@@ -38,12 +38,6 @@ const primaryButtonStyle: CSSProperties = {
   border: "1px solid #60a5fa",
 };
 
-const dangerButtonStyle: CSSProperties = {
-  ...buttonStyle,
-  background: "#dc2626",
-  border: "1px solid #fca5a5",
-};
-
 function getDeckStatus(deck: DeckRecipe) {
   if (!deck.leaderCardId) {
     return "リーダー未設定";
