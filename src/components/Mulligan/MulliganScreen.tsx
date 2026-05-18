@@ -30,7 +30,7 @@ export default function MulliganScreen() {
     >
       <div
         style={{
-          width: "600px",
+          width: "500px",
           padding: "24px",
           border: "2px solid #475569",
           borderRadius: "16px",
@@ -48,7 +48,7 @@ export default function MulliganScreen() {
         <div
           style={{
             display: "flex",
-            gap: "12px",
+            gap: "2px",
             justifyContent: "center",
             marginTop: "24px",
             marginBottom: "24px",
@@ -69,7 +69,7 @@ export default function MulliganScreen() {
         <div
           style={{
             display: "flex",
-            gap: "2px",
+            gap: "12px",
             justifyContent: "center",
           }}
         >
