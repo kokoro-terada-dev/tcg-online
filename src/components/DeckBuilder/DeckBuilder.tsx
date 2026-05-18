@@ -100,8 +100,6 @@ export default function DeckBuilder({ onBack }: Props) {
 
   const [message, setMessage] = useState("");
 
-  const longPressTimer = useRef<number | null>(null);
-
   const deckBuildableCardImages = useMemo(
     () => cardImages.filter((card) => card.series !== "system"),
     [cardImages]
@@ -287,47 +285,11 @@ export default function DeckBuilder({ onBack }: Props) {
     setMessage(`${cardId} をDONに${addCount}枚追加しました。`);
   }
 
-  function removeOneFromMain(cardId: string) {
-    updateEditingDeck((current) => {
-      const index = current.mainDeck.indexOf(cardId);
-
-      if (index === -1) {
-        return current;
-      }
-
-      const next = [...current.mainDeck];
-      next.splice(index, 1);
-
-      return {
-        ...current,
-        mainDeck: next,
-      };
-    });
-  }
-
   function removeAllFromMain(cardId: string) {
     updateEditingDeck((current) => ({
       ...current,
       mainDeck: current.mainDeck.filter((x) => x !== cardId),
     }));
-  }
-
-  function removeOneFromDon(cardId: string) {
-    updateEditingDeck((current) => {
-      const index = current.donDeck.indexOf(cardId);
-
-      if (index === -1) {
-        return current;
-      }
-
-      const next = [...current.donDeck];
-      next.splice(index, 1);
-
-      return {
-        ...current,
-        donDeck: next,
-      };
-    });
   }
 
   function removeAllFromDon(cardId: string) {
@@ -367,38 +329,6 @@ export default function DeckBuilder({ onBack }: Props) {
         [cardId]: "don",
       },
     }));
-  }
-
-  function askCardCount(
-    cardId: string,
-    currentCount: number,
-    onSetCount: (nextCount: number) => void
-  ) {
-    const input = window.prompt(
-      `${cardId} の枚数を入力してください。0にすると削除します。`,
-      String(currentCount)
-    );
-
-    if (input === null) {
-      return;
-    }
-
-    const nextCount = Number(input);
-
-    if (!Number.isInteger(nextCount) || nextCount < 0) {
-      setMessage("枚数は0以上の整数で入力してください。");
-      return;
-    }
-
-    onSetCount(nextCount);
-    setMessage(`${cardId} を${nextCount}枚に変更しました。`);
-  }
-
-  function clearLongPressTimer() {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
   }
 
   function renderImageIcon(cardId: string | null, size = 58) {
@@ -444,62 +374,45 @@ export default function DeckBuilder({ onBack }: Props) {
   function renderCountIcon(
     cardId: string,
     count: number,
+    onPlus: () => void,
     onMinus: () => void,
-    onRemoveAll: () => void,
-    onSetCount: (nextCount: number) => void
+    onRemoveAll: () => void
   ) {
     return (
       <div
         key={cardId}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          askCardCount(cardId, count, onSetCount);
-        }}
-        onTouchStart={() => {
-          clearLongPressTimer();
-
-          longPressTimer.current = window.setTimeout(() => {
-            askCardCount(cardId, count, onSetCount);
-          }, 550);
-        }}
-        onTouchMove={clearLongPressTimer}
-        onTouchEnd={clearLongPressTimer}
-        onTouchCancel={clearLongPressTimer}
         style={{
           position: "relative",
-          width: "64px",
+          width: "72px",
           margin: "4px",
           touchAction: "manipulation",
         }}
       >
-        <button
-          onClick={onMinus}
-          style={{
-            padding: 0,
-            border: "none",
-            background: "transparent",
-            cursor: "pointer",
-          }}
-        >
-          {renderImageIcon(cardId, 64)}
-        </button>
+        {renderImageIcon(cardId, 72)}
 
         <div
           style={{
             position: "absolute",
-            right: "-2px",
-            bottom: "-2px",
-            minWidth: "24px",
-            height: "24px",
+            right: "-4px",
+            bottom: "34px",
+
+            minWidth: "26px",
+            height: "26px",
+
             borderRadius: "999px",
+
             background: "#facc15",
             color: "#111827",
+
             border: "2px solid white",
+
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
+
             fontSize: "14px",
             fontWeight: 900,
+
             boxShadow: "0 0 8px rgba(0,0,0,0.8)",
             pointerEvents: "none",
           }}
@@ -513,19 +426,65 @@ export default function DeckBuilder({ onBack }: Props) {
             position: "absolute",
             left: "-4px",
             top: "-4px",
-            width: "22px",
-            height: "22px",
+
+            width: "24px",
+            height: "24px",
+
             borderRadius: "999px",
             border: "1px solid white",
+
             background: "#dc2626",
             color: "white",
-            fontSize: "12px",
+
+            fontSize: "14px",
             fontWeight: 900,
+
             padding: 0,
           }}
         >
           ×
         </button>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "4px",
+            marginTop: "6px",
+          }}
+        >
+          <button
+            onClick={onMinus}
+            style={{
+              height: "28px",
+              borderRadius: "6px",
+              border: "1px solid #64748b",
+              background: "#334155",
+              color: "white",
+              fontSize: "18px",
+              fontWeight: 900,
+              padding: 0,
+            }}
+          >
+            -
+          </button>
+
+          <button
+            onClick={onPlus}
+            style={{
+              height: "28px",
+              borderRadius: "6px",
+              border: "1px solid #60a5fa",
+              background: "#2563eb",
+              color: "white",
+              fontSize: "18px",
+              fontWeight: 900,
+              padding: 0,
+            }}
+          >
+            +
+          </button>
+        </div>
       </div>
     );
   }
@@ -867,9 +826,9 @@ export default function DeckBuilder({ onBack }: Props) {
                   renderCountIcon(
                     cardId,
                     count,
-                    () => removeOneFromMain(cardId),
-                    () => removeAllFromMain(cardId),
-                    (nextCount) => setMainCardCount(cardId, nextCount)
+                    () => setMainCardCount(cardId, count + 1),
+                    () => setMainCardCount(cardId, Math.max(0, count - 1)),
+                    () => removeAllFromMain(cardId)
                   )
                 )
               )}
@@ -895,9 +854,9 @@ export default function DeckBuilder({ onBack }: Props) {
                   renderCountIcon(
                     cardId,
                     count,
-                    () => removeOneFromDon(cardId),
-                    () => removeAllFromDon(cardId),
-                    (nextCount) => setDonCardCount(cardId, nextCount)
+                    () => setDonCardCount(cardId, count + 1),
+                    () => setDonCardCount(cardId, Math.max(0, count - 1)),
+                    () => removeAllFromDon(cardId)
                   )
                 )
               )}
