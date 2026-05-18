@@ -12,7 +12,9 @@ import {
 
 import {
   deleteLocalDeckRecipe,
+  exportLocalDeckRecipeToJson,
   getAllLocalDeckRecipes,
+  importLocalDeckRecipeFromJsonFile,
   saveLocalDeckRecipe,
 } from "../../utils/localDeckStorage";
 
@@ -28,6 +30,16 @@ const buttonStyle: CSSProperties = {
   borderRadius: "8px",
   border: "1px solid #475569",
   background: "#1e293b",
+  color: "white",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const importButtonStyle: CSSProperties = {
+  padding: "9px 12px",
+  borderRadius: "8px",
+  border: "1px solid #475569",
+  background: "#ee9b00",
   color: "white",
   fontWeight: 800,
   cursor: "pointer",
@@ -114,14 +126,27 @@ export default function DeckBuilder({
 
   const [message, setMessage] = useState("");
 
+  const [isOpeningSearch, setIsOpeningSearch] = useState(false);
+
   const [messageAnimationKey, setMessageAnimationKey] =
-  useState(0);
+    useState(0);
 
   function showMessage(nextMessage: string) {
-  setMessage(nextMessage);
+    setMessage(nextMessage);
 
-  setMessageAnimationKey((x) => x + 1);
-}
+    setMessageAnimationKey((x) => x + 1);
+  }
+
+  function openSearchScreen() {
+    setSearchText("");
+    setSeriesFilter("");
+    setIsOpeningSearch(true);
+
+    window.setTimeout(() => {
+      setMode("search");
+      setIsOpeningSearch(false);
+    }, 50);
+  }
 
   const deckBuildableCardImages = useMemo(
     () => cardImages.filter((card) => card.series !== "system"),
@@ -180,6 +205,41 @@ export default function DeckBuilder({
           : "画像ZIPの読み込みに失敗しました。"
       );
     }
+  }
+
+  async function handleImportDeckJson(file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    setMessage("デッキJSONを取り込み中...");
+
+    try {
+      const importedDeck = await importLocalDeckRecipeFromJsonFile(file);
+
+      refreshDecks();
+
+      setMessage(`${importedDeck.name} を取り込みました。`);
+    } catch (e) {
+      setMessage(
+        e instanceof Error
+          ? e.message
+          : "デッキJSONの取り込みに失敗しました。"
+      );
+    }
+  }
+
+  function exportEditingDeck() {
+    if (!editingDeck) {
+      return;
+    }
+
+    exportLocalDeckRecipeToJson({
+      ...editingDeck,
+      updatedAt: new Date().toISOString(),
+    });
+
+    setMessage("デッキJSONを書き出しました。");
   }
 
   function openNewDeck() {
@@ -583,6 +643,26 @@ export default function DeckBuilder({
             <button style={primaryButtonStyle} onClick={openNewDeck}>
               新規作成
             </button>
+
+            <label
+              style={{
+                ...buttonStyle,
+                display: "inline-flex",
+                alignItems: "center",
+                background: "#059669",
+              }}
+            >
+              デッキ取込
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={(e) => {
+                  handleImportDeckJson(e.target.files?.[0] ?? null);
+                  e.currentTarget.value = "";
+                }}
+                style={{ display: "none", background: "#175f10", }}
+              />
+            </label>
           </div>
 
           {message && (
@@ -682,7 +762,30 @@ export default function DeckBuilder({
           overflowX: "hidden",
           WebkitOverflowScrolling: "touch",
         }}
-      >
+      >{isOpeningSearch && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 999999,
+            background: "rgba(15, 23, 42, 0.72)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "54px",
+              height: "54px",
+              border: "6px solid rgba(255,255,255,0.25)",
+              borderTop: "6px solid #10b981",
+              borderRadius: "999px",
+              animation: "deckBuilderSpin 0.8s linear infinite",
+            }}
+          />
+        </div>
+      )}
         <div
           style={{
             maxWidth: "840px",
@@ -745,7 +848,7 @@ export default function DeckBuilder({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                gridTemplateColumns: "1fr 1fr 1fr",
                 gap: "8px",
               }}
             >
@@ -755,13 +858,13 @@ export default function DeckBuilder({
 
               <button
                 style={buttonStyle}
-                onClick={() => {
-                  setSearchText("");
-                  setSeriesFilter("");
-                  setMode("search");
-                }}
+                onClick={openSearchScreen}
               >
                 カード検索
+              </button>
+
+              <button style={importButtonStyle} onClick={exportEditingDeck}>
+                デッキ出力
               </button>
             </div>
 
@@ -772,7 +875,7 @@ export default function DeckBuilder({
 
           {message && (
             <div
-            　key={messageAnimationKey}
+              key={messageAnimationKey}
               style={{
                 background: "#334155",
                 padding: "8px 10px",
@@ -978,7 +1081,7 @@ export default function DeckBuilder({
 
         {message && (
           <div
-          　key={messageAnimationKey}
+            key={messageAnimationKey}
             style={{
               background: "#334155",
               padding: "8px 10px",

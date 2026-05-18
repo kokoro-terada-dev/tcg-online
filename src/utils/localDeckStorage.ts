@@ -73,6 +73,87 @@ export function deleteLocalDeckRecipe(id: string) {
   writeDecks(readDecks().filter((deck) => deck.id !== id));
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((x) => typeof x === "string");
+}
+
+function isDeckRecipe(value: unknown): value is DeckRecipe {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const recipe = value as Partial<DeckRecipe>;
+
+  return (
+    typeof recipe.id === "string" &&
+    typeof recipe.name === "string" &&
+    (typeof recipe.leaderCardId === "string" ||
+      recipe.leaderCardId === null) &&
+    isStringArray(recipe.mainDeck) &&
+    isStringArray(recipe.donDeck) &&
+    recipe.cardTypes !== null &&
+    typeof recipe.cardTypes === "object" &&
+    typeof recipe.leaderLifeCount === "number" &&
+    typeof recipe.createdAt === "string" &&
+    typeof recipe.updatedAt === "string"
+  );
+}
+
+function makeSafeFileName(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "deck";
+  }
+
+  return trimmed.replace(/[\\/:*?"<>|]/g, "_");
+}
+
+export function exportLocalDeckRecipeToJson(recipe: DeckRecipe) {
+  const blob = new Blob([JSON.stringify(recipe, null, 2)], {
+    type: "application/json",
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `${makeSafeFileName(recipe.name)}.json`;
+
+  document.body.appendChild(link);
+
+  link.click();
+
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+}
+
+export async function importLocalDeckRecipeFromJsonFile(file: File) {
+  const text = await file.text();
+
+  const parsed = JSON.parse(text);
+
+  if (!isDeckRecipe(parsed)) {
+    throw new Error("デッキJSONの形式が正しくありません。");
+  }
+
+  const now = new Date().toISOString();
+
+  const importedDeck: DeckRecipe = {
+    ...parsed,
+    id: crypto.randomUUID(),
+    name: `${parsed.name}（取込）`,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  saveLocalDeckRecipe(importedDeck);
+
+  return importedDeck;
+}
+
 function createCardData(
   cardId: string,
   type: CardType,
