@@ -261,7 +261,7 @@ export default function DeckSelect() {
         background: "#0f172a",
         color: "white",
         padding: "12px",
-        paddingBottom: "132px",
+        paddingBottom: "160px",
         boxSizing: "border-box",
         overflowY: "auto",
         overflowX: "hidden",
@@ -429,7 +429,7 @@ export default function DeckSelect() {
                       disabled={!usable}
                       onClick={() => selectDeckForPlayer(1, deck)}
                     >
-                      デッキ1に選択
+                      上側に選択
                     </button>
 
                     <button
@@ -444,7 +444,7 @@ export default function DeckSelect() {
                       disabled={!usable}
                       onClick={() => selectDeckForPlayer(2, deck)}
                     >
-                      デッキ2に選択
+                      下側に選択
                     </button>
                   </div>
                 </div>
@@ -487,9 +487,9 @@ export default function DeckSelect() {
         >
           <div
             style={{
-              minWidth: 0,
-              fontSize: "12px",
-              lineHeight: 1.5,
+              fontSize: "16px",
+              fontWeight: 900,
+              lineHeight: 1.6,
             }}
           >
             <div
@@ -499,7 +499,7 @@ export default function DeckSelect() {
                 textOverflow: "ellipsis",
               }}
             >
-              デッキ1：{getDeckName(player1DeckId)}
+              上側：{getDeckName(player1DeckId)}
             </div>
 
             <div
@@ -509,7 +509,7 @@ export default function DeckSelect() {
                 textOverflow: "ellipsis",
               }}
             >
-              デッキ2：{getDeckName(player2DeckId)}
+              上側：{getDeckName(player2DeckId)}
             </div>
           </div>
 
