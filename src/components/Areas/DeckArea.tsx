@@ -6,14 +6,13 @@ import type { CardData } from "../../types/card";
 
 import GameCard from "../Card/GameCard";
 import { GAME_LAYOUT } from "../../layout/gameLayout";
+import { getCardBackImageUrl } from "../../utils/localCardImages";
 
 type Props = {
   cards: CardData[];
   playerIndex: number;
   onOpen: () => void;
 };
-
-const CARD_BACK_IMAGE = "/cards/cardBack.png";
 
 export default function DeckArea({
   cards,
@@ -38,6 +37,7 @@ export default function DeckArea({
   }
 
   const topCard = cards[0];
+  const cardBackImage = getCardBackImageUrl();
 
   return (
     <div
@@ -81,7 +81,7 @@ export default function DeckArea({
               }}
             >
               <img
-                src={CARD_BACK_IMAGE}
+                src={cardBackImage}
                 draggable={false}
                 style={{
                   width: "100%",
@@ -103,7 +103,7 @@ export default function DeckArea({
             <GameCard
               card={{
                 ...topCard,
-                image: CARD_BACK_IMAGE,
+                image: cardBackImage,
                 rotated: false,
               }}
               playerIndex={playerIndex}

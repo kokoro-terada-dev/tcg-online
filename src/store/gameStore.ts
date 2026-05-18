@@ -5,6 +5,8 @@ import type {
   PlayerState,
 } from "../types/card";
 
+import { getDonImageUrl } from "../utils/localCardImages";
+
 type DonAreaKey =
   | "donDeck"
   | "activeDon"
@@ -102,7 +104,7 @@ function createPlayer(
         }).map((_) => ({
           id: Math.random().toString(36).slice(2),
           name: "DON",
-          image: "/cards/don.png",
+          image: getDonImageUrl(),
           type: "don" as const,
           rotated: false,
           attachedDonCount: 0,
@@ -597,7 +599,7 @@ export const useGameStore =
             player.restDons.unshift({
               id: Math.random().toString(36).slice(2),
               name: "DON",
-              image: "/cards/don.png",
+              image: getDonImageUrl(),
               type: "don",
               rotated: true,
               attachedDonCount: 0,
@@ -687,7 +689,7 @@ export const useGameStore =
         player.restDons.unshift({
           id: Math.random().toString(36).slice(2),
           name: "DON",
-          image: "/cards/don.png",
+          image: getDonImageUrl(),
           type: "don",
           rotated: false,
           attachedDonCount: 0,
@@ -853,7 +855,7 @@ export const useGameStore =
               player.activeDons.unshift({
                 id: Math.random().toString(36).slice(2),
                 name: "DON",
-                image: "/cards/don.png",
+                image: getDonImageUrl(),
                 type: "don",
                 rotated: false,
                 attachedDonCount: 0,
@@ -1251,7 +1253,7 @@ export const useGameStore =
         player.activeDons.unshift({
           id: Math.random().toString(36).slice(2),
           name: "DON",
-          image: "/cards/don.png",
+          image: getDonImageUrl(),
           type: "don",
           rotated: false,
           attachedDonCount: 0,
@@ -1291,7 +1293,7 @@ export const useGameStore =
         player.restDons.unshift({
           id: Math.random().toString(36).slice(2),
           name: "DON",
-          image: "/cards/don.png",
+          image: getDonImageUrl(),
           type: "don",
           rotated: true,
           attachedDonCount: 0,
@@ -1615,7 +1617,7 @@ export const useGameStore =
 
             name: "DON",
 
-            image: "/cards/don.png",
+            image: getDonImageUrl(),
 
             type: "don",
 

@@ -6,14 +6,13 @@ import type { CardData } from "../../types/card";
 
 import GameCard from "../Card/GameCard";
 import { GAME_LAYOUT } from "../../layout/gameLayout";
+import { getCardBackImageUrl } from "../../utils/localCardImages";
 
 type Props = {
   cards: CardData[];
   playerIndex: number;
   onOpen: () => void;
 };
-
-const CARD_BACK_IMAGE = "/cards/cardBack.png";
 
 export default function LifeArea({
   cards,
@@ -36,6 +35,8 @@ export default function LifeArea({
       longPressTimer.current = null;
     }
   }
+
+  const cardBackImage = getCardBackImageUrl();
 
   return (
     <div
@@ -102,7 +103,7 @@ export default function LifeArea({
           <GameCard
             card={{
               ...card,
-              image: card.isFaceUp ? card.image : CARD_BACK_IMAGE,
+              image: card.isFaceUp ? card.image : cardBackImage,
               rotated: false,
             }}
             playerIndex={playerIndex}

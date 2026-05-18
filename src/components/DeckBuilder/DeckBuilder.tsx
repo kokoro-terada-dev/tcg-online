@@ -102,15 +102,21 @@ export default function DeckBuilder({ onBack }: Props) {
 
   const longPressTimer = useRef<number | null>(null);
 
-  const seriesList = useMemo(
-    () => Array.from(new Set(cardImages.map((card) => card.series))).sort(),
+  const deckBuildableCardImages = useMemo(
+    () => cardImages.filter((card) => card.series !== "system"),
     [cardImages]
+  );
+
+  const seriesList = useMemo(
+    () =>
+      Array.from(new Set(deckBuildableCardImages.map((card) => card.series))).sort(),
+    [deckBuildableCardImages]
   );
 
   const filteredCards = useMemo(() => {
     const normalizedSearch = searchText.trim().toLowerCase();
 
-    return cardImages.filter((card) => {
+    return deckBuildableCardImages.filter((card) => {
       if (seriesFilter && card.series !== seriesFilter) {
         return false;
       }
@@ -121,7 +127,7 @@ export default function DeckBuilder({ onBack }: Props) {
 
       return card.cardId.toLowerCase().includes(normalizedSearch);
     });
-  }, [cardImages, searchText, seriesFilter]);
+  }, [deckBuildableCardImages, searchText, seriesFilter]);
 
   function refreshDecks() {
     setDecks(getAllLocalDeckRecipes());

@@ -8,6 +8,8 @@ import { useGameStore } from "../../store/gameStore";
 
 import { useDraggable } from "@dnd-kit/core";
 
+import { getDonDeckImageUrl } from "../../utils/localCardImages";
+
 import { createPortal } from "react-dom";
 
 type CardFrom =
@@ -218,7 +220,7 @@ export default function GameCard({
       }}
     >
       <img
-        src={from === "donDeck" ? "/cards/donDeck.png" : card.image}
+        src={from === "donDeck" ? getDonDeckImageUrl() : card.image}
         draggable={false}
         style={{
           pointerEvents: "none",

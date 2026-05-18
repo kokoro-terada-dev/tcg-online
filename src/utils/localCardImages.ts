@@ -18,6 +18,18 @@ export function getLocalCardImage(cardId: string) {
   return localCardImages.find((x) => x.cardId === cardId);
 }
 
+export function getCardBackImageUrl() {
+  return getLocalCardImage("cardBack")?.imageUrl ?? "/cards/cardBack.png";
+}
+
+export function getDonImageUrl() {
+  return getLocalCardImage("don")?.imageUrl ?? "/cards/don.png";
+}
+
+export function getDonDeckImageUrl() {
+  return getLocalCardImage("donDeck")?.imageUrl ?? "/cards/donDeck.png";
+}
+
 export function clearLocalCardImages() {
   objectUrls.forEach((url) => URL.revokeObjectURL(url));
 
@@ -48,19 +60,36 @@ function parseCardImagePath(path: string) {
     return null;
   }
 
-  const cardId = fileMatch[1];
+  const rawCardId = fileMatch[1];
   const parentFolder = parts[parts.length - 2];
+
+  // ZIP直下の cards/ に置く共通画像。
+  // 例: cards/cardBack.png
+  // 例: cards/don.png
+  // 例: cards/donDeck.png
+  if (
+    parentFolder === "cards" &&
+    (rawCardId === "cardBack" ||
+      rawCardId === "don" ||
+      rawCardId === "donDeck")
+  ) {
+    return {
+      series: "system",
+      cardId: rawCardId,
+      path: normalizedPath,
+    };
+  }
 
   // 例: cards/OP01/OP01-001.png
   // 例: OP01/OP01-001.png
   // 例: 任意フォルダ/cards/OP01/OP01-001.png
-  if (!cardId.startsWith(parentFolder)) {
+  if (!rawCardId.startsWith(parentFolder)) {
     return null;
   }
 
   return {
     series: parentFolder,
-    cardId,
+    cardId: rawCardId,
     path: normalizedPath,
   };
 }

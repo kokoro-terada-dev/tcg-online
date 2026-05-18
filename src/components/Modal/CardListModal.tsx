@@ -1,5 +1,7 @@
 import type { CardData } from "../../types/card";
 
+import { getCardBackImageUrl } from "../../utils/localCardImages";
+
 import {
   DndContext,
   closestCenter,
@@ -333,7 +335,7 @@ function SortableCardRow({
       }}
     >
       <img
-        src={isOpen ? card.image : "/cards/cardBack.png"}
+        src={isOpen ? card.image : getCardBackImageUrl()}
         onClick={(e) => {
           e.stopPropagation();
 
