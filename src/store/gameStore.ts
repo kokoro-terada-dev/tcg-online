@@ -60,23 +60,14 @@ function createPlayer(
     deck.filter((x) => x.type !== "leader" && x.type !== "don")
   );
 
-  const donCards = Array.from({
-    length: 10,
-  }).map((_, index) => ({
-    id: `don-${index}`,
-
-    name: "DON!!",
-
-    image: getDonImageUrl(),
-
-    type: "don" as const,
-
-    rotated: false,
-
-    attachedDonCount: 0,
-
-    isFaceUp: true,
-  }));
+  const donCards = deck
+    .filter((x) => x.type === "don")
+    .map((card) => ({
+      ...card,
+      rotated: false,
+      attachedDonCount: 0,
+      isFaceUp: true,
+    }));
 
   const lifeCount = leader?.lifeCount ?? 5;
 

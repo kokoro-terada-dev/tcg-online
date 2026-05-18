@@ -65,8 +65,10 @@ function createNewRecipe(): DeckRecipe {
     name: "新しいデッキ",
     leaderCardId: null,
     mainDeck: [],
-    donDeck: [],
-    cardTypes: {},
+    donDeck: Array.from({ length: 10 }, () => "don"),
+    cardTypes: {
+      don: "don",
+    },
     leaderLifeCount: 5,
     createdAt: now,
     updatedAt: now,
@@ -717,7 +719,7 @@ export default function DeckBuilder({
                   </div>
 
                   <div style={{ fontSize: "12px", color: "#cbd5e1" }}>
-                    メイン {deck.mainDeck.length}/50 / DON {deck.donDeck.length}/10
+                    メイン {deck.mainDeck.length}/50 / DON {deck.donDeck.length}枚
                   </div>
                 </div>
 
