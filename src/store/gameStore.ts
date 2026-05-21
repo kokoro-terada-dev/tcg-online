@@ -1654,10 +1654,38 @@ export const useGameStore =
 
           const deck = shuffledDeck.slice(5 + lifeCount);
 
-          const allDons = [
+          const visibleDons = [
             ...player.donDeck,
             ...player.activeDons,
             ...player.restDons,
+          ];
+
+          const attachedDonCount =
+            player.characters.reduce(
+              (sum, card) => sum + (card?.attachedDonCount ?? 0),
+              0
+            ) + (player.leader?.attachedDonCount ?? 0);
+
+          const donSource = visibleDons[0];
+
+          const restoredAttachedDons = Array.from({
+            length: attachedDonCount,
+          }).map((_, index) => ({
+            ...donSource,
+            id: `restored-don-${Date.now()}-${index}`,
+            name: donSource?.name ?? "DON!!",
+            image: donSource?.image ?? "",
+            type: "don" as const,
+            rotated: false,
+            powerModifier: 0,
+            statusLabel: undefined,
+            attachedDonCount: 0,
+            isFaceUp: true,
+          }));
+
+          const allDons = [
+            ...visibleDons,
+            ...restoredAttachedDons,
           ].map((card) => ({
             ...card,
             rotated: false,

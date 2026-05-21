@@ -126,6 +126,7 @@ export default function GameCard({
 
   const canOpenMenu =
     from === "hand" ||
+    from === "stage" ||
     from === "character" ||
     from === "leader";
 
@@ -260,7 +261,7 @@ export default function GameCard({
               setMenuOpen(false);
             }}
           >
-            {from === "hand" ? (
+            {from === "hand" || from === "stage" ? (
               <div
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}

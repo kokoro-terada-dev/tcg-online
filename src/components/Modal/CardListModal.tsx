@@ -1,3 +1,5 @@
+import { useRef, useState } from "react";
+
 import type { CardData } from "../../types/card";
 
 import { getCardBackImageUrl } from "../../utils/localCardImages";
@@ -79,6 +81,8 @@ export default function CardListModal({
   }
 
   const isDeck = title === "Deck";
+  const [previewImage, setPreviewImage] =
+    useState<string | null>(null);
   const isHiddenList = title === "Deck" || title === "Life";
 
   const actionButtonStyle = {
@@ -290,12 +294,68 @@ export default function CardListModal({
                     onTrash={onTrash}
                     onBottom={onBottom}
                     onLifeTop={onLifeTop}
+                    onPreview={setPreviewImage}
                   />
                 );
               })}
             </SortableContext>
           </DndContext>}
         </div>
+
+        {previewImage && (
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              setPreviewImage(null);
+            }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 999999,
+              background: "rgba(0,0,0,0.85)",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: "12px",
+              boxSizing: "border-box",
+            }}
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPreviewImage(null);
+              }}
+              style={{
+                position: "fixed",
+                top: "12px",
+                right: "12px",
+                width: "42px",
+                height: "42px",
+                borderRadius: "999px",
+                border: "2px solid white",
+                background: "#dc2626",
+                color: "white",
+                fontSize: "24px",
+                fontWeight: 900,
+                zIndex: 1000000,
+              }}
+            >
+              ×
+            </button>
+
+            <img
+              src={previewImage}
+              draggable={false}
+              style={{
+                maxWidth: "92vw",
+                maxHeight: "92dvh",
+                objectFit: "contain",
+                borderRadius: "12px",
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -310,6 +370,7 @@ function SortableCardRow({
   onTrash,
   onBottom,
   onLifeTop,
+  onPreview,
 }: {
   card: CardData;
   isOpen: boolean;
@@ -319,6 +380,7 @@ function SortableCardRow({
   onTrash: (cardId: string) => void;
   onBottom: (cardId: string) => void;
   onLifeTop: (cardId: string) => void;
+  onPreview: (image: string) => void;
 }) {
   const {
     attributes,
@@ -330,15 +392,24 @@ function SortableCardRow({
     id: card.id,
   });
 
-  function pressButton(e: React.PointerEvent<HTMLButtonElement>) {
-  e.currentTarget.style.transform = "scale(0.97)";
-  e.currentTarget.style.filter = "brightness(1.2)";
-}
+  const previewTimer = useRef<number | null>(null);
 
-function releaseButton(e: React.PointerEvent<HTMLButtonElement>) {
-  e.currentTarget.style.transform = "scale(1)";
-  e.currentTarget.style.filter = "brightness(1)";
-}
+  function clearPreviewTimer() {
+    if (previewTimer.current !== null) {
+      clearTimeout(previewTimer.current);
+      previewTimer.current = null;
+    }
+  }
+
+  function pressButton(e: React.PointerEvent<HTMLButtonElement>) {
+    e.currentTarget.style.transform = "scale(0.97)";
+    e.currentTarget.style.filter = "brightness(1.2)";
+  }
+
+  function releaseButton(e: React.PointerEvent<HTMLButtonElement>) {
+    e.currentTarget.style.transform = "scale(1)";
+    e.currentTarget.style.filter = "brightness(1)";
+  }
 
   return (
     <div
@@ -360,6 +431,38 @@ function releaseButton(e: React.PointerEvent<HTMLButtonElement>) {
     >
       <img
         src={isOpen ? card.image : getCardBackImageUrl()}
+        draggable={false}
+        onTouchStart={(e) => {
+          e.stopPropagation();
+
+          clearPreviewTimer();
+
+          previewTimer.current = window.setTimeout(() => {
+            onPreview(isOpen ? card.image : getCardBackImageUrl());
+          }, 550);
+        }}
+        onTouchMove={() => {
+          clearPreviewTimer();
+        }}
+        onTouchEnd={() => {
+          clearPreviewTimer();
+        }}
+        onTouchCancel={() => {
+          clearPreviewTimer();
+        }}
+        onMouseDown={(e) => {
+          if (e.button !== 0) {
+            return;
+          }
+
+          clearPreviewTimer();
+
+          previewTimer.current = window.setTimeout(() => {
+            onPreview(isOpen ? card.image : getCardBackImageUrl());
+          }, 550);
+        }}
+        onMouseUp={clearPreviewTimer}
+        onMouseLeave={clearPreviewTimer}
         onClick={(e) => {
           e.stopPropagation();
 
@@ -371,6 +474,8 @@ function releaseButton(e: React.PointerEvent<HTMLButtonElement>) {
           width: "80px",
           cursor: isHiddenList ? "pointer" : "default",
           borderRadius: "6px",
+          WebkitTouchCallout: "none",
+          userSelect: "none",
         }}
       />
 
@@ -388,40 +493,40 @@ function releaseButton(e: React.PointerEvent<HTMLButtonElement>) {
         }}
       >
         <button
-  style={actionButtonStyle}
-  onPointerDown={pressButton}
-  onPointerUp={releaseButton}
-  onPointerCancel={releaseButton}
-  onPointerLeave={releaseButton}
-  onClick={() => onHand(card.id)}
->
+          style={actionButtonStyle}
+          onPointerDown={pressButton}
+          onPointerUp={releaseButton}
+          onPointerCancel={releaseButton}
+          onPointerLeave={releaseButton}
+          onClick={() => onHand(card.id)}
+        >
           手札へ
         </button>
 
         <button
-  style={actionButtonStyle}
-  onPointerDown={pressButton}
-  onPointerUp={releaseButton}
-  onPointerCancel={releaseButton}
-  onPointerLeave={releaseButton} onClick={() => onTrash(card.id)}>
+          style={actionButtonStyle}
+          onPointerDown={pressButton}
+          onPointerUp={releaseButton}
+          onPointerCancel={releaseButton}
+          onPointerLeave={releaseButton} onClick={() => onTrash(card.id)}>
           トラッシュへ
         </button>
 
         <button
-  style={actionButtonStyle}
-  onPointerDown={pressButton}
-  onPointerUp={releaseButton}
-  onPointerCancel={releaseButton}
-  onPointerLeave={releaseButton}onClick={() => onBottom(card.id)}>
+          style={actionButtonStyle}
+          onPointerDown={pressButton}
+          onPointerUp={releaseButton}
+          onPointerCancel={releaseButton}
+          onPointerLeave={releaseButton} onClick={() => onBottom(card.id)}>
           デッキ下へ
         </button>
 
         <button
-  style={actionButtonStyle}
-  onPointerDown={pressButton}
-  onPointerUp={releaseButton}
-  onPointerCancel={releaseButton}
-  onPointerLeave={releaseButton}onClick={() => onLifeTop(card.id)}>
+          style={actionButtonStyle}
+          onPointerDown={pressButton}
+          onPointerUp={releaseButton}
+          onPointerCancel={releaseButton}
+          onPointerLeave={releaseButton} onClick={() => onLifeTop(card.id)}>
           ライフ上へ
         </button>
       </div>
