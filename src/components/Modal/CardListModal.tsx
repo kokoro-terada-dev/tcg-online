@@ -57,6 +57,8 @@ const actionButtonStyle = {
   overflow: "hidden",
 
   textOverflow: "ellipsis",
+
+  transition: "transform 0.08s ease, filter 0.08s ease",
 };
 
 export default function CardListModal({
@@ -328,6 +330,16 @@ function SortableCardRow({
     id: card.id,
   });
 
+  function pressButton(e: React.PointerEvent<HTMLButtonElement>) {
+  e.currentTarget.style.transform = "scale(0.97)";
+  e.currentTarget.style.filter = "brightness(1.2)";
+}
+
+function releaseButton(e: React.PointerEvent<HTMLButtonElement>) {
+  e.currentTarget.style.transform = "scale(1)";
+  e.currentTarget.style.filter = "brightness(1)";
+}
+
   return (
     <div
       ref={setNodeRef}
@@ -376,22 +388,40 @@ function SortableCardRow({
         }}
       >
         <button
-          style={actionButtonStyle} onClick={() => onHand(card.id)}>
+  style={actionButtonStyle}
+  onPointerDown={pressButton}
+  onPointerUp={releaseButton}
+  onPointerCancel={releaseButton}
+  onPointerLeave={releaseButton}
+  onClick={() => onHand(card.id)}
+>
           手札へ
         </button>
 
         <button
-          style={actionButtonStyle} onClick={() => onTrash(card.id)}>
+  style={actionButtonStyle}
+  onPointerDown={pressButton}
+  onPointerUp={releaseButton}
+  onPointerCancel={releaseButton}
+  onPointerLeave={releaseButton} onClick={() => onTrash(card.id)}>
           トラッシュへ
         </button>
 
         <button
-          style={actionButtonStyle} onClick={() => onBottom(card.id)}>
+  style={actionButtonStyle}
+  onPointerDown={pressButton}
+  onPointerUp={releaseButton}
+  onPointerCancel={releaseButton}
+  onPointerLeave={releaseButton}onClick={() => onBottom(card.id)}>
           デッキ下へ
         </button>
 
         <button
-          style={actionButtonStyle} onClick={() => onLifeTop(card.id)}>
+  style={actionButtonStyle}
+  onPointerDown={pressButton}
+  onPointerUp={releaseButton}
+  onPointerCancel={releaseButton}
+  onPointerLeave={releaseButton}onClick={() => onLifeTop(card.id)}>
           ライフ上へ
         </button>
       </div>
