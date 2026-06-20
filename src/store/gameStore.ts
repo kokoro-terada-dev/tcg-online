@@ -18,6 +18,10 @@ type SelectedDonStack = {
   count: number;
 } | null;
 
+export type OnlineDeckOrderPayload = {
+  player1MainDeckNames: string[];
+  player2MainDeckNames: string[];
+};
 
 type PlayersSnapshot = [PlayerState, PlayerState];
 
@@ -122,6 +126,116 @@ function createPlayer(
   };
 }
 
+function getMainDeckCards(deck: CardData[]) {
+  return deck.filter(
+    (x) => x.type !== "leader" && x.type !== "don"
+  );
+}
+
+function orderMainDeckCards(
+  deck: CardData[],
+  orderedNames: string[]
+) {
+  const mainDeck = getMainDeckCards(deck);
+
+  if (mainDeck.length !== orderedNames.length) {
+    throw new Error("同期された山札枚数が一致しません。");
+  }
+
+  const cardMap = new Map<string, CardData[]>();
+
+  for (const card of mainDeck) {
+    const cards = cardMap.get(card.name) ?? [];
+    cards.push(card);
+    cardMap.set(card.name, cards);
+  }
+
+  return orderedNames.map((name) => {
+    const cards = cardMap.get(name);
+
+    if (!cards || cards.length === 0) {
+      throw new Error(`同期されたカード ${name} がローカルデッキに存在しません。`);
+    }
+
+    return cards.shift()!;
+  });
+}
+
+function createPlayerWithMainDeckOrder(
+  deck: CardData[],
+  orderedNames: string[]
+): PlayerState {
+  const leader =
+    deck.find((x) => x.type === "leader") ||
+    null;
+
+  const mainDeck = orderMainDeckCards(
+    deck,
+    orderedNames
+  );
+
+  const donCards = deck
+    .filter((x) => x.type === "don")
+    .map((card) => ({
+      ...card,
+      rotated: false,
+      attachedDonCount: 0,
+      isFaceUp: true,
+    }));
+
+  const lifeCount = leader?.lifeCount ?? 5;
+
+  const life = mainDeck.splice(0, lifeCount);
+
+  const hand = mainDeck.splice(0, 5).map((card) => ({
+    ...card,
+    isFaceUp: true,
+    rotated: false,
+  }));
+
+  return {
+    hand,
+
+    deck: mainDeck,
+
+    trash: [],
+
+    life,
+
+    leader,
+
+    stage: null,
+
+    characters: [
+      null,
+      null,
+      null,
+      null,
+      null,
+    ],
+
+    donDeck: donCards,
+
+    activeDons: [],
+
+    restDons: [],
+  };
+}
+
+function createOnlineDeckOrder(
+  player1Deck: CardData[],
+  player2Deck: CardData[]
+): OnlineDeckOrderPayload {
+  return {
+    player1MainDeckNames: shuffleCards(
+      getMainDeckCards(player1Deck)
+    ).map((card) => card.name),
+    player2MainDeckNames: shuffleCards(
+      getMainDeckCards(player2Deck)
+    ).map((card) => card.name),
+  };
+}
+
 interface MoveParams {
   playerIndex: number;
 
@@ -154,6 +268,17 @@ interface GameState {
   startGame: (
     player1Deck: CardData[],
     player2Deck: CardData[]
+  ) => void;
+
+  createOnlineDeckOrder: (
+    player1Deck: CardData[],
+    player2Deck: CardData[]
+  ) => OnlineDeckOrderPayload;
+
+  startGameWithDeckOrders: (
+    player1Deck: CardData[],
+    player2Deck: CardData[],
+    deckOrder: OnlineDeckOrderPayload
   ) => void;
 
   drawCard: (
@@ -339,1503 +464,1538 @@ export const useGameStore =
     };
 
     return ({
-    players: [
-      createPlayer([]),
-      createPlayer([]),
-    ],
+      players: [
+        createPlayer([]),
+        createPlayer([]),
+      ],
 
-    isStarted: false,
+      isStarted: false,
 
-    undoHistory: [],
+      undoHistory: [],
 
-    turnStartSnapshot: null,
+      turnStartSnapshot: null,
 
-    startGame: (
-      player1Deck: CardData[],
-      player2Deck: CardData[]
-    ) =>
-      set(() => ({
-        players: [
-          createPlayer(player1Deck),
-          createPlayer(player2Deck),
-        ],
+      startGame: (
+        player1Deck: CardData[],
+        player2Deck: CardData[]
+      ) =>
+        set(() => ({
+          players: [
+            createPlayer(player1Deck),
+            createPlayer(player2Deck),
+          ],
 
-        isStarted: true,
+          isStarted: true,
 
-        mulliganPlayerIndex: 0,
+          mulliganPlayerIndex: 0,
 
-        undoHistory: [],
+          undoHistory: [],
 
-        turnStartSnapshot: null,
-      })),
+          turnStartSnapshot: null,
+        })),
 
-    drawCard: (
-      playerIndex: number
-    ) =>
-      setWithHistory((state) => {
-        const players = [
-          ...state.players,
-        ] as [
-            PlayerState,
-            PlayerState
+      createOnlineDeckOrder: (
+        player1Deck: CardData[],
+        player2Deck: CardData[]
+      ) =>
+        createOnlineDeckOrder(
+          player1Deck,
+          player2Deck
+        ),
+
+      startGameWithDeckOrders: (
+        player1Deck: CardData[],
+        player2Deck: CardData[],
+        deckOrder: OnlineDeckOrderPayload
+      ) =>
+        set(() => ({
+          players: [
+            createPlayerWithMainDeckOrder(
+              player1Deck,
+              deckOrder.player1MainDeckNames
+            ),
+            createPlayerWithMainDeckOrder(
+              player2Deck,
+              deckOrder.player2MainDeckNames
+            ),
+          ],
+
+          isStarted: true,
+
+          mulliganPlayerIndex: 0,
+
+          undoHistory: [],
+
+          turnStartSnapshot: null,
+        })),
+
+      drawCard: (
+        playerIndex: number
+      ) =>
+        setWithHistory((state) => {
+          const players = [
+            ...state.players,
+          ] as [
+              PlayerState,
+              PlayerState
+            ];
+
+          const player =
+            players[playerIndex];
+
+          const card =
+            player.deck.shift();
+
+          if (card) {
+            player.hand.push(card);
+          }
+
+          return { players };
+        }),
+
+      toggleRotate: (
+        playerIndex: number,
+        cardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [
+            ...state.players,
+          ] as [PlayerState, PlayerState];
+
+          const player = players[playerIndex];
+
+          const allCards: CardData[] = [
+            ...player.hand,
+            ...player.deck,
+            ...player.trash,
+            ...player.life,
+            ...player.activeDons,
+            ...player.restDons,
+            ...player.characters.filter(
+              (x): x is CardData => x !== null
+            ),
+            ...(player.leader ? [player.leader] : []),
+            ...(player.stage ? [player.stage] : []),
           ];
 
-        const player =
-          players[playerIndex];
+          const card = allCards.find(
+            (x) => x.id === cardId
+          );
 
-        const card =
-          player.deck.shift();
+          if (card) {
+            card.rotated = !card.rotated;
+          }
 
-        if (card) {
-          player.hand.push(card);
-        }
+          return { players };
+        }),
 
-        return { players };
-      }),
+      moveCard: ({
+        playerIndex,
+        cardId,
+        from,
+        to,
+        slotIndex,
+      }: MoveParams) =>
+        setWithHistory((state) => {
+          const players = [
+            ...state.players,
+          ] as [
+              PlayerState,
+              PlayerState
+            ];
 
-    toggleRotate: (
-      playerIndex: number,
-      cardId: string
-    ) =>
-      setWithHistory((state) => {
-        const players = [
-          ...state.players,
-        ] as [PlayerState, PlayerState];
+          const player =
+            players[playerIndex];
 
-        const player = players[playerIndex];
-
-        const allCards: CardData[] = [
-          ...player.hand,
-          ...player.deck,
-          ...player.trash,
-          ...player.life,
-          ...player.activeDons,
-          ...player.restDons,
-          ...player.characters.filter(
-            (x): x is CardData => x !== null
-          ),
-          ...(player.leader ? [player.leader] : []),
-          ...(player.stage ? [player.stage] : []),
-        ];
-
-        const card = allCards.find(
-          (x) => x.id === cardId
-        );
-
-        if (card) {
-          card.rotated = !card.rotated;
-        }
-
-        return { players };
-      }),
-
-    moveCard: ({
-      playerIndex,
-      cardId,
-      from,
-      to,
-      slotIndex,
-    }: MoveParams) =>
-      setWithHistory((state) => {
-        const players = [
-          ...state.players,
-        ] as [
-            PlayerState,
-            PlayerState
+          const movableSources = [
+            "hand",
+            "character",
+            "stage",
+            "trash",
+            "life",
+            "deck",
           ];
 
-        const player =
-          players[playerIndex];
+          const movableTargets = [
+            "hand",
+            "character",
+            "stage",
+            "trash",
+            "life",
+            "deck",
+          ];
 
-        const movableSources = [
-          "hand",
-          "character",
-          "stage",
-          "trash",
-          "life",
-          "deck",
-        ];
-
-        const movableTargets = [
-          "hand",
-          "character",
-          "stage",
-          "trash",
-          "life",
-          "deck",
-        ];
-
-        if (
-          !movableSources.includes(from) ||
-          !movableTargets.includes(to)
-        ) {
-          return { players };
-        }
-        // キャラクター枠が埋まっている場合は移動しない
-        if (
-          to === "character" &&
-          slotIndex !== undefined &&
-          player.characters[slotIndex]
-        ) {
-          return { players };
-        }
-
-        // ステージが埋まっている場合は移動しない
-        if (to === "stage" && player.stage) {
-          return { players };
-        }
-
-        // キャラクター枠埋まりチェック
-        if (
-          to === "character" &&
-          slotIndex !== undefined &&
-          player.characters[
-          slotIndex
-          ]
-        ) {
-          return { players };
-        }
-
-        let card:
-          | CardData
-          | undefined;
-
-        if (from === "hand") {
-          const index =
-            player.hand.findIndex(
-              (x) =>
-                x.id === cardId
-            );
-
-          if (index !== -1) {
-            card =
-              player.hand[index];
-
-            player.hand.splice(
-              index,
-              1
-            );
+          if (
+            !movableSources.includes(from) ||
+            !movableTargets.includes(to)
+          ) {
+            return { players };
           }
-        }
-
-        if (from === "trash") {
-          const index =
-            player.trash.findIndex(
-              (x) =>
-                x.id === cardId
-            );
-
-          if (index !== -1) {
-            card =
-              player.trash[index];
-
-            player.trash.splice(
-              index,
-              1
-            );
+          // キャラクター枠が埋まっている場合は移動しない
+          if (
+            to === "character" &&
+            slotIndex !== undefined &&
+            player.characters[slotIndex]
+          ) {
+            return { players };
           }
-        }
 
-        if (from === "life") {
-          const index =
-            player.life.findIndex(
-              (x) =>
-                x.id === cardId
-            );
-
-          if (index !== -1) {
-            card =
-              player.life[index];
-
-            player.life.splice(
-              index,
-              1
-            );
+          // ステージが埋まっている場合は移動しない
+          if (to === "stage" && player.stage) {
+            return { players };
           }
-        }
 
-        if (from === "deck") {
-          const index =
-            player.deck.findIndex(
-              (x) =>
-                x.id === cardId
-            );
-
-          if (index !== -1) {
-            card =
-              player.deck[index];
-
-            player.deck.splice(
-              index,
-              1
-            );
-          }
-        }
-
-        if (
-          from === "character"
-        ) {
-          const index =
-            player.characters.findIndex(
-              (x) =>
-                x?.id === cardId
-            );
-
-          if (index !== -1) {
-            card =
-              player.characters[
-              index
-              ] || undefined;
-
+          // キャラクター枠埋まりチェック
+          if (
+            to === "character" &&
+            slotIndex !== undefined &&
             player.characters[
-              index
-            ] = null;
-          }
-        }
-        if (from === "stage") {
-          card = player.stage || undefined;
-
-          player.stage = null;
-        }
-
-        if (!card) {
-          return { players };
-        }
-        // 手札・盤面は表
-        if (
-          to === "hand" ||
-          to === "character" ||
-          to === "stage"
-        ) {
-          card.isFaceUp = true;
-        }
-
-        if (to === "deck") {
-          card.isFaceUp = false;
-        }
-
-        if (to === "life") {
-          card.isFaceUp = true;
-        }
-
-        // トラッシュは表
-        if (to === "trash") {
-          card.isFaceUp = true;
-        }
-
-        // 移動先が手札・トラッシュ・ライフ・デッキの場合は縦向きに戻す
-        if (
-          to === "hand" ||
-          to === "trash" ||
-          // to === "life" ||
-          to === "deck"
-        ) {
-          card.rotated = false;
-        }
-
-        // キャラクターがトラッシュへ移動する場合、付与DONを横向きでドンエリアに戻す
-        if (
-          from === "character" &&
-          (to === "trash" || to === "hand") &&
-          card.attachedDonCount > 0
-        ) {
-          const donCount = card.attachedDonCount;
-
-          card.attachedDonCount = 0;
-
-          for (let i = 0; i < donCount; i++) {
-            player.restDons.unshift({
-              id: Math.random().toString(36).slice(2),
-              name: "DON",
-              image: getDonImageUrl(),
-              type: "don",
-              rotated: true,
-              attachedDonCount: 0,
-              isFaceUp: true,
-            });
-          }
-        }
-        // キャラクターエリアを離れる時は状態リセット
-        if (from === "character") {
-          card.powerModifier = 0;
-
-          card.statusLabel = undefined;
-        }
-
-        if (to === "stage") {
-          player.stage = card;
-        }
-
-        if (to === "hand") {
-          player.hand.push(card);
-        }
-
-        if (to === "trash") {
-          player.trash.unshift(card);
-        }
-
-        if (to === "life") {
-          player.life.unshift(card);
-        }
-
-        if (to === "deck") {
-          player.deck.unshift(card);
-        }
-
-        if (
-          to === "character" &&
-          slotIndex !== undefined
-        ) {
-          player.characters[
             slotIndex
-          ] = card;
-        }
+            ]
+          ) {
+            return { players };
+          }
 
-        return { players };
-      }),
+          let card:
+            | CardData
+            | undefined;
 
+          if (from === "hand") {
+            const index =
+              player.hand.findIndex(
+                (x) =>
+                  x.id === cardId
+              );
 
-    removeDon: (
-      playerIndex: number,
-      targetCardId: string
-    ) =>
-      setWithHistory((state) => {
-        const players = [
-          ...state.players,
-        ] as [
-            PlayerState,
-            PlayerState
-          ];
+            if (index !== -1) {
+              card =
+                player.hand[index];
 
-        const player =
-          players[playerIndex];
+              player.hand.splice(
+                index,
+                1
+              );
+            }
+          }
 
-        const target = [
-          ...player.characters.filter(
-            Boolean
-          ),
+          if (from === "trash") {
+            const index =
+              player.trash.findIndex(
+                (x) =>
+                  x.id === cardId
+              );
 
-          player.leader,
-        ].find(
-          (x) =>
-            x?.id === targetCardId
-        );
+            if (index !== -1) {
+              card =
+                player.trash[index];
 
-        if (!target) {
-          return { players };
-        }
+              player.trash.splice(
+                index,
+                1
+              );
+            }
+          }
 
-        if (
-          target.attachedDonCount <=
-          0
-        ) {
-          return { players };
-        }
+          if (from === "life") {
+            const index =
+              player.life.findIndex(
+                (x) =>
+                  x.id === cardId
+              );
 
-        target.attachedDonCount--;
+            if (index !== -1) {
+              card =
+                player.life[index];
 
-        player.restDons.unshift({
-          id: Math.random().toString(36).slice(2),
-          name: "DON",
-          image: getDonImageUrl(),
-          type: "don",
-          rotated: false,
-          attachedDonCount: 0,
-          isFaceUp: true,
-        });
+              player.life.splice(
+                index,
+                1
+              );
+            }
+          }
 
-        return { players };
-      }),
+          if (from === "deck") {
+            const index =
+              player.deck.findIndex(
+                (x) =>
+                  x.id === cardId
+              );
 
-    moveListCardToHand: (
-      playerIndex: number,
-      from,
-      cardId: string
-    ) =>
-      setWithHistory((state) => {
-        const players = [
-          ...state.players,
-        ] as [
-            PlayerState,
-            PlayerState
-          ];
+            if (index !== -1) {
+              card =
+                player.deck[index];
 
-        const player =
-          players[playerIndex];
+              player.deck.splice(
+                index,
+                1
+              );
+            }
+          }
 
-        const source =
-          player[from];
+          if (
+            from === "character"
+          ) {
+            const index =
+              player.characters.findIndex(
+                (x) =>
+                  x?.id === cardId
+              );
 
-        const index =
-          source.findIndex(
-            (x) =>
-              x.id === cardId
-          );
+            if (index !== -1) {
+              card =
+                player.characters[
+                index
+                ] || undefined;
 
-        if (index === -1) {
-          return { players };
-        }
+              player.characters[
+                index
+              ] = null;
+            }
+          }
+          if (from === "stage") {
+            card = player.stage || undefined;
 
-        const card =
-          source.splice(index, 1)[0];
+            player.stage = null;
+          }
 
-        player.hand.push(card);
+          if (!card) {
+            return { players };
+          }
+          // 手札・盤面は表
+          if (
+            to === "hand" ||
+            to === "character" ||
+            to === "stage"
+          ) {
+            card.isFaceUp = true;
+          }
 
-        return { players };
-      }),
+          if (to === "deck") {
+            card.isFaceUp = false;
+          }
 
-    moveListCardToTrash: (
-      playerIndex: number,
-      from,
-      cardId: string
-    ) =>
-      setWithHistory((state) => {
-        const players = [
-          ...state.players,
-        ] as [
-            PlayerState,
-            PlayerState
-          ];
+          if (to === "life") {
+            card.isFaceUp = true;
+          }
 
-        const player =
-          players[playerIndex];
+          // トラッシュは表
+          if (to === "trash") {
+            card.isFaceUp = true;
+          }
 
-        const source =
-          player[from];
+          // 移動先が手札・トラッシュ・ライフ・デッキの場合は縦向きに戻す
+          if (
+            to === "hand" ||
+            to === "trash" ||
+            // to === "life" ||
+            to === "deck"
+          ) {
+            card.rotated = false;
+          }
 
-        const index =
-          source.findIndex(
-            (x) =>
-              x.id === cardId
-          );
-
-        if (index === -1) {
-          return { players };
-        }
-
-        const card =
-          source.splice(index, 1)[0];
-
-        player.trash.unshift(card);
-
-        return { players };
-      }),
-
-    moveListCardToDeckBottom: (
-      playerIndex: number,
-      from,
-      cardId: string
-    ) =>
-      setWithHistory((state) => {
-        const players = [
-          ...state.players,
-        ] as [
-            PlayerState,
-            PlayerState
-          ];
-
-        const player =
-          players[playerIndex];
-
-        const source =
-          player[from];
-
-        const index =
-          source.findIndex(
-            (x) =>
-              x.id === cardId
-          );
-
-        if (index === -1) {
-          return { players };
-        }
-
-        const card =
-          source.splice(index, 1)[0];
-
-        player.deck.push(card);
-
-        return { players };
-      }),
-
-    refreshPlayer: (playerIndex: number) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const targetCards = [
-          player.leader,
-          player.stage,
-          ...player.characters.filter(Boolean),
-        ].filter(Boolean) as CardData[];
-
-        // REST DON はすべて ACTIVE DON へ
-        player.activeDons = [
-          ...player.restDons.map((don) => ({
-            ...don,
-            rotated: false,
-          })),
-          ...player.activeDons.map((don) => ({
-            ...don,
-            rotated: false,
-          })),
-        ];
-
-        player.restDons = [];
-
-        for (const card of targetCards) {
-          card.rotated = false;
-
-          // パワー補正リセット
-          card.powerModifier = 0;
-
-          // 付与DONはACTIVE DONへ戻す
-          if (card.attachedDonCount > 0) {
-            const count = card.attachedDonCount;
+          // キャラクターがトラッシュへ移動する場合、付与DONを横向きでドンエリアに戻す
+          if (
+            from === "character" &&
+            (to === "trash" || to === "hand") &&
+            card.attachedDonCount > 0
+          ) {
+            const donCount = card.attachedDonCount;
 
             card.attachedDonCount = 0;
 
-            for (let i = 0; i < count; i++) {
-              player.activeDons.unshift({
+            for (let i = 0; i < donCount; i++) {
+              player.restDons.unshift({
                 id: Math.random().toString(36).slice(2),
                 name: "DON",
                 image: getDonImageUrl(),
                 type: "don",
-                rotated: false,
+                rotated: true,
                 attachedDonCount: 0,
                 isFaceUp: true,
               });
             }
           }
-        }
-
-        // 山札の上から1枚ドロー
-        const drawCard = player.deck.shift();
-
-        if (drawCard) {
-          drawCard.isFaceUp = true;
-          drawCard.rotated = false;
-          player.hand.push(drawCard);
-        }
-
-        // DONデッキから2枚ACTIVE DONへ
-        for (let i = 0; i < 2; i++) {
-          const don = player.donDeck.shift();
-
-          if (don) {
-            don.rotated = false;
-            player.activeDons.unshift(don);
-          }
-        }
-
-        return {
-          players,
-          turnStartSnapshot: clonePlayers(players),
-        };
-      }),
-
-    moveListCardToLifeTop: (
-      playerIndex: number,
-      from,
-      cardId: string
-    ) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const source = player[from];
-
-        const index = source.findIndex(
-          (x) => x.id === cardId
-        );
-
-        if (index === -1) {
-          return { players };
-        }
-
-        const card = source.splice(index, 1)[0];
-
-        card.rotated = false;
-        card.isFaceUp = true;
-
-        player.life.unshift(card);
-
-        return { players };
-      }),
-    toggleCardFace: (
-      playerIndex: number,
-      cardId: string
-    ) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const allCards: CardData[] = [
-          ...player.hand,
-
-          ...player.deck,
-
-          ...player.trash,
-
-          ...player.life,
-
-          ...player.activeDons,
-
-          ...player.restDons,
-
-          ...player.characters.filter(
-            (x): x is CardData => x !== null
-          ),
-
-          ...(player.leader
-            ? [player.leader]
-            : []),
-
-          ...(player.stage
-            ? [player.stage]
-            : []),
-        ];
-
-        const card = allCards.find((x) => x.id === cardId);
-
-        if (card) {
-          card.isFaceUp = !card.isFaceUp;
-        }
-
-        return { players };
-      }),
-    openTopDeckCards: (
-      playerIndex: number,
-      count: number
-    ) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        player.deck
-          .slice(0, count)
-          .forEach((card) => {
-            card.isFaceUp = true;
-          });
-
-        return { players };
-      }),
-    changePower: (
-      playerIndex: number,
-      cardId: string,
-      amount: number
-    ) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const allCards = [
-          player.leader,
-          player.stage,
-          ...player.characters.filter(Boolean),
-        ].filter(Boolean) as CardData[];
-
-        const card = allCards.find((x) => x.id === cardId);
-
-        if (card) {
-          card.powerModifier = (card.powerModifier ?? 0) + amount;
-        }
-
-        return { players };
-      }),
-
-    setStatusLabel: (
-      playerIndex: number,
-      cardId: string,
-      label: "アタック×" | "アクティブ×"
-    ) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const allCards = [
-          player.leader,
-          player.stage,
-          ...player.characters.filter(Boolean),
-        ].filter(Boolean) as CardData[];
-
-        const card = allCards.find((x) => x.id === cardId);
-
-        if (card) {
-          card.statusLabel =
-            card.statusLabel === label
-              ? undefined
-              : label;
-        }
-
-        return { players };
-      }),
-    resetToDeckSelect: () =>
-      set(() => ({
-        isStarted: false,
-        undoHistory: [],
-        turnStartSnapshot: null,
-      })),
-    mulligan: (playerIndex: 0 | 1) =>
-      set((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const handCards = player.hand.map((card) => ({
-          ...card,
-          rotated: false,
-          attachedDonCount: 0,
-          isFaceUp: false,
-        }));
-
-        player.deck = shuffle([
-          ...player.deck,
-          ...handCards,
-        ]);
-
-        player.hand = player.deck.splice(0, 5).map((card) => ({
-          ...card,
-          isFaceUp: true,
-          rotated: false,
-        }));
-
-        return {
-          players,
-          mulliganPlayerIndex:
-            playerIndex === 0 ? 1 : null,
-        };
-      }),
-
-    keepHand: (playerIndex: 0 | 1) =>
-      set(() => ({
-        mulliganPlayerIndex:
-          playerIndex === 0 ? 1 : null,
-      })),
-
-    mulliganPlayerIndex: null,
-    takeDonFromDeckToActive: (playerIndex: number) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const don = player.donDeck.shift();
-
-        if (!don) {
-          return { players };
-        }
-
-        don.rotated = false;
-
-        player.activeDons.unshift(don);
-
-        return { players };
-      }),
-
-    takeDonFromDeckToRest: (playerIndex: number) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const don = player.donDeck.shift();
-
-        if (!don) {
-          return { players };
-        }
-
-        don.rotated = true;
-
-        player.restDons.unshift(don);
-
-        return { players };
-      }),
-
-    moveActiveDonToRest: (playerIndex: number) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const don = player.activeDons.shift();
-
-        if (!don) {
-          return { players };
-        }
-
-        don.rotated = true;
-
-        player.restDons.unshift(don);
-
-        return { players };
-      }),
-
-    moveRestDonToActive: (playerIndex: number) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const don = player.restDons.shift();
-
-        if (!don) {
-          return { players };
-        }
-
-        don.rotated = false;
-
-        player.activeDons.unshift(don);
-
-        return { players };
-      }),
-
-    attachDonFromArea: (
-      playerIndex: number,
-      donCardId: string,
-      fromArea: "activeDon" | "restDon",
-      targetCardId: string
-    ) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const source =
-          fromArea === "activeDon"
-            ? player.activeDons
-            : player.restDons;
-
-        const donIndex = source.findIndex(
-          (x) => x.id === donCardId
-        );
-
-        if (donIndex === -1) {
-          return { players };
-        }
-
-        const targetCards = [
-          player.leader,
-          ...player.characters.filter(Boolean),
-        ].filter(Boolean) as CardData[];
-
-        const target = targetCards.find(
-          (x) => x.id === targetCardId
-        );
-
-        if (!target) {
-          return { players };
-        }
-
-        source.splice(donIndex, 1);
-
-        target.attachedDonCount++;
-
-        return { players };
-      }),
-
-    returnAttachedDonToActive: (
-      playerIndex: number,
-      targetCardId: string
-    ) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const targetCards = [
-          player.leader,
-          ...player.characters.filter(Boolean),
-        ].filter(Boolean) as CardData[];
-
-        const target = targetCards.find(
-          (x) => x.id === targetCardId
-        );
-
-        if (!target || target.attachedDonCount <= 0) {
-          return { players };
-        }
-
-        target.attachedDonCount--;
-
-        player.activeDons.unshift({
-          id: Math.random().toString(36).slice(2),
-          name: "DON",
-          image: getDonImageUrl(),
-          type: "don",
-          rotated: false,
-          attachedDonCount: 0,
-          isFaceUp: true,
-        });
-
-        return { players };
-      }),
-
-    returnAttachedDonToRest: (
-      playerIndex: number,
-      targetCardId: string
-    ) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const targetCards = [
-          player.leader,
-          ...player.characters.filter(Boolean),
-        ].filter(Boolean) as CardData[];
-
-        const target = targetCards.find(
-          (x) => x.id === targetCardId
-        );
-
-        if (!target || target.attachedDonCount <= 0) {
-          return { players };
-        }
-
-        target.attachedDonCount--;
-
-        player.restDons.unshift({
-          id: Math.random().toString(36).slice(2),
-          name: "DON",
-          image: getDonImageUrl(),
-          type: "don",
-          rotated: true,
-          attachedDonCount: 0,
-          isFaceUp: true,
-        });
-
-        return { players };
-      }),
-    moveDonBetweenAreas: (
-      playerIndex: number,
-      cardId: string,
-      fromArea: "donDeck" | "activeDon" | "restDon",
-      toArea: "donDeck" | "activeDon" | "restDon"
-    ) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        if (fromArea === toArea) {
-          return { players };
-        }
-
-        const getArea = (
-          area: "donDeck" | "activeDon" | "restDon"
-        ) => {
-          if (area === "donDeck") return player.donDeck;
-          if (area === "activeDon") return player.activeDons;
-          return player.restDons;
-        };
-
-        const fromList = getArea(fromArea);
-        const toList = getArea(toArea);
-
-        const index = fromList.findIndex(
-          (x) => x.id === cardId
-        );
-
-        if (index === -1) {
-          return { players };
-        }
-
-        const don = fromList.splice(index, 1)[0];
-
-        don.rotated = toArea === "restDon";
-
-        toList.unshift(don);
-
-        return { players };
-      }),
-
-    reorderZoneCards: (
-      playerIndex,
-      zone,
-      activeId,
-      overId
-    ) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const cards = [...player[zone]];
-
-        const oldIndex = cards.findIndex(
-          (x) => x.id === activeId
-        );
-
-        const newIndex = cards.findIndex(
-          (x) => x.id === overId
-        );
-
-        if (
-          oldIndex === -1 ||
-          newIndex === -1
-        ) {
-          return { players };
-        }
-
-        const [moved] = cards.splice(
-          oldIndex,
-          1
-        );
-
-        cards.splice(
-          newIndex,
-          0,
-          moved
-        );
-
-        player[zone] = cards;
-
-        return { players };
-      }),
-    selectedDonStack: null,
-
-    selectDonStack: (
-      playerIndex: number,
-      fromArea: DonAreaKey
-    ) =>
-      set((state) => {
-        const player = state.players[playerIndex];
-
-        const source =
-          fromArea === "donDeck"
-            ? player.donDeck
-            : fromArea === "activeDon"
-              ? player.activeDons
-              : player.restDons;
-
-        if (source.length === 0) {
-          return {};
-        }
-
-        const current = state.selectedDonStack;
-
-        if (
-          current &&
-          current.playerIndex === playerIndex &&
-          current.fromArea === fromArea
-        ) {
-          return {
-            selectedDonStack: {
-              ...current,
-              count: Math.min(
-                current.count + 1,
-                source.length
-              ),
-            },
-          };
-        }
-
-        return {
-          selectedDonStack: {
-            playerIndex,
-            fromArea,
-            count: 1,
-          },
-        };
-      }),
-
-    clearSelectedDonStack: () =>
-      set(() => ({
-        selectedDonStack: null,
-      })),
-
-    moveSelectedDonStack: (
-      toArea: DonAreaKey
-    ) =>
-      setWithHistory((state) => {
-        const selected = state.selectedDonStack;
-
-        if (!selected) {
-          return {};
-        }
-
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player =
-          players[selected.playerIndex];
-
-        const getArea = (
-          area: DonAreaKey
-        ) => {
-          if (area === "donDeck") {
-            return player.donDeck;
+          // キャラクターエリアを離れる時は状態リセット
+          if (from === "character") {
+            card.powerModifier = 0;
+
+            card.statusLabel = undefined;
           }
 
-          if (area === "activeDon") {
-            return player.activeDons;
+          if (to === "stage") {
+            player.stage = card;
           }
 
-          return player.restDons;
-        };
+          if (to === "hand") {
+            player.hand.push(card);
+          }
 
-        if (selected.fromArea === toArea) {
-          return {
-            players,
-            selectedDonStack: null,
-          };
-        }
+          if (to === "trash") {
+            player.trash.unshift(card);
+          }
 
-        const fromList =
-          getArea(selected.fromArea);
+          if (to === "life") {
+            player.life.unshift(card);
+          }
 
-        const toList =
-          getArea(toArea);
+          if (to === "deck") {
+            player.deck.unshift(card);
+          }
 
-        const moveCount = Math.min(
-          selected.count,
-          fromList.length
-        );
+          if (
+            to === "character" &&
+            slotIndex !== undefined
+          ) {
+            player.characters[
+              slotIndex
+            ] = card;
+          }
 
-        const movedCards = fromList.splice(
-          0,
-          moveCount
-        );
-
-        for (const don of movedCards) {
-          don.rotated = toArea === "restDon";
-        }
-
-        toList.unshift(...movedCards);
-
-        return {
-          players,
-          selectedDonStack: null,
-        };
-      }),
-
-    attachSelectedDonStack: (
-      targetCardId: string
-    ) =>
-      setWithHistory((state) => {
-        const selected = state.selectedDonStack;
-
-        if (!selected) {
-          return {};
-        }
-
-        if (selected.fromArea === "donDeck") {
-          return {};
-        }
-
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player =
-          players[selected.playerIndex];
-
-        const source =
-          selected.fromArea === "activeDon"
-            ? player.activeDons
-            : player.restDons;
-
-        const targetCards = [
-          player.leader,
-          ...player.characters.filter(
-            (x): x is CardData => x !== null
-          ),
-        ].filter(Boolean) as CardData[];
-
-        const target = targetCards.find(
-          (x) => x.id === targetCardId
-        );
-
-        if (!target) {
-          return {
-            players,
-          };
-        }
-
-        const attachCount = Math.min(
-          selected.count,
-          source.length
-        );
-
-        source.splice(0, attachCount);
-
-        target.attachedDonCount += attachCount;
-
-        return {
-          players,
-          selectedDonStack: null,
-        };
-      }),
-
-    returnAttachedDonsToRest: (
-      playerIndex,
-      cardId
-    ) =>
-      setWithHistory((state) => {
-        const players = [...state.players] as [
-          PlayerState,
-          PlayerState
-        ];
-
-        const player = players[playerIndex];
-
-        const targetCards: CardData[] = [
-          ...(player.leader ? [player.leader] : []),
-          ...(player.stage ? [player.stage] : []),
-          ...player.characters.filter(
-            (x): x is CardData => x !== null
-          ),
-        ];
-
-        const card = targetCards.find(
-          (x) => x.id === cardId
-        );
-
-        if (!card) {
           return { players };
-        }
+        }),
 
-        const count =
-          card.attachedDonCount ?? 0;
 
-        if (count <= 0) {
-          return { players };
-        }
+      removeDon: (
+        playerIndex: number,
+        targetCardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [
+            ...state.players,
+          ] as [
+              PlayerState,
+              PlayerState
+            ];
 
-        card.attachedDonCount = 0;
+          const player =
+            players[playerIndex];
 
-        for (let i = 0; i < count; i++) {
+          const target = [
+            ...player.characters.filter(
+              Boolean
+            ),
+
+            player.leader,
+          ].find(
+            (x) =>
+              x?.id === targetCardId
+          );
+
+          if (!target) {
+            return { players };
+          }
+
+          if (
+            target.attachedDonCount <=
+            0
+          ) {
+            return { players };
+          }
+
+          target.attachedDonCount--;
+
           player.restDons.unshift({
-            id: Math.random()
-              .toString(36)
-              .slice(2),
-
+            id: Math.random().toString(36).slice(2),
             name: "DON",
-
             image: getDonImageUrl(),
-
             type: "don",
-
-            rotated: true,
-
+            rotated: false,
             attachedDonCount: 0,
-
             isFaceUp: true,
           });
-        }
 
-        return { players };
-      }),
-    undoLastAction: () => {
-      const snapshot = get().undoHistory[0];
+          return { players };
+        }),
 
-      if (!snapshot) {
-        return;
-      }
+      moveListCardToHand: (
+        playerIndex: number,
+        from,
+        cardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [
+            ...state.players,
+          ] as [
+              PlayerState,
+              PlayerState
+            ];
 
-      set((state) => ({
-        players: clonePlayers(snapshot),
-        undoHistory: state.undoHistory.slice(1),
-        selectedDonStack: null,
-      }));
-    },
+          const player =
+            players[playerIndex];
 
-    saveTurnStartSnapshot: () => {
-      set((state) => ({
-        turnStartSnapshot: clonePlayers(state.players),
-      }));
-    },
+          const source =
+            player[from];
 
-    returnToTurnStart: () => {
-      const snapshot = get().turnStartSnapshot;
+          const index =
+            source.findIndex(
+              (x) =>
+                x.id === cardId
+            );
 
-      if (!snapshot) {
-        return;
-      }
+          if (index === -1) {
+            return { players };
+          }
 
-      set((state) => ({
-        players: clonePlayers(snapshot),
-        undoHistory: [
-          clonePlayers(state.players),
-          ...state.undoHistory,
-        ].slice(0, MAX_HISTORY_COUNT),
-        selectedDonStack: null,
-      }));
-    },
+          const card =
+            source.splice(index, 1)[0];
 
-    resetGameToMulligan: () => {
-      set((state) => {
-        const resetPlayer = (player: PlayerState): PlayerState => {
-          const mainDeckCards = [
-            ...player.deck,
+          player.hand.push(card);
+
+          return { players };
+        }),
+
+      moveListCardToTrash: (
+        playerIndex: number,
+        from,
+        cardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [
+            ...state.players,
+          ] as [
+              PlayerState,
+              PlayerState
+            ];
+
+          const player =
+            players[playerIndex];
+
+          const source =
+            player[from];
+
+          const index =
+            source.findIndex(
+              (x) =>
+                x.id === cardId
+            );
+
+          if (index === -1) {
+            return { players };
+          }
+
+          const card =
+            source.splice(index, 1)[0];
+
+          player.trash.unshift(card);
+
+          return { players };
+        }),
+
+      moveListCardToDeckBottom: (
+        playerIndex: number,
+        from,
+        cardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [
+            ...state.players,
+          ] as [
+              PlayerState,
+              PlayerState
+            ];
+
+          const player =
+            players[playerIndex];
+
+          const source =
+            player[from];
+
+          const index =
+            source.findIndex(
+              (x) =>
+                x.id === cardId
+            );
+
+          if (index === -1) {
+            return { players };
+          }
+
+          const card =
+            source.splice(index, 1)[0];
+
+          player.deck.push(card);
+
+          return { players };
+        }),
+
+      refreshPlayer: (playerIndex: number) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const targetCards = [
+            player.leader,
+            player.stage,
+            ...player.characters.filter(Boolean),
+          ].filter(Boolean) as CardData[];
+
+          // REST DON はすべて ACTIVE DON へ
+          player.activeDons = [
+            ...player.restDons.map((don) => ({
+              ...don,
+              rotated: false,
+            })),
+            ...player.activeDons.map((don) => ({
+              ...don,
+              rotated: false,
+            })),
+          ];
+
+          player.restDons = [];
+
+          for (const card of targetCards) {
+            card.rotated = false;
+
+            // パワー補正リセット
+            card.powerModifier = 0;
+
+            // 付与DONはACTIVE DONへ戻す
+            if (card.attachedDonCount > 0) {
+              const count = card.attachedDonCount;
+
+              card.attachedDonCount = 0;
+
+              for (let i = 0; i < count; i++) {
+                player.activeDons.unshift({
+                  id: Math.random().toString(36).slice(2),
+                  name: "DON",
+                  image: getDonImageUrl(),
+                  type: "don",
+                  rotated: false,
+                  attachedDonCount: 0,
+                  isFaceUp: true,
+                });
+              }
+            }
+          }
+
+          // 山札の上から1枚ドロー
+          const drawCard = player.deck.shift();
+
+          if (drawCard) {
+            drawCard.isFaceUp = true;
+            drawCard.rotated = false;
+            player.hand.push(drawCard);
+          }
+
+          // DONデッキから2枚ACTIVE DONへ
+          for (let i = 0; i < 2; i++) {
+            const don = player.donDeck.shift();
+
+            if (don) {
+              don.rotated = false;
+              player.activeDons.unshift(don);
+            }
+          }
+
+          return {
+            players,
+            turnStartSnapshot: clonePlayers(players),
+          };
+        }),
+
+      moveListCardToLifeTop: (
+        playerIndex: number,
+        from,
+        cardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const source = player[from];
+
+          const index = source.findIndex(
+            (x) => x.id === cardId
+          );
+
+          if (index === -1) {
+            return { players };
+          }
+
+          const card = source.splice(index, 1)[0];
+
+          card.rotated = false;
+          card.isFaceUp = true;
+
+          player.life.unshift(card);
+
+          return { players };
+        }),
+      toggleCardFace: (
+        playerIndex: number,
+        cardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const allCards: CardData[] = [
             ...player.hand,
-            ...player.life,
+
+            ...player.deck,
+
             ...player.trash,
+
+            ...player.life,
+
+            ...player.activeDons,
+
+            ...player.restDons,
+
             ...player.characters.filter(
               (x): x is CardData => x !== null
             ),
-            ...(player.stage ? [player.stage] : []),
-          ].map((card) => ({
+
+            ...(player.leader
+              ? [player.leader]
+              : []),
+
+            ...(player.stage
+              ? [player.stage]
+              : []),
+          ];
+
+          const card = allCards.find((x) => x.id === cardId);
+
+          if (card) {
+            card.isFaceUp = !card.isFaceUp;
+          }
+
+          return { players };
+        }),
+      openTopDeckCards: (
+        playerIndex: number,
+        count: number
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          player.deck
+            .slice(0, count)
+            .forEach((card) => {
+              card.isFaceUp = true;
+            });
+
+          return { players };
+        }),
+      changePower: (
+        playerIndex: number,
+        cardId: string,
+        amount: number
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const allCards = [
+            player.leader,
+            player.stage,
+            ...player.characters.filter(Boolean),
+          ].filter(Boolean) as CardData[];
+
+          const card = allCards.find((x) => x.id === cardId);
+
+          if (card) {
+            card.powerModifier = (card.powerModifier ?? 0) + amount;
+          }
+
+          return { players };
+        }),
+
+      setStatusLabel: (
+        playerIndex: number,
+        cardId: string,
+        label: "アタック×" | "アクティブ×"
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const allCards = [
+            player.leader,
+            player.stage,
+            ...player.characters.filter(Boolean),
+          ].filter(Boolean) as CardData[];
+
+          const card = allCards.find((x) => x.id === cardId);
+
+          if (card) {
+            card.statusLabel =
+              card.statusLabel === label
+                ? undefined
+                : label;
+          }
+
+          return { players };
+        }),
+      resetToDeckSelect: () =>
+        set(() => ({
+          isStarted: false,
+          undoHistory: [],
+          turnStartSnapshot: null,
+        })),
+      mulligan: (playerIndex: 0 | 1) =>
+        set((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const handCards = player.hand.map((card) => ({
             ...card,
             rotated: false,
-            powerModifier: 0,
-            statusLabel: undefined,
             attachedDonCount: 0,
             isFaceUp: false,
           }));
 
-          const shuffledDeck = shuffleCards(mainDeckCards);
+          player.deck = shuffle([
+            ...player.deck,
+            ...handCards,
+          ]);
 
-          const lifeCount = player.leader?.lifeCount ?? 5;
-
-          const hand = shuffledDeck.slice(0, 5);
-
-          const life = shuffledDeck
-            .slice(5, 5 + lifeCount)
-            .map((card) => ({
-              ...card,
-              isFaceUp: false,
-            }));
-
-          const deck = shuffledDeck.slice(5 + lifeCount);
-
-          const visibleDons = [
-            ...player.donDeck,
-            ...player.activeDons,
-            ...player.restDons,
-          ];
-
-          const attachedDonCount =
-            player.characters.reduce(
-              (sum, card) => sum + (card?.attachedDonCount ?? 0),
-              0
-            ) + (player.leader?.attachedDonCount ?? 0);
-
-          const donSource = visibleDons[0];
-
-          const restoredAttachedDons = Array.from({
-            length: attachedDonCount,
-          }).map((_, index) => ({
-            ...donSource,
-            id: `restored-don-${Date.now()}-${index}`,
-            name: donSource?.name ?? "DON!!",
-            image: donSource?.image ?? "",
-            type: "don" as const,
-            rotated: false,
-            powerModifier: 0,
-            statusLabel: undefined,
-            attachedDonCount: 0,
-            isFaceUp: true,
-          }));
-
-          const allDons = [
-            ...visibleDons,
-            ...restoredAttachedDons,
-          ].map((card) => ({
+          player.hand = player.deck.splice(0, 5).map((card) => ({
             ...card,
-            rotated: false,
-            powerModifier: 0,
-            statusLabel: undefined,
-            attachedDonCount: 0,
             isFaceUp: true,
+            rotated: false,
           }));
 
           return {
-            ...player,
-
-            deck,
-            hand,
-            life,
-            trash: [],
-
-            characters: [null, null, null, null, null],
-            stage: null,
-
-            leader: player.leader
-              ? {
-                ...player.leader,
-                rotated: false,
-                powerModifier: 0,
-                statusLabel: undefined,
-                attachedDonCount: 0,
-                isFaceUp: true,
-              }
-              : null,
-
-            donDeck: allDons,
-            activeDons: [],
-            restDons: [],
+            players,
+            mulliganPlayerIndex:
+              playerIndex === 0 ? 1 : null,
           };
-        };
+        }),
 
-        return {
-          players: [
-            resetPlayer(state.players[0]),
-            resetPlayer(state.players[1]),
-          ],
+      keepHand: (playerIndex: 0 | 1) =>
+        set(() => ({
+          mulliganPlayerIndex:
+            playerIndex === 0 ? 1 : null,
+        })),
+
+      mulliganPlayerIndex: null,
+      takeDonFromDeckToActive: (playerIndex: number) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const don = player.donDeck.shift();
+
+          if (!don) {
+            return { players };
+          }
+
+          don.rotated = false;
+
+          player.activeDons.unshift(don);
+
+          return { players };
+        }),
+
+      takeDonFromDeckToRest: (playerIndex: number) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const don = player.donDeck.shift();
+
+          if (!don) {
+            return { players };
+          }
+
+          don.rotated = true;
+
+          player.restDons.unshift(don);
+
+          return { players };
+        }),
+
+      moveActiveDonToRest: (playerIndex: number) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const don = player.activeDons.shift();
+
+          if (!don) {
+            return { players };
+          }
+
+          don.rotated = true;
+
+          player.restDons.unshift(don);
+
+          return { players };
+        }),
+
+      moveRestDonToActive: (playerIndex: number) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const don = player.restDons.shift();
+
+          if (!don) {
+            return { players };
+          }
+
+          don.rotated = false;
+
+          player.activeDons.unshift(don);
+
+          return { players };
+        }),
+
+      attachDonFromArea: (
+        playerIndex: number,
+        donCardId: string,
+        fromArea: "activeDon" | "restDon",
+        targetCardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const source =
+            fromArea === "activeDon"
+              ? player.activeDons
+              : player.restDons;
+
+          const donIndex = source.findIndex(
+            (x) => x.id === donCardId
+          );
+
+          if (donIndex === -1) {
+            return { players };
+          }
+
+          const targetCards = [
+            player.leader,
+            ...player.characters.filter(Boolean),
+          ].filter(Boolean) as CardData[];
+
+          const target = targetCards.find(
+            (x) => x.id === targetCardId
+          );
+
+          if (!target) {
+            return { players };
+          }
+
+          source.splice(donIndex, 1);
+
+          target.attachedDonCount++;
+
+          return { players };
+        }),
+
+      returnAttachedDonToActive: (
+        playerIndex: number,
+        targetCardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const targetCards = [
+            player.leader,
+            ...player.characters.filter(Boolean),
+          ].filter(Boolean) as CardData[];
+
+          const target = targetCards.find(
+            (x) => x.id === targetCardId
+          );
+
+          if (!target || target.attachedDonCount <= 0) {
+            return { players };
+          }
+
+          target.attachedDonCount--;
+
+          player.activeDons.unshift({
+            id: Math.random().toString(36).slice(2),
+            name: "DON",
+            image: getDonImageUrl(),
+            type: "don",
+            rotated: false,
+            attachedDonCount: 0,
+            isFaceUp: true,
+          });
+
+          return { players };
+        }),
+
+      returnAttachedDonToRest: (
+        playerIndex: number,
+        targetCardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const targetCards = [
+            player.leader,
+            ...player.characters.filter(Boolean),
+          ].filter(Boolean) as CardData[];
+
+          const target = targetCards.find(
+            (x) => x.id === targetCardId
+          );
+
+          if (!target || target.attachedDonCount <= 0) {
+            return { players };
+          }
+
+          target.attachedDonCount--;
+
+          player.restDons.unshift({
+            id: Math.random().toString(36).slice(2),
+            name: "DON",
+            image: getDonImageUrl(),
+            type: "don",
+            rotated: true,
+            attachedDonCount: 0,
+            isFaceUp: true,
+          });
+
+          return { players };
+        }),
+      moveDonBetweenAreas: (
+        playerIndex: number,
+        cardId: string,
+        fromArea: "donDeck" | "activeDon" | "restDon",
+        toArea: "donDeck" | "activeDon" | "restDon"
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          if (fromArea === toArea) {
+            return { players };
+          }
+
+          const getArea = (
+            area: "donDeck" | "activeDon" | "restDon"
+          ) => {
+            if (area === "donDeck") return player.donDeck;
+            if (area === "activeDon") return player.activeDons;
+            return player.restDons;
+          };
+
+          const fromList = getArea(fromArea);
+          const toList = getArea(toArea);
+
+          const index = fromList.findIndex(
+            (x) => x.id === cardId
+          );
+
+          if (index === -1) {
+            return { players };
+          }
+
+          const don = fromList.splice(index, 1)[0];
+
+          don.rotated = toArea === "restDon";
+
+          toList.unshift(don);
+
+          return { players };
+        }),
+
+      reorderZoneCards: (
+        playerIndex,
+        zone,
+        activeId,
+        overId
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const cards = [...player[zone]];
+
+          const oldIndex = cards.findIndex(
+            (x) => x.id === activeId
+          );
+
+          const newIndex = cards.findIndex(
+            (x) => x.id === overId
+          );
+
+          if (
+            oldIndex === -1 ||
+            newIndex === -1
+          ) {
+            return { players };
+          }
+
+          const [moved] = cards.splice(
+            oldIndex,
+            1
+          );
+
+          cards.splice(
+            newIndex,
+            0,
+            moved
+          );
+
+          player[zone] = cards;
+
+          return { players };
+        }),
+      selectedDonStack: null,
+
+      selectDonStack: (
+        playerIndex: number,
+        fromArea: DonAreaKey
+      ) =>
+        set((state) => {
+          const player = state.players[playerIndex];
+
+          const source =
+            fromArea === "donDeck"
+              ? player.donDeck
+              : fromArea === "activeDon"
+                ? player.activeDons
+                : player.restDons;
+
+          if (source.length === 0) {
+            return {};
+          }
+
+          const current = state.selectedDonStack;
+
+          if (
+            current &&
+            current.playerIndex === playerIndex &&
+            current.fromArea === fromArea
+          ) {
+            return {
+              selectedDonStack: {
+                ...current,
+                count: Math.min(
+                  current.count + 1,
+                  source.length
+                ),
+              },
+            };
+          }
+
+          return {
+            selectedDonStack: {
+              playerIndex,
+              fromArea,
+              count: 1,
+            },
+          };
+        }),
+
+      clearSelectedDonStack: () =>
+        set(() => ({
           selectedDonStack: null,
-          undoHistory: [],
-          turnStartSnapshot: null,
-        };
-      });
-    },
+        })),
+
+      moveSelectedDonStack: (
+        toArea: DonAreaKey
+      ) =>
+        setWithHistory((state) => {
+          const selected = state.selectedDonStack;
+
+          if (!selected) {
+            return {};
+          }
+
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player =
+            players[selected.playerIndex];
+
+          const getArea = (
+            area: DonAreaKey
+          ) => {
+            if (area === "donDeck") {
+              return player.donDeck;
+            }
+
+            if (area === "activeDon") {
+              return player.activeDons;
+            }
+
+            return player.restDons;
+          };
+
+          if (selected.fromArea === toArea) {
+            return {
+              players,
+              selectedDonStack: null,
+            };
+          }
+
+          const fromList =
+            getArea(selected.fromArea);
+
+          const toList =
+            getArea(toArea);
+
+          const moveCount = Math.min(
+            selected.count,
+            fromList.length
+          );
+
+          const movedCards = fromList.splice(
+            0,
+            moveCount
+          );
+
+          for (const don of movedCards) {
+            don.rotated = toArea === "restDon";
+          }
+
+          toList.unshift(...movedCards);
+
+          return {
+            players,
+            selectedDonStack: null,
+          };
+        }),
+
+      attachSelectedDonStack: (
+        targetCardId: string
+      ) =>
+        setWithHistory((state) => {
+          const selected = state.selectedDonStack;
+
+          if (!selected) {
+            return {};
+          }
+
+          if (selected.fromArea === "donDeck") {
+            return {};
+          }
+
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player =
+            players[selected.playerIndex];
+
+          const source =
+            selected.fromArea === "activeDon"
+              ? player.activeDons
+              : player.restDons;
+
+          const targetCards = [
+            player.leader,
+            ...player.characters.filter(
+              (x): x is CardData => x !== null
+            ),
+          ].filter(Boolean) as CardData[];
+
+          const target = targetCards.find(
+            (x) => x.id === targetCardId
+          );
+
+          if (!target) {
+            return {
+              players,
+            };
+          }
+
+          const attachCount = Math.min(
+            selected.count,
+            source.length
+          );
+
+          source.splice(0, attachCount);
+
+          target.attachedDonCount += attachCount;
+
+          return {
+            players,
+            selectedDonStack: null,
+          };
+        }),
+
+      returnAttachedDonsToRest: (
+        playerIndex,
+        cardId
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const targetCards: CardData[] = [
+            ...(player.leader ? [player.leader] : []),
+            ...(player.stage ? [player.stage] : []),
+            ...player.characters.filter(
+              (x): x is CardData => x !== null
+            ),
+          ];
+
+          const card = targetCards.find(
+            (x) => x.id === cardId
+          );
+
+          if (!card) {
+            return { players };
+          }
+
+          const count =
+            card.attachedDonCount ?? 0;
+
+          if (count <= 0) {
+            return { players };
+          }
+
+          card.attachedDonCount = 0;
+
+          for (let i = 0; i < count; i++) {
+            player.restDons.unshift({
+              id: Math.random()
+                .toString(36)
+                .slice(2),
+
+              name: "DON",
+
+              image: getDonImageUrl(),
+
+              type: "don",
+
+              rotated: true,
+
+              attachedDonCount: 0,
+
+              isFaceUp: true,
+            });
+          }
+
+          return { players };
+        }),
+      undoLastAction: () => {
+        const snapshot = get().undoHistory[0];
+
+        if (!snapshot) {
+          return;
+        }
+
+        set((state) => ({
+          players: clonePlayers(snapshot),
+          undoHistory: state.undoHistory.slice(1),
+          selectedDonStack: null,
+        }));
+      },
+
+      saveTurnStartSnapshot: () => {
+        set((state) => ({
+          turnStartSnapshot: clonePlayers(state.players),
+        }));
+      },
+
+      returnToTurnStart: () => {
+        const snapshot = get().turnStartSnapshot;
+
+        if (!snapshot) {
+          return;
+        }
+
+        set((state) => ({
+          players: clonePlayers(snapshot),
+          undoHistory: [
+            clonePlayers(state.players),
+            ...state.undoHistory,
+          ].slice(0, MAX_HISTORY_COUNT),
+          selectedDonStack: null,
+        }));
+      },
+
+      resetGameToMulligan: () => {
+        set((state) => {
+          const resetPlayer = (player: PlayerState): PlayerState => {
+            const mainDeckCards = [
+              ...player.deck,
+              ...player.hand,
+              ...player.life,
+              ...player.trash,
+              ...player.characters.filter(
+                (x): x is CardData => x !== null
+              ),
+              ...(player.stage ? [player.stage] : []),
+            ].map((card) => ({
+              ...card,
+              rotated: false,
+              powerModifier: 0,
+              statusLabel: undefined,
+              attachedDonCount: 0,
+              isFaceUp: false,
+            }));
+
+            const shuffledDeck = shuffleCards(mainDeckCards);
+
+            const lifeCount = player.leader?.lifeCount ?? 5;
+
+            const hand = shuffledDeck.slice(0, 5);
+
+            const life = shuffledDeck
+              .slice(5, 5 + lifeCount)
+              .map((card) => ({
+                ...card,
+                isFaceUp: false,
+              }));
+
+            const deck = shuffledDeck.slice(5 + lifeCount);
+
+            const visibleDons = [
+              ...player.donDeck,
+              ...player.activeDons,
+              ...player.restDons,
+            ];
+
+            const attachedDonCount =
+              player.characters.reduce(
+                (sum, card) => sum + (card?.attachedDonCount ?? 0),
+                0
+              ) + (player.leader?.attachedDonCount ?? 0);
+
+            const donSource = visibleDons[0];
+
+            const restoredAttachedDons = Array.from({
+              length: attachedDonCount,
+            }).map((_, index) => ({
+              ...donSource,
+              id: `restored-don-${Date.now()}-${index}`,
+              name: donSource?.name ?? "DON!!",
+              image: donSource?.image ?? "",
+              type: "don" as const,
+              rotated: false,
+              powerModifier: 0,
+              statusLabel: undefined,
+              attachedDonCount: 0,
+              isFaceUp: true,
+            }));
+
+            const allDons = [
+              ...visibleDons,
+              ...restoredAttachedDons,
+            ].map((card) => ({
+              ...card,
+              rotated: false,
+              powerModifier: 0,
+              statusLabel: undefined,
+              attachedDonCount: 0,
+              isFaceUp: true,
+            }));
+
+            return {
+              ...player,
+
+              deck,
+              hand,
+              life,
+              trash: [],
+
+              characters: [null, null, null, null, null],
+              stage: null,
+
+              leader: player.leader
+                ? {
+                  ...player.leader,
+                  rotated: false,
+                  powerModifier: 0,
+                  statusLabel: undefined,
+                  attachedDonCount: 0,
+                  isFaceUp: true,
+                }
+                : null,
+
+              donDeck: allDons,
+              activeDons: [],
+              restDons: [],
+            };
+          };
+
+          return {
+            players: [
+              resetPlayer(state.players[0]),
+              resetPlayer(state.players[1]),
+            ],
+            selectedDonStack: null,
+            undoHistory: [],
+            turnStartSnapshot: null,
+          };
+        });
+      },
+    });
   });
-});

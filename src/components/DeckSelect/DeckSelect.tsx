@@ -1,8 +1,26 @@
-import { useState } from "react";
+import {
+  useEffect,
+  useState
+} from "react";
 
 import type { CSSProperties } from "react";
 
-import { useGameStore } from "../../store/gameStore";
+import {
+  useGameStore
+} from "../../store/gameStore";
+
+import type {
+  OnlineDeckOrderPayload
+} from "../../store/gameStore";
+
+import {
+  isHost,
+  socket
+} from "../../network/socket";
+
+import {
+  sendGameSetup
+} from "../../network/roomClient";
 
 import DeckBuilder from "../DeckBuilder/DeckBuilder";
 
@@ -111,13 +129,24 @@ export default function DeckSelect() {
   const [player2DeckId, setPlayer2DeckId] =
     useState<string | null>(null);
 
-  const [isZipLoaded, setIsZipLoaded] = useState(hasLocalCardImages());
+  const [isZipLoaded, setIsZipLoaded] =
+    useState(hasLocalCardImages());
 
   const [message, setMessage] = useState("");
 
   const [error, setError] = useState("");
 
-  const startGame = useGameStore((x) => x.startGame);
+  const startGame = useGameStore(
+    (x) => x.startGame
+  );
+
+  const createOnlineDeckOrder = useGameStore(
+    (x) => x.createOnlineDeckOrder
+  );
+
+  const startGameWithDeckOrders = useGameStore(
+    (x) => x.startGameWithDeckOrders
+  );
 
   function refreshDecks() {
     const nextDecks = getAllLocalDeckRecipes();
@@ -138,6 +167,71 @@ export default function DeckSelect() {
       setPlayer2DeckId(null);
     }
   }
+
+  function buildSelectedDeckCards() {
+    if (!player1DeckId || !player2DeckId) {
+      throw new Error("デッキ1とデッキ2を選択してください。");
+    }
+
+    const player1Recipe = getLocalDeckRecipe(player1DeckId);
+    const player2Recipe = getLocalDeckRecipe(player2DeckId);
+
+    if (!player1Recipe || !player2Recipe) {
+      refreshDecks();
+      throw new Error("選択したデッキが見つかりません。");
+    }
+
+    return {
+      player1Cards: buildDeckCardsFromRecipe(player1Recipe),
+      player2Cards: buildDeckCardsFromRecipe(player2Recipe),
+    };
+  }
+
+  useEffect(() => {
+    const handleGameSetup = (
+      deckOrder: OnlineDeckOrderPayload
+    ) => {
+      console.log(
+        "RECEIVED GAME SETUP",
+        deckOrder
+      );
+
+      try {
+        const {
+          player1Cards,
+          player2Cards,
+        } = buildSelectedDeckCards();
+
+        startGameWithDeckOrders(
+          player1Cards,
+          player2Cards,
+          deckOrder
+        );
+      } catch (e) {
+        setError(
+          e instanceof Error
+            ? e.message
+            : "同期されたゲーム開始に失敗しました。"
+        );
+      }
+    };
+
+    socket.on(
+      "game-setup",
+      handleGameSetup
+    );
+
+    return () => {
+      socket.off(
+        "game-setup",
+        handleGameSetup
+      );
+    };
+  }, [
+    player1DeckId,
+    player2DeckId,
+    startGameWithDeckOrders,
+  ]);
 
   async function handleLoadZip(file: File | null) {
     if (!file) {
@@ -213,25 +307,39 @@ export default function DeckSelect() {
       return;
     }
 
-    if (!player1DeckId || !player2DeckId) {
-      setError("デッキ1とデッキ2を選択してください。");
-      return;
-    }
-
-    const player1Recipe = getLocalDeckRecipe(player1DeckId);
-    const player2Recipe = getLocalDeckRecipe(player2DeckId);
-
-    if (!player1Recipe || !player2Recipe) {
-      setError("選択したデッキが見つかりません。");
-      refreshDecks();
-      return;
-    }
-
     try {
-      const player1Cards = buildDeckCardsFromRecipe(player1Recipe);
-      const player2Cards = buildDeckCardsFromRecipe(player2Recipe);
+      const {
+        player1Cards,
+        player2Cards,
+      } = buildSelectedDeckCards();
 
-      startGame(player1Cards, player2Cards);
+      console.log(
+        "START GAME",
+        player1Cards.length,
+        player2Cards.length
+      );
+
+      if (isHost) {
+        const deckOrder = createOnlineDeckOrder(
+          player1Cards,
+          player2Cards
+        );
+
+        startGameWithDeckOrders(
+          player1Cards,
+          player2Cards,
+          deckOrder
+        );
+
+        sendGameSetup(deckOrder);
+
+        return;
+      }
+
+      startGame(
+        player1Cards,
+        player2Cards
+      );
     } catch (e) {
       setError(
         e instanceof Error
@@ -473,7 +581,7 @@ export default function DeckSelect() {
           padding: "10px",
           boxSizing: "border-box",
           boxShadow: "0 -4px 16px rgba(0,0,0,0.45)",
-          marginBottom: "20px"
+          marginBottom: "20px",
         }}
       >
         <div
