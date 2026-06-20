@@ -12,6 +12,8 @@ import { getDonDeckImageUrl } from "../../utils/localCardImages";
 
 import { createPortal } from "react-dom";
 
+import { sendBoardAction } from "../../network/roomClient";
+
 type CardFrom =
   | "hand"
   | "character"
@@ -137,6 +139,74 @@ export default function GameCard({
     }
   }
 
+  function getMenuTargetInfo() {
+    const player =
+      useGameStore.getState().players[playerIndex];
+
+    if (from === "leader") {
+      return {
+        targetArea: "leader" as const,
+        targetIndex: 0,
+      };
+    }
+
+    if (from === "stage") {
+      return {
+        targetArea: "stage" as const,
+        targetIndex: 0,
+      };
+    }
+
+    if (from === "character") {
+      const targetIndex =
+        player.characters.findIndex(
+          (x) => x?.id === card.id
+        );
+
+      if (targetIndex === -1) {
+        return null;
+      }
+
+      return {
+        targetArea: "character" as const,
+        targetIndex,
+      };
+    }
+
+    return null;
+  }
+
+  function sendCardMenuAction(
+    menuAction:
+      | "TOGGLE_ROTATE"
+      | "CHANGE_POWER"
+      | "SET_STATUS_LABEL"
+      | "RETURN_ATTACHED_DONS_TO_REST",
+    options?: {
+      amount?: number;
+      label?: "アタック×" | "アクティブ×";
+    }
+  ) {
+    const targetInfo = getMenuTargetInfo();
+
+    if (!targetInfo) {
+      return;
+    }
+
+    sendBoardAction({
+      actionType: "CARD_MENU_ACTION",
+      payload: {
+        playerIndex,
+        cardId: card.id,
+        targetArea: targetInfo.targetArea,
+        targetIndex: targetInfo.targetIndex,
+        menuAction,
+        amount: options?.amount,
+        label: options?.label,
+      },
+    });
+  }
+
   const powerModifier = card.powerModifier ?? 0;
 
   return (
@@ -223,6 +293,8 @@ export default function GameCard({
           from === "stage"
         ) {
           toggleRotate(playerIndex, card.id);
+
+          sendCardMenuAction("TOGGLE_ROTATE");
         }
       }}
     >
@@ -430,36 +502,64 @@ export default function GameCard({
                 >
                   <button
                     style={menuButtonStylePowerPlus}
-                    onClick={() =>
-                      changePower(playerIndex, card.id, 1000)
-                    }
+                    onClick={() => {
+                      changePower(playerIndex, card.id, 1000);
+
+                      sendCardMenuAction(
+                        "CHANGE_POWER",
+                        {
+                          amount: 1000,
+                        }
+                      );
+                    }}
                   >
                     パワー+1000
                   </button>
 
                   <button
                     style={menuButtonStylePowerMinus}
-                    onClick={() =>
-                      changePower(playerIndex, card.id, -1000)
-                    }
+                    onClick={() => {
+                      changePower(playerIndex, card.id, -1000);
+
+                      sendCardMenuAction(
+                        "CHANGE_POWER",
+                        {
+                          amount: -1000,
+                        }
+                      );
+                    }}
                   >
                     パワー-1000
                   </button>
 
                   <button
                     style={menuButtonStyle}
-                    onClick={() =>
-                      setStatusLabel(playerIndex, card.id, "アタック×")
-                    }
+                    onClick={() => {
+                      setStatusLabel(playerIndex, card.id, "アタック×");
+
+                      sendCardMenuAction(
+                        "SET_STATUS_LABEL",
+                        {
+                          label: "アタック×",
+                        }
+                      );
+                    }}
                   >
                     アタック×
                   </button>
 
                   <button
                     style={menuButtonStyle}
-                    onClick={() =>
-                      setStatusLabel(playerIndex, card.id, "アクティブ×")
-                    }
+                    onClick={() => {
+                      setStatusLabel(playerIndex, card.id, "アクティブ×");
+
+                      sendCardMenuAction(
+                        "SET_STATUS_LABEL",
+                        {
+                          label: "アクティブ×",
+                        }
+                      );
+                    }}
                   >
                     アクティブ×
                   </button>
@@ -496,9 +596,13 @@ export default function GameCard({
                             ? "auto"
                             : "none",
                       }}
-                      onClick={() =>
-                        returnAttachedDonsToRest(playerIndex, card.id)
-                      }
+                      onClick={() => {
+                        returnAttachedDonsToRest(playerIndex, card.id);
+
+                        sendCardMenuAction(
+                          "RETURN_ATTACHED_DONS_TO_REST"
+                        );
+                      }}
                     >
                       付与ドン!!
                       <br />

@@ -13,6 +13,8 @@ import type { PlayerState } from "../../types/card";
 
 import { useGameStore } from "../../store/gameStore";
 
+import { sendBoardAction } from "../../network/roomClient";
+
 import CardListModal from "../Modal/CardListModal";
 import StageArea from "../Areas/StageArea";
 import { GAME_LAYOUT } from "../../layout/gameLayout";
@@ -28,6 +30,17 @@ type Props = {
 
   isOwnPlayer: boolean;
 };
+
+type ZoneKey =
+  | "deck"
+  | "trash"
+  | "life";
+
+type ListCardAction =
+  | "TO_HAND"
+  | "TO_TRASH"
+  | "TO_DECK_BOTTOM"
+  | "TO_LIFE_TOP";
 
 function getCardBackImage() {
   return (
@@ -89,6 +102,179 @@ export default function PlayerBoard({
 
   const selectDonStack =
     useGameStore((x) => x.selectDonStack);
+
+  function getZoneCards(
+    zone: ZoneKey
+  ) {
+    if (zone === "deck") {
+      return player.deck;
+    }
+
+    if (zone === "trash") {
+      return player.trash;
+    }
+
+    return player.life;
+  }
+
+  function getZoneCardIndex(
+    zone: ZoneKey,
+    cardId: string
+  ) {
+    return getZoneCards(zone).findIndex(
+      (card) => card.id === cardId
+    );
+  }
+
+  function sendListCardAction(
+    zone: ZoneKey,
+    cardId: string,
+    listAction: ListCardAction
+  ) {
+    const fromIndex = getZoneCardIndex(
+      zone,
+      cardId
+    );
+
+    if (fromIndex === -1) {
+      return false;
+    }
+
+    sendBoardAction({
+      actionType: "LIST_CARD_ACTION",
+      payload: {
+        playerIndex,
+        from: zone,
+        fromIndex,
+        listAction,
+      },
+    });
+
+    return true;
+  }
+
+  function handleListCardToHand(
+    zone: ZoneKey,
+    cardId: string
+  ) {
+    if (!sendListCardAction(zone, cardId, "TO_HAND")) {
+      return;
+    }
+
+    moveListCardToHand(playerIndex, zone, cardId);
+  }
+
+  function handleListCardToTrash(
+    zone: ZoneKey,
+    cardId: string
+  ) {
+    if (!sendListCardAction(zone, cardId, "TO_TRASH")) {
+      return;
+    }
+
+    moveListCardToTrash(playerIndex, zone, cardId);
+  }
+
+  function handleListCardToDeckBottom(
+    zone: ZoneKey,
+    cardId: string
+  ) {
+    if (!sendListCardAction(zone, cardId, "TO_DECK_BOTTOM")) {
+      return;
+    }
+
+    moveListCardToDeckBottom(playerIndex, zone, cardId);
+  }
+
+  function handleListCardToLifeTop(
+    zone: ZoneKey,
+    cardId: string
+  ) {
+    if (!sendListCardAction(zone, cardId, "TO_LIFE_TOP")) {
+      return;
+    }
+
+    moveListCardToLifeTop(playerIndex, zone, cardId);
+  }
+
+  function handleToggleCardFace(
+    zone: ZoneKey,
+    cardId: string
+  ) {
+    const cardIndex = getZoneCardIndex(
+      zone,
+      cardId
+    );
+
+    if (cardIndex === -1) {
+      return;
+    }
+
+    toggleCardFace(playerIndex, cardId);
+
+    sendBoardAction({
+      actionType: "TOGGLE_LIST_CARD_FACE",
+      payload: {
+        playerIndex,
+        zone,
+        cardIndex,
+      },
+    });
+  }
+
+  function handleOpenTopDeckCards(
+    count: number
+  ) {
+    openTopDeckCards(playerIndex, count);
+
+    sendBoardAction({
+      actionType: "OPEN_TOP_DECK_CARDS",
+      payload: {
+        playerIndex,
+        count,
+      },
+    });
+  }
+
+  function handleReorderZoneCards(
+    zone: ZoneKey,
+    activeId: string,
+    overId: string
+  ) {
+    const activeIndex = getZoneCardIndex(
+      zone,
+      activeId
+    );
+
+    const overIndex = getZoneCardIndex(
+      zone,
+      overId
+    );
+
+    if (
+      activeIndex === -1 ||
+      overIndex === -1
+    ) {
+      return;
+    }
+
+    reorderZoneCards(
+      playerIndex,
+      zone,
+      activeId,
+      overId
+    );
+
+    sendBoardAction({
+      actionType: "REORDER_ZONE_CARDS",
+      payload: {
+        playerIndex,
+        zone,
+        activeIndex,
+        overIndex,
+      },
+    });
+  }
 
   return (
     <>
@@ -342,28 +528,27 @@ export default function PlayerBoard({
         open={deckOpen}
         onClose={() => setDeckOpen(false)}
         onHand={(id) =>
-          moveListCardToHand(playerIndex, "deck", id)
+          handleListCardToHand("deck", id)
         }
         onTrash={(id) =>
-          moveListCardToTrash(playerIndex, "deck", id)
+          handleListCardToTrash("deck", id)
         }
         onBottom={(id) =>
-          moveListCardToDeckBottom(playerIndex, "deck", id)
+          handleListCardToDeckBottom("deck", id)
         }
         onLifeTop={(id) =>
-          moveListCardToLifeTop(playerIndex, "deck", id)
+          handleListCardToLifeTop("deck", id)
         }
         onToggleFace={(cardId) =>
-          toggleCardFace(playerIndex, cardId)
+          handleToggleCardFace("deck", cardId)
         }
         onOpenTopCards={(count) =>
-          openTopDeckCards(playerIndex, count)
+          handleOpenTopDeckCards(count)
         }
         zone="deck"
         playerIndex={playerIndex}
         onReorder={(activeId, overId) =>
-          reorderZoneCards(
-            playerIndex,
+          handleReorderZoneCards(
             "deck",
             activeId,
             overId
@@ -377,26 +562,25 @@ export default function PlayerBoard({
         open={trashOpen}
         onClose={() => setTrashOpen(false)}
         onHand={(id) =>
-          moveListCardToHand(playerIndex, "trash", id)
+          handleListCardToHand("trash", id)
         }
         onTrash={(id) =>
-          moveListCardToTrash(playerIndex, "trash", id)
+          handleListCardToTrash("trash", id)
         }
         onBottom={(id) =>
-          moveListCardToDeckBottom(playerIndex, "trash", id)
+          handleListCardToDeckBottom("trash", id)
         }
         onLifeTop={(id) =>
-          moveListCardToLifeTop(playerIndex, "trash", id)
+          handleListCardToLifeTop("trash", id)
         }
         onToggleFace={(cardId) =>
-          toggleCardFace(playerIndex, cardId)
+          handleToggleCardFace("trash", cardId)
         }
         onOpenTopCards={() => { }}
         zone="trash"
         playerIndex={playerIndex}
         onReorder={(activeId, overId) =>
-          reorderZoneCards(
-            playerIndex,
+          handleReorderZoneCards(
             "trash",
             activeId,
             overId
@@ -410,26 +594,25 @@ export default function PlayerBoard({
         open={lifeOpen}
         onClose={() => setLifeOpen(false)}
         onHand={(id) =>
-          moveListCardToHand(playerIndex, "life", id)
+          handleListCardToHand("life", id)
         }
         onTrash={(id) =>
-          moveListCardToTrash(playerIndex, "life", id)
+          handleListCardToTrash("life", id)
         }
         onBottom={(id) =>
-          moveListCardToDeckBottom(playerIndex, "life", id)
+          handleListCardToDeckBottom("life", id)
         }
         onLifeTop={(id) =>
-          moveListCardToLifeTop(playerIndex, "life", id)
+          handleListCardToLifeTop("life", id)
         }
         onToggleFace={(cardId) =>
-          toggleCardFace(playerIndex, cardId)
+          handleToggleCardFace("life", cardId)
         }
         onOpenTopCards={() => { }}
         zone="life"
         playerIndex={playerIndex}
         onReorder={(activeId, overId) =>
-          reorderZoneCards(
-            playerIndex,
+          handleReorderZoneCards(
             "life",
             activeId,
             overId
