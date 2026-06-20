@@ -608,7 +608,7 @@ export default function DeckBuilder({
             <h1 style={{ margin: 0, fontSize: "22px" }}>デッキ編集</h1>
 
             <button style={buttonStyle} onClick={onBack}>
-              デッキ選択へ戻る
+              トップへ戻る
             </button>
           </div>
 
