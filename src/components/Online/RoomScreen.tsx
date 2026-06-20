@@ -134,6 +134,10 @@ export default function RoomScreen({
                 const guestCards =
                     buildDeckCardsFromRecipe(guestDeckRecipe);
 
+                useGameStore
+                    .getState()
+                    .setLocalPlayerIndex(1);
+
                 startGameWithDeckOrders(
                     hostCards,
                     guestCards,
@@ -300,6 +304,10 @@ export default function RoomScreen({
                 hostCards,
                 guestCards
             );
+
+            useGameStore
+                .getState()
+                .setLocalPlayerIndex(0);
 
             startGameWithDeckOrders(
                 hostCards,

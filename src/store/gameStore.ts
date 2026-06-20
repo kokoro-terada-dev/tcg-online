@@ -265,6 +265,12 @@ interface GameState {
 
   isStarted: boolean;
 
+  localPlayerIndex: 0 | 1 | null;
+
+  setLocalPlayerIndex: (
+    playerIndex: 0 | 1
+  ) => void;
+
   startGame: (
     player1Deck: CardData[],
     player2Deck: CardData[]
@@ -352,6 +358,8 @@ interface GameState {
   mulliganPlayerIndex: 0 | 1 | null;
 
   mulligan: (playerIndex: 0 | 1) => void;
+
+  finishOnlineMulligan: () => void;
 
   keepHand: (playerIndex: 0 | 1) => void;
 
@@ -471,9 +479,18 @@ export const useGameStore =
 
       isStarted: false,
 
+      localPlayerIndex: null,
+
       undoHistory: [],
 
       turnStartSnapshot: null,
+
+      setLocalPlayerIndex: (
+        playerIndex: 0 | 1
+      ) =>
+        set(() => ({
+          localPlayerIndex: playerIndex,
+        })),
 
       startGame: (
         player1Deck: CardData[],
@@ -1298,6 +1315,11 @@ export const useGameStore =
         set(() => ({
           mulliganPlayerIndex:
             playerIndex === 0 ? 1 : null,
+        })),
+
+      finishOnlineMulligan: () =>
+        set(() => ({
+          mulliganPlayerIndex: null,
         })),
 
       mulliganPlayerIndex: null,

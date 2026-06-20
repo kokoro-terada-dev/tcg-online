@@ -50,6 +50,17 @@ export default function Board({
 }: Props) {
   const players = useGameStore((x) => x.players);
 
+  const localPlayerIndex =
+    useGameStore(
+      (x) => x.localPlayerIndex
+    );
+
+  const ownPlayerIndex =
+    localPlayerIndex ?? 1;
+
+  const opponentPlayerIndex =
+    ownPlayerIndex === 0 ? 1 : 0;
+
   const refreshPlayer = useGameStore(
     (x) => x.refreshPlayer
   );
@@ -315,10 +326,11 @@ export default function Board({
             }}
           >
             <PlayerBoard
-              player={players[0]}
-              playerIndex={0}
+              player={players[opponentPlayerIndex]}
+              playerIndex={opponentPlayerIndex}
               onPreview={setPreviewImage}
               reversed
+              isOwnPlayer={false}
             />
           </div>
 
@@ -342,7 +354,7 @@ export default function Board({
               title="上プレイヤーリフレッシュ"
               aria-label="上プレイヤーリフレッシュ"
               onClick={() => {
-                refreshPlayer(0);
+                refreshPlayer(opponentPlayerIndex);
               }}
             >
               ⬆️
@@ -352,7 +364,7 @@ export default function Board({
               title="下プレイヤーリフレッシュ"
               aria-label="下プレイヤーリフレッシュ"
               onClick={() => {
-                refreshPlayer(1);
+                refreshPlayer(ownPlayerIndex);
               }}
             >
               ⬇️
@@ -413,9 +425,10 @@ export default function Board({
             }}
           >
             <PlayerBoard
-              player={players[1]}
-              playerIndex={1}
+              player={players[ownPlayerIndex]}
+              playerIndex={ownPlayerIndex}
               onPreview={setPreviewImage}
+              isOwnPlayer
             />
           </div>
         </div>
