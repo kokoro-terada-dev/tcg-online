@@ -7,7 +7,76 @@ import {
   setHost
 } from "./socket";
 
+export type DeckRecipeForRoom = {
+  name: string;
+  leaderCardId: string | null;
+  mainDeck: string[];
+  donDeck: string[];
+  cardTypes: Record<string, string>;
+  leaderLifeCount?: number;
+};
+
+export type RoomStateForClient = {
+  roomId: string;
+  hostSocketId: string;
+  guestSocketId: string | null;
+  hostReady: boolean;
+  guestReady: boolean;
+  hostDeckRecipe: DeckRecipeForRoom | null;
+  guestDeckRecipe: DeckRecipeForRoom | null;
+};
+
 let roomIdForClient: string | null = null;
+let roomStateForClient: RoomStateForClient | null = null;
+
+const roomStateListeners =
+  new Set<(roomState: RoomStateForClient) => void>();
+
+const joinFailedListeners =
+  new Set<() => void>();
+
+function updateRoomState(
+  roomState: RoomStateForClient
+) {
+  roomIdForClient = roomState.roomId;
+  roomStateForClient = roomState;
+
+  for (const listener of roomStateListeners) {
+    listener(roomState);
+  }
+}
+
+export function getClientRoomId() {
+  return roomIdForClient;
+}
+
+export function getClientRoomState() {
+  return roomStateForClient;
+}
+
+export function onRoomStateChanged(
+  listener: (roomState: RoomStateForClient) => void
+) {
+  roomStateListeners.add(listener);
+
+  if (roomStateForClient) {
+    listener(roomStateForClient);
+  }
+
+  return () => {
+    roomStateListeners.delete(listener);
+  };
+}
+
+export function onJoinFailed(
+  listener: () => void
+) {
+  joinFailedListeners.add(listener);
+
+  return () => {
+    joinFailedListeners.delete(listener);
+  };
+}
 
 export function setClientRoomId(
   roomId: string
@@ -24,22 +93,41 @@ export function createRoom() {
 export function joinRoom(
   roomId: string
 ) {
+  const normalizedRoomId =
+    roomId.trim().toUpperCase();
+
+  if (!normalizedRoomId) {
+    return;
+  }
+
   setHost(false);
 
-  roomIdForClient = roomId;
+  roomIdForClient = normalizedRoomId;
 
   socket.emit(
     "join-room",
-    roomId
+    normalizedRoomId
+  );
+}
+
+export function selectDeckForRoom(
+  deckRecipe: DeckRecipeForRoom
+) {
+  if (!roomIdForClient) {
+    return;
+  }
+
+  socket.emit(
+    "deck-selected",
+    {
+      roomId: roomIdForClient,
+      deckRecipe,
+    }
   );
 }
 
 export function ready() {
   if (!roomIdForClient) {
-    console.warn(
-      "ready skipped: room id is not set"
-    );
-
     return;
   }
 
@@ -53,18 +141,8 @@ export function sendGameSetup(
   deckOrder: OnlineDeckOrderPayload
 ) {
   if (!roomIdForClient) {
-    console.warn(
-      "game setup skipped: room id is not set"
-    );
-
     return;
   }
-
-  console.log(
-    "SEND GAME SETUP",
-    roomIdForClient,
-    deckOrder
-  );
 
   socket.emit(
     "game-setup",
@@ -77,24 +155,33 @@ export function sendGameSetup(
 
 socket.on(
   "room-created",
-  (roomId: string) => {
-    roomIdForClient = roomId;
-
-    console.log(
-      "ROOM CREATED",
-      roomId
-    );
+  (roomState: RoomStateForClient) => {
+    console.log("ROOM CREATED", roomState);
+    setHost(true);
+    updateRoomState(roomState);
   }
 );
 
 socket.on(
   "room-joined",
-  (roomId: string) => {
-    roomIdForClient = roomId;
+  (roomState: RoomStateForClient) => {
+    setHost(false);
+    updateRoomState(roomState);
+  }
+);
 
-    console.log(
-      "ROOM JOINED",
-      roomId
-    );
+socket.on(
+  "room-state",
+  (roomState: RoomStateForClient) => {
+    updateRoomState(roomState);
+  }
+);
+
+socket.on(
+  "join-failed",
+  () => {
+    for (const listener of joinFailedListeners) {
+      listener();
+    }
   }
 );

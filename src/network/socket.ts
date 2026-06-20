@@ -1,21 +1,18 @@
 import { io } from "socket.io-client";
 
+const SERVER_URL =
+  import.meta.env.DEV
+    ? "http://localhost:3000"
+    : "https://tcg-server-u085.onrender.com";
+
 export const socket = io(
-  "http://localhost:3000",
+  SERVER_URL,
   {
     transports: ["websocket"],
   }
 );
 
-export let currentRoomId: string | null = null;
-
 export let isHost = false;
-
-export function setRoomId(
-  roomId: string
-) {
-  currentRoomId = roomId;
-}
 
 export function setHost(
   value: boolean

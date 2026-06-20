@@ -113,7 +113,13 @@ function renderLeaderIcon(deck: DeckRecipe) {
   );
 }
 
-export default function DeckSelect() {
+type DeckSelectProps = {
+  onOpenOnlineMenu: () => void;
+};
+
+export default function DeckSelect({
+  onOpenOnlineMenu,
+}: DeckSelectProps) {
   const [mode, setMode] = useState<ScreenMode>("select");
 
   const [editingDeckId, setEditingDeckId] =
@@ -433,8 +439,22 @@ export default function DeckSelect() {
             />
           </label>
 
-          <button style={primaryButtonStyle} onClick={openNewDeck}>
+          <button
+            style={primaryButtonStyle}
+            onClick={openNewDeck}
+          >
             デッキ編集
+          </button>
+
+          <button
+            style={{
+              ...primaryButtonStyle,
+              opacity: isZipLoaded ? 1 : 0.45,
+            }}
+            disabled={!isZipLoaded}
+            onClick={onOpenOnlineMenu}
+          >
+            対戦
           </button>
         </div>
 
