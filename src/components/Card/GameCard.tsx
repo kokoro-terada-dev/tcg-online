@@ -8,7 +8,10 @@ import { useGameStore } from "../../store/gameStore";
 
 import { useDraggable } from "@dnd-kit/core";
 
-import { getDonDeckImageUrl } from "../../utils/localCardImages";
+import {
+  getCardBackImageUrl,
+  getDonDeckImageUrl
+} from "../../utils/localCardImages";
 
 import { createPortal } from "react-dom";
 
@@ -21,6 +24,7 @@ type CardFrom =
   | "trash"
   | "life"
   | "deck"
+  | "public"
   | "don"
   | "leader"
   | "activeDon"
@@ -74,8 +78,6 @@ const menuButtonStylePowerMinus = {
   cursor: "pointer",
 };
 
-
-
 export default function GameCard({
   card,
   playerIndex,
@@ -100,6 +102,7 @@ export default function GameCard({
   const toggleRotate = useGameStore((x) => x.toggleRotate);
   const changePower = useGameStore((x) => x.changePower);
   const setStatusLabel = useGameStore((x) => x.setStatusLabel);
+  const toggleCardFace = useGameStore((x) => x.toggleCardFace);
   const returnAttachedDonsToRest = useGameStore(
     (x) => x.returnAttachedDonsToRest
   );
@@ -296,10 +299,43 @@ export default function GameCard({
 
           sendCardMenuAction("TOGGLE_ROTATE");
         }
+        if (from === "public") {
+          e.stopPropagation();
+
+          const player =
+            useGameStore.getState().players[playerIndex];
+
+          const cardIndex =
+            player.publicCards.findIndex(
+              (x) => x.id === card.id
+            );
+
+          if (cardIndex === -1) {
+            return;
+          }
+
+          toggleCardFace(playerIndex, card.id);
+
+          sendBoardAction({
+            actionType: "TOGGLE_PUBLIC_CARD_FACE",
+            payload: {
+              playerIndex,
+              cardIndex,
+            },
+          });
+
+          return;
+        }
       }}
     >
       <img
-        src={from === "donDeck" ? getDonDeckImageUrl() : card.image}
+        src={
+          from === "donDeck"
+            ? getDonDeckImageUrl()
+            : card.isFaceUp === false
+              ? getCardBackImageUrl()
+              : card.image
+        }
         draggable={false}
         style={{
           pointerEvents: "none",

@@ -50,6 +50,7 @@ type DragFrom =
   | "trash"
   | "life"
   | "deck"
+  | "public"
   | "leader"
   | "donDeck"
   | "activeDon"
@@ -67,7 +68,8 @@ type MovableCardArea =
   | "stage"
   | "trash"
   | "life"
-  | "deck";
+  | "deck"
+  | "public";
 
 function isMovableCardArea(
   value: unknown
@@ -78,7 +80,8 @@ function isMovableCardArea(
     value === "stage" ||
     value === "trash" ||
     value === "life" ||
-    value === "deck"
+    value === "deck" ||
+    value === "public"
   );
 }
 
@@ -97,6 +100,10 @@ function findCardIndexInArea(
 
   if (area === "trash") {
     return player.trash.findIndex((x) => x.id === cardId);
+  }
+
+  if (area === "public") {
+    return player.publicCards.findIndex((x) => x.id === cardId);
   }
 
   if (area === "life") {
@@ -131,6 +138,10 @@ function getCardIdByAreaIndex(
 
   if (area === "trash") {
     return player.trash[index]?.id;
+  }
+
+  if (area === "public") {
+    return player.publicCards[index]?.id;
   }
 
   if (area === "life") {
@@ -577,6 +588,16 @@ export default function Board({
           return;
         }
 
+        if (payload.listAction === "TO_PUBLIC") {
+          state.moveListCardToPublic(
+            payload.playerIndex,
+            payload.from,
+            cardId
+          );
+
+          return;
+        }
+
         if (payload.listAction === "TO_TRASH") {
           state.moveListCardToTrash(
             payload.playerIndex,
@@ -606,6 +627,7 @@ export default function Board({
 
           return;
         }
+
       }
 
       if (action.actionType === "TOGGLE_LIST_CARD_FACE") {
@@ -674,6 +696,26 @@ export default function Board({
 
         return;
       }
+      
+      if (action.actionType === "TOGGLE_PUBLIC_CARD_FACE") {
+        const { payload } = action;
+
+        const state = useGameStore.getState();
+        const card =
+          state.players[payload.playerIndex]
+            .publicCards[payload.cardIndex];
+
+        if (!card) {
+          return;
+        }
+
+        state.toggleCardFace(
+          payload.playerIndex,
+          card.id
+        );
+
+        return;
+      }
     });
 
     return () => {
@@ -719,6 +761,7 @@ export default function Board({
       ...player.hand,
       ...player.deck,
       ...player.trash,
+      ...player.publicCards,
       ...player.life,
       ...player.activeDons,
       ...player.restDons,

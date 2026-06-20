@@ -104,6 +104,8 @@ function createPlayer(
 
     trash: [],
 
+    publicCards: [],
+
     life,
 
     leader,
@@ -200,6 +202,8 @@ function createPlayerWithMainDeckOrder(
 
     trash: [],
 
+    publicCards: [],
+
     life,
 
     leader,
@@ -245,6 +249,7 @@ interface MoveParams {
   | "hand"
   | "character"
   | "stage"
+  | "public"
   | "trash"
   | "life"
   | "deck";
@@ -253,6 +258,7 @@ interface MoveParams {
   | "hand"
   | "character"
   | "stage"
+  | "public"
   | "trash"
   | "life"
   | "deck";
@@ -306,6 +312,12 @@ interface GameState {
   ) => void;
 
   moveListCardToHand: (
+    playerIndex: number,
+    from: "deck" | "trash" | "life",
+    cardId: string
+  ) => void;
+
+  moveListCardToPublic: (
     playerIndex: number,
     from: "deck" | "trash" | "life",
     cardId: string
@@ -585,6 +597,7 @@ export const useGameStore =
             ...player.hand,
             ...player.deck,
             ...player.trash,
+            ...player.publicCards,
             ...player.life,
             ...player.activeDons,
             ...player.restDons,
@@ -628,6 +641,7 @@ export const useGameStore =
             "hand",
             "character",
             "stage",
+            "public",
             "trash",
             "life",
             "deck",
@@ -637,6 +651,7 @@ export const useGameStore =
             "hand",
             "character",
             "stage",
+            "public",
             "trash",
             "life",
             "deck",
@@ -707,6 +722,24 @@ export const useGameStore =
                 player.trash[index];
 
               player.trash.splice(
+                index,
+                1
+              );
+            }
+          }
+
+          if (from === "public") {
+            const index =
+              player.publicCards.findIndex(
+                (x) =>
+                  x.id === cardId
+              );
+
+            if (index !== -1) {
+              card =
+                player.publicCards[index];
+
+              player.publicCards.splice(
                 index,
                 1
               );
@@ -792,7 +825,7 @@ export const useGameStore =
           }
 
           if (to === "life") {
-            card.isFaceUp = true;
+            card.isFaceUp = false;
           }
 
           // トラッシュは表
@@ -804,6 +837,7 @@ export const useGameStore =
           if (
             to === "hand" ||
             to === "trash" ||
+            to === "public" ||
             // to === "life" ||
             to === "deck"
           ) {
@@ -849,6 +883,12 @@ export const useGameStore =
 
           if (to === "trash") {
             player.trash.unshift(card);
+          }
+
+          if (to === "public") {
+            card.rotated = false;
+            card.isFaceUp = false;
+            player.publicCards.unshift(card);
           }
 
           if (to === "life") {
@@ -957,6 +997,46 @@ export const useGameStore =
             source.splice(index, 1)[0];
 
           player.hand.push(card);
+
+          return { players };
+        }),
+
+      moveListCardToPublic: (
+        playerIndex: number,
+        from,
+        cardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [
+            ...state.players,
+          ] as [
+              PlayerState,
+              PlayerState
+            ];
+
+          const player =
+            players[playerIndex];
+
+          const source =
+            player[from];
+
+          const index =
+            source.findIndex(
+              (x) =>
+                x.id === cardId
+            );
+
+          if (index === -1) {
+            return { players };
+          }
+
+          const card =
+            source.splice(index, 1)[0];
+
+          card.rotated = false;
+          card.isFaceUp = false;
+
+          player.publicCards.unshift(card);
 
           return { players };
         }),
@@ -1141,7 +1221,7 @@ export const useGameStore =
           const card = source.splice(index, 1)[0];
 
           card.rotated = false;
-          card.isFaceUp = true;
+          card.isFaceUp = false;
 
           player.life.unshift(card);
 
@@ -1165,6 +1245,8 @@ export const useGameStore =
             ...player.deck,
 
             ...player.trash,
+
+            ...player.publicCards,
 
             ...player.life,
 
@@ -1911,6 +1993,7 @@ export const useGameStore =
               ...player.hand,
               ...player.life,
               ...player.trash,
+              ...player.publicCards,
               ...player.characters.filter(
                 (x): x is CardData => x !== null
               ),
@@ -1987,6 +2070,7 @@ export const useGameStore =
               hand,
               life,
               trash: [],
+              publicCards: [],
 
               characters: [null, null, null, null, null],
               stage: null,

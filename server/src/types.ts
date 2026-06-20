@@ -138,6 +138,7 @@ export type BoardActionPayload =
       fromIndex: number;
       listAction:
         | "TO_HAND"
+        | "TO_PUBLIC"
         | "TO_TRASH"
         | "TO_DECK_BOTTOM"
         | "TO_LIFE_TOP";
@@ -168,5 +169,13 @@ export type BoardActionPayload =
       zone: "deck" | "trash" | "life";
       activeIndex: number;
       overIndex: number;
+    };
+  }
+    | {
+    roomId: string;
+    actionType: "TOGGLE_PUBLIC_CARD_FACE";
+    payload: {
+      playerIndex: number;
+      cardIndex: number;
     };
   };

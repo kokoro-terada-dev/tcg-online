@@ -6,6 +6,7 @@ import DonArea from "../Areas/DonArea";
 import LeaderArea from "../Areas/LeaderArea";
 import LifeArea from "../Areas/LifeArea";
 import TrashArea from "../Areas/TrashArea";
+import PublicArea from "../Areas/PublicArea";
 
 import HandArea from "../Hand/HandArea";
 
@@ -38,6 +39,7 @@ type ZoneKey =
 
 type ListCardAction =
   | "TO_HAND"
+  | "TO_PUBLIC"
   | "TO_TRASH"
   | "TO_DECK_BOTTOM"
   | "TO_LIFE_TOP";
@@ -70,6 +72,11 @@ export default function PlayerBoard({
   const moveListCardToHand =
     useGameStore(
       (x) => x.moveListCardToHand
+    );
+
+  const moveListCardToPublic =
+    useGameStore(
+      (x) => x.moveListCardToPublic
     );
 
   const moveListCardToTrash =
@@ -162,6 +169,17 @@ export default function PlayerBoard({
     }
 
     moveListCardToHand(playerIndex, zone, cardId);
+  }
+
+  function handleListCardToPublic(
+    zone: ZoneKey,
+    cardId: string
+  ) {
+    if (!sendListCardAction(zone, cardId, "TO_PUBLIC")) {
+      return;
+    }
+
+    moveListCardToPublic(playerIndex, zone, cardId);
   }
 
   function handleListCardToTrash(
@@ -340,12 +358,20 @@ export default function PlayerBoard({
                 style={{
                   marginTop: "0px",
                   marginLeft: "var(--op-trash-offset-left, 120px)",
+                  display: "flex",
+                  gap: "6px",
+                  alignItems: "center",
                 }}
               >
                 <TrashArea
                   cards={player.trash}
                   playerIndex={playerIndex}
                   onOpen={() => setTrashOpen(true)}
+                />
+
+                <PublicArea
+                  cards={player.publicCards}
+                  playerIndex={playerIndex}
                 />
               </div>
             </div>
@@ -487,12 +513,20 @@ export default function PlayerBoard({
                 style={{
                   marginTop: "var(--op-trash-lift)",
                   marginLeft: "var(--op-trash-offset-left, 120px)",
+                  display: "flex",
+                  gap: "6px",
+                  alignItems: "center",
                 }}
               >
                 <TrashArea
                   cards={player.trash}
                   playerIndex={playerIndex}
                   onOpen={() => setTrashOpen(true)}
+                />
+
+                <PublicArea
+                  cards={player.publicCards}
+                  playerIndex={playerIndex}
                 />
               </div>
             </div>
@@ -528,8 +562,9 @@ export default function PlayerBoard({
         open={deckOpen}
         onClose={() => setDeckOpen(false)}
         onHand={(id) =>
-          handleListCardToHand("deck", id)
+          handleListCardToPublic("deck", id)
         }
+        primaryActionLabel="公開へ"
         onTrash={(id) =>
           handleListCardToTrash("deck", id)
         }

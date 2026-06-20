@@ -21,6 +21,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onHand: (cardId: string) => void;
+  primaryActionLabel?: string;
   onTrash: (cardId: string) => void;
   onBottom: (cardId: string) => void;
   onLifeTop: (cardId: string) => void;
@@ -69,6 +70,7 @@ export default function CardListModal({
   open,
   onClose,
   onHand,
+  primaryActionLabel = "手札へ",
   onTrash,
   onBottom,
   onLifeTop,
@@ -290,6 +292,7 @@ export default function CardListModal({
                     isOpen={isOpen}
                     isHiddenList={isHiddenList}
                     onToggleFace={onToggleFace}
+                    primaryActionLabel={primaryActionLabel}
                     onHand={onHand}
                     onTrash={onTrash}
                     onBottom={onBottom}
@@ -381,6 +384,7 @@ function SortableCardRow({
   isOpen,
   isHiddenList,
   onToggleFace,
+  primaryActionLabel,
   onHand,
   onTrash,
   onBottom,
@@ -391,6 +395,7 @@ function SortableCardRow({
   isOpen: boolean;
   isHiddenList: boolean;
   onToggleFace: (cardId: string) => void;
+  primaryActionLabel: string;
   onHand: (cardId: string) => void;
   onTrash: (cardId: string) => void;
   onBottom: (cardId: string) => void;
@@ -515,7 +520,7 @@ function SortableCardRow({
           onPointerLeave={releaseButton}
           onClick={() => onHand(card.id)}
         >
-          手札へ
+          {primaryActionLabel}
         </button>
 
         <button
