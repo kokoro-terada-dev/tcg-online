@@ -6,10 +6,11 @@ import type {
 const rooms = new Map<string, RoomState>();
 
 function createRoomId() {
-  return Math.random()
-    .toString(36)
-    .substring(2, 6)
-    .toUpperCase();
+  return Math.floor(
+    Math.random() * 10000
+  )
+    .toString()
+    .padStart(4, "0");
 }
 
 export function createRoom(

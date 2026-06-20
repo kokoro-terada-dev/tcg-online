@@ -23,6 +23,15 @@ export type OnlineDeckOrderPayload = {
   player2MainDeckNames: string[];
 };
 
+export type MulliganAction = "keep" | "mulligan";
+
+export type MulliganResultPayload = {
+  playerIndex: 0 | 1;
+  action: MulliganAction;
+  handOrder: string[];
+  deckOrder: string[];
+};
+
 type PlayersSnapshot = [PlayerState, PlayerState];
 
 const MAX_HISTORY_COUNT = 30;
@@ -134,33 +143,43 @@ function getMainDeckCards(deck: CardData[]) {
   );
 }
 
+function orderCardsByNames(
+  cards: CardData[],
+  orderedNames: string[]
+) {
+  if (cards.length !== orderedNames.length) {
+    throw new Error("同期されたカード枚数が一致しません。");
+  }
+
+  const cardMap = new Map<string, CardData[]>();
+
+  for (const card of cards) {
+    const mappedCards = cardMap.get(card.name) ?? [];
+    mappedCards.push(card);
+    cardMap.set(card.name, mappedCards);
+  }
+
+  return orderedNames.map((name) => {
+    const mappedCards = cardMap.get(name);
+
+    if (!mappedCards || mappedCards.length === 0) {
+      throw new Error(`同期されたカード ${name} がローカルデッキに存在しません。`);
+    }
+
+    return mappedCards.shift()!;
+  });
+}
+
 function orderMainDeckCards(
   deck: CardData[],
   orderedNames: string[]
 ) {
   const mainDeck = getMainDeckCards(deck);
 
-  if (mainDeck.length !== orderedNames.length) {
-    throw new Error("同期された山札枚数が一致しません。");
-  }
-
-  const cardMap = new Map<string, CardData[]>();
-
-  for (const card of mainDeck) {
-    const cards = cardMap.get(card.name) ?? [];
-    cards.push(card);
-    cardMap.set(card.name, cards);
-  }
-
-  return orderedNames.map((name) => {
-    const cards = cardMap.get(name);
-
-    if (!cards || cards.length === 0) {
-      throw new Error(`同期されたカード ${name} がローカルデッキに存在しません。`);
-    }
-
-    return cards.shift()!;
-  });
+  return orderCardsByNames(
+    mainDeck,
+    orderedNames
+  );
 }
 
 function createPlayerWithMainDeckOrder(
@@ -369,11 +388,13 @@ interface GameState {
 
   mulliganPlayerIndex: 0 | 1 | null;
 
-  mulligan: (playerIndex: 0 | 1) => void;
+  mulligan: (playerIndex: 0 | 1) => MulliganResultPayload;
 
-  finishOnlineMulligan: () => void;
+  keepHand: (playerIndex: 0 | 1) => MulliganResultPayload;
 
-  keepHand: (playerIndex: 0 | 1) => void;
+  applyOnlineMulliganResult: (
+    result: MulliganResultPayload
+  ) => void;
 
   takeDonFromDeckToActive: (
     playerIndex: number
@@ -1359,7 +1380,7 @@ export const useGameStore =
           undoHistory: [],
           turnStartSnapshot: null,
         })),
-      mulligan: (playerIndex: 0 | 1) =>
+      mulligan: (playerIndex: 0 | 1) => {
         set((state) => {
           const players = [...state.players] as [
             PlayerState,
@@ -1384,25 +1405,86 @@ export const useGameStore =
             ...card,
             isFaceUp: true,
             rotated: false,
+            attachedDonCount: 0,
           }));
 
           return {
             players,
-            mulliganPlayerIndex:
-              playerIndex === 0 ? 1 : null,
+            mulliganPlayerIndex: null,
           };
-        }),
+        });
 
-      keepHand: (playerIndex: 0 | 1) =>
-        set(() => ({
-          mulliganPlayerIndex:
-            playerIndex === 0 ? 1 : null,
-        })),
+        const afterPlayer = get().players[playerIndex];
 
-      finishOnlineMulligan: () =>
+        return {
+          playerIndex,
+          action: "mulligan",
+          handOrder: afterPlayer.hand.map((card) => card.name),
+          deckOrder: afterPlayer.deck.map((card) => card.name),
+        };
+      },
+
+      keepHand: (playerIndex: 0 | 1) => {
         set(() => ({
           mulliganPlayerIndex: null,
-        })),
+        }));
+
+        const player = get().players[playerIndex];
+
+        return {
+          playerIndex,
+          action: "keep",
+          handOrder: player.hand.map((card) => card.name),
+          deckOrder: player.deck.map((card) => card.name),
+        };
+      },
+
+      applyOnlineMulliganResult: (
+        result: MulliganResultPayload
+      ) =>
+        set((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[result.playerIndex];
+
+          const sourceCards = [
+            ...player.hand,
+            ...player.deck,
+          ];
+
+          const orderedCards = orderCardsByNames(
+            sourceCards,
+            [
+              ...result.handOrder,
+              ...result.deckOrder,
+            ]
+          );
+
+          player.hand = orderedCards
+            .slice(0, result.handOrder.length)
+            .map((card) => ({
+              ...card,
+              isFaceUp: true,
+              rotated: false,
+              attachedDonCount: 0,
+            }));
+
+          player.deck = orderedCards
+            .slice(result.handOrder.length)
+            .map((card) => ({
+              ...card,
+              isFaceUp: false,
+              rotated: false,
+              attachedDonCount: 0,
+            }));
+
+          return {
+            players,
+          };
+        }),
 
       mulliganPlayerIndex: null,
       takeDonFromDeckToActive: (playerIndex: number) =>

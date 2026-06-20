@@ -1,117 +1,17 @@
 import {
-  useEffect,
   useState
 } from "react";
 
 import type { CSSProperties } from "react";
 
-import {
-  useGameStore
-} from "../../store/gameStore";
-
-import type {
-  OnlineDeckOrderPayload
-} from "../../store/gameStore";
-
-import {
-  isHost,
-  socket
-} from "../../network/socket";
-
-import {
-  sendGameSetup
-} from "../../network/roomClient";
-
 import DeckBuilder from "../DeckBuilder/DeckBuilder";
 
-import type { DeckRecipe } from "../../types/deck";
-
 import {
-  buildDeckCardsFromRecipe,
-  getAllLocalDeckRecipes,
-  getLocalDeckRecipe,
-} from "../../utils/localDeckStorage";
-
-import {
-  getLocalCardImage,
   hasLocalCardImages,
   loadCardImagesFromZip,
 } from "../../utils/localCardImages";
 
 type ScreenMode = "select" | "builder";
-
-const buttonStyle: CSSProperties = {
-  padding: "9px 12px",
-  borderRadius: "8px",
-  border: "1px solid #475569",
-  background: "#1e293b",
-  color: "white",
-  fontWeight: 800,
-  cursor: "pointer",
-};
-
-const primaryButtonStyle: CSSProperties = {
-  ...buttonStyle,
-  background: "#2563eb",
-  border: "1px solid #60a5fa",
-};
-
-function getDeckStatus(deck: DeckRecipe) {
-  if (!deck.leaderCardId) {
-    return "リーダー未設定";
-  }
-
-  if (deck.mainDeck.length !== 50) {
-    return `メイン${deck.mainDeck.length}/50`;
-  }
-
-  return "使用可能";
-}
-
-function canUseDeck(deck: DeckRecipe) {
-  return deck.leaderCardId !== null && deck.mainDeck.length === 50;
-}
-
-function renderLeaderIcon(deck: DeckRecipe) {
-  const imageUrl = deck.leaderCardId
-    ? getLocalCardImage(deck.leaderCardId)?.imageUrl
-    : null;
-
-  if (!imageUrl) {
-    return (
-      <div
-        style={{
-          width: "54px",
-          height: "76px",
-          borderRadius: "8px",
-          background: "#0f172a",
-          border: "1px solid #475569",
-          color: "#94a3b8",
-          fontSize: "10px",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          flexShrink: 0,
-        }}
-      >
-        no img
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={imageUrl}
-      draggable={false}
-      style={{
-        width: "54px",
-        borderRadius: "8px",
-        display: "block",
-        flexShrink: 0,
-      }}
-    />
-  );
-}
 
 type DeckSelectProps = {
   onOpenOnlineMenu: () => void;
@@ -125,119 +25,12 @@ export default function DeckSelect({
   const [editingDeckId, setEditingDeckId] =
     useState<string | null>(null);
 
-  const [decks, setDecks] = useState<DeckRecipe[]>(
-    getAllLocalDeckRecipes()
-  );
-
-  const [player1DeckId, setPlayer1DeckId] =
-    useState<string | null>(null);
-
-  const [player2DeckId, setPlayer2DeckId] =
-    useState<string | null>(null);
-
   const [isZipLoaded, setIsZipLoaded] =
     useState(hasLocalCardImages());
 
   const [message, setMessage] = useState("");
 
   const [error, setError] = useState("");
-
-  const startGame = useGameStore(
-    (x) => x.startGame
-  );
-
-  const createOnlineDeckOrder = useGameStore(
-    (x) => x.createOnlineDeckOrder
-  );
-
-  const startGameWithDeckOrders = useGameStore(
-    (x) => x.startGameWithDeckOrders
-  );
-
-  function refreshDecks() {
-    const nextDecks = getAllLocalDeckRecipes();
-
-    setDecks(nextDecks);
-
-    if (
-      player1DeckId &&
-      !nextDecks.some((deck) => deck.id === player1DeckId)
-    ) {
-      setPlayer1DeckId(null);
-    }
-
-    if (
-      player2DeckId &&
-      !nextDecks.some((deck) => deck.id === player2DeckId)
-    ) {
-      setPlayer2DeckId(null);
-    }
-  }
-
-  function buildSelectedDeckCards() {
-    if (!player1DeckId || !player2DeckId) {
-      throw new Error("デッキ1とデッキ2を選択してください。");
-    }
-
-    const player1Recipe = getLocalDeckRecipe(player1DeckId);
-    const player2Recipe = getLocalDeckRecipe(player2DeckId);
-
-    if (!player1Recipe || !player2Recipe) {
-      refreshDecks();
-      throw new Error("選択したデッキが見つかりません。");
-    }
-
-    return {
-      player1Cards: buildDeckCardsFromRecipe(player1Recipe),
-      player2Cards: buildDeckCardsFromRecipe(player2Recipe),
-    };
-  }
-
-  useEffect(() => {
-    const handleGameSetup = (
-      deckOrder: OnlineDeckOrderPayload
-    ) => {
-      console.log(
-        "RECEIVED GAME SETUP",
-        deckOrder
-      );
-
-      try {
-        const {
-          player1Cards,
-          player2Cards,
-        } = buildSelectedDeckCards();
-
-        startGameWithDeckOrders(
-          player1Cards,
-          player2Cards,
-          deckOrder
-        );
-      } catch (e) {
-        setError(
-          e instanceof Error
-            ? e.message
-            : "同期されたゲーム開始に失敗しました。"
-        );
-      }
-    };
-
-    socket.on(
-      "game-setup",
-      handleGameSetup
-    );
-
-    return () => {
-      socket.off(
-        "game-setup",
-        handleGameSetup
-      );
-    };
-  }, [
-    player1DeckId,
-    player2DeckId,
-    startGameWithDeckOrders,
-  ]);
 
   async function handleLoadZip(file: File | null) {
     if (!file) {
@@ -271,96 +64,11 @@ export default function DeckSelect({
     setMode("builder");
   }
 
-  function openEditDeck(deckId: string) {
-    setEditingDeckId(deckId);
-    setMode("builder");
-  }
-
-  function getDeckName(deckId: string | null) {
-    if (!deckId) {
-      return "未選択";
-    }
-
-    return decks.find((deck) => deck.id === deckId)?.name ?? "不明なデッキ";
-  }
-
-  function selectDeckForPlayer(playerIndex: 1 | 2, deck: DeckRecipe) {
-    if (!canUseDeck(deck)) {
-      setError(
-        `${deck.name} は使用できません。リーダー設定済み、かつメインデッキ50枚のデッキだけ選択できます。`
-      );
-      return;
-    }
-
-    if (playerIndex === 1) {
-      setPlayer1DeckId(deck.id);
-    } else {
-      setPlayer2DeckId(deck.id);
-    }
-
-    setError("");
-  }
-
-  function canStart() {
-    return player1DeckId !== null && player2DeckId !== null;
-  }
-
-  function handleStart() {
-    setError("");
-
-    if (!isZipLoaded) {
-      setError("ゲーム開始前に画像ZIPを読み込んでください。");
-      return;
-    }
-
-    try {
-      const {
-        player1Cards,
-        player2Cards,
-      } = buildSelectedDeckCards();
-
-      console.log(
-        "START GAME",
-        player1Cards.length,
-        player2Cards.length
-      );
-
-      if (isHost) {
-        const deckOrder = createOnlineDeckOrder(
-          player1Cards,
-          player2Cards
-        );
-
-        startGameWithDeckOrders(
-          player1Cards,
-          player2Cards,
-          deckOrder
-        );
-
-        sendGameSetup(deckOrder);
-
-        return;
-      }
-
-      startGame(
-        player1Cards,
-        player2Cards
-      );
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "デッキ読み込みに失敗しました。"
-      );
-    }
-  }
-
   if (mode === "builder") {
     return (
       <DeckBuilder
         initialDeckId={editingDeckId}
         onBack={() => {
-          refreshDecks();
           setIsZipLoaded(hasLocalCardImages());
           setMode("select");
         }}
@@ -369,65 +77,33 @@ export default function DeckSelect({
   }
 
   return (
-    <div
-      style={{
-        height: "100dvh",
-        background: "#111827",
-        color: "white",
-        padding: "12px",
-        paddingBottom: "132px",
-        boxSizing: "border-box",
-        overflowY: "auto",
-        overflowX: "hidden",
-        WebkitOverflowScrolling: "touch",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "760px",
-          margin: "0 auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px",
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: "22px" }}>
-          デッキ選択
-        </h1>
+    <div style={pageStyle}>
+      <div style={bgGlowStyle} />
 
-        {!isZipLoaded && (
-          <div
-            style={{
-              background: "#7f1d1d",
-              border: "1px solid #fca5a5",
-              borderRadius: "12px",
-              padding: "10px",
-              fontWeight: 800,
-            }}
-          >
-            画像ZIPが未読込です。デッキ編集・ゲーム開始前に読み込んでください。
+      <div style={containerStyle}>
+        <div style={titleBlockStyle}>
+          <div style={smallTitleStyle}>
+            ONLINE CARD BATTLE
           </div>
-        )}
 
-        <div
-          style={{
-            background: "#1e293b",
-            borderRadius: "12px",
-            padding: "10px",
-            display: "flex",
-            gap: "8px",
-            flexWrap: "wrap",
-            alignItems: "center",
-          }}
-        >
-          <label
-            style={{
-              ...buttonStyle,
-              display: "inline-flex",
-              alignItems: "center",
-            }}
-          >
-            画像ZIP読込
+          <h1 style={titleStyle}>
+            TCG ONLINE
+          </h1>
+
+          <div style={subTitleStyle}>
+            Local Images / Deck Edit / Online Match
+          </div>
+        </div>
+
+        <div style={panelStyle}>
+          <label style={menuButtonStyle}>
+            <span style={buttonMainTextStyle}>
+              画像ZIP読込
+            </span>
+            <span style={buttonSubTextStyle}>
+              カード画像を読み込む
+            </span>
+
             <input
               type="file"
               accept=".zip"
@@ -440,223 +116,195 @@ export default function DeckSelect({
           </label>
 
           <button
-            style={primaryButtonStyle}
+            style={menuButtonStyle}
             onClick={openNewDeck}
           >
-            デッキ編集
+            <span style={buttonMainTextStyle}>
+              デッキ編集
+            </span>
+            <span style={buttonSubTextStyle}>
+              デッキを作成・編集する
+            </span>
           </button>
 
           <button
             style={{
-              ...primaryButtonStyle,
+              ...battleButtonStyle,
               opacity: isZipLoaded ? 1 : 0.45,
             }}
             disabled={!isZipLoaded}
             onClick={onOpenOnlineMenu}
           >
-            対戦
+            <span style={buttonMainTextStyle}>
+              対戦
+            </span>
+            <span style={buttonSubTextStyle}>
+              オンラインルームへ
+            </span>
           </button>
         </div>
 
+        {!isZipLoaded && (
+          <div style={warningStyle}>
+            画像ZIPを読み込むと対戦に進めます。
+          </div>
+        )}
+
         {message && (
-          <div
-            style={{
-              background: "#334155",
-              padding: "8px 10px",
-              borderRadius: "8px",
-            }}
-          >
+          <div style={messageStyle}>
             {message}
           </div>
         )}
 
         {error && (
-          <div
-            style={{
-              background: "#7f1d1d",
-              padding: "8px 10px",
-              borderRadius: "8px",
-              border: "1px solid #fca5a5",
-            }}
-          >
+          <div style={errorStyle}>
             {error}
           </div>
         )}
-
-        {decks.length === 0 ? (
-          <div
-            style={{
-              background: "#1e293b",
-              borderRadius: "12px",
-              padding: "16px",
-              color: "#cbd5e1",
-            }}
-          >
-            作成済みデッキはありません。「新規作成」から作ってください。
-          </div>
-        ) : (
-          decks.map((deck) => {
-            const usable = canUseDeck(deck);
-
-            return (
-              <div
-                key={deck.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  background: "#1e293b",
-                  padding: "10px",
-                  borderRadius: "12px",
-                  border: usable
-                    ? "1px solid #475569"
-                    : "1px solid #7f1d1d",
-                }}
-              >
-                {renderLeaderIcon(deck)}
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontWeight: 900,
-                      overflow: "hidden",
-                      whiteSpace: "nowrap",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {deck.name}
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: usable ? "#cbd5e1" : "#fca5a5",
-                      marginTop: "2px",
-                    }}
-                  >
-                    {getDeckStatus(deck)} / DON {deck.donDeck.length}枚
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "6px",
-                      marginTop: "8px",
-                    }}
-                  >
-                    <button
-                      style={{
-                        ...buttonStyle,
-                        padding: "7px 4px",
-                        fontSize: "11px",
-                        background:
-                          player1DeckId === deck.id ? "#2563eb" : "#1e293b",
-                        opacity: usable ? 1 : 0.45,
-                      }}
-                      disabled={!usable}
-                      onClick={() => selectDeckForPlayer(1, deck)}
-                    >
-                      上側に選択
-                    </button>
-
-                    <button
-                      style={{
-                        ...buttonStyle,
-                        padding: "7px 4px",
-                        fontSize: "11px",
-                        background:
-                          player2DeckId === deck.id ? "#2563eb" : "#1e293b",
-                        opacity: usable ? 1 : 0.45,
-                      }}
-                      disabled={!usable}
-                      onClick={() => selectDeckForPlayer(2, deck)}
-                    >
-                      下側に選択
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  style={primaryButtonStyle}
-                  onClick={() => openEditDeck(deck.id)}
-                >
-                  編集
-                </button>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      <div
-        style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 9999,
-          background: "#1e293b",
-          borderTop: "2px solid #475569",
-          padding: "10px",
-          boxSizing: "border-box",
-          boxShadow: "0 -4px 16px rgba(0,0,0,0.45)",
-          marginBottom: "20px",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "760px",
-            margin: "0 auto",
-            display: "grid",
-            gridTemplateColumns: "1fr auto",
-            gap: "8px",
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              minWidth: 0,
-              fontSize: "12px",
-              lineHeight: 1.5,
-            }}
-          >
-            <div
-              style={{
-                overflow: "hidden",
-                whiteSpace: "nowrap",
-                textOverflow: "ellipsis",
-              }}
-            >
-              上：{getDeckName(player1DeckId)}
-            </div>
-
-            <div
-              style={{
-                overflow: "hidden",
-                whiteSpace: "nowrap",
-                textOverflow: "ellipsis",
-              }}
-            >
-              下：{getDeckName(player2DeckId)}
-            </div>
-          </div>
-
-          <button
-            disabled={!canStart()}
-            onClick={handleStart}
-            style={{
-              ...primaryButtonStyle,
-              minWidth: "86px",
-              height: "44px",
-              opacity: canStart() ? 1 : 0.45,
-              cursor: canStart() ? "pointer" : "not-allowed",
-            }}
-          >
-            開始
-          </button>
-        </div>
       </div>
     </div>
   );
 }
+
+const pageStyle: CSSProperties = {
+  minHeight: "100dvh",
+  background:
+    "radial-gradient(circle at top, #1e3a8a 0%, #0f172a 38%, #020617 100%)",
+  color: "white",
+  padding: "18px",
+  boxSizing: "border-box",
+  overflow: "hidden",
+  position: "relative",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const bgGlowStyle: CSSProperties = {
+  position: "absolute",
+  width: "280px",
+  height: "280px",
+  borderRadius: "999px",
+  background: "rgba(59,130,246,0.22)",
+  filter: "blur(48px)",
+  top: "-60px",
+  right: "-80px",
+};
+
+const containerStyle: CSSProperties = {
+  width: "100%",
+  maxWidth: "420px",
+  position: "relative",
+  zIndex: 1,
+  display: "flex",
+  flexDirection: "column",
+  gap: "18px",
+};
+
+const titleBlockStyle: CSSProperties = {
+  textAlign: "center",
+  marginBottom: "10px",
+};
+
+const smallTitleStyle: CSSProperties = {
+  fontSize: "12px",
+  fontWeight: 900,
+  color: "#93c5fd",
+  letterSpacing: "2px",
+};
+
+const titleStyle: CSSProperties = {
+  margin: "6px 0 4px",
+  fontSize: "38px",
+  fontWeight: 1000,
+  letterSpacing: "1px",
+  textShadow:
+    "0 0 12px rgba(96,165,250,0.8), 0 4px 0 rgba(0,0,0,0.45)",
+};
+
+const subTitleStyle: CSSProperties = {
+  fontSize: "12px",
+  color: "#cbd5e1",
+  fontWeight: 700,
+};
+
+const panelStyle: CSSProperties = {
+  background: "rgba(15,23,42,0.86)",
+  border: "1px solid rgba(148,163,184,0.45)",
+  borderRadius: "22px",
+  padding: "16px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
+  boxShadow:
+    "0 18px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)",
+};
+
+const menuButtonStyle: CSSProperties = {
+  width: "100%",
+  minHeight: "76px",
+  borderRadius: "18px",
+  border: "1px solid #475569",
+  background:
+    "linear-gradient(180deg, #334155 0%, #1e293b 100%)",
+  color: "white",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  alignItems: "flex-start",
+  gap: "4px",
+  padding: "0 18px",
+  boxSizing: "border-box",
+  cursor: "pointer",
+  boxShadow:
+    "0 8px 0 #0f172a, 0 12px 20px rgba(0,0,0,0.35)",
+};
+
+const battleButtonStyle: CSSProperties = {
+  ...menuButtonStyle,
+  border: "1px solid #facc15",
+  background:
+    "linear-gradient(180deg, #f59e0b 0%, #b45309 100%)",
+  boxShadow:
+    "0 8px 0 #78350f, 0 12px 24px rgba(245,158,11,0.28)",
+};
+
+const buttonMainTextStyle: CSSProperties = {
+  fontSize: "22px",
+  fontWeight: 1000,
+  lineHeight: 1,
+};
+
+const buttonSubTextStyle: CSSProperties = {
+  fontSize: "12px",
+  fontWeight: 800,
+  color: "#e2e8f0",
+};
+
+const warningStyle: CSSProperties = {
+  background: "rgba(127,29,29,0.9)",
+  border: "1px solid #fca5a5",
+  borderRadius: "14px",
+  padding: "10px 12px",
+  fontSize: "13px",
+  fontWeight: 900,
+  textAlign: "center",
+};
+
+const messageStyle: CSSProperties = {
+  background: "rgba(22,78,99,0.9)",
+  border: "1px solid #67e8f9",
+  borderRadius: "14px",
+  padding: "10px 12px",
+  fontSize: "13px",
+  fontWeight: 800,
+};
+
+const errorStyle: CSSProperties = {
+  background: "rgba(127,29,29,0.9)",
+  border: "1px solid #fca5a5",
+  borderRadius: "14px",
+  padding: "10px 12px",
+  fontSize: "13px",
+  fontWeight: 800,
+};

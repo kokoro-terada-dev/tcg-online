@@ -1,3 +1,7 @@
+import {
+  sendMulliganResult,
+} from "../../network/roomClient";
+
 import { useGameStore } from "../../store/gameStore";
 
 function getCardBackImage() {
@@ -13,10 +17,12 @@ export default function MulliganScreen() {
   const mulliganPlayerIndex =
     useGameStore((x) => x.mulliganPlayerIndex);
 
-  const finishOnlineMulligan =
-    useGameStore(
-      (x) => x.finishOnlineMulligan
-    );
+  const mulligan =
+    useGameStore((x) => x.mulligan);
+
+  const keepHand =
+    useGameStore((x) => x.keepHand);
+
 
   if (mulliganPlayerIndex === null) {
     return null;
@@ -28,11 +34,23 @@ export default function MulliganScreen() {
   const player = players[displayPlayerIndex];
 
   function handleKeep() {
-    finishOnlineMulligan();
+    const result = keepHand(
+      displayPlayerIndex as 0 | 1
+    );
+
+    if (localPlayerIndex !== null) {
+      sendMulliganResult(result);
+    }
   }
 
   function handleMulligan() {
-    finishOnlineMulligan();
+    const result = mulligan(
+      displayPlayerIndex as 0 | 1
+    );
+
+    if (localPlayerIndex !== null) {
+      sendMulliganResult(result);
+    }
   }
 
   return (
@@ -69,7 +87,7 @@ export default function MulliganScreen() {
         </h1>
 
         <p>
-          1回だけマリガンできます。
+          マリガンは1回だけです。
         </p>
 
         <div
@@ -117,7 +135,7 @@ export default function MulliganScreen() {
             onClick={handleMulligan}
             style={dangerButtonStyle}
           >
-            マリガンする
+            マリガンして開始
           </button>
         </div>
       </div>

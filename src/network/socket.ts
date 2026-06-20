@@ -13,14 +13,6 @@ export const socket = io(
   }
 );
 
-socket.on("connect", () => {
-  console.log("SOCKET CONNECTED", socket.id);
-});
-
-socket.on("connect_error", (error) => {
-  console.error("SOCKET CONNECT ERROR", error);
-});
-
 export let isHost = false;
 
 export function setHost(

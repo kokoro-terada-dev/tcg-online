@@ -696,7 +696,7 @@ export default function Board({
 
         return;
       }
-      
+
       if (action.actionType === "TOGGLE_PUBLIC_CARD_FACE") {
         const { payload } = action;
 
@@ -1139,7 +1139,7 @@ export default function Board({
                 });
               }}
             >
-              ⬇️
+              リフレッシュ
             </button>
 
             <button
@@ -1157,7 +1157,7 @@ export default function Board({
                 sendMatchExitRequest();
               }}
             >
-              {exitRequestWaiting ? "確認待ち" : "×"}
+              {exitRequestWaiting ? "確認待ち" : "終了"}
             </button>
           </div>
 

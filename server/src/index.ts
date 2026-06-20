@@ -29,21 +29,24 @@ app.get("/", (_: Request, res: Response) => {
 
 const httpServer = createServer(app);
 
+const allowedOrigins = [
+    "https://tcg-online-theta.vercel.app",
+    "http://localhost:5173",
+];
+
 const io = new Server(httpServer, {
     cors: {
-        origin: "*",
+        origin: allowedOrigins,
     },
 });
 
 io.on("connection", (socket) => {
-    console.log("connected:", socket.id);
 
     socket.emit("welcome", {
         socketId: socket.id,
     });
 
     socket.on("disconnect", () => {
-        console.log("disconnected:", socket.id);
 
         const room = findRoomBySocketId(socket.id);
 
@@ -140,12 +143,6 @@ io.on("connection", (socket) => {
     socket.on(
         "game-setup",
         (payload: GameSetupPayload) => {
-            console.log(
-                "SERVER GAME SETUP",
-                payload.roomId,
-                payload.deckOrder.player1MainDeckNames.length,
-                payload.deckOrder.player2MainDeckNames.length
-            );
 
             socket.to(payload.roomId).emit(
                 "game-setup",
@@ -157,14 +154,6 @@ io.on("connection", (socket) => {
     socket.on(
         "mulligan-result",
         (payload: MulliganResultPayload) => {
-            console.log(
-                "SERVER MULLIGAN RESULT",
-                payload.roomId,
-                payload.playerIndex,
-                payload.action,
-                payload.handOrder.length,
-                payload.deckOrder.length
-            );
 
             socket.to(payload.roomId).emit(
                 "mulligan-result",
@@ -176,10 +165,6 @@ io.on("connection", (socket) => {
     socket.on(
         "board-action",
         (payload: BoardActionPayload) => {
-            console.log(
-                "SERVER BOARD ACTION",
-                payload
-            );
 
             socket.to(payload.roomId).emit(
                 "board-action",
@@ -228,7 +213,3 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-
-httpServer.listen(PORT, () => {
-    console.log(`server start ${PORT}`);
-});

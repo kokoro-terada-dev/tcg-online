@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import Board from "./components/Board/Board";
 import DeckSelect from "./components/DeckSelect/DeckSelect";
 import MulliganScreen from "./components/Mulligan/MulliganScreen";
 import RoomScreen from "./components/Online/RoomScreen";
+
+import { onMulliganResult } from "./network/roomClient";
 
 import { useGameStore } from "./store/gameStore";
 
@@ -24,6 +26,21 @@ function App() {
 
   const resetToDeckSelect =
     useGameStore((x) => x.resetToDeckSelect);
+
+  const applyOnlineMulliganResult =
+    useGameStore((x) => x.applyOnlineMulliganResult);
+
+  useEffect(() => {
+    const offMulliganResult = onMulliganResult(
+      (result) => {
+        applyOnlineMulliganResult(result);
+      }
+    );
+
+    return () => {
+      offMulliganResult();
+    };
+  }, [applyOnlineMulliganResult]);
 
   if (isStarted) {
     if (mulliganPlayerIndex !== null) {
@@ -63,14 +80,14 @@ function App() {
           </h1>
 
           <button
-            style={menuButtonStyle}
+            style={createRoomButtonStyle}
             onClick={() => setScreen("host-room")}
           >
             ルーム作成
           </button>
 
           <button
-            style={menuButtonStyle}
+            style={joinRoomButtonStyle}
             onClick={() => setScreen("guest-room")}
           >
             ルーム入室
@@ -112,15 +129,32 @@ function App() {
   );
 }
 
-const menuButtonStyle: React.CSSProperties = {
-  width: "100%",
-  minHeight: "52px",
-  borderRadius: "12px",
-  border: "1px solid #60a5fa",
-  background: "#2563eb",
-  color: "white",
-  fontSize: "16px",
-  fontWeight: 900,
+const createRoomButtonStyle: React.CSSProperties = {
+    width: "100%",
+    minHeight: "60px",
+    borderRadius: "16px",
+    border: "1px solid #86efac",
+    background:
+        "linear-gradient(180deg, #22c55e 0%, #15803d 100%)",
+    color: "white",
+    fontSize: "18px",
+    fontWeight: 900,
+    boxShadow:
+        "0 7px 0 #14532d, 0 12px 22px rgba(34,197,94,0.28)",
+};
+
+const joinRoomButtonStyle: React.CSSProperties = {
+    width: "100%",
+    minHeight: "60px",
+    borderRadius: "16px",
+    border: "1px solid #60a5fa",
+    background:
+        "linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%)",
+    color: "white",
+    fontSize: "18px",
+    fontWeight: 900,
+    boxShadow:
+        "0 7px 0 #1e3a8a, 0 12px 22px rgba(59,130,246,0.28)",
 };
 
 const subButtonStyle: React.CSSProperties = {

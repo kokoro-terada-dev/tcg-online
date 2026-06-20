@@ -1,4 +1,5 @@
 import type {
+  MulliganResultPayload,
   OnlineDeckOrderPayload
 } from "../store/gameStore";
 
@@ -183,6 +184,9 @@ const joinFailedListeners =
 const boardActionListeners =
   new Set<(payload: BoardActionPayload) => void>();
 
+const mulliganResultListeners =
+  new Set<(payload: MulliganResultPayload) => void>();
+
 const opponentDisconnectedListeners =
   new Set<() => void>();
 
@@ -245,6 +249,16 @@ export function onBoardAction(
 
   return () => {
     boardActionListeners.delete(listener);
+  };
+}
+
+export function onMulliganResult(
+  listener: (payload: MulliganResultPayload) => void
+) {
+  mulliganResultListeners.add(listener);
+
+  return () => {
+    mulliganResultListeners.delete(listener);
   };
 }
 
@@ -368,6 +382,22 @@ export function sendGameSetup(
   );
 }
 
+export function sendMulliganResult(
+  result: MulliganResultPayload
+) {
+  if (!roomIdForClient) {
+    return;
+  }
+
+  socket.emit(
+    "mulligan-result",
+    {
+      roomId: roomIdForClient,
+      ...result,
+    }
+  );
+}
+
 export function sendBoardAction(
   action: Omit<BoardActionPayload, "roomId">
 ) {
@@ -426,7 +456,6 @@ export function sendMatchExitRejected() {
 socket.on(
   "room-created",
   (roomState: RoomStateForClient) => {
-    console.log("ROOM CREATED", roomState);
     setHost(true);
     updateRoomState(roomState);
   }
@@ -460,6 +489,15 @@ socket.on(
   "board-action",
   (payload: BoardActionPayload) => {
     for (const listener of boardActionListeners) {
+      listener(payload);
+    }
+  }
+);
+
+socket.on(
+  "mulligan-result",
+  (payload: MulliganResultPayload) => {
+    for (const listener of mulliganResultListeners) {
       listener(payload);
     }
   }

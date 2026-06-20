@@ -509,13 +509,16 @@ const titleStyle: CSSProperties = {
 };
 
 const cardStyle: CSSProperties = {
-    background: "#1e293b",
-    border: "1px solid #475569",
-    borderRadius: "14px",
-    padding: "14px",
+    background:
+        "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
+    border: "1px solid rgba(148,163,184,0.45)",
+    borderRadius: "18px",
+    padding: "16px",
     display: "flex",
     flexDirection: "column",
-    gap: "10px",
+    gap: "12px",
+    boxShadow:
+        "0 10px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
 };
 
 const labelStyle: CSSProperties = {
@@ -525,13 +528,18 @@ const labelStyle: CSSProperties = {
 };
 
 const roomCodeStyle: CSSProperties = {
-    fontSize: "36px",
-    fontWeight: 900,
-    letterSpacing: "6px",
-    textAlign: "center",
-    background: "#0f172a",
+    marginTop: "8px",
+    background: "#020617",
+    border: "2px solid #60a5fa",
     borderRadius: "12px",
-    padding: "14px 8px",
+    padding: "14px",
+    textAlign: "center",
+    fontSize: "34px",
+    fontWeight: 1000,
+    letterSpacing: "6px",
+    color: "#93c5fd",
+    textShadow:
+        "0 0 10px rgba(96,165,250,0.7)",
 };
 
 const subTextStyle: CSSProperties = {
@@ -569,30 +577,44 @@ const selectStyle: CSSProperties = {
 
 const primaryButtonStyle: CSSProperties = {
     width: "100%",
-    minHeight: "48px",
-    borderRadius: "12px",
+    minHeight: "56px",
+    borderRadius: "16px",
     border: "1px solid #60a5fa",
-    background: "#2563eb",
+    background:
+        "linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%)",
     color: "white",
-    fontSize: "16px",
+    fontSize: "17px",
     fontWeight: 900,
+    boxShadow:
+        "0 6px 0 #1e3a8a, 0 10px 18px rgba(0,0,0,0.35)",
+    cursor: "pointer",
 };
 
 const startButtonStyle: CSSProperties = {
     ...primaryButtonStyle,
-    background: "#16a34a",
-    border: "1px solid #86efac",
+    minHeight: "60px",
+    background:
+        "linear-gradient(180deg, #f59e0b 0%, #b45309 100%)",
+    border: "1px solid #facc15",
+    color: "white",
+    fontSize: "18px",
+    boxShadow:
+        "0 7px 0 #78350f, 0 12px 22px rgba(245,158,11,0.28)",
 };
 
 const subButtonStyle: CSSProperties = {
     width: "100%",
-    minHeight: "46px",
-    borderRadius: "12px",
-    border: "1px solid #475569",
-    background: "#1e293b",
-    color: "white",
+    minHeight: "48px",
+    borderRadius: "14px",
+    border: "1px solid #64748b",
+    background:
+        "linear-gradient(180deg, #334155 0%, #1e293b 100%)",
+    color: "#e2e8f0",
     fontSize: "15px",
-    fontWeight: 800,
+    fontWeight: 900,
+    boxShadow:
+        "0 5px 0 #0f172a, 0 8px 14px rgba(0,0,0,0.3)",
+    cursor: "pointer",
 };
 
 const statusTextStyle: CSSProperties = {
