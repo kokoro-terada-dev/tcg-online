@@ -1,8 +1,4 @@
 {
-  "rewrites": [
-    {
-      "source": "/((?!assets/|manifest.webmanifest|registerSW.js|sw.js|workbox-.*\\.js|favicon.ico|icons/).*)",
-      "destination": "/index.html"
-    }
-  ]
+  "cleanUrls": true,
+  "trailingSlash": false
 }
