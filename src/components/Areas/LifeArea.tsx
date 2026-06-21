@@ -7,6 +7,7 @@ import type { CardData } from "../../types/card";
 import GameCard from "../Card/GameCard";
 import { GAME_LAYOUT } from "../../layout/gameLayout";
 import { getCardBackImageUrl } from "../../utils/localCardImages";
+import { useGameStore } from "../../store/gameStore";
 
 type Props = {
   cards: CardData[];
@@ -20,6 +21,10 @@ export default function LifeArea({
   onOpen,
 }: Props) {
   const longPressTimer = useRef<number | null>(null);
+  const localPlayerIndex = useGameStore((x) => x.localPlayerIndex);
+  const isOpponent =
+    localPlayerIndex !== null &&
+    playerIndex !== localPlayerIndex;
 
   const { setNodeRef, isOver } = useDroppable({
     id: `life-${playerIndex}`,
@@ -34,6 +39,15 @@ export default function LifeArea({
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
+  }
+
+  function requestOpen() {
+    if (isOpponent) {
+      window.alert("相手のライフは確認できません");
+      return;
+    }
+
+    onOpen();
   }
 
   const cardBackImage = getCardBackImageUrl();
@@ -51,7 +65,7 @@ export default function LifeArea({
         e.stopPropagation();
 
         clearLongPressTimer();
-        onOpen();
+        requestOpen();
       }}
       style={{
         width: GAME_LAYOUT.css.lifeWidth,
@@ -119,7 +133,7 @@ export default function LifeArea({
           e.stopPropagation();
 
           clearLongPressTimer();
-          onOpen();
+          requestOpen();
         }}
         onTouchStart={(e) => {
           e.stopPropagation();

@@ -751,6 +751,13 @@ export default function Board({
       return;
     }
 
+    if (
+      localPlayerIndex !== null &&
+      data.playerIndex !== localPlayerIndex
+    ) {
+      return;
+    }
+
     const player = players[data.playerIndex];
 
     if (!player) {
@@ -801,6 +808,13 @@ export default function Board({
     const overData = over.data.current as any;
 
     if (!activeData || !overData) {
+      return;
+    }
+
+    if (
+      localPlayerIndex !== null &&
+      activeData.playerIndex !== localPlayerIndex
+    ) {
       return;
     }
 

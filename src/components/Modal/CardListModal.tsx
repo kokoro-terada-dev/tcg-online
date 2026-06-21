@@ -33,6 +33,7 @@ type Props = {
   | "trash";
 
   playerIndex: number;
+  canOperate: boolean;
 
   onReorder: (
     activeId: string,
@@ -77,6 +78,7 @@ export default function CardListModal({
   onToggleFace,
   onOpenTopCards,
   onReorder,
+  canOperate,
 }: Props) {
   if (!open) {
     return null;
@@ -191,7 +193,7 @@ export default function CardListModal({
             </button>
           </div>
 
-          {isDeck && (
+          {isDeck && canOperate && (
             <div
               style={{
                 display: "flex",
@@ -257,6 +259,10 @@ export default function CardListModal({
               closestCenter
             }
             onDragEnd={(event) => {
+              if (!canOperate) {
+                return;
+              }
+
               const { active, over } =
                 event;
 
@@ -298,6 +304,7 @@ export default function CardListModal({
                     onBottom={onBottom}
                     onLifeTop={onLifeTop}
                     onPreview={setPreviewImage}
+                    canOperate={canOperate}
                   />
                 );
               })}
@@ -390,6 +397,7 @@ function SortableCardRow({
   onBottom,
   onLifeTop,
   onPreview,
+  canOperate,
 }: {
   card: CardData;
   isOpen: boolean;
@@ -401,6 +409,7 @@ function SortableCardRow({
   onBottom: (cardId: string) => void;
   onLifeTop: (cardId: string) => void;
   onPreview: (image: string) => void;
+  canOperate: boolean;
 }) {
   const {
     attributes,
@@ -410,6 +419,7 @@ function SortableCardRow({
     transition,
   } = useSortable({
     id: card.id,
+    disabled: !canOperate,
   });
 
   const previewTimer = useRef<number | null>(null);
@@ -486,20 +496,23 @@ function SortableCardRow({
         onClick={(e) => {
           e.stopPropagation();
 
-          if (isHiddenList) {
+          if (isHiddenList && canOperate) {
             onToggleFace(card.id);
           }
         }}
         style={{
           width: "80px",
-          cursor: isHiddenList ? "pointer" : "default",
+          cursor:
+            isHiddenList && canOperate
+              ? "pointer"
+              : "default",
           borderRadius: "6px",
           WebkitTouchCallout: "none",
           userSelect: "none",
         }}
       />
 
-      <div
+      {canOperate && <div
         style={{
           display: "grid",
 
@@ -549,9 +562,9 @@ function SortableCardRow({
           onPointerLeave={releaseButton} onClick={() => onLifeTop(card.id)}>
           ライフ上へ
         </button>
-      </div>
+      </div>}
 
-      <div
+      {canOperate && <div
         {...attributes}
         {...listeners}
         style={{
@@ -572,7 +585,7 @@ function SortableCardRow({
         title="並び替え"
       >
         ☰
-      </div>
+      </div>}
     </div>
   );
 }

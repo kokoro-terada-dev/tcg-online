@@ -103,12 +103,18 @@ export default function GameCard({
   const changePower = useGameStore((x) => x.changePower);
   const setStatusLabel = useGameStore((x) => x.setStatusLabel);
   const toggleCardFace = useGameStore((x) => x.toggleCardFace);
+  const localPlayerIndex = useGameStore((x) => x.localPlayerIndex);
   const returnAttachedDonsToRest = useGameStore(
     (x) => x.returnAttachedDonsToRest
   );
 
+  const isOpponent =
+    localPlayerIndex !== null &&
+    playerIndex !== localPlayerIndex;
+
   const isDraggable =
     !overlay &&
+    !isOpponent &&
     from !== "leader";
 
   const {
@@ -133,7 +139,9 @@ export default function GameCard({
     from === "hand" ||
     from === "stage" ||
     from === "character" ||
-    from === "leader";
+    from === "leader" ||
+    from === "trash" ||
+    from === "public";
 
   function openCardMenu() {
     if (!overlay && canOpenMenu) {
@@ -190,6 +198,10 @@ export default function GameCard({
       label?: "アタック×" | "アクティブ×";
     }
   ) {
+    if (isOpponent) {
+      return;
+    }
+
     const targetInfo = getMenuTargetInfo();
 
     if (!targetInfo) {
@@ -211,6 +223,12 @@ export default function GameCard({
   }
 
   const powerModifier = card.powerModifier ?? 0;
+  const displayImage =
+    from === "donDeck"
+      ? getDonDeckImageUrl()
+      : card.isFaceUp === false
+        ? getCardBackImageUrl()
+        : card.image;
 
   return (
     <div
@@ -286,7 +304,7 @@ export default function GameCard({
       onClick={(e) => {
         e.stopPropagation();
 
-        if (overlay) {
+        if (overlay || isOpponent) {
           return;
         }
 
@@ -329,13 +347,7 @@ export default function GameCard({
       }}
     >
       <img
-        src={
-          from === "donDeck"
-            ? getDonDeckImageUrl()
-            : card.isFaceUp === false
-              ? getCardBackImageUrl()
-              : card.image
-        }
+        src={displayImage}
         draggable={false}
         style={{
           pointerEvents: "none",
@@ -353,7 +365,12 @@ export default function GameCard({
       )}
 
       {card.attachedDonCount > 0 && (
-        <DonBadge card={card} playerIndex={playerIndex} overlay={overlay} />
+        <DonBadge
+          card={card}
+          playerIndex={playerIndex}
+          overlay={overlay}
+          disabled={isOpponent}
+        />
       )}
 
       {menuOpen &&
@@ -369,7 +386,11 @@ export default function GameCard({
               setMenuOpen(false);
             }}
           >
-            {from === "hand" || from === "stage" ? (
+            {isOpponent ||
+              from === "hand" ||
+              from === "stage" ||
+              from === "trash" ||
+              from === "public" ? (
               <div
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -416,7 +437,7 @@ export default function GameCard({
                 </button>
 
                 <img
-                  src={card.image}
+                  src={displayImage}
                   draggable={false}
                   style={{
                     maxWidth: "92vw",
@@ -678,14 +699,16 @@ function DonBadge({
   card,
   playerIndex,
   overlay,
+  disabled,
 }: {
   card: CardData;
   playerIndex: number;
   overlay: boolean;
+  disabled: boolean;
 }) {
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: `don-badge-${card.id}`,
-    disabled: overlay,
+    disabled: overlay || disabled,
     data: {
       type: "attached-don",
       targetCardId: card.id,
