@@ -7,6 +7,8 @@ export type DeckRecipeForRoom = {
   leaderLifeCount?: number;
 };
 
+export type CommunicationMode = "voice" | "silent";
+
 export type RoomState = {
   roomId: string;
   hostSocketId: string;
@@ -15,6 +17,9 @@ export type RoomState = {
   guestReady: boolean;
   hostDeckRecipe: DeckRecipeForRoom | null;
   guestDeckRecipe: DeckRecipeForRoom | null;
+  communicationMode: CommunicationMode;
+  hostMulliganComplete: boolean;
+  guestMulliganComplete: boolean;
 };
 
 export type OnlineDeckOrderPayload = {
@@ -178,5 +183,91 @@ export type BoardActionPayload =
     payload: {
       playerIndex: number;
       cardIndex: number;
+    };
+  }
+  | {
+    roomId: string;
+    actionType: "QUICK_ACTION";
+    payload: {
+      log: {
+        id: string;
+        playerIndex: 0 | 1;
+        actionType:
+          | "attack"
+          | "target"
+          | "effect"
+          | "characterEffect"
+          | "leaderEffect"
+          | "stageEffect"
+          | "rest"
+          | "block"
+          | "counter"
+          | "event"
+          | "trigger"
+          | "life"
+          | "ok"
+          | "wait"
+          | "thinking"
+          | "takeHit"
+          | "endTurn"
+          | "clearTarget";
+        createdAt: number;
+      };
+    };
+  }
+  | {
+    roomId: string;
+    actionType: "SET_ATTACK_TARGET";
+    payload: {
+      targetPlayerIndex: 0 | 1;
+      targetArea: "leader" | "character";
+      targetIndex: number;
+      log: {
+        id: string;
+        playerIndex: 0 | 1;
+        actionType: "target";
+        createdAt: number;
+      };
+    };
+  }
+  | {
+    roomId: string;
+    actionType: "CARD_QUICK_ACTION";
+    payload: {
+      playerIndex: 0 | 1;
+      targetArea: "leader" | "character" | "stage" | "public";
+      targetIndex: number;
+      quickAction:
+        | "attack"
+        | "target"
+        | "effect"
+        | "rest"
+        | "cancelSource"
+        | "cancelTarget";
+      log?: {
+        id: string;
+        playerIndex: 0 | 1;
+        actionType:
+          | "attack"
+          | "target"
+          | "effect"
+          | "characterEffect"
+          | "leaderEffect"
+          | "stageEffect"
+          | "rest";
+        createdAt: number;
+      };
+    };
+  }
+  | {
+    roomId: string;
+    actionType: "CLEAR_CARD_ACTIONS";
+    payload: {
+      log?: {
+        id: string;
+        playerIndex: 0 | 1;
+        actionType: "clearTarget";
+        createdAt: number;
+      };
     };
   };

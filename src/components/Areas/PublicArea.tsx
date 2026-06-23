@@ -4,6 +4,7 @@ import type { CardData } from "../../types/card";
 
 import GameCard from "../Card/GameCard";
 import { GAME_LAYOUT } from "../../layout/gameLayout";
+import { useGameStore } from "../../store/gameStore";
 
 type Props = {
   cards: CardData[];
@@ -14,6 +15,9 @@ export default function PublicArea({
   cards,
   playerIndex,
 }: Props) {
+  const communicationMode = useGameStore(
+    (state) => state.communicationMode
+  );
   const { setNodeRef, isOver } = useDroppable({
     id: `public-${playerIndex}`,
     data: {
@@ -75,6 +79,10 @@ export default function PublicArea({
               card={{
                 ...topCard,
                 rotated: false,
+                isFaceUp:
+                  communicationMode === "silent"
+                    ? true
+                    : topCard.isFaceUp,
               }}
               playerIndex={playerIndex}
               from="public"

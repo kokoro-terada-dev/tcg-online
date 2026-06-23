@@ -18,7 +18,8 @@ import {
     onRoomStateChanged,
     ready,
     selectDeckForRoom,
-    sendGameSetup
+    sendGameSetup,
+    setRoomCommunicationMode
 } from "../../network/roomClient";
 
 import type {
@@ -179,6 +180,11 @@ export default function RoomScreen({
         const offRoomState = onRoomStateChanged(
             (nextRoomState) => {
                 setRoomState(nextRoomState);
+                useGameStore
+                    .getState()
+                    .setCommunicationMode(
+                        nextRoomState.communicationMode
+                    );
             }
         );
 
@@ -391,6 +397,57 @@ export default function RoomScreen({
 
                 {roomState && (
                     <>
+                        <div style={cardStyle}>
+                            <div style={labelStyle}>
+                                対戦時の通話
+                            </div>
+
+                            {isHost ? (
+                                <div
+                                    style={{
+                                        display: "grid",
+                                        gridTemplateColumns: "1fr 1fr",
+                                        gap: "8px",
+                                    }}
+                                >
+                                    <button
+                                        style={{
+                                            ...subButtonStyle,
+                                            borderColor:
+                                                roomState.communicationMode === "voice"
+                                                    ? "#38bdf8"
+                                                    : "#475569",
+                                        }}
+                                        onClick={() =>
+                                            setRoomCommunicationMode("voice")
+                                        }
+                                    >
+                                        通話あり
+                                    </button>
+                                    <button
+                                        style={{
+                                            ...subButtonStyle,
+                                            borderColor:
+                                                roomState.communicationMode === "silent"
+                                                    ? "#38bdf8"
+                                                    : "#475569",
+                                        }}
+                                        onClick={() =>
+                                            setRoomCommunicationMode("silent")
+                                        }
+                                    >
+                                        通話なし
+                                    </button>
+                                </div>
+                            ) : (
+                                <strong>
+                                    {roomState.communicationMode === "silent"
+                                        ? "通話なし"
+                                        : "通話あり"}
+                                </strong>
+                            )}
+                        </div>
+
                         <div style={cardStyle}>
                             <div style={labelStyle}>
                                 自分のデッキ

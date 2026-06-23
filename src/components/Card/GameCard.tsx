@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import "./GameCard.css";
 
@@ -16,6 +16,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { sendBoardAction } from "../../network/roomClient";
+import type { ActionLog } from "../../store/gameStore";
 
 type CardFrom =
   | "hand"
@@ -86,8 +87,17 @@ export default function GameCard({
   onPreview,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+  const [quickMenuPosition, setQuickMenuPosition] = useState({
+    left: 0,
+    top: 0,
+  });
+  const [effectVisible, setEffectVisible] = useState(false);
 
   const longPressTimer = useRef<number | null>(null);
+  const longPressTriggered = useRef(false);
+  const pointerStartPos =
+    useRef<{ x: number; y: number } | null>(null);
 
   const touchStartPos =
     useRef<{ x: number; y: number } | null>(null);
@@ -100,15 +110,50 @@ export default function GameCard({
   }
 
   const toggleRotate = useGameStore((x) => x.toggleRotate);
+  const toggleCardFace = useGameStore((x) => x.toggleCardFace);
+  const startAttack = useGameStore((x) => x.startAttack);
+  const setAttackSource = useGameStore(
+    (x) => x.setAttackSource
+  );
   const changePower = useGameStore((x) => x.changePower);
   const changeCountModifier = useGameStore(
     (x) => x.changeCountModifier
   );
   const setStatusLabel = useGameStore((x) => x.setStatusLabel);
-  const toggleCardFace = useGameStore((x) => x.toggleCardFace);
   const localPlayerIndex = useGameStore((x) => x.localPlayerIndex);
+  const communicationMode = useGameStore(
+    (x) => x.communicationMode
+  );
+  const isSilentMode = communicationMode === "silent";
   const returnAttachedDonsToRest = useGameStore(
     (x) => x.returnAttachedDonsToRest
+  );
+  const currentAttackSource = useGameStore(
+    (x) => x.currentAttackSource
+  );
+  const currentAttackTarget = useGameStore(
+    (x) => x.currentAttackTarget
+  );
+  const setAttackTarget = useGameStore(
+    (x) => x.setAttackTarget
+  );
+  const clearAttackTarget = useGameStore(
+    (x) => x.clearAttackTarget
+  );
+  const clearAttackState = useGameStore(
+    (x) => x.clearAttackState
+  );
+  const addActionLog = useGameStore(
+    (x) => x.addActionLog
+  );
+  const cardEffectSignal = useGameStore(
+    (x) => x.cardEffectSignal
+  );
+  const showCardEffect = useGameStore(
+    (x) => x.showCardEffect
+  );
+  const clearCardEffect = useGameStore(
+    (x) => x.clearCardEffect
   );
 
   const isOpponent =
@@ -150,9 +195,27 @@ export default function GameCard({
     from === "trash" ||
     from === "public";
 
+  const canOpenQuickMenu =
+    isSilentMode &&
+    !overlay &&
+    (from === "leader" ||
+      from === "character" ||
+      from === "stage" ||
+      (from === "public" && canOperate)) &&
+    (!isOpponent || from !== "stage");
+
+  const isCurrentAttackSource =
+    currentAttackSource?.playerIndex === playerIndex &&
+    currentAttackSource.cardId === card.id;
+
+  const isCurrentAttackTarget =
+    currentAttackTarget?.playerIndex === playerIndex &&
+    currentAttackTarget.cardId === card.id;
+
   function openCardMenu() {
     if (!overlay && canOpenMenu) {
       onPreview?.(null);
+      setQuickMenuOpen(false);
       setMenuOpen(true);
     }
   }
@@ -191,8 +254,182 @@ export default function GameCard({
       };
     }
 
+    if (from === "public") {
+      const targetIndex =
+        player.publicCards.findIndex(
+          (item) => item.id === card.id
+        );
+
+      if (targetIndex === -1) {
+        return null;
+      }
+
+      return {
+        targetArea: "public" as const,
+        targetIndex,
+      };
+    }
+
     return null;
   }
+
+  function createActionLog(
+    actionType:
+      | "attack"
+      | "target"
+      | "characterEffect"
+      | "leaderEffect"
+      | "stageEffect"
+      | "effect"
+  ): ActionLog {
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      playerIndex: (localPlayerIndex ?? playerIndex) as 0 | 1,
+      actionType,
+      createdAt: Date.now(),
+    };
+  }
+
+  function sendQuickAction(
+    quickAction:
+      | "attack"
+      | "target"
+      | "effect"
+      | "rest"
+      | "cancelSource"
+      | "cancelTarget",
+    log?: ActionLog
+  ) {
+    const targetInfo = getMenuTargetInfo();
+
+    if (!targetInfo) {
+      return;
+    }
+
+    sendBoardAction({
+      actionType: "CARD_QUICK_ACTION",
+      payload: {
+        playerIndex: playerIndex as 0 | 1,
+        targetArea: targetInfo.targetArea,
+        targetIndex: targetInfo.targetIndex,
+        quickAction,
+        log,
+      },
+    });
+  }
+
+  function runQuickAction(
+    action: "attack" | "target" | "effect" | "rest" | "cancel"
+  ) {
+    if (!canOpenQuickMenu) {
+      return;
+    }
+
+    if (action === "cancel") {
+      if (isCurrentAttackSource) {
+        clearAttackState();
+        sendQuickAction("cancelSource");
+      } else if (isCurrentAttackTarget) {
+        clearAttackTarget();
+        sendQuickAction("cancelTarget");
+      }
+      setQuickMenuOpen(false);
+      return;
+    }
+
+    const pointer = {
+      playerIndex: playerIndex as 0 | 1,
+      cardId: card.id,
+    };
+    if (action === "attack") {
+      if (!canOperate || from === "stage") {
+        return;
+      }
+      const log = createActionLog("attack");
+      startAttack(
+        playerIndex as 0 | 1,
+        card.id,
+        log
+      );
+      sendQuickAction(action, log);
+    } else if (action === "target") {
+      if (!isOpponent || from === "stage") {
+        return;
+      }
+      const log = createActionLog("target");
+      setAttackTarget(pointer, log);
+      sendQuickAction(action, log);
+    } else if (action === "effect") {
+      if (!canOperate) {
+        return;
+      }
+      const effectActionType =
+        from === "leader"
+          ? "leaderEffect"
+          : from === "stage"
+            ? "stageEffect"
+            : from === "public"
+              ? "effect"
+            : "characterEffect";
+      const log = createActionLog(effectActionType);
+      showCardEffect({
+        ...pointer,
+        nonce: Date.now(),
+      });
+      if (from === "public") {
+        setAttackSource(pointer, log);
+      } else {
+        addActionLog(log);
+      }
+      sendQuickAction(action, log);
+    } else {
+      if (!canOperate) {
+        return;
+      }
+      toggleRotate(playerIndex, card.id);
+      sendQuickAction(action);
+    }
+
+    setQuickMenuOpen(false);
+  }
+
+  useEffect(() => {
+    if (
+      cardEffectSignal?.playerIndex !== playerIndex ||
+      cardEffectSignal.cardId !== card.id
+    ) {
+      return;
+    }
+
+    setEffectVisible(true);
+    const timer = window.setTimeout(
+      () => {
+        setEffectVisible(false);
+
+        if (
+          useGameStore.getState().cardEffectSignal?.nonce ===
+          cardEffectSignal.nonce
+        ) {
+          clearCardEffect();
+        }
+      },
+      1000
+    );
+
+    return () => window.clearTimeout(timer);
+  }, [
+    card.id,
+    cardEffectSignal,
+    clearCardEffect,
+    playerIndex,
+  ]);
+
+  useEffect(() => {
+    if (isDragging) {
+      setQuickMenuOpen(false);
+      longPressTriggered.current = true;
+    }
+  }, [isDragging]);
 
   function sendCardMenuAction(
     menuAction:
@@ -212,7 +449,10 @@ export default function GameCard({
 
     const targetInfo = getMenuTargetInfo();
 
-    if (!targetInfo) {
+    if (
+      !targetInfo ||
+      targetInfo.targetArea === "public"
+    ) {
       return;
     }
 
@@ -249,6 +489,8 @@ export default function GameCard({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      data-card-id={card.id}
+      data-player-index={playerIndex}
       className={`game-card game-card-${from} ${card.rotated ? "rotated" : ""
         }`}
       style={{
@@ -259,7 +501,10 @@ export default function GameCard({
             : undefined,
         cursor: isDraggable ? "grab" : "default",
         touchAction: "none",
-        zIndex: overlay || isDragging || menuOpen ? 99999 : 10,
+        zIndex:
+          overlay || isDragging || menuOpen || quickMenuOpen
+            ? 99999
+            : 10,
         opacity: isDragging && !overlay ? 0.2 : 1,
       }}
       onTouchStart={(e) => {
@@ -275,9 +520,11 @@ export default function GameCard({
         };
 
         clearLongPressTimer();
+        longPressTriggered.current = false;
 
         longPressTimer.current = window.setTimeout(() => {
           if (!isDragging) {
+            longPressTriggered.current = true;
             openCardMenu();
           }
         }, 550);
@@ -309,7 +556,79 @@ export default function GameCard({
         clearLongPressTimer();
         touchStartPos.current = null;
       }}
-      onPointerUp={clearLongPressTimer}
+      onPointerDown={(e) => {
+        listeners?.onPointerDown?.(e);
+
+        if (!canOpenQuickMenu) {
+          return;
+        }
+
+        pointerStartPos.current = {
+          x: e.clientX,
+          y: e.clientY,
+        };
+        longPressTriggered.current = false;
+      }}
+      onPointerMove={(e) => {
+        if (!pointerStartPos.current) {
+          return;
+        }
+
+        const distance = Math.hypot(
+          e.clientX - pointerStartPos.current.x,
+          e.clientY - pointerStartPos.current.y
+        );
+
+        if (distance > 10) {
+          longPressTriggered.current = true;
+          setQuickMenuOpen(false);
+        }
+      }}
+      onPointerUp={(e) => {
+        clearLongPressTimer();
+
+        const start = pointerStartPos.current;
+        pointerStartPos.current = null;
+
+        if (
+          !start ||
+          !canOpenQuickMenu ||
+          isDragging ||
+          longPressTriggered.current
+        ) {
+          return;
+        }
+
+        const distance = Math.hypot(
+          e.clientX - start.x,
+          e.clientY - start.y
+        );
+
+        if (distance > 10) {
+          return;
+        }
+
+        const rect =
+          e.currentTarget.getBoundingClientRect();
+        const menuWidth = 132;
+        const menuHeight = isOpponent ? 92 : 180;
+        const left = Math.min(
+          window.innerWidth - menuWidth - 8,
+          Math.max(8, rect.right + 6)
+        );
+        const top = Math.min(
+          window.innerHeight - menuHeight - 8,
+          Math.max(8, rect.top)
+        );
+
+        setQuickMenuPosition({ left, top });
+        setQuickMenuOpen((open) => !open);
+      }}
+      onPointerCancel={() => {
+        clearLongPressTimer();
+        pointerStartPos.current = null;
+        longPressTriggered.current = true;
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -318,36 +637,38 @@ export default function GameCard({
       onClick={(e) => {
         e.stopPropagation();
 
-        if (overlay || !canOperate) {
+        if (overlay) {
           return;
         }
 
         if (
-          from === "leader" ||
-          from === "character" ||
-          from === "stage"
+          !isSilentMode &&
+          canOperate &&
+          (from === "leader" ||
+            from === "character" ||
+            from === "stage")
         ) {
           toggleRotate(playerIndex, card.id);
-
           sendCardMenuAction("TOGGLE_ROTATE");
+          return;
         }
-        if (from === "public") {
-          e.stopPropagation();
 
+        if (
+          !isSilentMode &&
+          from === "public" &&
+          canOperate
+        ) {
           const player =
             useGameStore.getState().players[playerIndex];
-
-          const cardIndex =
-            player.publicCards.findIndex(
-              (x) => x.id === card.id
-            );
+          const cardIndex = player.publicCards.findIndex(
+            (item) => item.id === card.id
+          );
 
           if (cardIndex === -1) {
             return;
           }
 
           toggleCardFace(playerIndex, card.id);
-
           sendBoardAction({
             actionType: "TOGGLE_PUBLIC_CARD_FACE",
             payload: {
@@ -355,9 +676,8 @@ export default function GameCard({
               cardIndex,
             },
           });
-
-          return;
         }
+
       }}
     >
       <img
@@ -384,6 +704,43 @@ export default function GameCard({
         <div className="status-label">{visibleStatusLabel}</div>
       )}
 
+      {isSilentMode && isCurrentAttackTarget && (
+        <div
+          aria-label="攻撃対象"
+          title="攻撃対象"
+          style={{
+            position: "absolute",
+            inset: "-4px",
+            border: "3px solid #facc15",
+            borderRadius: "10px",
+            boxShadow: "0 0 12px #facc15",
+            pointerEvents: "none",
+            zIndex: 1200,
+          }}
+        />
+      )}
+
+      {isSilentMode && isCurrentAttackSource && (
+        <div
+          aria-label="Attack source"
+          style={{
+            position: "absolute",
+            inset: "-4px",
+            border: "3px solid #f97316",
+            borderRadius: "10px",
+            boxShadow: "0 0 12px #f97316",
+            pointerEvents: "none",
+            zIndex: 1199,
+          }}
+        />
+      )}
+
+      {isSilentMode && effectVisible && (
+        <div className="card-effect-toast" aria-live="polite">
+          効果
+        </div>
+      )}
+
       {card.attachedDonCount > 0 && (
         <DonBadge
           card={card}
@@ -392,6 +749,65 @@ export default function GameCard({
           disabled={!canOperate}
         />
       )}
+
+      {isSilentMode && quickMenuOpen &&
+        createPortal(
+          <>
+            <button
+              type="button"
+              aria-label="Close quick actions"
+              onClick={() => setQuickMenuOpen(false)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                padding: 0,
+                border: 0,
+                background: "transparent",
+                zIndex: 99990,
+              }}
+            />
+            <div
+              className="card-quick-actions"
+              style={{
+                left: quickMenuPosition.left,
+                top: quickMenuPosition.top,
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {!isOpponent &&
+                (from === "leader" || from === "character") && (
+                <button onClick={() => runQuickAction("attack")}>
+                  アタック
+                </button>
+              )}
+              {!isOpponent && (
+                <button onClick={() => runQuickAction("effect")}>
+                  効果
+                </button>
+              )}
+              {!isOpponent && from !== "public" && (
+                <button onClick={() => runQuickAction("rest")}>
+                  {card.rotated ? "アクティブ" : "レスト"}
+                </button>
+              )}
+              {isOpponent && from !== "stage" && (
+                <button onClick={() => runQuickAction("target")}>
+                  対象
+                </button>
+              )}
+              <button
+                className="card-quick-actions-cancel"
+                onClick={() => runQuickAction("cancel")}
+              >
+                キャンセル
+              </button>
+            </div>
+          </>,
+          document.body
+        )}
 
       {menuOpen &&
         createPortal(
@@ -468,6 +884,7 @@ export default function GameCard({
                     pointerEvents: "none",
                   }}
                 />
+
               </div>
             ) : (
               <div

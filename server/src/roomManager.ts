@@ -1,4 +1,5 @@
 import type {
+  CommunicationMode,
   DeckRecipeForRoom,
   RoomState,
 } from "./types";
@@ -30,6 +31,9 @@ export function createRoom(
     guestReady: false,
     hostDeckRecipe: null,
     guestDeckRecipe: null,
+    communicationMode: "voice",
+    hostMulliganComplete: false,
+    guestMulliganComplete: false,
   };
 
   rooms.set(roomId, room);
@@ -148,6 +152,45 @@ export function removeRoom(
   rooms.delete(roomId);
 }
 
+export function setCommunicationMode(
+  roomId: string,
+  socketId: string,
+  communicationMode: CommunicationMode
+) {
+  const room = rooms.get(roomId);
+
+  if (!room || room.hostSocketId !== socketId) {
+    return null;
+  }
+
+  room.communicationMode = communicationMode;
+  room.hostReady = false;
+  room.guestReady = false;
+
+  return room;
+}
+
+export function markMulliganComplete(
+  roomId: string,
+  socketId: string
+) {
+  const room = rooms.get(roomId);
+
+  if (!room) {
+    return null;
+  }
+
+  if (room.hostSocketId === socketId) {
+    room.hostMulliganComplete = true;
+  } else if (room.guestSocketId === socketId) {
+    room.guestMulliganComplete = true;
+  } else {
+    return null;
+  }
+
+  return room;
+}
+
 export function leaveRoom(
   roomId: string,
   socketId: string
@@ -193,6 +236,8 @@ export function resetRoomAfterMatch(
 
   room.hostReady = false;
   room.guestReady = false;
+  room.hostMulliganComplete = false;
+  room.guestMulliganComplete = false;
 
   return room;
 }

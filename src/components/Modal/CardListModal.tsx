@@ -21,6 +21,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onHand: (cardId: string) => void;
+  onPublic: (cardId: string) => void;
   primaryActionLabel?: string;
   onTrash: (cardId: string) => void;
   onBottom: (cardId: string) => void;
@@ -35,6 +36,7 @@ type Props = {
   playerIndex: number;
   canOperate: boolean;
   canToggleFace: boolean;
+  useSilentDeckLayout?: boolean;
 
   onReorder: (
     activeId: string,
@@ -72,6 +74,7 @@ export default function CardListModal({
   open,
   onClose,
   onHand,
+  onPublic,
   primaryActionLabel = "手札へ",
   onTrash,
   onBottom,
@@ -81,6 +84,7 @@ export default function CardListModal({
   onReorder,
   canOperate,
   canToggleFace,
+  useSilentDeckLayout = false,
   zone,
 }: Props) {
   if (!open) {
@@ -303,6 +307,7 @@ export default function CardListModal({
                     onToggleFace={onToggleFace}
                     primaryActionLabel={primaryActionLabel}
                     onHand={onHand}
+                    onPublic={onPublic}
                     onTrash={onTrash}
                     onBottom={onBottom}
                     onLifeTop={onLifeTop}
@@ -310,6 +315,7 @@ export default function CardListModal({
                     canOperate={canOperate}
                     canToggleFace={canToggleFace}
                     canPreviewHiddenCard={zone === "deck"}
+                    isDeck={isDeck && useSilentDeckLayout}
                   />
                 );
               })}
@@ -398,6 +404,7 @@ function SortableCardRow({
   onToggleFace,
   primaryActionLabel,
   onHand,
+  onPublic,
   onTrash,
   onBottom,
   onLifeTop,
@@ -405,6 +412,7 @@ function SortableCardRow({
   canOperate,
   canToggleFace,
   canPreviewHiddenCard,
+  isDeck,
 }: {
   card: CardData;
   isOpen: boolean;
@@ -412,6 +420,7 @@ function SortableCardRow({
   onToggleFace: (cardId: string) => void;
   primaryActionLabel: string;
   onHand: (cardId: string) => void;
+  onPublic: (cardId: string) => void;
   onTrash: (cardId: string) => void;
   onBottom: (cardId: string) => void;
   onLifeTop: (cardId: string) => void;
@@ -419,6 +428,7 @@ function SortableCardRow({
   canOperate: boolean;
   canToggleFace: boolean;
   canPreviewHiddenCard: boolean;
+  isDeck: boolean;
 }) {
   const {
     attributes,
@@ -544,7 +554,9 @@ function SortableCardRow({
           display: "grid",
 
           gridTemplateColumns:
-            "repeat(2, minmax(0, 1fr))",
+            isDeck
+              ? "repeat(3, minmax(0, 1fr))"
+              : "repeat(2, minmax(0, 1fr))",
 
           gap: "6px",
 
@@ -553,18 +565,28 @@ function SortableCardRow({
         }}
       >
         <button
-          style={actionButtonStyle}
+          style={{
+            ...actionButtonStyle,
+            ...(isDeck
+              ? { gridColumn: "1", gridRow: "1" }
+              : {}),
+          }}
           onPointerDown={pressButton}
           onPointerUp={releaseButton}
           onPointerCancel={releaseButton}
           onPointerLeave={releaseButton}
           onClick={() => onHand(card.id)}
         >
-          {primaryActionLabel}
+          {isDeck ? "手札へ" : primaryActionLabel}
         </button>
 
         <button
-          style={actionButtonStyle}
+          style={{
+            ...actionButtonStyle,
+            ...(isDeck
+              ? { gridColumn: "2", gridRow: "1" }
+              : {}),
+          }}
           onPointerDown={pressButton}
           onPointerUp={releaseButton}
           onPointerCancel={releaseButton}
@@ -573,7 +595,12 @@ function SortableCardRow({
         </button>
 
         <button
-          style={actionButtonStyle}
+          style={{
+            ...actionButtonStyle,
+            ...(isDeck
+              ? { gridColumn: "1", gridRow: "2" }
+              : {}),
+          }}
           onPointerDown={pressButton}
           onPointerUp={releaseButton}
           onPointerCancel={releaseButton}
@@ -582,13 +609,39 @@ function SortableCardRow({
         </button>
 
         <button
-          style={actionButtonStyle}
+          style={{
+            ...actionButtonStyle,
+            ...(isDeck
+              ? { gridColumn: "2", gridRow: "2" }
+              : {}),
+          }}
           onPointerDown={pressButton}
           onPointerUp={releaseButton}
           onPointerCancel={releaseButton}
           onPointerLeave={releaseButton} onClick={() => onLifeTop(card.id)}>
           ライフ上へ
         </button>
+
+        {isDeck && (
+          <button
+            style={{
+              ...actionButtonStyle,
+              gridColumn: "3",
+              gridRow: "1 / span 2",
+              height: "100%",
+              minHeight: "70px",
+              background: "#0369a1",
+              color: "white",
+            }}
+            onPointerDown={pressButton}
+            onPointerUp={releaseButton}
+            onPointerCancel={releaseButton}
+            onPointerLeave={releaseButton}
+            onClick={() => onPublic(card.id)}
+          >
+            公開
+          </button>
+        )}
       </div>}
 
       {canOperate && <div

@@ -1,4 +1,5 @@
 import type {
+  ActionLog,
   MulliganResultPayload,
   OnlineDeckOrderPayload
 } from "../store/gameStore";
@@ -17,6 +18,8 @@ export type DeckRecipeForRoom = {
   leaderLifeCount?: number;
 };
 
+export type CommunicationMode = "voice" | "silent";
+
 export type RoomStateForClient = {
   roomId: string;
   hostSocketId: string;
@@ -25,6 +28,9 @@ export type RoomStateForClient = {
   guestReady: boolean;
   hostDeckRecipe: DeckRecipeForRoom | null;
   guestDeckRecipe: DeckRecipeForRoom | null;
+  communicationMode: CommunicationMode;
+  hostMulliganComplete: boolean;
+  guestMulliganComplete: boolean;
 };
 
 export type BoardActionPayload =
@@ -171,6 +177,47 @@ export type BoardActionPayload =
       playerIndex: number;
       cardIndex: number;
     };
+  }
+  | {
+    roomId: string;
+    actionType: "QUICK_ACTION";
+    payload: {
+      log: ActionLog;
+    };
+  }
+  | {
+    roomId: string;
+    actionType: "SET_ATTACK_TARGET";
+    payload: {
+      targetPlayerIndex: 0 | 1;
+      targetArea: "leader" | "character";
+      targetIndex: number;
+      log: ActionLog;
+    };
+  }
+  | {
+    roomId: string;
+    actionType: "CARD_QUICK_ACTION";
+    payload: {
+      playerIndex: 0 | 1;
+      targetArea: "leader" | "character" | "stage" | "public";
+      targetIndex: number;
+      quickAction:
+        | "attack"
+        | "target"
+        | "effect"
+        | "rest"
+        | "cancelSource"
+        | "cancelTarget";
+      log?: ActionLog;
+    };
+  }
+  | {
+    roomId: string;
+    actionType: "CLEAR_CARD_ACTIONS";
+    payload: {
+      log?: ActionLog;
+    };
   };
 
 let roomIdForClient: string | null = null;
@@ -190,6 +237,9 @@ const boardActionListeners =
 
 const mulliganResultListeners =
   new Set<(payload: MulliganResultPayload) => void>();
+
+const mulliganCompleteListeners =
+  new Set<() => void>();
 
 const opponentDisconnectedListeners =
   new Set<() => void>();
@@ -312,6 +362,16 @@ export function clearClientRoomState() {
   createRoomPending = false;
 }
 
+export function onMulliganComplete(
+  listener: () => void
+) {
+  mulliganCompleteListeners.add(listener);
+
+  return () => {
+    mulliganCompleteListeners.delete(listener);
+  };
+}
+
 export function leaveRoom() {
   const roomId = roomIdForClient;
   const wasCreatingRoom = createRoomPending;
@@ -389,6 +449,19 @@ export function ready() {
     "ready",
     roomIdForClient
   );
+}
+
+export function setRoomCommunicationMode(
+  communicationMode: CommunicationMode
+) {
+  if (!roomIdForClient) {
+    return;
+  }
+
+  socket.emit("set-communication-mode", {
+    roomId: roomIdForClient,
+    communicationMode,
+  });
 }
 
 export function sendGameSetup(
@@ -544,6 +617,15 @@ socket.on(
   (payload: MulliganResultPayload) => {
     for (const listener of mulliganResultListeners) {
       listener(payload);
+    }
+  }
+);
+
+socket.on(
+  "mulligan-complete",
+  () => {
+    for (const listener of mulliganCompleteListeners) {
+      listener();
     }
   }
 );

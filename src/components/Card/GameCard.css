@@ -119,6 +119,69 @@
   -webkit-user-drag: none;
 }
 
+.card-quick-actions {
+  position: fixed;
+  z-index: 99991;
+  width: 126px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid #64748b;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.97);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.card-quick-actions button {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  background: #1d4ed8;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.card-quick-actions .card-quick-actions-cancel {
+  background: #475569;
+}
+
+.card-effect-toast {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1300;
+  transform: translate(-50%, -50%);
+  padding: 5px 10px;
+  border: 2px solid #ffffff;
+  border-radius: 5px;
+  background: #7c3aed;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  pointer-events: none;
+  animation: card-effect-toast 1s ease-out forwards;
+}
+
+@keyframes card-effect-toast {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -35%);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -70%);
+  }
+}
+
 /* 通常カード：手札・キャラクター・ステージなど */
 .game-card-hand,
 .game-card-character,

@@ -62,6 +62,8 @@ export default function PlayerBoard({
 }: Props) {
   const localPlayerIndex =
     useGameStore((x) => x.localPlayerIndex);
+  const communicationMode =
+    useGameStore((x) => x.communicationMode);
 
   const isOpponent =
     localPlayerIndex !== null &&
@@ -334,9 +336,22 @@ export default function PlayerBoard({
           height: "100%",
           minHeight: 0,
           width: "100%",
+          position: "relative",
           padding: GAME_LAYOUT.css.boardPadding,
           boxSizing: "border-box",
           overflow: "hidden",
+          borderLeft:
+            communicationMode === "silent"
+              ? `3px solid ${
+                  playerIndex === 0 ? "#38bdf8" : "#fb7185"
+                }`
+              : undefined,
+          background:
+            communicationMode === "silent"
+              ? playerIndex === 0
+                ? "rgba(14, 116, 144, 0.055)"
+                : "rgba(190, 24, 93, 0.055)"
+              : undefined,
         }}
       >
         {reversed ? (
@@ -587,6 +602,7 @@ export default function PlayerBoard({
             </div>
           </>
         )}
+
       </div>
 
       <CardListModal
@@ -595,6 +611,11 @@ export default function PlayerBoard({
         open={deckOpen}
         onClose={() => setDeckOpen(false)}
         onHand={(id) =>
+          communicationMode === "silent"
+            ? handleListCardToHand("deck", id)
+            : handleListCardToPublic("deck", id)
+        }
+        onPublic={(id) =>
           handleListCardToPublic("deck", id)
         }
         primaryActionLabel="公開へ"
@@ -617,6 +638,7 @@ export default function PlayerBoard({
         playerIndex={playerIndex}
         canOperate={canOperate}
         canToggleFace={canOperate || isOpponent}
+        useSilentDeckLayout={communicationMode === "silent"}
         onReorder={(activeId, overId) =>
           handleReorderZoneCards(
             "deck",
@@ -633,6 +655,9 @@ export default function PlayerBoard({
         onClose={() => setTrashOpen(false)}
         onHand={(id) =>
           handleListCardToHand("trash", id)
+        }
+        onPublic={(id) =>
+          handleListCardToPublic("trash", id)
         }
         onTrash={(id) =>
           handleListCardToTrash("trash", id)
@@ -667,6 +692,9 @@ export default function PlayerBoard({
         onClose={() => setLifeOpen(false)}
         onHand={(id) =>
           handleListCardToHand("life", id)
+        }
+        onPublic={(id) =>
+          handleListCardToPublic("life", id)
         }
         onTrash={(id) =>
           handleListCardToTrash("life", id)

@@ -25,12 +25,52 @@ export type OnlineDeckOrderPayload = {
 
 export type MulliganAction = "keep" | "mulligan";
 
+export type CommunicationMode = "voice" | "silent";
+
 export type MulliganResultPayload = {
   playerIndex: 0 | 1;
   action: MulliganAction;
   handOrder: string[];
   deckOrder: string[];
 };
+
+export type QuickActionType =
+  | "attack"
+  | "target"
+  | "effect"
+  | "characterEffect"
+  | "leaderEffect"
+  | "stageEffect"
+  | "rest"
+  | "block"
+  | "counter"
+  | "event"
+  | "trigger"
+  | "life"
+  | "ok"
+  | "wait"
+  | "thinking"
+  | "takeHit"
+  | "endTurn"
+  | "clearTarget";
+
+export type ActionLog = {
+  id: string;
+  playerIndex: 0 | 1;
+  actionType: QuickActionType;
+  createdAt: number;
+};
+
+export type AttackTarget = {
+  playerIndex: 0 | 1;
+  cardId: string;
+} | null;
+
+export type CardEffectSignal = {
+  playerIndex: 0 | 1;
+  cardId: string;
+  nonce: number;
+} | null;
 
 type PlayersSnapshot = [PlayerState, PlayerState];
 
@@ -292,9 +332,59 @@ interface GameState {
 
   localPlayerIndex: 0 | 1 | null;
 
+  communicationMode: CommunicationMode;
+
+  mulliganWaiting: boolean;
+
+  actionLogs: ActionLog[];
+
+  currentAttackSource: AttackTarget;
+
+  currentAttackTarget: AttackTarget;
+
+  pendingAttackPlayerIndex: 0 | 1 | null;
+
+  cardEffectSignal: CardEffectSignal;
+
+  addActionLog: (log: ActionLog) => void;
+
+  setAttackTarget: (
+    target: AttackTarget,
+    log?: ActionLog
+  ) => void;
+
+  setAttackSource: (
+    source: AttackTarget,
+    log?: ActionLog
+  ) => void;
+
+  startAttack: (
+    playerIndex: 0 | 1,
+    cardId: string,
+    log: ActionLog
+  ) => void;
+
+  clearAttackTarget: () => void;
+
+  clearAttackState: () => void;
+
+  showCardEffect: (
+    signal: Exclude<CardEffectSignal, null>
+  ) => void;
+
+  clearCardEffect: () => void;
+
+  clearActionLogs: () => void;
+
   setLocalPlayerIndex: (
     playerIndex: 0 | 1
   ) => void;
+
+  setCommunicationMode: (
+    communicationMode: CommunicationMode
+  ) => void;
+
+  finishOnlineMulligan: () => void;
 
   startGame: (
     player1Deck: CardData[],
@@ -319,6 +409,12 @@ interface GameState {
   toggleRotate: (
     playerIndex: number,
     cardId: string
+  ) => void;
+
+  setCardRotated: (
+    playerIndex: number,
+    cardId: string,
+    rotated: boolean
   ) => void;
 
   moveCard: (
@@ -525,6 +621,103 @@ export const useGameStore =
 
       localPlayerIndex: null,
 
+      communicationMode: "voice",
+
+      mulliganWaiting: false,
+
+      actionLogs: [],
+
+      currentAttackSource: null,
+
+      currentAttackTarget: null,
+
+      pendingAttackPlayerIndex: null,
+
+      cardEffectSignal: null,
+
+      addActionLog: (log) =>
+        set((state) => ({
+          actionLogs: [...state.actionLogs, log],
+        })),
+
+      setAttackSource: (source, log) =>
+        set((state) => ({
+          currentAttackSource: source,
+          currentAttackTarget: source
+            ? null
+            : state.currentAttackTarget,
+          actionLogs: log
+            ? [...state.actionLogs, log]
+            : state.actionLogs,
+        })),
+
+      startAttack: (playerIndex, cardId, log) =>
+        setWithHistory((state) => {
+          const players = [
+            ...state.players,
+          ] as [PlayerState, PlayerState];
+          const player = players[playerIndex];
+          const attackCard = [
+            player.leader,
+            ...player.characters,
+          ].find((item) => item?.id === cardId);
+
+          if (!attackCard) {
+            return { players };
+          }
+
+          attackCard.rotated = true;
+
+          return {
+            players,
+            currentAttackSource: {
+              playerIndex,
+              cardId,
+            },
+            currentAttackTarget: null,
+            actionLogs: [...state.actionLogs, log],
+          };
+        }),
+
+      setAttackTarget: (target, log) =>
+        set((state) => ({
+          currentAttackTarget: target,
+          actionLogs: log
+            ? [...state.actionLogs, log]
+            : state.actionLogs,
+        })),
+
+      clearAttackTarget: () =>
+        set(() => ({
+          currentAttackTarget: null,
+        })),
+
+      clearAttackState: () =>
+        set(() => ({
+          currentAttackSource: null,
+          currentAttackTarget: null,
+          pendingAttackPlayerIndex: null,
+        })),
+
+      showCardEffect: (signal) =>
+        set(() => ({
+          cardEffectSignal: signal,
+        })),
+
+      clearCardEffect: () =>
+        set(() => ({
+          cardEffectSignal: null,
+        })),
+
+      clearActionLogs: () =>
+        set(() => ({
+          actionLogs: [],
+          currentAttackSource: null,
+          currentAttackTarget: null,
+          pendingAttackPlayerIndex: null,
+          cardEffectSignal: null,
+        })),
+
       undoHistory: [],
 
       turnStartSnapshot: null,
@@ -534,6 +727,22 @@ export const useGameStore =
       ) =>
         set(() => ({
           localPlayerIndex: playerIndex,
+        })),
+
+      setCommunicationMode: (communicationMode) =>
+        set(() => ({
+          communicationMode,
+          actionLogs:
+            communicationMode === "voice" ? [] : get().actionLogs,
+          currentAttackSource: null,
+          currentAttackTarget: null,
+          cardEffectSignal: null,
+        })),
+
+      finishOnlineMulligan: () =>
+        set(() => ({
+          mulliganPlayerIndex: null,
+          mulliganWaiting: false,
         })),
 
       startGame: (
@@ -550,7 +759,18 @@ export const useGameStore =
 
           localPlayerIndex: null,
 
+          actionLogs: [],
+
+          currentAttackSource: null,
+
+          currentAttackTarget: null,
+
+          pendingAttackPlayerIndex: null,
+
+          cardEffectSignal: null,
+
           mulliganPlayerIndex: 0,
+          mulliganWaiting: false,
 
           undoHistory: [],
 
@@ -585,7 +805,18 @@ export const useGameStore =
 
           isStarted: true,
 
+          actionLogs: [],
+
+          currentAttackSource: null,
+
+          currentAttackTarget: null,
+
+          pendingAttackPlayerIndex: null,
+
+          cardEffectSignal: null,
+
           mulliganPlayerIndex: 0,
+          mulliganWaiting: false,
 
           undoHistory: [],
 
@@ -648,6 +879,41 @@ export const useGameStore =
 
           if (card) {
             card.rotated = !card.rotated;
+          }
+
+          return { players };
+        }),
+
+      setCardRotated: (
+        playerIndex: number,
+        cardId: string,
+        rotated: boolean
+      ) =>
+        setWithHistory((state) => {
+          const players = [
+            ...state.players,
+          ] as [PlayerState, PlayerState];
+          const player = players[playerIndex];
+          const allCards: CardData[] = [
+            ...player.hand,
+            ...player.deck,
+            ...player.trash,
+            ...player.publicCards,
+            ...player.life,
+            ...player.activeDons,
+            ...player.restDons,
+            ...player.characters.filter(
+              (item): item is CardData => item !== null
+            ),
+            ...(player.leader ? [player.leader] : []),
+            ...(player.stage ? [player.stage] : []),
+          ];
+          const targetCard = allCards.find(
+            (item) => item.id === cardId
+          );
+
+          if (targetCard) {
+            targetCard.rotated = rotated;
           }
 
           return { players };
@@ -922,7 +1188,8 @@ export const useGameStore =
 
           if (to === "public") {
             card.rotated = false;
-            card.isFaceUp = false;
+            card.isFaceUp =
+              state.communicationMode === "silent";
             player.publicCards.unshift(card);
           }
 
@@ -943,7 +1210,29 @@ export const useGameStore =
             ] = card;
           }
 
-          return { players };
+          const sourceMovedOffBoard =
+            state.currentAttackSource?.playerIndex === playerIndex &&
+            state.currentAttackSource.cardId === cardId &&
+            (
+              (from === "character" && to !== "character") ||
+              (from === "public" && to !== "public")
+            );
+          const targetMovedOffBoard =
+            state.currentAttackTarget?.playerIndex === playerIndex &&
+            state.currentAttackTarget.cardId === cardId &&
+            from === "character" &&
+            to !== "character";
+
+          return {
+            players,
+            currentAttackSource: sourceMovedOffBoard
+              ? null
+              : state.currentAttackSource,
+            currentAttackTarget:
+              sourceMovedOffBoard || targetMovedOffBoard
+                ? null
+                : state.currentAttackTarget,
+          };
         }),
 
 
@@ -1031,6 +1320,10 @@ export const useGameStore =
           const card =
             source.splice(index, 1)[0];
 
+          if (state.communicationMode === "silent") {
+            card.rotated = false;
+            card.isFaceUp = true;
+          }
           player.hand.push(card);
 
           return { players };
@@ -1069,7 +1362,8 @@ export const useGameStore =
             source.splice(index, 1)[0];
 
           card.rotated = false;
-          card.isFaceUp = false;
+          card.isFaceUp =
+            state.communicationMode === "silent";
 
           player.publicCards.unshift(card);
 
@@ -1228,6 +1522,11 @@ export const useGameStore =
           return {
             players,
             turnStartSnapshot: clonePlayers(players),
+            actionLogs: [],
+            currentAttackSource: null,
+            currentAttackTarget: null,
+            pendingAttackPlayerIndex: null,
+            cardEffectSignal: null,
           };
         }),
 
@@ -1427,6 +1726,12 @@ export const useGameStore =
           isStarted: false,
           undoHistory: [],
           turnStartSnapshot: null,
+          actionLogs: [],
+          currentAttackSource: null,
+          currentAttackTarget: null,
+          pendingAttackPlayerIndex: null,
+          cardEffectSignal: null,
+          mulliganWaiting: false,
         })),
       mulligan: (playerIndex: 0 | 1) => {
         set((state) => {
@@ -1458,7 +1763,10 @@ export const useGameStore =
 
           return {
             players,
-            mulliganPlayerIndex: null,
+            mulliganPlayerIndex:
+              state.localPlayerIndex === null ? null : 0,
+            mulliganWaiting:
+              state.localPlayerIndex !== null,
           };
         });
 
@@ -1473,8 +1781,11 @@ export const useGameStore =
       },
 
       keepHand: (playerIndex: 0 | 1) => {
-        set(() => ({
-          mulliganPlayerIndex: null,
+        set((state) => ({
+          mulliganPlayerIndex:
+            state.localPlayerIndex === null ? null : 0,
+          mulliganWaiting:
+            state.localPlayerIndex !== null,
         }));
 
         const player = get().players[playerIndex];
@@ -2273,6 +2584,11 @@ export const useGameStore =
             selectedDonStack: null,
             undoHistory: [],
             turnStartSnapshot: null,
+            actionLogs: [],
+            currentAttackSource: null,
+            currentAttackTarget: null,
+            pendingAttackPlayerIndex: null,
+            cardEffectSignal: null,
           };
         });
       },

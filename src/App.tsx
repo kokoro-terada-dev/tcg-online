@@ -5,7 +5,10 @@ import DeckSelect from "./components/DeckSelect/DeckSelect";
 import MulliganScreen from "./components/Mulligan/MulliganScreen";
 import RoomScreen from "./components/Online/RoomScreen";
 
-import { onMulliganResult } from "./network/roomClient";
+import {
+  onMulliganComplete,
+  onMulliganResult,
+} from "./network/roomClient";
 
 import { useGameStore } from "./store/gameStore";
 
@@ -24,11 +27,10 @@ function App() {
   const mulliganPlayerIndex =
     useGameStore((x) => x.mulliganPlayerIndex);
 
-  const resetToDeckSelect =
-    useGameStore((x) => x.resetToDeckSelect);
-
   const applyOnlineMulliganResult =
     useGameStore((x) => x.applyOnlineMulliganResult);
+  const finishOnlineMulligan =
+    useGameStore((x) => x.finishOnlineMulligan);
 
   useEffect(() => {
     const offMulliganResult = onMulliganResult(
@@ -36,22 +38,22 @@ function App() {
         applyOnlineMulliganResult(result);
       }
     );
+    const offMulliganComplete = onMulliganComplete(
+      finishOnlineMulligan
+    );
 
     return () => {
       offMulliganResult();
+      offMulliganComplete();
     };
-  }, [applyOnlineMulliganResult]);
+  }, [applyOnlineMulliganResult, finishOnlineMulligan]);
 
   if (isStarted) {
     if (mulliganPlayerIndex !== null) {
       return <MulliganScreen />;
     }
 
-    return (
-      <Board
-        resetToDeckSelect={resetToDeckSelect}
-      />
-    );
+    return <Board />;
   }
 
   if (screen === "online-menu") {

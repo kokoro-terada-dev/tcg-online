@@ -22,6 +22,8 @@ export default function MulliganScreen() {
 
   const keepHand =
     useGameStore((x) => x.keepHand);
+  const mulliganWaiting =
+    useGameStore((x) => x.mulliganWaiting);
 
 
   if (mulliganPlayerIndex === null) {
@@ -34,6 +36,10 @@ export default function MulliganScreen() {
   const player = players[displayPlayerIndex];
 
   function handleKeep() {
+    if (mulliganWaiting) {
+      return;
+    }
+
     const result = keepHand(
       displayPlayerIndex as 0 | 1
     );
@@ -44,6 +50,10 @@ export default function MulliganScreen() {
   }
 
   function handleMulligan() {
+    if (mulliganWaiting) {
+      return;
+    }
+
     const result = mulligan(
       displayPlayerIndex as 0 | 1
     );
@@ -87,7 +97,9 @@ export default function MulliganScreen() {
         </h1>
 
         <p>
-          マリガンは1回だけです。
+          {mulliganWaiting
+            ? "対戦相手のマリガン選択を待っています。"
+            : "マリガンは1回だけです。"}
         </p>
 
         <div
@@ -126,6 +138,7 @@ export default function MulliganScreen() {
         >
           <button
             onClick={handleKeep}
+            disabled={mulliganWaiting}
             style={primaryButtonStyle}
           >
             この手札で開始
@@ -133,6 +146,7 @@ export default function MulliganScreen() {
 
           <button
             onClick={handleMulligan}
+            disabled={mulliganWaiting}
             style={dangerButtonStyle}
           >
             マリガンして開始

@@ -11,6 +11,8 @@ import {
     leaveRoom,
     removeRoom,
     resetRoomAfterMatch,
+    markMulliganComplete,
+    setCommunicationMode,
     setDeckRecipe,
     setReady,
 } from "./roomManager";
@@ -183,13 +185,42 @@ io.on("connection", (socket) => {
     );
 
     socket.on(
+        "set-communication-mode",
+        (payload: {
+            roomId: string;
+            communicationMode: "voice" | "silent";
+        }) => {
+            const room = setCommunicationMode(
+                payload.roomId,
+                socket.id,
+                payload.communicationMode
+            );
+
+            if (room) {
+                io.to(payload.roomId).emit("room-state", room);
+            }
+        }
+    );
+
+    socket.on(
         "mulligan-result",
         (payload: MulliganResultPayload) => {
-
             socket.to(payload.roomId).emit(
                 "mulligan-result",
                 payload
             );
+
+            const room = markMulliganComplete(
+                payload.roomId,
+                socket.id
+            );
+
+            if (
+                room?.hostMulliganComplete &&
+                room.guestMulliganComplete
+            ) {
+                io.to(payload.roomId).emit("mulligan-complete");
+            }
         }
     );
 

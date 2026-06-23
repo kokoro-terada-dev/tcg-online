@@ -1,9 +1,13 @@
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
 import PlayerBoard from "./PlayerBoard";
+import ActionLogBar from "./ActionLogBar";
+import AttackArrow from "./AttackArrow";
+import ChatControls from "./ChatControls";
 
 import { useGameStore } from "../../store/gameStore";
 
@@ -39,10 +43,6 @@ import type { CardData } from "../../types/card";
 
 import { GAME_LAYOUT } from "../../layout/gameLayout";
 import { getDonImageUrl } from "../../utils/localCardImages";
-
-type Props = {
-  resetToDeckSelect: () => void;
-};
 
 type DragFrom =
   | "hand"
@@ -228,20 +228,29 @@ function getTargetInfoByCardId(
 
 function getTargetCardIdByInfo(
   player: ReturnType<typeof useGameStore.getState>["players"][number],
-  targetArea: "leader" | "character",
+  targetArea: "leader" | "character" | "stage" | "public",
   targetIndex: number
 ) {
   if (targetArea === "leader") {
     return player.leader?.id;
   }
 
+  if (targetArea === "stage") {
+    return player.stage?.id;
+  }
+
+  if (targetArea === "public") {
+    return player.publicCards[targetIndex]?.id;
+  }
+
   return player.characters[targetIndex]?.id;
 }
 
-export default function Board({
-  resetToDeckSelect,
-}: Props) {
+export default function Board() {
   const players = useGameStore((x) => x.players);
+  const resetToDeckSelect = useGameStore(
+    (x) => x.resetToDeckSelect
+  );
 
   const localPlayerIndex =
     useGameStore(
@@ -264,6 +273,19 @@ export default function Board({
   const refreshPlayer = useGameStore(
     (x) => x.refreshPlayer
   );
+  const currentAttackSource = useGameStore(
+    (x) => x.currentAttackSource
+  );
+  const currentAttackTarget = useGameStore(
+    (x) => x.currentAttackTarget
+  );
+  const cardEffectSignal = useGameStore(
+    (x) => x.cardEffectSignal
+  );
+  const communicationMode = useGameStore(
+    (x) => x.communicationMode
+  );
+  const isSilentMode = communicationMode === "silent";
 
 
   const [activeCard, setActiveCard] =
@@ -285,6 +307,49 @@ export default function Board({
 
   const [boardMenuOpen, setBoardMenuOpen] =
     useState(false);
+
+  const [quickChatOpen, setQuickChatOpen] =
+    useState(false);
+
+  const [chatHistoryOpen, setChatHistoryOpen] =
+    useState(false);
+
+  const [unreadChatCount, setUnreadChatCount] =
+    useState(0);
+
+  const chatHistoryOpenRef = useRef(false);
+
+  function toggleChatHistory() {
+    setChatHistoryOpen((open) => {
+      const next = !open;
+      chatHistoryOpenRef.current = next;
+
+      if (next) {
+        setUnreadChatCount(0);
+      }
+
+      return next;
+    });
+  }
+
+  function clearCardActions() {
+    const state = useGameStore.getState();
+    const log = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      playerIndex: ownPlayerIndex as 0 | 1,
+      actionType: "clearTarget" as const,
+      createdAt: Date.now(),
+    };
+    state.clearAttackState();
+    state.clearCardEffect();
+    state.addActionLog(log);
+    setQuickChatOpen(false);
+
+    sendBoardAction({
+      actionType: "CLEAR_CARD_ACTIONS",
+      payload: { log },
+    });
+  }
 
   function requestMatchExit() {
     const result = window.confirm(
@@ -744,22 +809,130 @@ export default function Board({
       }
 
       if (action.actionType === "TOGGLE_PUBLIC_CARD_FACE") {
-        const { payload } = action;
-
         const state = useGameStore.getState();
-        const card =
-          state.players[payload.playerIndex]
-            .publicCards[payload.cardIndex];
 
-        if (!card) {
+        if (state.communicationMode === "silent") {
           return;
         }
 
-        state.toggleCardFace(
-          payload.playerIndex,
-          card.id
+        const card =
+          state.players[action.payload.playerIndex]
+            .publicCards[action.payload.cardIndex];
+
+        if (card) {
+          state.toggleCardFace(
+            action.payload.playerIndex,
+            card.id
+          );
+        }
+        return;
+      }
+
+      if (action.actionType === "QUICK_ACTION") {
+        if (useGameStore.getState().communicationMode !== "silent") {
+          return;
+        }
+        useGameStore.getState().addActionLog(
+          action.payload.log
+        );
+        const currentLocalPlayerIndex =
+          useGameStore.getState().localPlayerIndex;
+
+        if (
+          currentLocalPlayerIndex !== null &&
+          action.payload.log.playerIndex !== currentLocalPlayerIndex &&
+          !chatHistoryOpenRef.current
+        ) {
+          setUnreadChatCount((count) => count + 1);
+        }
+        return;
+      }
+
+      if (action.actionType === "SET_ATTACK_TARGET") {
+        const state = useGameStore.getState();
+        const targetPlayer =
+          state.players[action.payload.targetPlayerIndex];
+        const cardId = getTargetCardIdByInfo(
+          targetPlayer,
+          action.payload.targetArea,
+          action.payload.targetIndex
         );
 
+        if (cardId) {
+          state.setAttackTarget(
+            {
+              playerIndex: action.payload.targetPlayerIndex,
+              cardId,
+            },
+            action.payload.log
+          );
+        }
+        return;
+      }
+
+      if (action.actionType === "CARD_QUICK_ACTION") {
+        const state = useGameStore.getState();
+        if (state.communicationMode !== "silent") {
+          return;
+        }
+        const { payload } = action;
+        const cardId = getTargetCardIdByInfo(
+          state.players[payload.playerIndex],
+          payload.targetArea,
+          payload.targetIndex
+        );
+
+        if (!cardId) {
+          return;
+        }
+
+        const pointer = {
+          playerIndex: payload.playerIndex,
+          cardId,
+        };
+
+        if (payload.quickAction === "attack") {
+          if (!payload.log) {
+            return;
+          }
+          state.startAttack(
+            payload.playerIndex,
+            cardId,
+            payload.log
+          );
+        } else if (payload.quickAction === "target") {
+          state.setAttackTarget(pointer, payload.log);
+        } else if (payload.quickAction === "effect") {
+          state.showCardEffect({
+            ...pointer,
+            nonce: Date.now(),
+          });
+          if (
+            payload.targetArea === "public" &&
+            payload.log
+          ) {
+            state.setAttackSource(pointer, payload.log);
+          } else if (payload.log) {
+            state.addActionLog(payload.log);
+          }
+        } else if (payload.quickAction === "rest") {
+          state.toggleRotate(payload.playerIndex, cardId);
+        } else if (payload.quickAction === "cancelSource") {
+          state.clearAttackState();
+        } else {
+          state.clearAttackTarget();
+        }
+
+        return;
+      }
+
+      if (action.actionType === "CLEAR_CARD_ACTIONS") {
+        const state = useGameStore.getState();
+        state.clearAttackState();
+        state.clearCardEffect();
+        if (action.payload.log) {
+          state.addActionLog(action.payload.log);
+        }
         return;
       }
     });
@@ -1216,7 +1389,8 @@ export default function Board({
             />
           </div>
 
-          <div
+          {isSilentMode && (
+            <div
             style={{
               flexShrink: 0,
 
@@ -1225,31 +1399,16 @@ export default function Board({
               alignItems: "center",
 
               gap: "4px",
-              padding: "2px 4px",
+              padding: "2px 52px 2px 4px",
 
               fontSize: "clamp(10px, 2.8vw, 12px)",
-              minHeight: "28px",
+              minHeight: "42px",
               marginTop: 0,
             }}
           >
-            <button
-              title="自分リフレッシュ"
-              aria-label="自分リフレッシュ"
-              onClick={() => {
-                refreshPlayer(ownPlayerIndex);
-
-                sendBoardAction({
-                  actionType: "REFRESH_PLAYER",
-                  payload: {
-                    playerIndex: ownPlayerIndex,
-                  },
-                });
-              }}
-            >
-              リフレッシュ
-            </button>
-
-          </div>
+            <ActionLogBar />
+            </div>
+          )}
 
           <div
             style={{
@@ -1267,6 +1426,48 @@ export default function Board({
           </div>
         </div>
       </div>
+
+      {isSilentMode && <AttackArrow />}
+
+      {isSilentMode && (currentAttackSource ||
+        currentAttackTarget ||
+        cardEffectSignal) && (
+        <button
+          type="button"
+          aria-label="アクションをキャンセル"
+          title="アクションをキャンセル"
+          onClick={clearCardActions}
+          style={{
+            position: "fixed",
+            top: "max(8px, env(safe-area-inset-top))",
+            right: "56px",
+            minWidth: "88px",
+            height: "40px",
+            padding: "0 10px",
+            borderRadius: "7px",
+            border: "1px solid #fca5a5",
+            background: "#b91c1c",
+            color: "white",
+            fontSize: "12px",
+            fontWeight: 900,
+            zIndex: 90000,
+          }}
+        >
+          キャンセル
+        </button>
+      )}
+
+      {isSilentMode && <ChatControls
+        senderPlayerIndex={ownPlayerIndex as 0 | 1}
+        quickChatOpen={quickChatOpen}
+        historyOpen={chatHistoryOpen}
+        unreadCount={unreadChatCount}
+        onToggleQuickChat={() =>
+          setQuickChatOpen((open) => !open)
+        }
+        onToggleHistory={toggleChatHistory}
+        onCloseQuickChat={() => setQuickChatOpen(false)}
+      />}
 
       <button
         type="button"
@@ -1351,6 +1552,33 @@ export default function Board({
               }}
             >
               {exitRequestWaiting ? "確認待ち" : "対戦終了"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setBoardMenuOpen(false);
+                refreshPlayer(ownPlayerIndex);
+
+                sendBoardAction({
+                  actionType: "REFRESH_PLAYER",
+                  payload: {
+                    playerIndex: ownPlayerIndex,
+                  },
+                });
+              }}
+              style={{
+                width: "100%",
+                minHeight: "44px",
+                marginTop: "8px",
+                borderRadius: "8px",
+                border: "1px solid #38bdf8",
+                background: "#0369a1",
+                color: "white",
+                fontWeight: 900,
+              }}
+            >
+              リフレッシュ
             </button>
           </div>
         </div>
