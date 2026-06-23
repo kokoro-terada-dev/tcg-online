@@ -128,30 +128,30 @@ export default function MulliganScreen() {
           ))}
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            justifyContent: "center",
-            flexDirection: "column",
-          }}
-        >
-          <button
-            onClick={handleKeep}
-            disabled={mulliganWaiting}
-            style={primaryButtonStyle}
+        {!mulliganWaiting && (
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              justifyContent: "center",
+              flexDirection: "column",
+            }}
           >
-            この手札で開始
-          </button>
+            <button
+              onClick={handleKeep}
+              style={primaryButtonStyle}
+            >
+              この手札で開始
+            </button>
 
-          <button
-            onClick={handleMulligan}
-            disabled={mulliganWaiting}
-            style={dangerButtonStyle}
-          >
-            マリガンして開始
-          </button>
-        </div>
+            <button
+              onClick={handleMulligan}
+              style={dangerButtonStyle}
+            >
+              マリガンして開始
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
