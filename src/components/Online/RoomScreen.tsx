@@ -502,13 +502,17 @@ export default function RoomScreen({
 }
 
 const pageStyle: CSSProperties = {
-    minHeight: "100dvh",
+    width: "100%",
+    height: "100dvh",
     background: "#111827",
     color: "white",
-    padding: "12px",
+    padding:
+        "12px 12px calc(20px + env(safe-area-inset-bottom))",
     boxSizing: "border-box",
     overflowY: "auto",
+    overflowX: "hidden",
     WebkitOverflowScrolling: "touch",
+    overscrollBehaviorY: "contain",
 };
 
 const containerStyle: CSSProperties = {
@@ -622,6 +626,7 @@ const startButtonStyle: CSSProperties = {
 const subButtonStyle: CSSProperties = {
     width: "100%",
     minHeight: "48px",
+    flexShrink: 0,
     borderRadius: "14px",
     border: "1px solid #64748b",
     background:
