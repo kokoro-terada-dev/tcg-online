@@ -101,6 +101,9 @@ export default function GameCard({
 
   const toggleRotate = useGameStore((x) => x.toggleRotate);
   const changePower = useGameStore((x) => x.changePower);
+  const changeCountModifier = useGameStore(
+    (x) => x.changeCountModifier
+  );
   const setStatusLabel = useGameStore((x) => x.setStatusLabel);
   const toggleCardFace = useGameStore((x) => x.toggleCardFace);
   const localPlayerIndex = useGameStore((x) => x.localPlayerIndex);
@@ -112,9 +115,13 @@ export default function GameCard({
     localPlayerIndex !== null &&
     playerIndex !== localPlayerIndex;
 
+  const canOperate =
+    localPlayerIndex === null ||
+    playerIndex === localPlayerIndex;
+
   const isDraggable =
     !overlay &&
-    !isOpponent &&
+    canOperate &&
     from !== "leader";
 
   const {
@@ -191,14 +198,15 @@ export default function GameCard({
     menuAction:
       | "TOGGLE_ROTATE"
       | "CHANGE_POWER"
+      | "CHANGE_COUNT_MODIFIER"
       | "SET_STATUS_LABEL"
       | "RETURN_ATTACHED_DONS_TO_REST",
     options?: {
       amount?: number;
-      label?: "アタック×" | "アクティブ×";
+      label?: string;
     }
   ) {
-    if (isOpponent) {
+    if (!canOperate) {
       return;
     }
 
@@ -223,6 +231,12 @@ export default function GameCard({
   }
 
   const powerModifier = card.powerModifier ?? 0;
+  const countModifier = card.countModifier ?? 0;
+  const visibleStatusLabel =
+    card.statusLabel &&
+      !card.statusLabel.includes("アクティブ")
+      ? "×"
+      : null;
   const displayImage =
     from === "donDeck"
       ? getDonDeckImageUrl()
@@ -304,7 +318,7 @@ export default function GameCard({
       onClick={(e) => {
         e.stopPropagation();
 
-        if (overlay || isOpponent) {
+        if (overlay || !canOperate) {
           return;
         }
 
@@ -360,8 +374,14 @@ export default function GameCard({
         </div>
       )}
 
-      {card.statusLabel && (
-        <div className="status-label">{card.statusLabel}</div>
+      {countModifier !== 0 && (
+        <div className="count-modifier">
+          {countModifier > 0 ? `+${countModifier}` : countModifier}
+        </div>
+      )}
+
+      {visibleStatusLabel && (
+        <div className="status-label">{visibleStatusLabel}</div>
       )}
 
       {card.attachedDonCount > 0 && (
@@ -369,7 +389,7 @@ export default function GameCard({
           card={card}
           playerIndex={playerIndex}
           overlay={overlay}
-          disabled={isOpponent}
+          disabled={!canOperate}
         />
       )}
 
@@ -507,11 +527,40 @@ export default function GameCard({
                     </div>
                   )}
 
-                  {card.statusLabel && (
+                  {countModifier !== 0 && (
                     <div
                       style={{
                         position: "absolute",
                         top: "52px",
+                        right: "8px",
+                        minWidth: "52px",
+                        height: "32px",
+                        padding: "0 10px",
+                        borderRadius: "999px",
+                        background:
+                          countModifier > 0 ? "#22c55e" : "#ef4444",
+                        color: "#ffffff",
+                        border: "2px solid white",
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        fontSize: "15px",
+                        fontWeight: 900,
+                        boxShadow: "0 0 10px rgba(0,0,0,0.8)",
+                        zIndex: 10,
+                      }}
+                    >
+                      {countModifier > 0
+                        ? `+${countModifier}`
+                        : countModifier}
+                    </div>
+                  )}
+
+                  {visibleStatusLabel && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: countModifier !== 0 ? "92px" : "52px",
                         right: "8px",
                         padding: "4px 10px",
                         borderRadius: "999px",
@@ -523,7 +572,7 @@ export default function GameCard({
                         boxShadow: "0 0 10px rgba(0,0,0,0.8)",
                       }}
                     >
-                      {card.statusLabel}
+                      {visibleStatusLabel}
                     </div>
                   )}
 
@@ -592,33 +641,55 @@ export default function GameCard({
                   <button
                     style={menuButtonStyle}
                     onClick={() => {
-                      setStatusLabel(playerIndex, card.id, "アタック×");
+                      setStatusLabel(playerIndex, card.id, "×");
 
                       sendCardMenuAction(
                         "SET_STATUS_LABEL",
                         {
-                          label: "アタック×",
+                          label: "×",
                         }
                       );
                     }}
                   >
-                    アタック×
+                    ×
                   </button>
 
                   <button
-                    style={menuButtonStyle}
+                    style={{
+                      ...menuButtonStyle,
+                      background: "#22c55e",
+                    }}
                     onClick={() => {
-                      setStatusLabel(playerIndex, card.id, "アクティブ×");
+                      changeCountModifier(playerIndex, card.id, 1);
 
                       sendCardMenuAction(
-                        "SET_STATUS_LABEL",
+                        "CHANGE_COUNT_MODIFIER",
                         {
-                          label: "アクティブ×",
+                          amount: 1,
                         }
                       );
                     }}
                   >
-                    アクティブ×
+                    +1
+                  </button>
+
+                  <button
+                    style={{
+                      ...menuButtonStyle,
+                      background: "#ef4444",
+                    }}
+                    onClick={() => {
+                      changeCountModifier(playerIndex, card.id, -1);
+
+                      sendCardMenuAction(
+                        "CHANGE_COUNT_MODIFIER",
+                        {
+                          amount: -1,
+                        }
+                      );
+                    }}
+                  >
+                    -1
                   </button>
 
                   <div
@@ -706,7 +777,12 @@ function DonBadge({
   overlay: boolean;
   disabled: boolean;
 }) {
-  const { attributes, listeners, setNodeRef } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    isDragging,
+  } = useDraggable({
     id: `don-badge-${card.id}`,
     disabled: overlay || disabled,
     data: {
@@ -715,6 +791,10 @@ function DonBadge({
       playerIndex,
     },
   });
+
+  const displayAttachedDonCount = isDragging
+    ? Math.max(0, card.attachedDonCount - 1)
+    : card.attachedDonCount;
 
   return (
     <div
@@ -741,10 +821,12 @@ function DonBadge({
         fontWeight: "bold",
         boxShadow: "0 0 10px rgba(0,0,0,0.6)",
         zIndex: 999,
-        cursor: "pointer",
+        cursor: disabled ? "default" : "grab",
+        opacity: displayAttachedDonCount > 0 ? 1 : 0,
+        touchAction: "none",
       }}
     >
-      ﾄﾞﾝ!!×{card.attachedDonCount}
+      ﾄﾞﾝ!!×{displayAttachedDonCount}
     </div>
   );
 }

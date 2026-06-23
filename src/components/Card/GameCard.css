@@ -50,6 +50,24 @@
   z-index: 1000;
 }
 
+.count-modifier {
+  position: absolute;
+  top: calc(var(--op-card-height) * 0.02);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 40px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #ffffff;
+  border: 2px solid white;
+  font-size: clamp(11px, 3vw, 14px);
+  font-weight: 900;
+  text-align: center;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+  z-index: 1001;
+}
+
 .card-menu {
   position: absolute;
 
@@ -170,14 +188,14 @@
   top: calc(var(--op-card-width) * 0.09);
 }
 
-.game-card-deck{
-  width: calc(var(--op-deck-width) * 0.82);
-  height: calc(var(--op-deck-height) * 0.81);
+.game-card-deck {
+  width: 100%;
+  height: 100%;
 }
 
 .game-card-deck img {
-  width: calc(var(--op-deck-width) * 0.95);
-  height: calc(var(--op-deck-height) * 0.97);
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 
   border-radius: var(--op-card-radius);

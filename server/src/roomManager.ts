@@ -148,6 +148,39 @@ export function removeRoom(
   rooms.delete(roomId);
 }
 
+export function leaveRoom(
+  roomId: string,
+  socketId: string
+) {
+  const room = rooms.get(roomId);
+
+  if (!room) {
+    return null;
+  }
+
+  if (room.hostSocketId === socketId) {
+    rooms.delete(roomId);
+
+    return {
+      room,
+      roomRemoved: true,
+    };
+  }
+
+  if (room.guestSocketId !== socketId) {
+    return null;
+  }
+
+  room.guestSocketId = null;
+  room.guestReady = false;
+  room.guestDeckRecipe = null;
+
+  return {
+    room,
+    roomRemoved: false,
+  };
+}
+
 
 export function resetRoomAfterMatch(
   roomId: string

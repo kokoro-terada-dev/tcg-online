@@ -378,10 +378,16 @@ interface GameState {
     amount: number
   ) => void;
 
+  changeCountModifier: (
+    playerIndex: number,
+    cardId: string,
+    amount: number
+  ) => void;
+
   setStatusLabel: (
     playerIndex: number,
     cardId: string,
-    label: "アタック×" | "アクティブ×"
+    label: string
   ) => void;
 
   resetToDeckSelect: () => void;
@@ -425,6 +431,11 @@ interface GameState {
   ) => void;
 
   returnAttachedDonToRest: (
+    playerIndex: number,
+    targetCardId: string
+  ) => void;
+
+  returnAttachedDonToDeck: (
     playerIndex: number,
     targetCardId: string
   ) => void;
@@ -536,6 +547,8 @@ export const useGameStore =
           ],
 
           isStarted: true,
+
+          localPlayerIndex: null,
 
           mulliganPlayerIndex: 0,
 
@@ -890,6 +903,7 @@ export const useGameStore =
           // キャラクターエリアを離れる時は状態リセット
           if (from === "character") {
             card.powerModifier = 0;
+            card.countModifier = 0;
 
             card.statusLabel = undefined;
           }
@@ -1170,6 +1184,7 @@ export const useGameStore =
 
             // パワー補正リセット
             card.powerModifier = 0;
+            card.countModifier = 0;
 
             // 付与DONはACTIVE DONへ戻す
             if (card.attachedDonCount > 0) {
@@ -1344,10 +1359,10 @@ export const useGameStore =
           return { players };
         }),
 
-      setStatusLabel: (
+      changeCountModifier: (
         playerIndex: number,
         cardId: string,
-        label: "アタック×" | "アクティブ×"
+        amount: number
       ) =>
         setWithHistory((state) => {
           const players = [...state.players] as [
@@ -1366,8 +1381,41 @@ export const useGameStore =
           const card = allCards.find((x) => x.id === cardId);
 
           if (card) {
+            card.countModifier =
+              (card.countModifier ?? 0) + amount;
+          }
+
+          return { players };
+        }),
+
+      setStatusLabel: (
+        playerIndex: number,
+        cardId: string,
+        label: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const allCards = [
+            player.leader,
+            player.stage,
+            ...player.characters.filter(Boolean),
+          ].filter(Boolean) as CardData[];
+
+          const card = allCards.find((x) => x.id === cardId);
+
+          if (card) {
+            const hasVisibleDisabledLabel =
+              card.statusLabel !== undefined &&
+              !card.statusLabel.includes("アクティブ");
+
             card.statusLabel =
-              card.statusLabel === label
+              label === "×" && hasVisibleDisabledLabel
                 ? undefined
                 : label;
           }
@@ -1695,6 +1743,45 @@ export const useGameStore =
             image: getDonImageUrl(),
             type: "don",
             rotated: true,
+            attachedDonCount: 0,
+            isFaceUp: true,
+          });
+
+          return { players };
+        }),
+      returnAttachedDonToDeck: (
+        playerIndex: number,
+        targetCardId: string
+      ) =>
+        setWithHistory((state) => {
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+
+          const player = players[playerIndex];
+
+          const targetCards = [
+            player.leader,
+            ...player.characters.filter(Boolean),
+          ].filter(Boolean) as CardData[];
+
+          const target = targetCards.find(
+            (x) => x.id === targetCardId
+          );
+
+          if (!target || target.attachedDonCount <= 0) {
+            return { players };
+          }
+
+          target.attachedDonCount--;
+
+          player.donDeck.unshift({
+            id: Math.random().toString(36).slice(2),
+            name: "DON",
+            image: getDonImageUrl(),
+            type: "don",
+            rotated: false,
             attachedDonCount: 0,
             isFaceUp: true,
           });
@@ -2084,6 +2171,7 @@ export const useGameStore =
               ...card,
               rotated: false,
               powerModifier: 0,
+              countModifier: 0,
               statusLabel: undefined,
               attachedDonCount: 0,
               isFaceUp: false,
@@ -2128,6 +2216,7 @@ export const useGameStore =
               type: "don" as const,
               rotated: false,
               powerModifier: 0,
+              countModifier: 0,
               statusLabel: undefined,
               attachedDonCount: 0,
               isFaceUp: true,
@@ -2140,6 +2229,7 @@ export const useGameStore =
               ...card,
               rotated: false,
               powerModifier: 0,
+              countModifier: 0,
               statusLabel: undefined,
               attachedDonCount: 0,
               isFaceUp: true,
@@ -2162,6 +2252,7 @@ export const useGameStore =
                   ...player.leader,
                   rotated: false,
                   powerModifier: 0,
+                  countModifier: 0,
                   statusLabel: undefined,
                   attachedDonCount: 0,
                   isFaceUp: true,

@@ -80,7 +80,7 @@ export type BoardActionPayload =
       targetCardId: string;
       targetArea: "leader" | "character";
       targetIndex: number;
-      toArea: "activeDon" | "restDon";
+      toArea: "donDeck" | "activeDon" | "restDon";
     };
   }
   | {
@@ -101,10 +101,11 @@ export type BoardActionPayload =
       menuAction:
         | "TOGGLE_ROTATE"
         | "CHANGE_POWER"
+        | "CHANGE_COUNT_MODIFIER"
         | "SET_STATUS_LABEL"
         | "RETURN_ATTACHED_DONS_TO_REST";
       amount?: number;
-      label?: "アタック×" | "アクティブ×";
+      label?: string;
     };
   }
   | {

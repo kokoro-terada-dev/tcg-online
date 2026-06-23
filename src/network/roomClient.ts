@@ -72,7 +72,7 @@ export type BoardActionPayload =
       targetCardId: string;
       targetArea: "leader" | "character";
       targetIndex: number;
-      toArea: "activeDon" | "restDon";
+      toArea: "donDeck" | "activeDon" | "restDon";
     };
   }
   | {
@@ -93,10 +93,11 @@ export type BoardActionPayload =
       menuAction:
       | "TOGGLE_ROTATE"
       | "CHANGE_POWER"
+      | "CHANGE_COUNT_MODIFIER"
       | "SET_STATUS_LABEL"
       | "RETURN_ATTACHED_DONS_TO_REST";
       amount?: number;
-      label?: "アタック×" | "アクティブ×";
+      label?: string;
     };
   }
   | {
@@ -174,6 +175,9 @@ export type BoardActionPayload =
 
 let roomIdForClient: string | null = null;
 let roomStateForClient: RoomStateForClient | null = null;
+let createRoomPending = false;
+let leaveAfterCreate = false;
+let ignoredRoomId: string | null = null;
 
 const roomStateListeners =
   new Set<(roomState: RoomStateForClient) => void>();
@@ -305,6 +309,20 @@ export function onMatchExitRejected(
 export function clearClientRoomState() {
   roomIdForClient = null;
   roomStateForClient = null;
+  createRoomPending = false;
+}
+
+export function leaveRoom() {
+  const roomId = roomIdForClient;
+  const wasCreatingRoom = createRoomPending;
+
+  if (roomId) {
+    socket.emit("leave-room", { roomId });
+  }
+
+  clearClientRoomState();
+  leaveAfterCreate = wasCreatingRoom;
+  setHost(false);
 }
 
 export function setClientRoomId(
@@ -314,6 +332,13 @@ export function setClientRoomId(
 }
 
 export function createRoom() {
+  if (createRoomPending || roomIdForClient) {
+    return;
+  }
+
+  createRoomPending = true;
+  leaveAfterCreate = false;
+  ignoredRoomId = null;
   setHost(true);
 
   socket.emit("create-room");
@@ -456,6 +481,18 @@ export function sendMatchExitRejected() {
 socket.on(
   "room-created",
   (roomState: RoomStateForClient) => {
+    createRoomPending = false;
+
+    if (leaveAfterCreate) {
+      leaveAfterCreate = false;
+      ignoredRoomId = roomState.roomId;
+      socket.emit("leave-room", {
+        roomId: roomState.roomId,
+      });
+      setHost(false);
+      return;
+    }
+
     setHost(true);
     updateRoomState(roomState);
   }
@@ -464,6 +501,7 @@ socket.on(
 socket.on(
   "room-joined",
   (roomState: RoomStateForClient) => {
+    ignoredRoomId = null;
     setHost(false);
     updateRoomState(roomState);
   }
@@ -472,6 +510,10 @@ socket.on(
 socket.on(
   "room-state",
   (roomState: RoomStateForClient) => {
+    if (roomState.roomId === ignoredRoomId) {
+      return;
+    }
+
     updateRoomState(roomState);
   }
 );
@@ -479,6 +521,9 @@ socket.on(
 socket.on(
   "join-failed",
   () => {
+    createRoomPending = false;
+    clearClientRoomState();
+
     for (const listener of joinFailedListeners) {
       listener();
     }
@@ -526,8 +571,6 @@ socket.on(
 socket.on(
   "match-exit-accepted",
   () => {
-    clearClientRoomState();
-
     for (const listener of matchExitAcceptedListeners) {
       listener();
     }

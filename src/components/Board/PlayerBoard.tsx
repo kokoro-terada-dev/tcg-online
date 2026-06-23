@@ -67,6 +67,10 @@ export default function PlayerBoard({
     localPlayerIndex !== null &&
     playerIndex !== localPlayerIndex;
 
+  const canOperate =
+    localPlayerIndex === null ||
+    playerIndex === localPlayerIndex;
+
   const [deckOpen, setDeckOpen] =
     useState(false);
 
@@ -145,7 +149,7 @@ export default function PlayerBoard({
     cardId: string,
     listAction: ListCardAction
   ) {
-    if (isOpponent) {
+    if (!canOperate) {
       return false;
     }
 
@@ -230,7 +234,11 @@ export default function PlayerBoard({
     zone: ZoneKey,
     cardId: string
   ) {
-    if (isOpponent) {
+    const canToggleFace =
+      canOperate ||
+      (isOpponent && zone === "deck");
+
+    if (!canToggleFace) {
       return;
     }
 
@@ -258,7 +266,7 @@ export default function PlayerBoard({
   function handleOpenTopDeckCards(
     count: number
   ) {
-    if (isOpponent) {
+    if (!canOperate) {
       return;
     }
 
@@ -278,7 +286,7 @@ export default function PlayerBoard({
     activeId: string,
     overId: string
   ) {
-    if (isOpponent) {
+    if (!canOperate) {
       return;
     }
 
@@ -373,7 +381,7 @@ export default function PlayerBoard({
                 playerIndex={playerIndex}
                 selectedDonStack={selectedDonStack}
                 onSelectDonStack={(fromArea) =>
-                  !isOpponent &&
+                  canOperate &&
                   selectDonStack(playerIndex, fromArea)
                 }
               />
@@ -529,7 +537,7 @@ export default function PlayerBoard({
                 playerIndex={playerIndex}
                 selectedDonStack={selectedDonStack}
                 onSelectDonStack={(fromArea) =>
-                  !isOpponent &&
+                  canOperate &&
                   selectDonStack(playerIndex, fromArea)
                 }
               />
@@ -584,7 +592,7 @@ export default function PlayerBoard({
       <CardListModal
         title="Deck"
         cards={player.deck}
-        open={deckOpen && !isOpponent}
+        open={deckOpen}
         onClose={() => setDeckOpen(false)}
         onHand={(id) =>
           handleListCardToPublic("deck", id)
@@ -607,7 +615,8 @@ export default function PlayerBoard({
         }
         zone="deck"
         playerIndex={playerIndex}
-        canOperate={!isOpponent}
+        canOperate={canOperate}
+        canToggleFace={canOperate || isOpponent}
         onReorder={(activeId, overId) =>
           handleReorderZoneCards(
             "deck",
@@ -640,7 +649,8 @@ export default function PlayerBoard({
         onOpenTopCards={() => { }}
         zone="trash"
         playerIndex={playerIndex}
-        canOperate={!isOpponent}
+        canOperate={canOperate}
+        canToggleFace={canOperate}
         onReorder={(activeId, overId) =>
           handleReorderZoneCards(
             "trash",
@@ -673,7 +683,8 @@ export default function PlayerBoard({
         onOpenTopCards={() => { }}
         zone="life"
         playerIndex={playerIndex}
-        canOperate={!isOpponent}
+        canOperate={canOperate}
+        canToggleFace={canOperate}
         onReorder={(activeId, overId) =>
           handleReorderZoneCards(
             "life",

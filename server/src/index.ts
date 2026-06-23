@@ -8,6 +8,7 @@ import {
     createRoom,
     findRoomBySocketId,
     joinRoom,
+    leaveRoom,
     removeRoom,
     resetRoomAfterMatch,
     setDeckRecipe,
@@ -71,6 +72,36 @@ io.on("connection", (socket) => {
         socket.emit("room-created", room);
         io.to(room.roomId).emit("room-state", room);
     });
+
+    socket.on(
+        "leave-room",
+        (payload: { roomId: string }) => {
+            const result = leaveRoom(
+                payload.roomId,
+                socket.id
+            );
+
+            if (!result) {
+                socket.leave(payload.roomId);
+                return;
+            }
+
+            socket.leave(payload.roomId);
+
+            if (result.roomRemoved) {
+                socket.to(payload.roomId).emit(
+                    "opponent-disconnected"
+                );
+                io.in(payload.roomId).socketsLeave(payload.roomId);
+                return;
+            }
+
+            io.to(payload.roomId).emit(
+                "room-state",
+                result.room
+            );
+        }
+    );
 
     socket.on(
         "join-room",
@@ -189,16 +220,16 @@ io.on("connection", (socket) => {
                 payload.roomId
             );
 
-            io.to(payload.roomId).emit(
-                "match-exit-accepted"
-            );
-
             if (room) {
                 io.to(payload.roomId).emit(
                     "room-state",
                     room
                 );
             }
+
+            io.to(payload.roomId).emit(
+                "match-exit-accepted"
+            );
         }
     );
 

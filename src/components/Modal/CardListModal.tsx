@@ -34,6 +34,7 @@ type Props = {
 
   playerIndex: number;
   canOperate: boolean;
+  canToggleFace: boolean;
 
   onReorder: (
     activeId: string,
@@ -79,6 +80,8 @@ export default function CardListModal({
   onOpenTopCards,
   onReorder,
   canOperate,
+  canToggleFace,
+  zone,
 }: Props) {
   if (!open) {
     return null;
@@ -305,6 +308,8 @@ export default function CardListModal({
                     onLifeTop={onLifeTop}
                     onPreview={setPreviewImage}
                     canOperate={canOperate}
+                    canToggleFace={canToggleFace}
+                    canPreviewHiddenCard={zone === "deck"}
                   />
                 );
               })}
@@ -398,6 +403,8 @@ function SortableCardRow({
   onLifeTop,
   onPreview,
   canOperate,
+  canToggleFace,
+  canPreviewHiddenCard,
 }: {
   card: CardData;
   isOpen: boolean;
@@ -410,6 +417,8 @@ function SortableCardRow({
   onLifeTop: (cardId: string) => void;
   onPreview: (image: string) => void;
   canOperate: boolean;
+  canToggleFace: boolean;
+  canPreviewHiddenCard: boolean;
 }) {
   const {
     attributes,
@@ -468,7 +477,11 @@ function SortableCardRow({
           clearPreviewTimer();
 
           previewTimer.current = window.setTimeout(() => {
-            onPreview(isOpen ? card.image : getCardBackImageUrl());
+            onPreview(
+              isOpen || canPreviewHiddenCard
+                ? card.image
+                : getCardBackImageUrl()
+            );
           }, 550);
         }}
         onTouchMove={() => {
@@ -488,7 +501,11 @@ function SortableCardRow({
           clearPreviewTimer();
 
           previewTimer.current = window.setTimeout(() => {
-            onPreview(isOpen ? card.image : getCardBackImageUrl());
+            onPreview(
+              isOpen || canPreviewHiddenCard
+                ? card.image
+                : getCardBackImageUrl()
+            );
           }, 550);
         }}
         onMouseUp={clearPreviewTimer}
@@ -496,14 +513,14 @@ function SortableCardRow({
         onClick={(e) => {
           e.stopPropagation();
 
-          if (isHiddenList && canOperate) {
+          if (isHiddenList && canToggleFace) {
             onToggleFace(card.id);
           }
         }}
         style={{
           width: "80px",
           cursor:
-            isHiddenList && canOperate
+            isHiddenList && canToggleFace
               ? "pointer"
               : "default",
           borderRadius: "6px",
@@ -511,6 +528,16 @@ function SortableCardRow({
           userSelect: "none",
         }}
       />
+
+      {isHiddenList && canToggleFace && !canOperate && (
+        <button
+          type="button"
+          style={actionButtonStyle}
+          onClick={() => onToggleFace(card.id)}
+        >
+          表裏切替
+        </button>
+      )}
 
       {canOperate && <div
         style={{

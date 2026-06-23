@@ -7,7 +7,6 @@ import type { CardData } from "../../types/card";
 import GameCard from "../Card/GameCard";
 import { GAME_LAYOUT } from "../../layout/gameLayout";
 import { getCardBackImageUrl } from "../../utils/localCardImages";
-import { useGameStore } from "../../store/gameStore";
 
 type Props = {
   cards: CardData[];
@@ -21,10 +20,6 @@ export default function DeckArea({
   onOpen,
 }: Props) {
   const longPressTimer = useRef<number | null>(null);
-  const localPlayerIndex = useGameStore((x) => x.localPlayerIndex);
-  const isOpponent =
-    localPlayerIndex !== null &&
-    playerIndex !== localPlayerIndex;
 
   const { setNodeRef, isOver } = useDroppable({
     id: `deck-${playerIndex}`,
@@ -41,15 +36,6 @@ export default function DeckArea({
     }
   }
 
-  function requestOpen() {
-    if (isOpponent) {
-      window.alert("相手の山札は確認できません");
-      return;
-    }
-
-    onOpen();
-  }
-
   const topCard = cards[0];
   const cardBackImage = getCardBackImageUrl();
 
@@ -64,11 +50,11 @@ export default function DeckArea({
         e.stopPropagation();
 
         clearTimer();
-        requestOpen();
+        onOpen();
       }}
       style={{
         width: GAME_LAYOUT.css.deckWidth,
-        height: "calc(var(--op-card-height) + 3px)",
+        height: GAME_LAYOUT.css.deckHeight,
 
         border: isOver
           ? GAME_LAYOUT.css.areaBorderActive
@@ -78,7 +64,8 @@ export default function DeckArea({
         background: "#111827",
 
         position: "relative",
-        overflow: "visible",
+        overflow: "hidden",
+        isolation: "isolate",
 
         userSelect: "none",
       }}
@@ -100,8 +87,9 @@ export default function DeckArea({
                 style={{
                   width: "100%",
                   height: "100%",
-
+                  objectFit: "cover",
                   borderRadius: GAME_LAYOUT.css.cardRadius,
+                  display: "block",
                 }}
               />
             </div>
@@ -112,6 +100,8 @@ export default function DeckArea({
               position: "absolute",
               inset: 0,
               zIndex: 2,
+              width: "100%",
+              height: "100%",
             }}
           >
             <GameCard
@@ -149,7 +139,7 @@ export default function DeckArea({
           e.stopPropagation();
 
           clearTimer();
-          requestOpen();
+          onOpen();
         }}
         onTouchStart={(e) => {
           e.stopPropagation();

@@ -38,6 +38,7 @@ import type {
 import type { CardData } from "../../types/card";
 
 import { GAME_LAYOUT } from "../../layout/gameLayout";
+import { getDonImageUrl } from "../../utils/localCardImages";
 
 type Props = {
   resetToDeckSelect: () => void;
@@ -253,6 +254,13 @@ export default function Board({
   const opponentPlayerIndex =
     ownPlayerIndex === 0 ? 1 : 0;
 
+  function canOperatePlayer(playerIndex: number) {
+    return (
+      localPlayerIndex === null ||
+      playerIndex === localPlayerIndex
+    );
+  }
+
   const refreshPlayer = useGameStore(
     (x) => x.refreshPlayer
   );
@@ -260,6 +268,11 @@ export default function Board({
 
   const [activeCard, setActiveCard] =
     useState<DragCardInfo | null>(null);
+
+  const [
+    disableAttachedDonDropAnimation,
+    setDisableAttachedDonDropAnimation,
+  ] = useState(false);
 
   const [, setPreviewImage] =
     useState<string | null>(null);
@@ -269,6 +282,23 @@ export default function Board({
 
   const [incomingExitRequest, setIncomingExitRequest] =
     useState(false);
+
+  const [boardMenuOpen, setBoardMenuOpen] =
+    useState(false);
+
+  function requestMatchExit() {
+    const result = window.confirm(
+      "対戦終了を相手に申請しますか？"
+    );
+
+    if (!result) {
+      return;
+    }
+
+    setBoardMenuOpen(false);
+    setExitRequestWaiting(true);
+    sendMatchExitRequest();
+  }
 
   function returnToRoomKeepingRoom() {
     resetToDeckSelect();
@@ -431,8 +461,13 @@ export default function Board({
             payload.playerIndex,
             targetCardIdForThisClient
           );
-        } else {
+        } else if (payload.toArea === "restDon") {
           state.returnAttachedDonToRest(
+            payload.playerIndex,
+            targetCardIdForThisClient
+          );
+        } else {
+          state.returnAttachedDonToDeck(
             payload.playerIndex,
             targetCardIdForThisClient
           );
@@ -486,6 +521,16 @@ export default function Board({
           return;
         }
 
+        if (payload.menuAction === "CHANGE_COUNT_MODIFIER") {
+          state.changeCountModifier(
+            payload.playerIndex,
+            targetCardId,
+            payload.amount ?? 0
+          );
+
+          return;
+        }
+
         if (
           payload.menuAction === "SET_STATUS_LABEL" &&
           payload.label
@@ -507,6 +552,7 @@ export default function Board({
 
           return;
         }
+
       }
       if (action.actionType === "MOVE_SELECTED_DON_STACK") {
         const { payload } = action;
@@ -747,20 +793,36 @@ export default function Board({
   function onDragStart(event: DragStartEvent) {
     const data = event.active.data.current as any;
 
+    setDisableAttachedDonDropAnimation(false);
+
     if (!data) {
       return;
     }
 
-    if (
-      localPlayerIndex !== null &&
-      data.playerIndex !== localPlayerIndex
-    ) {
+    if (!canOperatePlayer(data.playerIndex)) {
       return;
     }
 
     const player = players[data.playerIndex];
 
     if (!player) {
+      return;
+    }
+
+    if (data.type === "attached-don") {
+      setActiveCard({
+        card: {
+          id: `attached-don-${data.targetCardId}`,
+          name: "DON",
+          image: getDonImageUrl(),
+          type: "don",
+          rotated: false,
+          attachedDonCount: 0,
+          isFaceUp: true,
+        },
+        playerIndex: data.playerIndex,
+        from: "activeDon",
+      });
       return;
     }
 
@@ -798,23 +860,35 @@ export default function Board({
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
 
+    const activeData = active.data.current as any;
+    const overData = over?.data.current as any;
+
+    const isSuccessfulAttachedDonDrop =
+      activeData?.type === "attached-don" &&
+      (overData?.to === "activeDon" ||
+        overData?.to === "restDon" ||
+        overData?.to === "donDeck");
+
+    setDisableAttachedDonDropAnimation(
+      isSuccessfulAttachedDonDrop
+    );
     setActiveCard(null);
+
+    if (isSuccessfulAttachedDonDrop) {
+      window.setTimeout(() => {
+        setDisableAttachedDonDropAnimation(false);
+      }, 0);
+    }
 
     if (!over) {
       return;
     }
 
-    const activeData = active.data.current as any;
-    const overData = over.data.current as any;
-
     if (!activeData || !overData) {
       return;
     }
 
-    if (
-      localPlayerIndex !== null &&
-      activeData.playerIndex !== localPlayerIndex
-    ) {
+    if (!canOperatePlayer(activeData.playerIndex)) {
       return;
     }
 
@@ -832,6 +906,10 @@ export default function Board({
         useGameStore.getState().selectedDonStack;
 
       if (selected) {
+        if (!canOperatePlayer(selected.playerIndex)) {
+          return;
+        }
+
         store.moveSelectedDonStack(overData.to);
 
         sendBoardAction({
@@ -893,6 +971,10 @@ export default function Board({
         useGameStore.getState().selectedDonStack;
 
       if (selected) {
+        if (!canOperatePlayer(selected.playerIndex)) {
+          return;
+        }
+
         if (
           selected.fromArea === "donDeck"
         ) {
@@ -1007,7 +1089,8 @@ export default function Board({
 
     if (
       activeData.type === "attached-don" &&
-      overData.to === "restDon"
+      (overData.to === "restDon" ||
+        overData.to === "donDeck")
     ) {
       const player =
         store.players[activeData.playerIndex];
@@ -1021,10 +1104,17 @@ export default function Board({
         return;
       }
 
-      store.returnAttachedDonToRest(
-        activeData.playerIndex,
-        activeData.targetCardId
-      );
+      if (overData.to === "restDon") {
+        store.returnAttachedDonToRest(
+          activeData.playerIndex,
+          activeData.targetCardId
+        );
+      } else {
+        store.returnAttachedDonToDeck(
+          activeData.playerIndex,
+          activeData.targetCardId
+        );
+      }
 
       sendBoardAction({
         actionType: "RETURN_ATTACHED_DON",
@@ -1033,7 +1123,7 @@ export default function Board({
           targetCardId: activeData.targetCardId,
           targetArea: targetInfo.targetArea,
           targetIndex: targetInfo.targetIndex,
-          toArea: "restDon",
+          toArea: overData.to,
         },
       });
 
@@ -1078,7 +1168,10 @@ export default function Board({
       sensors={sensors}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      onDragCancel={() => setActiveCard(null)}
+      onDragCancel={() => {
+        setDisableAttachedDonDropAnimation(false);
+        setActiveCard(null);
+      }}
     >
       <div
         className="board-root"
@@ -1156,23 +1249,6 @@ export default function Board({
               リフレッシュ
             </button>
 
-            <button
-              disabled={exitRequestWaiting}
-              onClick={() => {
-                const result = window.confirm(
-                  "試合終了を相手に申請しますか？"
-                );
-
-                if (!result) {
-                  return;
-                }
-
-                setExitRequestWaiting(true);
-                sendMatchExitRequest();
-              }}
-            >
-              {exitRequestWaiting ? "確認待ち" : "終了"}
-            </button>
           </div>
 
           <div
@@ -1191,6 +1267,94 @@ export default function Board({
           </div>
         </div>
       </div>
+
+      <button
+        type="button"
+        aria-label="メニュー"
+        title="メニュー"
+        onClick={() => setBoardMenuOpen(true)}
+        style={{
+          position: "fixed",
+          top: "max(8px, env(safe-area-inset-top))",
+          right: "8px",
+          width: "40px",
+          height: "40px",
+          borderRadius: "8px",
+          border: "1px solid #94a3b8",
+          background: "rgba(15, 23, 42, 0.94)",
+          color: "white",
+          fontSize: "24px",
+          lineHeight: 1,
+          zIndex: 90000,
+        }}
+      >
+        ☰
+      </button>
+
+      {boardMenuOpen && (
+        <div
+          onClick={() => setBoardMenuOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 90001,
+            background: "rgba(0, 0, 0, 0.35)",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              top: "max(8px, env(safe-area-inset-top))",
+              right: "8px",
+              width: "min(240px, calc(100vw - 16px))",
+              padding: "12px",
+              borderRadius: "8px",
+              border: "1px solid #64748b",
+              background: "#0f172a",
+              boxShadow: "0 12px 30px rgba(0,0,0,0.55)",
+            }}
+          >
+            <button
+              type="button"
+              aria-label="閉じる"
+              title="閉じる"
+              onClick={() => setBoardMenuOpen(false)}
+              style={{
+                display: "block",
+                marginLeft: "auto",
+                width: "36px",
+                height: "36px",
+                borderRadius: "8px",
+                border: "1px solid #64748b",
+                background: "#1e293b",
+                color: "white",
+                fontSize: "22px",
+              }}
+            >
+              ×
+            </button>
+
+            <button
+              type="button"
+              disabled={exitRequestWaiting}
+              onClick={requestMatchExit}
+              style={{
+                width: "100%",
+                minHeight: "44px",
+                marginTop: "10px",
+                borderRadius: "8px",
+                border: "1px solid #ef4444",
+                background: "#b91c1c",
+                color: "white",
+                fontWeight: 900,
+              }}
+            >
+              {exitRequestWaiting ? "確認待ち" : "対戦終了"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {incomingExitRequest && (
         <div
@@ -1287,7 +1451,14 @@ export default function Board({
         </div>
       )}
 
-      <DragOverlay zIndex={999999}>
+      <DragOverlay
+        zIndex={999999}
+        dropAnimation={
+          disableAttachedDonDropAnimation
+            ? null
+            : undefined
+        }
+      >
         {activeCard ? (
           <img
             src={activeCard.card.image}

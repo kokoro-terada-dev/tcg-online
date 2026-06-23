@@ -43,7 +43,6 @@ export default function LifeArea({
 
   function requestOpen() {
     if (isOpponent) {
-      window.alert("相手のライフは確認できません");
       return;
     }
 
@@ -79,7 +78,8 @@ export default function LifeArea({
         background: "#111827",
 
         position: "relative",
-        overflow: "visible",
+        overflow: "hidden",
+        isolation: "isolate",
 
         userSelect: "none",
       }}

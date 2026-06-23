@@ -13,6 +13,7 @@ import {
 import {
     createRoom,
     joinRoom,
+    leaveRoom,
     onJoinFailed,
     onRoomStateChanged,
     ready,
@@ -108,6 +109,12 @@ export default function RoomScreen({
     const startGameWithDeckOrders = useGameStore(
         (x) => x.startGameWithDeckOrders
     );
+
+    useEffect(() => {
+        useGameStore
+            .getState()
+            .setLocalPlayerIndex(mode === "host" ? 0 : 1);
+    }, [mode]);
 
     useEffect(() => {
         const handleGameSetup = (
@@ -230,6 +237,16 @@ export default function RoomScreen({
         }
 
         joinRoom(roomCodeInput);
+    }
+
+    function handleBack() {
+        leaveRoom();
+        setRoomState(null);
+        setRoomCodeInput("");
+        setSelectedDeckId("");
+        setMessage("");
+        setError("");
+        onBack();
     }
 
     function handleSelectDeck(
@@ -475,7 +492,7 @@ export default function RoomScreen({
 
                 <button
                     style={subButtonStyle}
-                    onClick={onBack}
+                    onClick={handleBack}
                 >
                     戻る
                 </button>

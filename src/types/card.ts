@@ -31,7 +31,8 @@ export interface CardData {
   isFaceUp: boolean;
   lifeCount?: number;
   powerModifier?: number;
-  statusLabel?: "アタック×" | "アクティブ×";
+  countModifier?: number;
+  statusLabel?: string;
   donCount?: number;
 }
 
