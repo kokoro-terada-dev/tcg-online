@@ -205,7 +205,14 @@ export type BoardActionPayload =
       quickAction:
         | "attack"
         | "target"
+        | "target1"
+        | "target2"
+        | "target3"
         | "effect"
+        | "processing"
+        | "confirmRequest"
+        | "confirmed"
+        | "note"
         | "rest"
         | "cancelSource"
         | "cancelTarget";

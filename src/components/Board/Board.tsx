@@ -282,6 +282,9 @@ export default function Board() {
   const cardEffectSignal = useGameStore(
     (x) => x.cardEffectSignal
   );
+  const cardMarkers = useGameStore(
+    (x) => x.cardMarkers
+  );
   const communicationMode = useGameStore(
     (x) => x.communicationMode
   );
@@ -342,6 +345,7 @@ export default function Board() {
     };
     state.clearAttackState();
     state.clearCardEffect();
+    state.clearCardMarkers();
     state.addActionLog(log);
     setQuickChatOpen(false);
 
@@ -902,21 +906,59 @@ export default function Board() {
           );
         } else if (payload.quickAction === "target") {
           state.setAttackTarget(pointer, payload.log);
+        } else if (
+          payload.quickAction === "target1" ||
+          payload.quickAction === "target2" ||
+          payload.quickAction === "target3"
+        ) {
+          state.setCardMarker(
+            {
+              ...pointer,
+              markerType: payload.quickAction,
+              createdBy: payload.log?.playerIndex ?? payload.playerIndex,
+            },
+            payload.log
+          );
         } else if (payload.quickAction === "effect") {
           state.showCardEffect({
             ...pointer,
             nonce: Date.now(),
           });
+          state.setCardMarker(
+            {
+              ...pointer,
+              markerType: "effect",
+              createdBy: payload.log?.playerIndex ?? payload.playerIndex,
+            },
+            payload.targetArea === "public"
+              ? undefined
+              : payload.log
+          );
           if (
             payload.targetArea === "public" &&
             payload.log
           ) {
             state.setAttackSource(pointer, payload.log);
-          } else if (payload.log) {
-            state.addActionLog(payload.log);
           }
         } else if (payload.quickAction === "rest") {
           state.toggleRotate(payload.playerIndex, cardId);
+          if (payload.log) {
+            state.addActionLog(payload.log);
+          }
+        } else if (
+          payload.quickAction === "processing" ||
+          payload.quickAction === "confirmRequest" ||
+          payload.quickAction === "confirmed" ||
+          payload.quickAction === "note"
+        ) {
+          state.setCardMarker(
+            {
+              ...pointer,
+              markerType: payload.quickAction,
+              createdBy: payload.log?.playerIndex ?? payload.playerIndex,
+            },
+            payload.log
+          );
         } else if (payload.quickAction === "cancelSource") {
           state.clearAttackState();
         } else {
@@ -930,6 +972,7 @@ export default function Board() {
         const state = useGameStore.getState();
         state.clearAttackState();
         state.clearCardEffect();
+        state.clearCardMarkers();
         if (action.payload.log) {
           state.addActionLog(action.payload.log);
         }
@@ -1431,7 +1474,8 @@ export default function Board() {
 
       {isSilentMode && (currentAttackSource ||
         currentAttackTarget ||
-        cardEffectSignal) && (
+        cardEffectSignal ||
+        cardMarkers.length > 0) && (
         <button
           type="button"
           aria-label="アクションをキャンセル"

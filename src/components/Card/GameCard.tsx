@@ -16,7 +16,11 @@ import {
 import { createPortal } from "react-dom";
 
 import { sendBoardAction } from "../../network/roomClient";
-import type { ActionLog } from "../../store/gameStore";
+import type {
+  ActionLog,
+  CardMarkerType,
+  QuickActionType,
+} from "../../store/gameStore";
 
 type CardFrom =
   | "hand"
@@ -77,6 +81,19 @@ const menuButtonStylePowerMinus = {
   background: "#ef4444",
   color: "#ffffff",
   cursor: "pointer",
+};
+
+const MARKER_LABELS: Record<CardMarkerType, string> = {
+  attackSource: "攻",
+  attackTarget: "↓",
+  target1: "①",
+  target2: "②",
+  target3: "③",
+  effect: "効果",
+  processing: "処理中",
+  confirmRequest: "確認",
+  confirmed: "OK",
+  note: "！",
 };
 
 export default function GameCard({
@@ -155,6 +172,15 @@ export default function GameCard({
   const clearCardEffect = useGameStore(
     (x) => x.clearCardEffect
   );
+  const clearCardMarkers = useGameStore(
+    (x) => x.clearCardMarkers
+  );
+  const setCardMarker = useGameStore(
+    (x) => x.setCardMarker
+  );
+  const cardMarkers = useGameStore(
+    (x) => x.cardMarkers
+  );
 
   const isOpponent =
     localPlayerIndex !== null &&
@@ -211,6 +237,11 @@ export default function GameCard({
   const isCurrentAttackTarget =
     currentAttackTarget?.playerIndex === playerIndex &&
     currentAttackTarget.cardId === card.id;
+  const markersForThisCard = cardMarkers.filter(
+    (marker) =>
+      marker.playerIndex === playerIndex &&
+      marker.cardId === card.id
+  );
 
   function openCardMenu() {
     if (!overlay && canOpenMenu) {
@@ -274,13 +305,7 @@ export default function GameCard({
   }
 
   function createActionLog(
-    actionType:
-      | "attack"
-      | "target"
-      | "characterEffect"
-      | "leaderEffect"
-      | "stageEffect"
-      | "effect"
+    actionType: QuickActionType
   ): ActionLog {
     return {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -294,7 +319,14 @@ export default function GameCard({
     quickAction:
       | "attack"
       | "target"
+      | "target1"
+      | "target2"
+      | "target3"
       | "effect"
+      | "processing"
+      | "confirmRequest"
+      | "confirmed"
+      | "note"
       | "rest"
       | "cancelSource"
       | "cancelTarget",
@@ -319,20 +351,33 @@ export default function GameCard({
   }
 
   function runQuickAction(
-    action: "attack" | "target" | "effect" | "rest" | "cancel"
+    action:
+      | "attack"
+      | "target"
+      | "target1"
+      | "target2"
+      | "target3"
+      | "effect"
+      | "processing"
+      | "confirmRequest"
+      | "confirmed"
+      | "note"
+      | "rest"
+      | "cancel"
   ) {
     if (!canOpenQuickMenu) {
       return;
     }
 
     if (action === "cancel") {
-      if (isCurrentAttackSource) {
-        clearAttackState();
-        sendQuickAction("cancelSource");
-      } else if (isCurrentAttackTarget) {
-        clearAttackTarget();
-        sendQuickAction("cancelTarget");
-      }
+      clearAttackState();
+      clearAttackTarget();
+      clearCardEffect();
+      clearCardMarkers();
+      sendBoardAction({
+        actionType: "CLEAR_CARD_ACTIONS",
+        payload: {},
+      });
       setQuickMenuOpen(false);
       return;
     }
@@ -359,6 +404,24 @@ export default function GameCard({
       const log = createActionLog("target");
       setAttackTarget(pointer, log);
       sendQuickAction(action, log);
+    } else if (
+      action === "target1" ||
+      action === "target2" ||
+      action === "target3"
+    ) {
+      if (!isOpponent || from === "stage") {
+        return;
+      }
+      const log = createActionLog(action);
+      setCardMarker(
+        {
+          ...pointer,
+          markerType: action,
+          createdBy: (localPlayerIndex ?? playerIndex) as 0 | 1,
+        },
+        log
+      );
+      sendQuickAction(action, log);
     } else if (action === "effect") {
       if (!canOperate) {
         return;
@@ -376,18 +439,62 @@ export default function GameCard({
         ...pointer,
         nonce: Date.now(),
       });
+      setCardMarker(
+        {
+          ...pointer,
+          markerType: "effect",
+          createdBy: (localPlayerIndex ?? playerIndex) as 0 | 1,
+        },
+        from === "public" ? undefined : log
+      );
       if (from === "public") {
         setAttackSource(pointer, log);
-      } else {
-        addActionLog(log);
       }
+      sendQuickAction(action, log);
+    } else if (
+      action === "processing" ||
+      action === "confirmRequest" ||
+      action === "confirmed" ||
+      action === "note"
+    ) {
+      const markerType: CardMarkerType =
+        action === "processing"
+          ? "processing"
+          : action === "confirmRequest"
+            ? "confirmRequest"
+            : action === "confirmed"
+              ? "confirmed"
+              : "note";
+
+      if (
+        (action === "processing" || action === "confirmRequest") &&
+        !canOperate
+      ) {
+        return;
+      }
+
+      if (action === "confirmed" && !isOpponent) {
+        return;
+      }
+
+      const log = createActionLog(action);
+      setCardMarker(
+        {
+          ...pointer,
+          markerType,
+          createdBy: (localPlayerIndex ?? playerIndex) as 0 | 1,
+        },
+        log
+      );
       sendQuickAction(action, log);
     } else {
       if (!canOperate) {
         return;
       }
+      const log = createActionLog("rest");
       toggleRotate(playerIndex, card.id);
-      sendQuickAction(action);
+      addActionLog(log);
+      sendQuickAction(action, log);
     }
 
     setQuickMenuOpen(false);
@@ -611,7 +718,7 @@ export default function GameCard({
         const rect =
           e.currentTarget.getBoundingClientRect();
         const menuWidth = 132;
-        const menuHeight = isOpponent ? 92 : 180;
+        const menuHeight = isOpponent ? 250 : 300;
         const left = Math.min(
           window.innerWidth - menuWidth - 8,
           Math.max(8, rect.right + 6)
@@ -741,6 +848,19 @@ export default function GameCard({
         </div>
       )}
 
+      {isSilentMode && markersForThisCard.length > 0 && (
+        <div className="card-markers" aria-hidden="true">
+          {markersForThisCard.slice(-5).map((marker) => (
+            <span
+              key={marker.id}
+              className={`card-marker card-marker-${marker.markerType}`}
+            >
+              {MARKER_LABELS[marker.markerType]}
+            </span>
+          ))}
+        </div>
+      )}
+
       {card.attachedDonCount > 0 && (
         <DonBadge
           card={card}
@@ -789,6 +909,21 @@ export default function GameCard({
                 </button>
               )}
               {!isOpponent && from !== "public" && (
+                <button onClick={() => runQuickAction("processing")}>
+                  処理中
+                </button>
+              )}
+              {!isOpponent && from !== "public" && (
+                <button onClick={() => runQuickAction("confirmRequest")}>
+                  確認して
+                </button>
+              )}
+              {!isOpponent && from !== "public" && (
+                <button onClick={() => runQuickAction("note")}>
+                  付箋
+                </button>
+              )}
+              {!isOpponent && from !== "public" && (
                 <button onClick={() => runQuickAction("rest")}>
                   {card.rotated ? "アクティブ" : "レスト"}
                 </button>
@@ -796,6 +931,31 @@ export default function GameCard({
               {isOpponent && from !== "stage" && (
                 <button onClick={() => runQuickAction("target")}>
                   対象
+                </button>
+              )}
+              {isOpponent && from !== "stage" && (
+                <button onClick={() => runQuickAction("target1")}>
+                  対象①
+                </button>
+              )}
+              {isOpponent && from !== "stage" && (
+                <button onClick={() => runQuickAction("target2")}>
+                  対象②
+                </button>
+              )}
+              {isOpponent && from !== "stage" && (
+                <button onClick={() => runQuickAction("target3")}>
+                  対象③
+                </button>
+              )}
+              {isOpponent && (
+                <button onClick={() => runQuickAction("confirmed")}>
+                  確認OK
+                </button>
+              )}
+              {isOpponent && (
+                <button onClick={() => runQuickAction("note")}>
+                  付箋
                 </button>
               )}
               <button

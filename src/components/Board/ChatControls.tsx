@@ -12,6 +12,8 @@ import {
 } from "./ActionLogBar";
 
 const CHAT_ACTIONS: QuickActionType[] = [
+  "attack",
+  "target",
   "block",
   "counter",
   "event",

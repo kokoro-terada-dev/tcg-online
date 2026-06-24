@@ -6,10 +6,17 @@ import {
 export const ACTION_LABELS: Record<QuickActionType, string> = {
   attack: "アタック",
   target: "対象",
+  target1: "対象①",
+  target2: "対象②",
+  target3: "対象③",
   effect: "効果",
   characterEffect: "キャラクター効果",
   leaderEffect: "リーダー効果",
   stageEffect: "ステージ効果",
+  processing: "処理中",
+  confirmRequest: "確認して",
+  confirmed: "確認OK",
+  note: "付箋",
   rest: "レスト",
   block: "ブロック",
   counter: "カウンター",
@@ -22,6 +29,7 @@ export const ACTION_LABELS: Record<QuickActionType, string> = {
   takeHit: "受ける",
   endTurn: "ターン終了",
   clearTarget: "解除",
+  cancel: "キャンセル",
 };
 
 export const PLAYER_COLORS = {

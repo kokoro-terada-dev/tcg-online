@@ -195,10 +195,17 @@ export type BoardActionPayload =
         actionType:
           | "attack"
           | "target"
+          | "target1"
+          | "target2"
+          | "target3"
           | "effect"
           | "characterEffect"
           | "leaderEffect"
           | "stageEffect"
+          | "processing"
+          | "confirmRequest"
+          | "confirmed"
+          | "note"
           | "rest"
           | "block"
           | "counter"
@@ -210,7 +217,8 @@ export type BoardActionPayload =
           | "thinking"
           | "takeHit"
           | "endTurn"
-          | "clearTarget";
+          | "clearTarget"
+          | "cancel";
         createdAt: number;
       };
     };
@@ -240,7 +248,14 @@ export type BoardActionPayload =
       quickAction:
         | "attack"
         | "target"
+        | "target1"
+        | "target2"
+        | "target3"
         | "effect"
+        | "processing"
+        | "confirmRequest"
+        | "confirmed"
+        | "note"
         | "rest"
         | "cancelSource"
         | "cancelTarget";
@@ -250,10 +265,17 @@ export type BoardActionPayload =
         actionType:
           | "attack"
           | "target"
+          | "target1"
+          | "target2"
+          | "target3"
           | "effect"
           | "characterEffect"
           | "leaderEffect"
           | "stageEffect"
+          | "processing"
+          | "confirmRequest"
+          | "confirmed"
+          | "note"
           | "rest";
         createdAt: number;
       };

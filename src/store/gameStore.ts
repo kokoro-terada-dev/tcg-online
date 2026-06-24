@@ -37,10 +37,17 @@ export type MulliganResultPayload = {
 export type QuickActionType =
   | "attack"
   | "target"
+  | "target1"
+  | "target2"
+  | "target3"
   | "effect"
   | "characterEffect"
   | "leaderEffect"
   | "stageEffect"
+  | "processing"
+  | "confirmRequest"
+  | "confirmed"
+  | "note"
   | "rest"
   | "block"
   | "counter"
@@ -52,7 +59,8 @@ export type QuickActionType =
   | "thinking"
   | "takeHit"
   | "endTurn"
-  | "clearTarget";
+  | "clearTarget"
+  | "cancel";
 
 export type ActionLog = {
   id: string;
@@ -65,6 +73,27 @@ export type AttackTarget = {
   playerIndex: 0 | 1;
   cardId: string;
 } | null;
+
+export type CardMarkerType =
+  | "attackSource"
+  | "attackTarget"
+  | "target1"
+  | "target2"
+  | "target3"
+  | "effect"
+  | "processing"
+  | "confirmRequest"
+  | "confirmed"
+  | "note";
+
+export type CardMarker = {
+  id: string;
+  playerIndex: 0 | 1;
+  cardId: string;
+  markerType: CardMarkerType;
+  createdBy: 0 | 1;
+  createdAt: number;
+};
 
 export type CardEffectSignal = {
   playerIndex: 0 | 1;
@@ -344,6 +373,8 @@ interface GameState {
 
   pendingAttackPlayerIndex: 0 | 1 | null;
 
+  cardMarkers: CardMarker[];
+
   cardEffectSignal: CardEffectSignal;
 
   addActionLog: (log: ActionLog) => void;
@@ -367,6 +398,13 @@ interface GameState {
   clearAttackTarget: () => void;
 
   clearAttackState: () => void;
+
+  setCardMarker: (
+    marker: Omit<CardMarker, "id" | "createdAt">,
+    log?: ActionLog
+  ) => void;
+
+  clearCardMarkers: () => void;
 
   showCardEffect: (
     signal: Exclude<CardEffectSignal, null>
@@ -633,6 +671,8 @@ export const useGameStore =
 
       pendingAttackPlayerIndex: null,
 
+      cardMarkers: [],
+
       cardEffectSignal: null,
 
       addActionLog: (log) =>
@@ -646,6 +686,27 @@ export const useGameStore =
           currentAttackTarget: source
             ? null
             : state.currentAttackTarget,
+          cardMarkers: source
+            ? [
+              ...state.cardMarkers.filter(
+                (marker) =>
+                  marker.markerType !== "attackSource" &&
+                  marker.markerType !== "attackTarget"
+              ),
+              {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                playerIndex: source.playerIndex,
+                cardId: source.cardId,
+                markerType: "attackSource",
+                createdBy: source.playerIndex,
+                createdAt: Date.now(),
+              },
+            ]
+            : state.cardMarkers.filter(
+              (marker) =>
+                marker.markerType !== "attackSource" &&
+                marker.markerType !== "attackTarget"
+            ),
           actionLogs: log
             ? [...state.actionLogs, log]
             : state.actionLogs,
@@ -675,6 +736,21 @@ export const useGameStore =
               cardId,
             },
             currentAttackTarget: null,
+            cardMarkers: [
+              ...state.cardMarkers.filter(
+                (marker) =>
+                  marker.markerType !== "attackSource" &&
+                  marker.markerType !== "attackTarget"
+              ),
+              {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                playerIndex,
+                cardId,
+                markerType: "attackSource",
+                createdBy: playerIndex,
+                createdAt: Date.now(),
+              },
+            ],
             actionLogs: [...state.actionLogs, log],
           };
         }),
@@ -682,6 +758,23 @@ export const useGameStore =
       setAttackTarget: (target, log) =>
         set((state) => ({
           currentAttackTarget: target,
+          cardMarkers: target
+            ? [
+              ...state.cardMarkers.filter(
+                (marker) => marker.markerType !== "attackTarget"
+              ),
+              {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                playerIndex: target.playerIndex,
+                cardId: target.cardId,
+                markerType: "attackTarget",
+                createdBy: target.playerIndex,
+                createdAt: Date.now(),
+              },
+            ]
+            : state.cardMarkers.filter(
+              (marker) => marker.markerType !== "attackTarget"
+            ),
           actionLogs: log
             ? [...state.actionLogs, log]
             : state.actionLogs,
@@ -690,6 +783,9 @@ export const useGameStore =
       clearAttackTarget: () =>
         set(() => ({
           currentAttackTarget: null,
+          cardMarkers: get().cardMarkers.filter(
+            (marker) => marker.markerType !== "attackTarget"
+          ),
         })),
 
       clearAttackState: () =>
@@ -697,6 +793,70 @@ export const useGameStore =
           currentAttackSource: null,
           currentAttackTarget: null,
           pendingAttackPlayerIndex: null,
+          cardMarkers: get().cardMarkers.filter(
+            (marker) =>
+              marker.markerType !== "attackSource" &&
+              marker.markerType !== "attackTarget"
+          ),
+        })),
+
+      setCardMarker: (marker, log) =>
+        set((state) => {
+          const uniqueMarkerTypes: CardMarkerType[] = [
+            "attackSource",
+            "attackTarget",
+            "target1",
+            "target2",
+            "target3",
+          ];
+          const nextMarkers = state.cardMarkers.filter(
+            (item) => {
+              if (
+                uniqueMarkerTypes.includes(marker.markerType) &&
+                item.markerType === marker.markerType
+              ) {
+                return false;
+              }
+
+              return !(
+                item.playerIndex === marker.playerIndex &&
+                item.cardId === marker.cardId &&
+                item.markerType === marker.markerType
+              );
+            }
+          );
+
+          if (marker.markerType === "confirmed") {
+            for (let i = nextMarkers.length - 1; i >= 0; i--) {
+              const item = nextMarkers[i];
+              if (
+                item.playerIndex === marker.playerIndex &&
+                item.cardId === marker.cardId &&
+                item.markerType === "confirmRequest"
+              ) {
+                nextMarkers.splice(i, 1);
+              }
+            }
+          }
+
+          return {
+            cardMarkers: [
+              ...nextMarkers,
+              {
+                ...marker,
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                createdAt: Date.now(),
+              },
+            ],
+            actionLogs: log
+              ? [...state.actionLogs, log]
+              : state.actionLogs,
+          };
+        }),
+
+      clearCardMarkers: () =>
+        set(() => ({
+          cardMarkers: [],
         })),
 
       showCardEffect: (signal) =>
@@ -715,6 +875,7 @@ export const useGameStore =
           currentAttackSource: null,
           currentAttackTarget: null,
           pendingAttackPlayerIndex: null,
+          cardMarkers: [],
           cardEffectSignal: null,
         })),
 
@@ -736,6 +897,7 @@ export const useGameStore =
             communicationMode === "voice" ? [] : get().actionLogs,
           currentAttackSource: null,
           currentAttackTarget: null,
+          cardMarkers: [],
           cardEffectSignal: null,
         })),
 
@@ -766,6 +928,8 @@ export const useGameStore =
           currentAttackTarget: null,
 
           pendingAttackPlayerIndex: null,
+
+          cardMarkers: [],
 
           cardEffectSignal: null,
 
@@ -812,6 +976,8 @@ export const useGameStore =
           currentAttackTarget: null,
 
           pendingAttackPlayerIndex: null,
+
+          cardMarkers: [],
 
           cardEffectSignal: null,
 
@@ -1222,9 +1388,22 @@ export const useGameStore =
             state.currentAttackTarget.cardId === cardId &&
             from === "character" &&
             to !== "character";
+          const markerCanRemain =
+            (from === "character" && to === "character") ||
+            (from === "stage" && to === "stage") ||
+            (from === "public" && to === "public");
 
           return {
             players,
+            cardMarkers: markerCanRemain
+              ? state.cardMarkers
+              : state.cardMarkers.filter(
+                (marker) =>
+                  !(
+                    marker.playerIndex === playerIndex &&
+                    marker.cardId === cardId
+                  )
+              ),
             currentAttackSource: sourceMovedOffBoard
               ? null
               : state.currentAttackSource,
