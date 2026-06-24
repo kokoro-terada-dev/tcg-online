@@ -57,13 +57,40 @@ io.on("connection", (socket) => {
             return;
         }
 
-        socket.to(room.roomId).emit(
-            "opponent-disconnected"
+        if (room.hostSocketId === socket.id) {
+            io.to(room.roomId).emit(
+                "room-closed",
+                {
+                    message: "ホストがルームを解散しました",
+                }
+            );
+
+            io.in(room.roomId).socketsLeave(room.roomId);
+
+            removeRoom(room.roomId);
+            return;
+        }
+
+        const result = leaveRoom(
+            room.roomId,
+            socket.id
         );
 
-        io.in(room.roomId).socketsLeave(room.roomId);
+        if (!result || result.roomRemoved) {
+            return;
+        }
 
-        removeRoom(room.roomId);
+        io.to(room.roomId).emit(
+            "room-state",
+            result.room
+        );
+
+        io.to(room.roomId).emit(
+            "guest-left",
+            {
+                message: "ゲストが退出しました",
+            }
+        );
     });
 
     socket.on("create-room", () => {
@@ -91,8 +118,11 @@ io.on("connection", (socket) => {
             socket.leave(payload.roomId);
 
             if (result.roomRemoved) {
-                socket.to(payload.roomId).emit(
-                    "opponent-disconnected"
+                io.to(payload.roomId).emit(
+                    "room-closed",
+                    {
+                        message: "ホストがルームを解散しました",
+                    }
                 );
                 io.in(payload.roomId).socketsLeave(payload.roomId);
                 return;
@@ -101,6 +131,13 @@ io.on("connection", (socket) => {
             io.to(payload.roomId).emit(
                 "room-state",
                 result.room
+            );
+
+            io.to(payload.roomId).emit(
+                "guest-left",
+                {
+                    message: "ゲストが退出しました",
+                }
             );
         }
     );

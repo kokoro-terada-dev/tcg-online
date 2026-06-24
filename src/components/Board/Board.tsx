@@ -18,6 +18,7 @@ import {
   onMatchExitRejected,
   onMatchExitRequest,
   onOpponentDisconnected,
+  onRoomClosed,
   sendBoardAction,
   sendMatchExitAccepted,
   sendMatchExitRejected,
@@ -387,6 +388,12 @@ export default function Board() {
       returnToRoomAfterDisconnect();
     });
 
+    const offRoomClosed = onRoomClosed((message) => {
+      window.alert(message);
+
+      returnToRoomAfterDisconnect();
+    });
+
     const offMatchExitRequest = onMatchExitRequest(() => {
       setIncomingExitRequest(true);
     });
@@ -407,6 +414,7 @@ export default function Board() {
 
     return () => {
       offOpponentDisconnected();
+      offRoomClosed();
       offMatchExitRequest();
       offMatchExitAccepted();
       offMatchExitRejected();

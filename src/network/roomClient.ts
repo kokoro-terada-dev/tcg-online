@@ -251,6 +251,12 @@ const mulliganCompleteListeners =
 const opponentDisconnectedListeners =
   new Set<() => void>();
 
+const roomClosedListeners =
+  new Set<(message: string) => void>();
+
+const guestLeftListeners =
+  new Set<(message: string) => void>();
+
 const matchExitRequestListeners =
   new Set<() => void>();
 
@@ -333,6 +339,26 @@ export function onOpponentDisconnected(
   };
 }
 
+export function onRoomClosed(
+  listener: (message: string) => void
+) {
+  roomClosedListeners.add(listener);
+
+  return () => {
+    roomClosedListeners.delete(listener);
+  };
+}
+
+export function onGuestLeft(
+  listener: (message: string) => void
+) {
+  guestLeftListeners.add(listener);
+
+  return () => {
+    guestLeftListeners.delete(listener);
+  };
+}
+
 export function onMatchExitRequest(
   listener: () => void
 ) {
@@ -367,6 +393,9 @@ export function clearClientRoomState() {
   roomIdForClient = null;
   roomStateForClient = null;
   createRoomPending = false;
+  leaveAfterCreate = false;
+  ignoredRoomId = null;
+  setHost(false);
 }
 
 export function onMulliganComplete(
@@ -644,6 +673,32 @@ socket.on(
 
     for (const listener of opponentDisconnectedListeners) {
       listener();
+    }
+  }
+);
+
+socket.on(
+  "room-closed",
+  (payload?: { message?: string }) => {
+    const message =
+      payload?.message ?? "ホストがルームを解散しました";
+
+    clearClientRoomState();
+
+    for (const listener of roomClosedListeners) {
+      listener(message);
+    }
+  }
+);
+
+socket.on(
+  "guest-left",
+  (payload?: { message?: string }) => {
+    const message =
+      payload?.message ?? "ゲストが退出しました";
+
+    for (const listener of guestLeftListeners) {
+      listener(message);
     }
   }
 );

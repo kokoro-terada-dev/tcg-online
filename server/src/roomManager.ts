@@ -217,6 +217,8 @@ export function leaveRoom(
   room.guestSocketId = null;
   room.guestReady = false;
   room.guestDeckRecipe = null;
+  room.guestMulliganComplete = false;
+  room.hostReady = false;
 
   return {
     room,
