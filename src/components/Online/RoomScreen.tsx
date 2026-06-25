@@ -574,19 +574,14 @@ export default function RoomScreen({
                     </div>
                 </header>
 
-                <section style={roomCodeCardStyle}>
-                    <div style={roomCodeHeaderStyle}>
-                        <span>ルームコード</span>
-                        <span style={roomStateBadgeStyle}>
-                            {roomState ? "接続中" : "未接続"}
-                        </span>
-                    </div>
-
-                    <div style={roomCodeStyle}>
-                        {roomState?.roomId ?? "----"}
-                    </div>
-
-                    {mode === "guest" && !roomState && (
+                {mode === "guest" && !roomState ? (
+                    <section style={joinCardStyle}>
+                        <div style={joinTitleStyle}>
+                            ルームに入室
+                        </div>
+                        <div style={joinHelpTextStyle}>
+                            ホストから共有された4桁のルームコードを入力してください。
+                        </div>
                         <div style={joinBoxStyle}>
                             <input
                                 value={roomCodeInput}
@@ -606,8 +601,21 @@ export default function RoomScreen({
                                 入室
                             </button>
                         </div>
-                    )}
-                </section>
+                    </section>
+                ) : (
+                    <section style={roomCodeCardStyle}>
+                        <div style={roomCodeHeaderStyle}>
+                            <span>ルームコード</span>
+                            <span style={roomStateBadgeStyle}>
+                                {roomState ? "接続中" : "未接続"}
+                            </span>
+                        </div>
+
+                        <div style={roomCodeStyle}>
+                            {roomState?.roomId ?? "----"}
+                        </div>
+                    </section>
+                )}
 
                 {roomState && (
                     <>
@@ -835,8 +843,32 @@ const roomCodeStyle: CSSProperties = {
         "0 0 12px rgba(96,165,250,0.86)",
 };
 
+const joinCardStyle: CSSProperties = {
+    padding: "16px",
+    borderRadius: "14px",
+    border: "1px solid rgba(96, 165, 250, 0.55)",
+    background:
+        "linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(30, 64, 175, 0.56))",
+    boxShadow:
+        "0 12px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
+};
+
+const joinTitleStyle: CSSProperties = {
+    fontSize: "18px",
+    fontWeight: 1000,
+    color: "#f8fafc",
+};
+
+const joinHelpTextStyle: CSSProperties = {
+    marginTop: "6px",
+    color: "#cbd5e1",
+    fontSize: "12px",
+    fontWeight: 800,
+    lineHeight: 1.45,
+};
+
 const joinBoxStyle: CSSProperties = {
-    marginTop: "10px",
+    marginTop: "12px",
     display: "grid",
     gridTemplateColumns: "1fr 92px",
     gap: "8px",
