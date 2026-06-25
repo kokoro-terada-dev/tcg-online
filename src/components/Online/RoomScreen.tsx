@@ -65,6 +65,9 @@ type PlayerPanelProps = {
     deck: DeckRecipeForRoom | undefined | null;
     accent: "blue" | "rose";
     emptyText: string;
+    deckOptions?: DeckRecipe[];
+    selectedDeckId?: string;
+    onSelectDeck?: (deckId: string) => void;
 };
 
 function toRoomDeckRecipe(
@@ -114,6 +117,9 @@ function PlayerPanel({
     deck,
     accent,
     emptyText,
+    deckOptions,
+    selectedDeckId = "",
+    onSelectDeck,
 }: PlayerPanelProps) {
     const leaderImageUrl = getLeaderImageUrl(deck);
     const colors = accent === "blue"
@@ -202,6 +208,29 @@ function PlayerPanel({
                     <div style={deckNameStyle}>
                         {deck?.name ?? emptyText}
                     </div>
+
+                    {deckOptions && onSelectDeck && (
+                        <select
+                            value={selectedDeckId}
+                            onChange={(e) =>
+                                onSelectDeck(e.target.value)
+                            }
+                            style={inlineSelectStyle}
+                        >
+                            <option value="">
+                                デッキを選択
+                            </option>
+
+                            {deckOptions.map((item) => (
+                                <option
+                                    key={item.id}
+                                    value={item.id}
+                                >
+                                    {item.name}
+                                </option>
+                            ))}
+                        </select>
+                    )}
 
                     <div style={miniStatusGridStyle}>
                         <div
@@ -590,6 +619,9 @@ export default function RoomScreen({
                             deck={ownDeck}
                             accent="blue"
                             emptyText="デッキを選択してください"
+                            deckOptions={decks}
+                            selectedDeckId={selectedDeckId}
+                            onSelectDeck={handleSelectDeck}
                         />
 
                         <PlayerPanel
@@ -653,29 +685,8 @@ export default function RoomScreen({
 
                         <section style={actionCardStyle}>
                             <div style={sectionTitleStyle}>
-                                自分のデッキ
+                                準備
                             </div>
-
-                            <select
-                                value={selectedDeckId}
-                                onChange={(e) =>
-                                    handleSelectDeck(e.target.value)
-                                }
-                                style={selectStyle}
-                            >
-                                <option value="">
-                                    デッキを選択
-                                </option>
-
-                                {decks.map((deck) => (
-                                    <option
-                                        key={deck.id}
-                                        value={deck.id}
-                                    >
-                                        {deck.name}
-                                    </option>
-                                ))}
-                            </select>
 
                             <button
                                 style={{
@@ -1035,15 +1046,15 @@ const inputStyle: CSSProperties = {
     textTransform: "uppercase",
 };
 
-const selectStyle: CSSProperties = {
+const inlineSelectStyle: CSSProperties = {
     width: "100%",
-    minHeight: "46px",
-    borderRadius: "10px",
-    border: "1px solid #64748b",
-    background: "#0f172a",
+    minHeight: "38px",
+    borderRadius: "8px",
+    border: "1px solid #38bdf8",
+    background: "rgba(2, 6, 23, 0.92)",
     color: "white",
-    fontSize: "15px",
-    fontWeight: 800,
+    fontSize: "13px",
+    fontWeight: 900,
     padding: "0 10px",
     boxSizing: "border-box",
 };

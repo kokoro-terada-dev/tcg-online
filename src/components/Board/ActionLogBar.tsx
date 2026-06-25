@@ -30,6 +30,7 @@ export const ACTION_LABELS: Record<QuickActionType, string> = {
   endTurn: "ターン終了",
   clearTarget: "解除",
   cancel: "キャンセル",
+  custom: "メッセージ",
 };
 
 export const PLAYER_COLORS = {
@@ -55,12 +56,12 @@ export default function ActionLogBar() {
       style={{
         flex: 1,
         minWidth: 0,
-        height: "38px",
+        height: "48px",
         display: "flex",
         alignItems: "center",
         justifyContent: "flex-end",
         gap: "5px",
-        padding: "4px 8px",
+        padding: "6px 8px",
         overflow: "hidden",
         background: "rgba(2, 6, 23, 0.92)",
         border: "1px solid #475569",
@@ -87,20 +88,20 @@ export default function ActionLogBar() {
             <span
               title={`プレイヤー${log.playerIndex + 1}`}
               style={{
-                maxWidth: "150px",
-                padding: "4px 8px",
+                maxWidth: "140px",
+                padding: "5px 7px",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 borderRadius: "4px",
                 border: `1px solid ${colors.border}`,
                 background: colors.background,
                 color: "white",
-                fontSize: "11px",
+                fontSize: "10px",
                 fontWeight: 900,
                 whiteSpace: "nowrap",
               }}
             >
-              {ACTION_LABELS[log.actionType]}
+              {log.message ?? ACTION_LABELS[log.actionType]}
             </span>
           </div>
         );

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { sendBoardAction } from "../../network/roomClient";
 import {
@@ -46,6 +46,7 @@ export default function ChatControls({
   onToggleHistory,
   onCloseQuickChat,
 }: Props) {
+  const [customMessage, setCustomMessage] = useState("");
   const logs = useGameStore((state) => state.actionLogs);
   const addActionLog = useGameStore(
     (state) => state.addActionLog
@@ -73,6 +74,29 @@ export default function ChatControls({
       payload: { log },
     });
     onCloseQuickChat();
+  }
+
+  function sendCustomMessage() {
+    const message = customMessage.trim();
+
+    if (!message) {
+      return;
+    }
+
+    const log: ActionLog = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      playerIndex: senderPlayerIndex,
+      actionType: "custom",
+      message: message.slice(0, 40),
+      createdAt: Date.now(),
+    };
+
+    addActionLog(log);
+    sendBoardAction({
+      actionType: "QUICK_ACTION",
+      payload: { log },
+    });
+    setCustomMessage("");
   }
 
   return (
@@ -157,9 +181,56 @@ export default function ChatControls({
             ×
           </button>
           <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 48px",
+              gap: "6px",
+              paddingTop: "7px",
+            }}
+          >
+            <input
+              value={customMessage}
+              maxLength={40}
+              placeholder="メッセージ"
+              onChange={(e) => setCustomMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  sendCustomMessage();
+                }
+              }}
+              style={{
+                minWidth: 0,
+                height: "32px",
+                border: "1px solid #64748b",
+                borderRadius: "5px",
+                background: "#020617",
+                color: "white",
+                padding: "0 8px",
+                fontSize: "12px",
+                fontWeight: 800,
+              }}
+            />
+            <button
+              type="button"
+              onClick={sendCustomMessage}
+              style={{
+                height: "32px",
+                border: "1px solid #38bdf8",
+                borderRadius: "5px",
+                background: "#0369a1",
+                color: "white",
+                fontSize: "12px",
+                fontWeight: 900,
+              }}
+            >
+              送信
+            </button>
+          </div>
+          <div
             ref={historyRef}
             style={{
-              maxHeight: "calc(46dvh - 42px)",
+              maxHeight: "calc(46dvh - 82px)",
               overflowY: "auto",
               display: "flex",
               flexDirection: "column",
@@ -186,6 +257,7 @@ export default function ChatControls({
                     ? "自分"
                     : "相手"}
                   ：{ACTION_LABELS[log.actionType]}
+                  {log.message ? ` ${log.message}` : ""}
                 </div>
               );
             })}

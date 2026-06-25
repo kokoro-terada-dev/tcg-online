@@ -218,7 +218,9 @@ export type BoardActionPayload =
           | "takeHit"
           | "endTurn"
           | "clearTarget"
-          | "cancel";
+          | "cancel"
+          | "custom";
+        message?: string;
         createdAt: number;
       };
     };

@@ -60,12 +60,14 @@ export type QuickActionType =
   | "takeHit"
   | "endTurn"
   | "clearTarget"
-  | "cancel";
+  | "cancel"
+  | "custom";
 
 export type ActionLog = {
   id: string;
   playerIndex: 0 | 1;
   actionType: QuickActionType;
+  message?: string;
   createdAt: number;
 };
 
@@ -1499,10 +1501,8 @@ export const useGameStore =
           const card =
             source.splice(index, 1)[0];
 
-          if (state.communicationMode === "silent") {
-            card.rotated = false;
-            card.isFaceUp = true;
-          }
+          card.rotated = false;
+          card.isFaceUp = true;
           player.hand.push(card);
 
           return { players };

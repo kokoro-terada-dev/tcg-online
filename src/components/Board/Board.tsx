@@ -1450,10 +1450,10 @@ export default function Board() {
               alignItems: "center",
 
               gap: "4px",
-              padding: "2px 52px 2px 4px",
+              padding: "3px 52px 3px 4px",
 
-              fontSize: "clamp(10px, 2.8vw, 12px)",
-              minHeight: "42px",
+              fontSize: "10px",
+              minHeight: "54px",
               marginTop: 0,
             }}
           >
