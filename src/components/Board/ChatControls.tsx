@@ -183,7 +183,7 @@ export default function ChatControls({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 48px",
+              gridTemplateColumns: "1fr 52px",
               gap: "6px",
               paddingTop: "7px",
             }}
@@ -201,21 +201,22 @@ export default function ChatControls({
               }}
               style={{
                 minWidth: 0,
-                height: "32px",
+                height: "38px",
                 border: "1px solid #64748b",
                 borderRadius: "5px",
                 background: "#020617",
                 color: "white",
                 padding: "0 8px",
-                fontSize: "12px",
+                fontSize: "16px",
                 fontWeight: 800,
+                WebkitTextSizeAdjust: "100%",
               }}
             />
             <button
               type="button"
               onClick={sendCustomMessage}
               style={{
-                height: "32px",
+                height: "38px",
                 border: "1px solid #38bdf8",
                 borderRadius: "5px",
                 background: "#0369a1",
