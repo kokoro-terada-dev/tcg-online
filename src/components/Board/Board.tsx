@@ -8,6 +8,7 @@ import PlayerBoard from "./PlayerBoard";
 import ActionLogBar from "./ActionLogBar";
 import AttackArrow from "./AttackArrow";
 import ChatControls from "./ChatControls";
+import GameCard from "../Card/GameCard";
 
 import { useGameStore } from "../../store/gameStore";
 
@@ -31,11 +32,17 @@ import {
   PointerSensor,
   TouchSensor,
   MouseSensor,
+  closestCenter,
+  pointerWithin,
+  rectIntersection,
   useSensor,
   useSensors,
+  useDroppable,
 } from "@dnd-kit/core";
 
 import type {
+  CollisionDetection,
+  Collision,
   DragEndEvent,
   DragStartEvent,
 } from "@dnd-kit/core";
@@ -53,6 +60,7 @@ type DragFrom =
   | "life"
   | "deck"
   | "public"
+  | "counter"
   | "leader"
   | "donDeck"
   | "activeDon"
@@ -71,7 +79,73 @@ type MovableCardArea =
   | "trash"
   | "life"
   | "deck"
-  | "public";
+  | "public"
+  | "counter";
+
+function prioritizeCounterCollision(
+  collisions: Collision[],
+  counterId: string | null
+) {
+  if (!counterId) {
+    return null;
+  }
+
+  const counterCollision = collisions.find(
+    (collision) => collision.id === counterId
+  );
+
+  return counterCollision ? [counterCollision] : null;
+}
+
+const boardCollisionDetection: CollisionDetection = (args) => {
+  const state = useGameStore.getState();
+  const phase = state.counterPhase;
+  const activeData = args.active.data.current as any;
+  const isCounterMove =
+    phase &&
+    activeData?.playerIndex === phase.playerIndex &&
+    (activeData.from === "hand" ||
+      activeData.from === "counter");
+  const counterId = isCounterMove
+    ? `counter-${phase.playerIndex}`
+    : null;
+
+  const pointerCollisions = pointerWithin(args);
+  const pointerCounter = prioritizeCounterCollision(
+    pointerCollisions,
+    counterId
+  );
+
+  if (pointerCounter) {
+    return pointerCounter;
+  }
+
+  if (pointerCollisions.length > 0) {
+    return pointerCollisions;
+  }
+
+  const rectangleCollisions = rectIntersection(args);
+  const rectangleCounter = prioritizeCounterCollision(
+    rectangleCollisions,
+    counterId
+  );
+
+  if (rectangleCounter) {
+    return rectangleCounter;
+  }
+
+  if (rectangleCollisions.length > 0) {
+    return rectangleCollisions;
+  }
+
+  const centerCollisions = closestCenter(args);
+  const centerCounter = prioritizeCounterCollision(
+    centerCollisions,
+    counterId
+  );
+
+  return centerCounter ?? centerCollisions;
+};
 
 function isMovableCardArea(
   value: unknown
@@ -83,10 +157,10 @@ function isMovableCardArea(
     value === "trash" ||
     value === "life" ||
     value === "deck" ||
-    value === "public"
+    value === "public" ||
+    value === "counter"
   );
 }
-
 function findCardIndexInArea(
   player: ReturnType<typeof useGameStore.getState>["players"][number],
   area: MovableCardArea,
@@ -106,6 +180,10 @@ function findCardIndexInArea(
 
   if (area === "public") {
     return player.publicCards.findIndex((x) => x.id === cardId);
+  }
+
+  if (area === "counter") {
+    return player.counterCards.findIndex((x) => x.id === cardId);
   }
 
   if (area === "life") {
@@ -144,6 +222,10 @@ function getCardIdByAreaIndex(
 
   if (area === "public") {
     return player.publicCards[index]?.id;
+  }
+
+  if (area === "counter") {
+    return player.counterCards[index]?.id;
   }
 
   if (area === "life") {
@@ -247,6 +329,348 @@ function getTargetCardIdByInfo(
   return player.characters[targetIndex]?.id;
 }
 
+function getCounterTargetCard(
+  player: ReturnType<typeof useGameStore.getState>["players"][number],
+  targetArea: "leader" | "character",
+  targetIndex: number
+) {
+  if (targetArea === "leader") {
+    return player.leader;
+  }
+
+  return player.characters[targetIndex] ?? null;
+}
+
+function CounterPhasePanel({
+  phase,
+}: {
+  phase: NonNullable<ReturnType<typeof useGameStore.getState>["counterPhase"]>;
+}) {
+  const players = useGameStore((x) => x.players);
+  const localPlayerIndex = useGameStore((x) => x.localPlayerIndex);
+  const adjustCounterPower = useGameStore(
+    (x) => x.adjustCounterPower
+  );
+  const cancelCounterPhase = useGameStore(
+    (x) => x.cancelCounterPhase
+  );
+  const confirmCounterPhase = useGameStore(
+    (x) => x.confirmCounterPhase
+  );
+  const clearAttackState = useGameStore(
+    (x) => x.clearAttackState
+  );
+  const clearCardEffect = useGameStore(
+    (x) => x.clearCardEffect
+  );
+  const clearCardMarkers = useGameStore(
+    (x) => x.clearCardMarkers
+  );
+
+  const player = players[phase.playerIndex];
+  const targetCard = getCounterTargetCard(
+    player,
+    phase.targetArea,
+    phase.targetIndex
+  );
+  const canCounterPlayerOperate =
+    localPlayerIndex === null ||
+    localPlayerIndex === phase.playerIndex;
+  const canConfirmPlayerOperate =
+    localPlayerIndex === null ||
+    localPlayerIndex !== phase.playerIndex;
+  const counterCardWidth = canCounterPlayerOperate
+    ? "clamp(58px, 17vw, 72px)"
+    : "clamp(60px, 18vw, 74px)";
+  const targetCardWidth = canCounterPlayerOperate
+    ? "clamp(78px, 20vw, 92px)"
+    : "clamp(84px, 24vw, 104px)";
+  const counterCardOverlap = canCounterPlayerOperate
+    ? Math.min(
+      48,
+      Math.max(24, player.counterCards.length * 8)
+    )
+    : 28;
+
+  const { setNodeRef, isOver } = useDroppable({
+    id: `counter-${phase.playerIndex}`,
+    disabled: !canCounterPlayerOperate,
+    data: {
+      to: "counter",
+      playerIndex: phase.playerIndex,
+    },
+  });
+
+  function sendCounterAction(
+    payload:
+      | {
+        counterAction: "ADJUST";
+        amount: number;
+      }
+      | {
+        counterAction: "CANCEL" | "CONFIRM";
+      }
+  ) {
+    sendBoardAction({
+      actionType: "COUNTER_PHASE_ACTION",
+      payload,
+    });
+  }
+
+  function adjust(amount: number) {
+    if (!canCounterPlayerOperate) {
+      return;
+    }
+
+    adjustCounterPower(amount);
+    sendCounterAction({
+      counterAction: "ADJUST",
+      amount,
+    });
+  }
+
+  function cancel() {
+    if (!canCounterPlayerOperate) {
+      return;
+    }
+
+    cancelCounterPhase();
+    sendCounterAction({
+      counterAction: "CANCEL",
+    });
+  }
+
+  function confirm() {
+    if (!canConfirmPlayerOperate) {
+      return;
+    }
+
+    confirmCounterPhase();
+    clearAttackState();
+    clearCardEffect();
+    clearCardMarkers();
+    sendCounterAction({
+      counterAction: "CONFIRM",
+    });
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: "50%",
+        top: "50%",
+        transform: "translate(-50%, -50%)",
+        width: "min(94vw, 470px)",
+        maxWidth: "calc(100vw - 12px)",
+        zIndex: 88000,
+        display: "flex",
+        gap: "8px",
+        alignItems: "center",
+        justifyContent: "center",
+        pointerEvents: "none",
+      }}
+    >
+      {targetCard && (
+        <div
+          style={{
+            width: targetCardWidth,
+            pointerEvents: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: "7px",
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              width: targetCardWidth,
+            }}
+          >
+            <img
+              src={targetCard.image}
+              draggable={false}
+              style={{
+                width: "100%",
+                borderRadius: "8px",
+                display: "block",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                transform: "translate(-50%, -50%)",
+                minWidth: "70px",
+                padding: "4px 8px",
+                borderRadius: "999px",
+                border: "3px solid #ffffff",
+                background: "#ffffff",
+                color: "#111827",
+                fontSize: "20px",
+                fontWeight: 1000,
+                textAlign: "center",
+                boxShadow: "0 0 12px rgba(0,0,0,0.72)",
+                pointerEvents: "none",
+              }}
+            >
+              {phase.power >= 0 ? `+${phase.power}` : phase.power}
+            </div>
+          </div>
+
+          {canCounterPlayerOperate && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateRows: "1fr 1fr",
+                gap: "7px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => adjust(1000)}
+                style={counterButtonStyle("#facc15", "#111827", 44)}
+              >
+                +1000
+              </button>
+              <button
+                type="button"
+                onClick={() => adjust(-1000)}
+                style={counterButtonStyle("#ef4444", "#ffffff", 44)}
+              >
+                -1000
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div
+        ref={setNodeRef}
+        style={{
+          width: canCounterPlayerOperate
+            ? "min(310px, 58vw)"
+            : "min(340px, 62vw)",
+          padding: "8px",
+          borderRadius: "8px",
+          border: "1px solid #38bdf8",
+          background: "rgba(15, 23, 42, 0.96)",
+          boxShadow: "0 10px 24px rgba(0,0,0,0.5)",
+          pointerEvents: "auto",
+        }}
+      >
+        <div
+          style={{
+            marginBottom: "6px",
+            color: "#e0f2fe",
+            fontSize: "12px",
+            fontWeight: 1000,
+          }}
+        >
+          カウンター
+        </div>
+
+        <div
+          style={{
+            minHeight: canCounterPlayerOperate ? "148px" : "166px",
+            padding: "6px",
+            borderRadius: "7px",
+            border: `2px dashed ${isOver ? "#facc15" : "#475569"}`,
+            background: isOver
+              ? "rgba(250, 204, 21, 0.16)"
+              : "rgba(2, 6, 23, 0.72)",
+            display: "flex",
+            gap: "5px",
+            alignItems: "center",
+            overflowX: canCounterPlayerOperate
+              ? "hidden"
+              : "auto",
+            overflowY: "hidden",
+          }}
+        >
+          {player.counterCards.length === 0 && (
+            <div
+              style={{
+                color: "#94a3b8",
+                fontSize: "11px",
+                fontWeight: 800,
+              }}
+            >
+              {canCounterPlayerOperate
+                ? "手札からカードを置いてください"
+                : "相手がカウンターします"}
+            </div>
+          )}
+          {player.counterCards.map((card, index) => (
+            <div
+              key={card.id}
+              style={{
+                width: counterCardWidth,
+                flexShrink: 0,
+                marginLeft: index === 0
+                  ? 0
+                  : `-${counterCardOverlap}px`,
+                zIndex: index + 1,
+              }}
+            >
+              <GameCard
+                card={card}
+                playerIndex={phase.playerIndex}
+                from="counter"
+              />
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
+            marginTop: "7px",
+            display: "flex",
+            gap: "6px",
+            justifyContent: "flex-end",
+          }}
+        >
+          {canCounterPlayerOperate && (
+            <button
+              type="button"
+              onClick={cancel}
+              style={counterButtonStyle("#475569", "#ffffff", 42)}
+            >
+              キャンセル
+            </button>
+          )}
+          {canConfirmPlayerOperate && (
+            <button
+              type="button"
+              onClick={confirm}
+              style={counterButtonStyle("#0369a1", "#ffffff", 42)}
+            >
+              OK
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function counterButtonStyle(
+  background: string,
+  color: string,
+  minHeight = 34
+) {
+  return {
+    minHeight: `${minHeight}px`,
+    borderRadius: "6px",
+    border: "1px solid rgba(255,255,255,0.24)",
+    background,
+    color,
+    fontSize: "12px",
+    fontWeight: 1000,
+  };
+}
+
 export default function Board() {
   const players = useGameStore((x) => x.players);
   const resetToDeckSelect = useGameStore(
@@ -285,6 +709,9 @@ export default function Board() {
   );
   const cardMarkers = useGameStore(
     (x) => x.cardMarkers
+  );
+  const counterPhase = useGameStore(
+    (x) => x.counterPhase
   );
   const communicationMode = useGameStore(
     (x) => x.communicationMode
@@ -338,21 +765,14 @@ export default function Board() {
 
   function clearCardActions() {
     const state = useGameStore.getState();
-    const log = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      playerIndex: ownPlayerIndex as 0 | 1,
-      actionType: "clearTarget" as const,
-      createdAt: Date.now(),
-    };
     state.clearAttackState();
     state.clearCardEffect();
     state.clearCardMarkers();
-    state.addActionLog(log);
     setQuickChatOpen(false);
 
     sendBoardAction({
       actionType: "CLEAR_CARD_ACTIONS",
-      payload: { log },
+      payload: {},
     });
   }
 
@@ -953,6 +1373,29 @@ export default function Board() {
           if (payload.log) {
             state.addActionLog(payload.log);
           }
+        } else if (payload.quickAction === "block") {
+          const card =
+            [
+              state.players[payload.playerIndex].leader,
+              ...state.players[payload.playerIndex].characters,
+            ].find((item) => item?.id === cardId) ?? null;
+
+          if (card && !card.rotated) {
+            state.toggleRotate(payload.playerIndex, cardId);
+          }
+
+          if (
+            state.currentAttackSource &&
+            state.currentAttackTarget?.playerIndex === payload.playerIndex
+          ) {
+            state.setAttackTarget(pointer);
+          }
+
+          if (payload.log) {
+            state.addActionLog(payload.log);
+          }
+        } else if (payload.quickAction === "powerPlus") {
+          state.changePower(payload.playerIndex, cardId, 1000);
         } else if (
           payload.quickAction === "processing" ||
           payload.quickAction === "confirmRequest" ||
@@ -984,6 +1427,41 @@ export default function Board() {
         if (action.payload.log) {
           state.addActionLog(action.payload.log);
         }
+        return;
+      }
+
+      if (action.actionType === "COUNTER_PHASE_ACTION") {
+        const state = useGameStore.getState();
+        const { payload } = action;
+
+        if (payload.counterAction === "START") {
+          state.startCounterPhase({
+            playerIndex: payload.playerIndex,
+            targetCardId: payload.targetCardId,
+            targetArea: payload.targetArea,
+            targetIndex: payload.targetIndex,
+            power: 0,
+          });
+          if (payload.log) {
+            state.addActionLog(payload.log);
+          }
+          return;
+        }
+
+        if (payload.counterAction === "ADJUST") {
+          state.adjustCounterPower(payload.amount);
+          return;
+        }
+
+        if (payload.counterAction === "CANCEL") {
+          state.cancelCounterPhase();
+          return;
+        }
+
+        state.confirmCounterPhase();
+        state.clearAttackState();
+        state.clearCardEffect();
+        state.clearCardMarkers();
         return;
       }
     });
@@ -1055,6 +1533,7 @@ export default function Board() {
       ...player.deck,
       ...player.trash,
       ...player.publicCards,
+      ...player.counterCards,
       ...player.life,
       ...player.activeDons,
       ...player.restDons,
@@ -1361,6 +1840,39 @@ export default function Board() {
       return;
     }
 
+    const activeCounterPhase =
+      useGameStore.getState().counterPhase;
+
+    if (
+      activeCounterPhase &&
+      activeData.playerIndex === activeCounterPhase.playerIndex &&
+      (activeData.from === "hand" || activeData.from === "counter")
+    ) {
+      const isAllowedCounterMove =
+        (activeData.from === "hand" &&
+          overData.to === "counter" &&
+          overData.playerIndex === activeCounterPhase.playerIndex) ||
+        (activeData.from === "counter" &&
+          overData.to === "hand" &&
+          overData.playerIndex === activeCounterPhase.playerIndex);
+
+      if (!isAllowedCounterMove) {
+        return;
+      }
+    }
+
+    if (
+      activeCounterPhase &&
+      overData.to === "counter" &&
+      !(
+        activeData.from === "hand" &&
+        activeData.playerIndex === activeCounterPhase.playerIndex &&
+        overData.playerIndex === activeCounterPhase.playerIndex
+      )
+    ) {
+      return;
+    }
+
     const player =
       store.players[activeData.playerIndex];
 
@@ -1390,6 +1902,7 @@ export default function Board() {
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={boardCollisionDetection}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onDragCancel={() => {
@@ -1453,7 +1966,7 @@ export default function Board() {
               padding: "3px 52px 3px 4px",
 
               fontSize: "10px",
-              minHeight: "54px",
+              minHeight: "38px",
               marginTop: 0,
             }}
           >
@@ -1478,6 +1991,10 @@ export default function Board() {
         </div>
       </div>
 
+      {counterPhase && (
+        <CounterPhasePanel phase={counterPhase} />
+      )}
+
       {isSilentMode && <AttackArrow />}
 
       {isSilentMode && (currentAttackSource ||
@@ -1486,8 +2003,8 @@ export default function Board() {
         cardMarkers.length > 0) && (
         <button
           type="button"
-          aria-label="アクションをキャンセル"
-          title="アクションをキャンセル"
+          aria-label="処理終了"
+          title="処理終了"
           onClick={clearCardActions}
           style={{
             position: "fixed",
@@ -1505,7 +2022,7 @@ export default function Board() {
             zIndex: 90000,
           }}
         >
-          キャンセル
+          処理終了
         </button>
       )}
 

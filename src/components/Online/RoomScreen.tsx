@@ -19,14 +19,18 @@ import {
     onRoomClosed,
     onRoomStateChanged,
     ready,
+    rollTurnOrder,
     selectDeckForRoom,
+    selectTurnOrder,
     sendGameSetup,
     setRoomCommunicationMode
 } from "../../network/roomClient";
 
 import type {
     DeckRecipeForRoom,
-    RoomStateForClient
+    GameSetupStartPayload,
+    RoomStateForClient,
+    TurnOrderPlayer
 } from "../../network/roomClient";
 
 import {
@@ -107,6 +111,21 @@ function getLeaderImageUrl(deck: DeckRecipeForRoom | undefined | null) {
     }
 
     return getLocalCardImage(deck.leaderCardId)?.imageUrl ?? null;
+}
+
+function getRoleLabel(role: TurnOrderPlayer) {
+    return role === "host" ? "HOST" : "GUEST";
+}
+
+function getTurnOrderLabel(
+    role: TurnOrderPlayer | null,
+    ownRole: TurnOrderPlayer
+) {
+    if (!role) {
+        return "未決定";
+    }
+
+    return role === ownRole ? "あなた" : "相手";
 }
 
 function PlayerPanel({
@@ -286,6 +305,9 @@ export default function RoomScreen({
     const [error, setError] =
         useState("");
 
+    const [turnOrderWaiting, setTurnOrderWaiting] =
+        useState(false);
+
     const decks = getAllLocalDeckRecipes();
 
     const createOnlineDeckOrder = useGameStore(
@@ -294,6 +316,9 @@ export default function RoomScreen({
 
     const startGameWithDeckOrders = useGameStore(
         (x) => x.startGameWithDeckOrders
+    );
+    const setTurnOrderDecider = useGameStore(
+        (x) => x.setTurnOrderDecider
     );
 
     useEffect(() => {
@@ -304,8 +329,17 @@ export default function RoomScreen({
 
     useEffect(() => {
         const handleGameSetup = (
-            deckOrder: OnlineDeckOrderPayload
+            setup: GameSetupStartPayload | OnlineDeckOrderPayload
         ) => {
+            const deckOrder =
+                "deckOrder" in setup
+                    ? setup.deckOrder
+                    : setup;
+            const turnOrderDecider =
+                "turnOrderDecider" in setup
+                    ? setup.turnOrderDecider
+                    : 0;
+
             if (
                 !roomState?.hostDeckRecipe ||
                 !roomState?.guestDeckRecipe
@@ -329,13 +363,16 @@ export default function RoomScreen({
 
                 useGameStore
                     .getState()
-                    .setLocalPlayerIndex(1);
+                    .setLocalPlayerIndex(
+                        mode === "host" ? 0 : 1
+                    );
 
                 startGameWithDeckOrders(
                     hostCards,
                     guestCards,
                     deckOrder
                 );
+                setTurnOrderDecider(turnOrderDecider);
             } catch (e) {
                 setError(
                     e instanceof Error
@@ -358,13 +395,16 @@ export default function RoomScreen({
         };
     }, [
         roomState,
+        mode,
         startGameWithDeckOrders,
+        setTurnOrderDecider,
     ]);
 
     useEffect(() => {
         const offRoomState = onRoomStateChanged(
             (nextRoomState) => {
                 setRoomState(nextRoomState);
+                setTurnOrderWaiting(false);
                 useGameStore
                     .getState()
                     .setCommunicationMode(
@@ -434,6 +474,38 @@ export default function RoomScreen({
 
     const ownConnected = roomState !== null;
 
+    const ownRole: TurnOrderPlayer =
+        isHost ? "host" : "guest";
+
+    const canRollTurnOrder =
+        isHost &&
+        roomState !== null &&
+        roomState.guestSocketId !== null &&
+        roomState.hostReady &&
+        roomState.guestReady &&
+        roomState.hostDeckRecipe !== null &&
+        roomState.guestDeckRecipe !== null;
+
+    const canChooseTurnOrder =
+        roomState?.turnOrderDecider === ownRole &&
+        roomState.firstPlayer === null;
+
+    const firstPlayerLabel =
+        getTurnOrderLabel(
+            roomState?.firstPlayer ?? null,
+            ownRole
+        );
+
+    const secondPlayerRole =
+        roomState?.firstPlayer === "host"
+            ? "guest"
+            : roomState?.firstPlayer === "guest"
+                ? "host"
+                : null;
+
+    const secondPlayerLabel =
+        getTurnOrderLabel(secondPlayerRole, ownRole);
+
     const canStart =
         isHost &&
         roomState !== null &&
@@ -497,6 +569,73 @@ export default function RoomScreen({
         ready();
     }
 
+    function handleRollTurnOrder() {
+        setError("");
+        setMessage("");
+
+        if (!canRollTurnOrder) {
+            setError("両者のデッキ選択とREADY後に抽選できます。");
+            return;
+        }
+
+        setTurnOrderWaiting(true);
+        setMessage("先攻後攻を抽選中です...");
+
+        window.setTimeout(() => {
+            setTurnOrderWaiting((waiting) => {
+                if (waiting) {
+                    setError(
+                        "抽選結果を受信できませんでした。サーバーが最新化されているか確認してください。"
+                    );
+                    setMessage("");
+                }
+
+                return false;
+            });
+        }, 3000);
+
+        rollTurnOrder((response) => {
+            if (!response.ok) {
+                setTurnOrderWaiting(false);
+                setMessage("");
+                setError(
+                    response.message ??
+                    "先攻後攻の抽選に失敗しました。"
+                );
+            }
+        });
+    }
+
+    function handleSelectTurnOrder(
+        choice: "first" | "second"
+    ) {
+        setError("");
+        setMessage("");
+
+        if (!canChooseTurnOrder) {
+            setError("先攻後攻の選択権がありません。");
+            return;
+        }
+
+        setTurnOrderWaiting(true);
+        setMessage(
+            choice === "first"
+                ? "先攻を選択中です..."
+                : "後攻を選択中です..."
+        );
+
+        selectTurnOrder(choice, (response) => {
+            if (!response.ok) {
+                setTurnOrderWaiting(false);
+                setMessage("");
+                setError(
+                    response.message ??
+                    "先攻後攻の選択に失敗しました。"
+                );
+            }
+        });
+    }
+
     function handleStart() {
         setError("");
 
@@ -534,16 +673,6 @@ export default function RoomScreen({
             const deckOrder = createOnlineDeckOrder(
                 hostCards,
                 guestCards
-            );
-
-            useGameStore
-                .getState()
-                .setLocalPlayerIndex(0);
-
-            startGameWithDeckOrders(
-                hostCards,
-                guestCards,
-                deckOrder
             );
 
             sendGameSetup(deckOrder);
@@ -689,6 +818,83 @@ export default function RoomScreen({
                                         : "通話あり"}
                                 </div>
                             )}
+                        </section>
+
+                        <section style={turnOrderCardStyle}>
+                            <div style={sectionTitleStyle}>
+                                先攻後攻
+                            </div>
+
+                            <div style={turnOrderStatusStyle}>
+                                {turnOrderWaiting
+                                    ? "処理中..."
+                                    : roomState.firstPlayer
+                                    ? "決定済み"
+                                    : roomState.turnOrderDecider
+                                        ? `${getRoleLabel(roomState.turnOrderDecider)} が選択中`
+                                        : "両者READY後に抽選できます"}
+                            </div>
+
+                            <div style={turnOrderGridStyle}>
+                                <div style={turnOrderResultStyle}>
+                                    <span>先攻</span>
+                                    <strong>{firstPlayerLabel}</strong>
+                                </div>
+                                <div style={turnOrderResultStyle}>
+                                    <span>後攻</span>
+                                    <strong>{secondPlayerLabel}</strong>
+                                </div>
+                            </div>
+
+                            {!roomState.firstPlayer && !roomState.turnOrderDecider && isHost && (
+                                <button
+                                    type="button"
+                                    style={{
+                                        ...primaryButtonStyle,
+                                        minHeight: "42px",
+                                        opacity: canRollTurnOrder && !turnOrderWaiting ? 1 : 0.45,
+                                    }}
+                                    disabled={!canRollTurnOrder || turnOrderWaiting}
+                                    onClick={handleRollTurnOrder}
+                                >
+                                    {turnOrderWaiting ? "抽選中..." : "先攻後攻を決める"}
+                                </button>
+                            )}
+
+                            {!roomState.firstPlayer && !roomState.turnOrderDecider && !isHost && (
+                                <div style={turnOrderHintStyle}>
+                                    HOSTが抽選を開始します。
+                                </div>
+                            )}
+
+                            {canChooseTurnOrder && (
+                                <div style={turnOrderChoiceGridStyle}>
+                                    <button
+                                        type="button"
+                                        style={primaryButtonStyle}
+                                        disabled={turnOrderWaiting}
+                                        onClick={() => handleSelectTurnOrder("first")}
+                                    >
+                                        先攻を選ぶ
+                                    </button>
+                                    <button
+                                        type="button"
+                                        style={primaryButtonStyle}
+                                        disabled={turnOrderWaiting}
+                                        onClick={() => handleSelectTurnOrder("second")}
+                                    >
+                                        後攻を選ぶ
+                                    </button>
+                                </div>
+                            )}
+
+                            {!canChooseTurnOrder &&
+                                roomState.turnOrderDecider &&
+                                !roomState.firstPlayer && (
+                                    <div style={turnOrderHintStyle}>
+                                        相手が先攻/後攻を選択中です。
+                                    </div>
+                                )}
                         </section>
 
                         <section style={actionCardStyle}>
@@ -1009,6 +1215,68 @@ const modeCardStyle: CSSProperties = {
     borderRadius: "14px",
     border: "1px solid rgba(148, 163, 184, 0.42)",
     background: "rgba(15, 23, 42, 0.78)",
+};
+
+const turnOrderCardStyle: CSSProperties = {
+    ...modeCardStyle,
+    display: "none",
+    /*
+    display: "flex",
+    */
+    flexDirection: "column",
+    gap: "9px",
+};
+
+const turnOrderStatusStyle: CSSProperties = {
+    minHeight: "34px",
+    borderRadius: "8px",
+    border: "1px solid #38bdf8",
+    background: "rgba(8, 47, 73, 0.78)",
+    color: "#e0f2fe",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "13px",
+    fontWeight: 1000,
+};
+
+const turnOrderGridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "8px",
+};
+
+const turnOrderResultStyle: CSSProperties = {
+    minHeight: "42px",
+    borderRadius: "9px",
+    border: "1px solid #475569",
+    background: "#020617",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "2px",
+    fontSize: "12px",
+    fontWeight: 900,
+};
+
+const turnOrderChoiceGridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "8px",
+};
+
+const turnOrderHintStyle: CSSProperties = {
+    minHeight: "34px",
+    borderRadius: "8px",
+    background: "rgba(51, 65, 85, 0.72)",
+    color: "#cbd5e1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "12px",
+    fontWeight: 900,
+    textAlign: "center",
 };
 
 const actionCardStyle: CSSProperties = {

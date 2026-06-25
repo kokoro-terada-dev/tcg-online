@@ -4,8 +4,10 @@ import Board from "./components/Board/Board";
 import DeckSelect from "./components/DeckSelect/DeckSelect";
 import MulliganScreen from "./components/Mulligan/MulliganScreen";
 import RoomScreen from "./components/Online/RoomScreen";
+import TurnOrderScreen from "./components/TurnOrder/TurnOrderScreen";
 
 import {
+  onGameTurnOrderSelected,
   onMulliganComplete,
   onMulliganResult,
 } from "./network/roomClient";
@@ -26,11 +28,15 @@ function App() {
 
   const mulliganPlayerIndex =
     useGameStore((x) => x.mulliganPlayerIndex);
+  const turnOrderSelectionPending =
+    useGameStore((x) => x.turnOrderSelectionPending);
 
   const applyOnlineMulliganResult =
     useGameStore((x) => x.applyOnlineMulliganResult);
   const finishOnlineMulligan =
     useGameStore((x) => x.finishOnlineMulligan);
+  const confirmTurnOrder =
+    useGameStore((x) => x.confirmTurnOrder);
 
   useEffect(() => {
     const offMulliganResult = onMulliganResult(
@@ -41,14 +47,25 @@ function App() {
     const offMulliganComplete = onMulliganComplete(
       finishOnlineMulligan
     );
+    const offGameTurnOrderSelected =
+      onGameTurnOrderSelected(confirmTurnOrder);
 
     return () => {
       offMulliganResult();
       offMulliganComplete();
+      offGameTurnOrderSelected();
     };
-  }, [applyOnlineMulliganResult, finishOnlineMulligan]);
+  }, [
+    applyOnlineMulliganResult,
+    confirmTurnOrder,
+    finishOnlineMulligan,
+  ]);
 
   if (isStarted) {
+    if (turnOrderSelectionPending) {
+      return <TurnOrderScreen />;
+    }
+
     if (mulliganPlayerIndex !== null) {
       return <MulliganScreen />;
     }

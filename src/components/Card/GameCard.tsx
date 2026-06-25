@@ -29,6 +29,7 @@ type CardFrom =
   | "trash"
   | "life"
   | "deck"
+  | "counter"
   | "public"
   | "don"
   | "leader"
@@ -175,6 +176,9 @@ export default function GameCard({
   const clearCardMarkers = useGameStore(
     (x) => x.clearCardMarkers
   );
+  const startCounterPhase = useGameStore(
+    (x) => x.startCounterPhase
+  );
   const setCardMarker = useGameStore(
     (x) => x.setCardMarker
   );
@@ -219,6 +223,7 @@ export default function GameCard({
     from === "character" ||
     from === "leader" ||
     from === "trash" ||
+    from === "counter" ||
     from === "public";
 
   const canOpenQuickMenu =
@@ -240,7 +245,9 @@ export default function GameCard({
   const markersForThisCard = cardMarkers.filter(
     (marker) =>
       marker.playerIndex === playerIndex &&
-      marker.cardId === card.id
+      marker.cardId === card.id &&
+      marker.markerType !== "attackSource" &&
+      marker.markerType !== "attackTarget"
   );
 
   function openCardMenu() {
@@ -328,6 +335,9 @@ export default function GameCard({
       | "confirmed"
       | "note"
       | "rest"
+      | "block"
+      | "powerPlus"
+      | "counterPhase"
       | "cancelSource"
       | "cancelTarget",
     log?: ActionLog
@@ -363,6 +373,9 @@ export default function GameCard({
       | "confirmed"
       | "note"
       | "rest"
+      | "block"
+      | "powerPlus"
+      | "counterPhase"
       | "cancel"
   ) {
     if (!canOpenQuickMenu) {
@@ -487,14 +500,80 @@ export default function GameCard({
         log
       );
       sendQuickAction(action, log);
+    } else if (action === "rest") {
+      if (!canOperate) {
+        return;
+      }
+      const log = createActionLog(
+        card.rotated ? "active" : "rest"
+      );
+      toggleRotate(playerIndex, card.id);
+      addActionLog(log);
+      sendQuickAction(action, log);
+    } else if (action === "block") {
+      if (
+        !canOperate ||
+        (from !== "leader" && from !== "character")
+      ) {
+        return;
+      }
+      const log = createActionLog("block");
+      if (!card.rotated) {
+        toggleRotate(playerIndex, card.id);
+      }
+      if (
+        currentAttackSource &&
+        currentAttackTarget?.playerIndex === playerIndex
+      ) {
+        setAttackTarget(pointer);
+      }
+      addActionLog(log);
+      sendQuickAction(action, log);
+    } else if (action === "counterPhase") {
+      if (
+        !canOperate ||
+        (from !== "leader" && from !== "character")
+      ) {
+        return;
+      }
+
+      const targetInfo = getMenuTargetInfo();
+
+      if (
+        !targetInfo ||
+        targetInfo.targetArea === "stage" ||
+        targetInfo.targetArea === "public"
+      ) {
+        return;
+      }
+
+      const log = createActionLog("counter");
+
+      startCounterPhase({
+        playerIndex: playerIndex as 0 | 1,
+        targetCardId: card.id,
+        targetArea: targetInfo.targetArea,
+        targetIndex: targetInfo.targetIndex,
+        power: 0,
+      });
+      addActionLog(log);
+      sendBoardAction({
+        actionType: "COUNTER_PHASE_ACTION",
+        payload: {
+          counterAction: "START",
+          playerIndex: playerIndex as 0 | 1,
+          targetCardId: card.id,
+          targetArea: targetInfo.targetArea,
+          targetIndex: targetInfo.targetIndex,
+          log,
+        },
+      });
     } else {
       if (!canOperate) {
         return;
       }
-      const log = createActionLog("rest");
-      toggleRotate(playerIndex, card.id);
-      addActionLog(log);
-      sendQuickAction(action, log);
+      changePower(playerIndex, card.id, 1000);
+      sendQuickAction(action);
     }
 
     setQuickMenuOpen(false);
@@ -909,23 +988,26 @@ export default function GameCard({
                 </button>
               )}
               {!isOpponent && from !== "public" && (
-                <button onClick={() => runQuickAction("processing")}>
-                  処理中
-                </button>
-              )}
-              {!isOpponent && from !== "public" && (
-                <button onClick={() => runQuickAction("confirmRequest")}>
-                  確認して
-                </button>
-              )}
-              {!isOpponent && from !== "public" && (
-                <button onClick={() => runQuickAction("note")}>
-                  付箋
-                </button>
-              )}
-              {!isOpponent && from !== "public" && (
                 <button onClick={() => runQuickAction("rest")}>
                   {card.rotated ? "アクティブ" : "レスト"}
+                </button>
+              )}
+              {!isOpponent &&
+                (from === "leader" || from === "character") && (
+                <button onClick={() => runQuickAction("counterPhase")}>
+                  カウンター
+                </button>
+              )}
+              {!isOpponent &&
+                (from === "leader" || from === "character") && (
+                <button onClick={() => runQuickAction("block")}>
+                  ブロック
+                </button>
+              )}
+              {!isOpponent &&
+                (from === "leader" || from === "character") && (
+                <button onClick={() => runQuickAction("powerPlus")}>
+                  +1000
                 </button>
               )}
               {isOpponent && from !== "stage" && (

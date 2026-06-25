@@ -10,6 +10,7 @@ export type AreaType =
   | "character"
   | "deck"
   | "public"
+  | "counter"
   | "trash"
   | "life"
   | "leader"
@@ -41,6 +42,7 @@ export interface PlayerState {
   deck: CardData[];
   trash: CardData[];
   publicCards: CardData[];
+  counterCards: CardData[];
   life: CardData[];
 
   leader: CardData | null;

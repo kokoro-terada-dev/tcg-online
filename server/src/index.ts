@@ -12,6 +12,8 @@ import {
     removeRoom,
     resetRoomAfterMatch,
     markMulliganComplete,
+    rollTurnOrderDecider,
+    selectTurnOrder,
     setCommunicationMode,
     setDeckRecipe,
     setReady,
@@ -20,6 +22,7 @@ import {
 import type {
     DeckRecipeForRoom,
     GameSetupPayload,
+    GameSetupStartPayload,
     MulliganResultPayload,
     BoardActionPayload,
 } from "./types";
@@ -211,12 +214,96 @@ io.on("connection", (socket) => {
     );
 
     socket.on(
+        "roll-turn-order",
+        (
+            payload: { roomId: string },
+            callback?: (response: {
+                ok: boolean;
+                message?: string;
+            }) => void
+        ) => {
+            const room = rollTurnOrderDecider(
+                payload.roomId,
+                socket.id
+            );
+
+            if (!room) {
+                callback?.({
+                    ok: false,
+                    message: "両者READY後にHOSTだけが抽選できます。",
+                });
+                return;
+            }
+
+            io.to(payload.roomId).emit(
+                "room-state",
+                room
+            );
+            callback?.({ ok: true });
+        }
+    );
+
+    socket.on(
+        "select-turn-order",
+        (
+            payload: {
+                roomId: string;
+                choice: "first" | "second";
+            },
+            callback?: (response: {
+                ok: boolean;
+                message?: string;
+            }) => void
+        ) => {
+            const room = selectTurnOrder(
+                payload.roomId,
+                socket.id,
+                payload.choice
+            );
+
+            if (!room) {
+                callback?.({
+                    ok: false,
+                    message: "先攻後攻の選択権がありません。",
+                });
+                return;
+            }
+
+            io.to(payload.roomId).emit(
+                "room-state",
+                room
+            );
+            callback?.({ ok: true });
+        }
+    );
+
+    socket.on(
         "game-setup",
         (payload: GameSetupPayload) => {
+            const setupPayload: GameSetupStartPayload = {
+                deckOrder: payload.deckOrder,
+                turnOrderDecider:
+                    Math.random() < 0.5 ? 0 : 1,
+            };
 
-            socket.to(payload.roomId).emit(
+            io.to(payload.roomId).emit(
                 "game-setup",
-                payload.deckOrder
+                setupPayload
+            );
+        }
+    );
+
+    socket.on(
+        "game-turn-order-selected",
+        (payload: {
+            roomId: string;
+            firstPlayerIndex: 0 | 1;
+        }) => {
+            io.to(payload.roomId).emit(
+                "game-turn-order-selected",
+                {
+                    firstPlayerIndex: payload.firstPlayerIndex,
+                }
             );
         }
     );

@@ -12,13 +12,12 @@ import {
 } from "./ActionLogBar";
 
 const CHAT_ACTIONS: QuickActionType[] = [
-  "attack",
-  "target",
-  "block",
   "counter",
   "event",
   "trigger",
   "life",
+  "donPlus",
+  "donMinus",
   "ok",
   "wait",
   "thinking",
@@ -153,7 +152,7 @@ export default function ChatControls({
             right: "54px",
             top: "50%",
             transform: "translateY(-50%)",
-            width: "min(250px, calc(100vw - 70px))",
+            width: "min(340px, calc(100vw - 70px))",
             maxHeight: "46dvh",
             padding: "8px",
             border: "1px solid #64748b",
@@ -212,24 +211,28 @@ export default function ChatControls({
           >
             {logs.map((log) => {
               const colors = PLAYER_COLORS[log.playerIndex];
+              const isOwn =
+                log.playerIndex === senderPlayerIndex;
 
               return (
                 <div
                   key={log.id}
                   style={{
+                    maxWidth: "82%",
+                    alignSelf: isOwn ? "flex-end" : "flex-start",
                     padding: "6px 8px",
-                    borderLeft: `4px solid ${colors.border}`,
+                    border: `1px solid ${colors.border}`,
                     background: colors.background,
-                    borderRadius: "4px",
-                    fontSize: "12px",
+                    borderRadius: isOwn
+                      ? "10px 10px 2px 10px"
+                      : "10px 10px 10px 2px",
+                    fontSize: "10px",
                     fontWeight: 800,
+                    lineHeight: 1.35,
+                    overflowWrap: "anywhere",
                   }}
                 >
-                  {log.playerIndex === senderPlayerIndex
-                    ? "自分"
-                    : "相手"}
-                  ：{ACTION_LABELS[log.actionType]}
-                  {log.message ? ` ${log.message}` : ""}
+                  {log.message ?? ACTION_LABELS[log.actionType]}
                 </div>
               );
             })}

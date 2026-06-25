@@ -24,6 +24,8 @@ export default function MulliganScreen() {
     useGameStore((x) => x.keepHand);
   const mulliganWaiting =
     useGameStore((x) => x.mulliganWaiting);
+  const firstPlayerIndex =
+    useGameStore((x) => x.firstPlayerIndex);
 
 
   if (mulliganPlayerIndex === null) {
@@ -34,6 +36,12 @@ export default function MulliganScreen() {
     localPlayerIndex ?? mulliganPlayerIndex;
 
   const player = players[displayPlayerIndex];
+  const turnOrderText =
+    firstPlayerIndex === null
+      ? null
+      : firstPlayerIndex === displayPlayerIndex
+        ? "あなたは 先行 です"
+        : "あなたは 後攻 です";
 
   function handleKeep() {
     if (mulliganWaiting) {
@@ -101,6 +109,24 @@ export default function MulliganScreen() {
             ? "対戦相手のマリガン選択を待っています。"
             : "マリガンは1回だけです。"}
         </p>
+
+        {turnOrderText && (
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "12px",
+              borderRadius: "12px",
+              border: "2px solid #38bdf8",
+              background: "rgba(8, 47, 73, 0.78)",
+              color: "#e0f2fe",
+              textAlign: "center",
+              fontSize: "18px",
+              fontWeight: 1000,
+            }}
+          >
+            {turnOrderText}
+          </div>
+        )}
 
         <div
           style={{

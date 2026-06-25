@@ -20,6 +20,8 @@ export type DeckRecipeForRoom = {
 
 export type CommunicationMode = "voice" | "silent";
 
+export type TurnOrderPlayer = "host" | "guest";
+
 export type RoomStateForClient = {
   roomId: string;
   hostSocketId: string;
@@ -31,6 +33,13 @@ export type RoomStateForClient = {
   communicationMode: CommunicationMode;
   hostMulliganComplete: boolean;
   guestMulliganComplete: boolean;
+  turnOrderDecider: TurnOrderPlayer | null;
+  firstPlayer: TurnOrderPlayer | null;
+};
+
+export type GameSetupStartPayload = {
+  deckOrder: OnlineDeckOrderPayload;
+  turnOrderDecider: 0 | 1;
 };
 
 export type BoardActionPayload =
@@ -41,8 +50,8 @@ export type BoardActionPayload =
       playerIndex: number;
       cardId: string;
       fromIndex?: number;
-      from: "hand" | "character" | "stage" | "trash" | "life" | "deck";
-      to: "hand" | "character" | "stage" | "trash" | "life" | "deck";
+      from: "hand" | "character" | "stage" | "trash" | "life" | "deck" | "counter";
+      to: "hand" | "character" | "stage" | "trash" | "life" | "deck" | "counter";
       slotIndex?: number;
     };
   }
@@ -214,6 +223,9 @@ export type BoardActionPayload =
         | "confirmed"
         | "note"
         | "rest"
+        | "block"
+        | "powerPlus"
+        | "counterPhase"
         | "cancelSource"
         | "cancelTarget";
       log?: ActionLog;
@@ -225,6 +237,26 @@ export type BoardActionPayload =
     payload: {
       log?: ActionLog;
     };
+  }
+  | {
+    roomId: string;
+    actionType: "COUNTER_PHASE_ACTION";
+    payload:
+      | {
+        counterAction: "START";
+        playerIndex: 0 | 1;
+        targetCardId: string;
+        targetArea: "leader" | "character";
+        targetIndex: number;
+        log?: ActionLog;
+      }
+      | {
+        counterAction: "ADJUST";
+        amount: number;
+      }
+      | {
+        counterAction: "CANCEL" | "CONFIRM";
+      };
   };
 
 let roomIdForClient: string | null = null;
@@ -247,6 +279,9 @@ const mulliganResultListeners =
 
 const mulliganCompleteListeners =
   new Set<() => void>();
+
+const gameTurnOrderSelectedListeners =
+  new Set<(firstPlayerIndex: 0 | 1) => void>();
 
 const opponentDisconnectedListeners =
   new Set<() => void>();
@@ -408,6 +443,16 @@ export function onMulliganComplete(
   };
 }
 
+export function onGameTurnOrderSelected(
+  listener: (firstPlayerIndex: 0 | 1) => void
+) {
+  gameTurnOrderSelectedListeners.add(listener);
+
+  return () => {
+    gameTurnOrderSelectedListeners.delete(listener);
+  };
+}
+
 export function leaveRoom() {
   const roomId = roomIdForClient;
   const wasCreatingRoom = createRoomPending;
@@ -500,6 +545,53 @@ export function setRoomCommunicationMode(
   });
 }
 
+type TurnOrderResponse = {
+  ok: boolean;
+  message?: string;
+};
+
+export function rollTurnOrder(
+  callback?: (response: TurnOrderResponse) => void
+) {
+  if (!roomIdForClient) {
+    callback?.({
+      ok: false,
+      message: "ルーム情報がありません。",
+    });
+    return;
+  }
+
+  socket.emit(
+    "roll-turn-order",
+    {
+      roomId: roomIdForClient,
+    },
+    callback
+  );
+}
+
+export function selectTurnOrder(
+  choice: "first" | "second",
+  callback?: (response: TurnOrderResponse) => void
+) {
+  if (!roomIdForClient) {
+    callback?.({
+      ok: false,
+      message: "ルーム情報がありません。",
+    });
+    return;
+  }
+
+  socket.emit(
+    "select-turn-order",
+    {
+      roomId: roomIdForClient,
+      choice,
+    },
+    callback
+  );
+}
+
 export function sendGameSetup(
   deckOrder: OnlineDeckOrderPayload
 ) {
@@ -512,6 +604,22 @@ export function sendGameSetup(
     {
       roomId: roomIdForClient,
       deckOrder,
+    }
+  );
+}
+
+export function sendGameTurnOrderSelected(
+  firstPlayerIndex: 0 | 1
+) {
+  if (!roomIdForClient) {
+    return;
+  }
+
+  socket.emit(
+    "game-turn-order-selected",
+    {
+      roomId: roomIdForClient,
+      firstPlayerIndex,
     }
   );
 }
@@ -662,6 +770,15 @@ socket.on(
   () => {
     for (const listener of mulliganCompleteListeners) {
       listener();
+    }
+  }
+);
+
+socket.on(
+  "game-turn-order-selected",
+  (payload: { firstPlayerIndex: 0 | 1 }) => {
+    for (const listener of gameTurnOrderSelectedListeners) {
+      listener(payload.firstPlayerIndex);
     }
   }
 );

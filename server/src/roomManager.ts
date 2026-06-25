@@ -2,6 +2,7 @@ import type {
   CommunicationMode,
   DeckRecipeForRoom,
   RoomState,
+  TurnOrderPlayer,
 } from "./types";
 
 const rooms = new Map<string, RoomState>();
@@ -34,6 +35,8 @@ export function createRoom(
     communicationMode: "voice",
     hostMulliganComplete: false,
     guestMulliganComplete: false,
+    turnOrderDecider: null,
+    firstPlayer: null,
   };
 
   rooms.set(roomId, room);
@@ -64,8 +67,16 @@ export function joinRoom(
 
   room.guestSocketId = socketId;
   room.guestReady = false;
+  resetTurnOrder(room);
 
   return room;
+}
+
+function resetTurnOrder(
+  room: RoomState
+) {
+  room.turnOrderDecider = null;
+  room.firstPlayer = null;
 }
 
 export function setReady(
@@ -110,6 +121,8 @@ export function setDeckRecipe(
     return null;
   }
 
+  resetTurnOrder(room);
+
   return room;
 }
 
@@ -129,6 +142,75 @@ export function canStartGame(
     room.hostDeckRecipe !== null &&
     room.guestDeckRecipe !== null
   );
+}
+
+export function canRollTurnOrder(
+  room: RoomState
+) {
+  return (
+    room.guestSocketId !== null &&
+    room.hostReady &&
+    room.guestReady &&
+    room.hostDeckRecipe !== null &&
+    room.guestDeckRecipe !== null
+  );
+}
+
+export function rollTurnOrderDecider(
+  roomId: string,
+  socketId: string
+) {
+  const room = rooms.get(roomId);
+
+  if (!room || room.hostSocketId !== socketId) {
+    return null;
+  }
+
+  if (!canRollTurnOrder(room)) {
+    return null;
+  }
+
+  if (room.turnOrderDecider || room.firstPlayer) {
+    return null;
+  }
+
+  room.turnOrderDecider =
+    Math.random() < 0.5 ? "host" : "guest";
+  room.firstPlayer = null;
+
+  return room;
+}
+
+export function selectTurnOrder(
+  roomId: string,
+  socketId: string,
+  choice: "first" | "second"
+) {
+  const room = rooms.get(roomId);
+
+  if (!room || !room.turnOrderDecider) {
+    return null;
+  }
+
+  const role: TurnOrderPlayer | null =
+    room.hostSocketId === socketId
+      ? "host"
+      : room.guestSocketId === socketId
+        ? "guest"
+        : null;
+
+  if (!role || role !== room.turnOrderDecider) {
+    return null;
+  }
+
+  room.firstPlayer =
+    choice === "first"
+      ? role
+      : role === "host"
+        ? "guest"
+        : "host";
+
+  return room;
 }
 
 export function findRoomBySocketId(
@@ -166,6 +248,7 @@ export function setCommunicationMode(
   room.communicationMode = communicationMode;
   room.hostReady = false;
   room.guestReady = false;
+  resetTurnOrder(room);
 
   return room;
 }
@@ -219,6 +302,7 @@ export function leaveRoom(
   room.guestDeckRecipe = null;
   room.guestMulliganComplete = false;
   room.hostReady = false;
+  resetTurnOrder(room);
 
   return {
     room,
@@ -240,6 +324,7 @@ export function resetRoomAfterMatch(
   room.guestReady = false;
   room.hostMulliganComplete = false;
   room.guestMulliganComplete = false;
+  resetTurnOrder(room);
 
   return room;
 }

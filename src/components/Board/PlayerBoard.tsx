@@ -688,7 +688,7 @@ export default function PlayerBoard({
       <CardListModal
         title="Life"
         cards={player.life}
-        open={lifeOpen && !isOpponent}
+        open={lifeOpen}
         onClose={() => setLifeOpen(false)}
         onHand={(id) =>
           handleListCardToHand("life", id)

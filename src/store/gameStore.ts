@@ -49,11 +49,14 @@ export type QuickActionType =
   | "confirmed"
   | "note"
   | "rest"
+  | "active"
   | "block"
   | "counter"
   | "event"
   | "trigger"
   | "life"
+  | "donPlus"
+  | "donMinus"
   | "ok"
   | "wait"
   | "thinking"
@@ -101,6 +104,14 @@ export type CardEffectSignal = {
   playerIndex: 0 | 1;
   cardId: string;
   nonce: number;
+} | null;
+
+export type CounterPhase = {
+  playerIndex: 0 | 1;
+  targetCardId: string;
+  targetArea: "leader" | "character";
+  targetIndex: number;
+  power: number;
 } | null;
 
 type PlayersSnapshot = [PlayerState, PlayerState];
@@ -185,6 +196,7 @@ function createPlayer(
     trash: [],
 
     publicCards: [],
+    counterCards: [],
 
     life,
 
@@ -293,6 +305,7 @@ function createPlayerWithMainDeckOrder(
     trash: [],
 
     publicCards: [],
+    counterCards: [],
 
     life,
 
@@ -340,6 +353,7 @@ interface MoveParams {
   | "character"
   | "stage"
   | "public"
+  | "counter"
   | "trash"
   | "life"
   | "deck";
@@ -349,6 +363,7 @@ interface MoveParams {
   | "character"
   | "stage"
   | "public"
+  | "counter"
   | "trash"
   | "life"
   | "deck";
@@ -367,6 +382,12 @@ interface GameState {
 
   mulliganWaiting: boolean;
 
+  turnOrderSelectionPending: boolean;
+
+  turnOrderDecider: 0 | 1 | null;
+
+  firstPlayerIndex: 0 | 1 | null;
+
   actionLogs: ActionLog[];
 
   currentAttackSource: AttackTarget;
@@ -378,6 +399,8 @@ interface GameState {
   cardMarkers: CardMarker[];
 
   cardEffectSignal: CardEffectSignal;
+
+  counterPhase: CounterPhase;
 
   addActionLog: (log: ActionLog) => void;
 
@@ -414,6 +437,18 @@ interface GameState {
 
   clearCardEffect: () => void;
 
+  startCounterPhase: (
+    phase: Exclude<CounterPhase, null>
+  ) => void;
+
+  adjustCounterPower: (
+    amount: number
+  ) => void;
+
+  cancelCounterPhase: () => void;
+
+  confirmCounterPhase: () => void;
+
   clearActionLogs: () => void;
 
   setLocalPlayerIndex: (
@@ -425,6 +460,14 @@ interface GameState {
   ) => void;
 
   finishOnlineMulligan: () => void;
+
+  setTurnOrderDecider: (
+    playerIndex: 0 | 1
+  ) => void;
+
+  confirmTurnOrder: (
+    firstPlayerIndex: 0 | 1
+  ) => void;
 
   startGame: (
     player1Deck: CardData[],
@@ -665,6 +708,12 @@ export const useGameStore =
 
       mulliganWaiting: false,
 
+      turnOrderSelectionPending: false,
+
+      turnOrderDecider: null,
+
+      firstPlayerIndex: null,
+
       actionLogs: [],
 
       currentAttackSource: null,
@@ -676,6 +725,8 @@ export const useGameStore =
       cardMarkers: [],
 
       cardEffectSignal: null,
+
+      counterPhase: null,
 
       addActionLog: (log) =>
         set((state) => ({
@@ -871,6 +922,73 @@ export const useGameStore =
           cardEffectSignal: null,
         })),
 
+      startCounterPhase: (phase) =>
+        set(() => ({
+          counterPhase: phase,
+        })),
+
+      adjustCounterPower: (amount) =>
+        set((state) => ({
+          counterPhase: state.counterPhase
+            ? {
+              ...state.counterPhase,
+              power: state.counterPhase.power + amount,
+            }
+            : null,
+        })),
+
+      cancelCounterPhase: () =>
+        setWithHistory((state) => {
+          const phase = state.counterPhase;
+
+          if (!phase) {
+            return {};
+          }
+
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+          const player = players[phase.playerIndex];
+
+          player.hand.push(...player.counterCards);
+          player.counterCards = [];
+
+          return {
+            players,
+            counterPhase: null,
+          };
+        }),
+
+      confirmCounterPhase: () =>
+        setWithHistory((state) => {
+          const phase = state.counterPhase;
+
+          if (!phase) {
+            return {};
+          }
+
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+          const player = players[phase.playerIndex];
+
+          player.trash.unshift(
+            ...player.counterCards.map((card) => ({
+              ...card,
+              isFaceUp: true,
+              rotated: false,
+            }))
+          );
+          player.counterCards = [];
+
+          return {
+            players,
+            counterPhase: null,
+          };
+        }),
+
       clearActionLogs: () =>
         set(() => ({
           actionLogs: [],
@@ -879,6 +997,7 @@ export const useGameStore =
           pendingAttackPlayerIndex: null,
           cardMarkers: [],
           cardEffectSignal: null,
+          counterPhase: null,
         })),
 
       undoHistory: [],
@@ -906,6 +1025,23 @@ export const useGameStore =
       finishOnlineMulligan: () =>
         set(() => ({
           mulliganPlayerIndex: null,
+          mulliganWaiting: false,
+        })),
+
+      setTurnOrderDecider: (playerIndex) =>
+        set(() => ({
+          turnOrderSelectionPending: true,
+          turnOrderDecider: playerIndex,
+          firstPlayerIndex: null,
+          mulliganPlayerIndex: null,
+          mulliganWaiting: false,
+        })),
+
+      confirmTurnOrder: (firstPlayerIndex) =>
+        set(() => ({
+          turnOrderSelectionPending: false,
+          firstPlayerIndex,
+          mulliganPlayerIndex: 0,
           mulliganWaiting: false,
         })),
 
@@ -937,6 +1073,10 @@ export const useGameStore =
 
           mulliganPlayerIndex: 0,
           mulliganWaiting: false,
+
+          turnOrderSelectionPending: false,
+          turnOrderDecider: null,
+          firstPlayerIndex: null,
 
           undoHistory: [],
 
@@ -983,8 +1123,12 @@ export const useGameStore =
 
           cardEffectSignal: null,
 
-          mulliganPlayerIndex: 0,
+          mulliganPlayerIndex: null,
           mulliganWaiting: false,
+
+          turnOrderSelectionPending: false,
+          turnOrderDecider: null,
+          firstPlayerIndex: null,
 
           undoHistory: [],
 
@@ -1031,6 +1175,7 @@ export const useGameStore =
             ...player.deck,
             ...player.trash,
             ...player.publicCards,
+            ...player.counterCards,
             ...player.life,
             ...player.activeDons,
             ...player.restDons,
@@ -1067,6 +1212,7 @@ export const useGameStore =
             ...player.deck,
             ...player.trash,
             ...player.publicCards,
+            ...player.counterCards,
             ...player.life,
             ...player.activeDons,
             ...player.restDons,
@@ -1110,6 +1256,7 @@ export const useGameStore =
             "character",
             "stage",
             "public",
+            "counter",
             "trash",
             "life",
             "deck",
@@ -1120,6 +1267,7 @@ export const useGameStore =
             "character",
             "stage",
             "public",
+            "counter",
             "trash",
             "life",
             "deck",
@@ -1214,6 +1362,24 @@ export const useGameStore =
             }
           }
 
+          if (from === "counter") {
+            const index =
+              player.counterCards.findIndex(
+                (x) =>
+                  x.id === cardId
+              );
+
+            if (index !== -1) {
+              card =
+                player.counterCards[index];
+
+              player.counterCards.splice(
+                index,
+                1
+              );
+            }
+          }
+
           if (from === "life") {
             const index =
               player.life.findIndex(
@@ -1282,6 +1448,7 @@ export const useGameStore =
           // 手札・盤面は表
           if (
             to === "hand" ||
+            to === "counter" ||
             to === "character" ||
             to === "stage"
           ) {
@@ -1306,6 +1473,7 @@ export const useGameStore =
             to === "hand" ||
             to === "trash" ||
             to === "public" ||
+            to === "counter" ||
             // to === "life" ||
             to === "deck"
           ) {
@@ -1359,6 +1527,12 @@ export const useGameStore =
             card.isFaceUp =
               state.communicationMode === "silent";
             player.publicCards.unshift(card);
+          }
+
+          if (to === "counter") {
+            card.rotated = false;
+            card.isFaceUp = true;
+            player.counterCards.push(card);
           }
 
           if (to === "life") {
@@ -1706,6 +1880,9 @@ export const useGameStore =
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
             cardEffectSignal: null,
+            turnOrderSelectionPending: false,
+            turnOrderDecider: null,
+            firstPlayerIndex: null,
           };
         }),
 
@@ -1911,6 +2088,9 @@ export const useGameStore =
           pendingAttackPlayerIndex: null,
           cardEffectSignal: null,
           mulliganWaiting: false,
+          turnOrderSelectionPending: false,
+          turnOrderDecider: null,
+          firstPlayerIndex: null,
         })),
       mulligan: (playerIndex: 0 | 1) => {
         set((state) => {
@@ -2651,9 +2831,10 @@ export const useGameStore =
               ...player.deck,
               ...player.hand,
               ...player.life,
-              ...player.trash,
-              ...player.publicCards,
-              ...player.characters.filter(
+            ...player.trash,
+            ...player.publicCards,
+            ...player.counterCards,
+            ...player.characters.filter(
                 (x): x is CardData => x !== null
               ),
               ...(player.stage ? [player.stage] : []),
@@ -2733,6 +2914,7 @@ export const useGameStore =
               life,
               trash: [],
               publicCards: [],
+              counterCards: [],
 
               characters: [null, null, null, null, null],
               stage: null,
@@ -2768,6 +2950,7 @@ export const useGameStore =
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
             cardEffectSignal: null,
+            counterPhase: null,
           };
         });
       },

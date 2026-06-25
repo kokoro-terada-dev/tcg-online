@@ -9,6 +9,8 @@ export type DeckRecipeForRoom = {
 
 export type CommunicationMode = "voice" | "silent";
 
+export type TurnOrderPlayer = "host" | "guest";
+
 export type RoomState = {
   roomId: string;
   hostSocketId: string;
@@ -20,6 +22,8 @@ export type RoomState = {
   communicationMode: CommunicationMode;
   hostMulliganComplete: boolean;
   guestMulliganComplete: boolean;
+  turnOrderDecider: TurnOrderPlayer | null;
+  firstPlayer: TurnOrderPlayer | null;
 };
 
 export type OnlineDeckOrderPayload = {
@@ -30,6 +34,11 @@ export type OnlineDeckOrderPayload = {
 export type GameSetupPayload = {
   roomId: string;
   deckOrder: OnlineDeckOrderPayload;
+};
+
+export type GameSetupStartPayload = {
+  deckOrder: OnlineDeckOrderPayload;
+  turnOrderDecider: 0 | 1;
 };
 
 export type MulliganResultPayload = {
@@ -48,8 +57,8 @@ export type BoardActionPayload =
       playerIndex: number;
       cardId: string;
       fromIndex?: number;
-      from: "hand" | "character" | "stage" | "trash" | "life" | "deck";
-      to: "hand" | "character" | "stage" | "trash" | "life" | "deck";
+      from: "hand" | "character" | "stage" | "trash" | "life" | "deck" | "counter";
+      to: "hand" | "character" | "stage" | "trash" | "life" | "deck" | "counter";
       slotIndex?: number;
     };
   }
@@ -207,11 +216,14 @@ export type BoardActionPayload =
           | "confirmed"
           | "note"
           | "rest"
+          | "active"
           | "block"
           | "counter"
           | "event"
           | "trigger"
           | "life"
+          | "donPlus"
+          | "donMinus"
           | "ok"
           | "wait"
           | "thinking"
@@ -259,6 +271,9 @@ export type BoardActionPayload =
         | "confirmed"
         | "note"
         | "rest"
+        | "block"
+        | "powerPlus"
+        | "counterPhase"
         | "cancelSource"
         | "cancelTarget";
       log?: {
@@ -278,7 +293,9 @@ export type BoardActionPayload =
           | "confirmRequest"
           | "confirmed"
           | "note"
-          | "rest";
+          | "rest"
+          | "active"
+          | "block";
         createdAt: number;
       };
     };
@@ -294,4 +311,23 @@ export type BoardActionPayload =
         createdAt: number;
       };
     };
+  }
+  | {
+    roomId: string;
+    actionType: "COUNTER_PHASE_ACTION";
+    payload:
+      | {
+        counterAction: "START";
+        playerIndex: 0 | 1;
+        targetCardId: string;
+        targetArea: "leader" | "character";
+        targetIndex: number;
+      }
+      | {
+        counterAction: "ADJUST";
+        amount: number;
+      }
+      | {
+        counterAction: "CANCEL" | "CONFIRM";
+      };
   };
