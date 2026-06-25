@@ -47,6 +47,7 @@ export default function ChatControls({
   onCloseQuickChat,
 }: Props) {
   const [customMessage, setCustomMessage] = useState("");
+  const [customInputOpen, setCustomInputOpen] = useState(false);
   const logs = useGameStore((state) => state.actionLogs);
   const addActionLog = useGameStore(
     (state) => state.addActionLog
@@ -97,6 +98,7 @@ export default function ChatControls({
       payload: { log },
     });
     setCustomMessage("");
+    setCustomInputOpen(false);
   }
 
   return (
@@ -180,58 +182,27 @@ export default function ChatControls({
           >
             ×
           </button>
-          <div
+          <button
+            type="button"
+            onClick={() => setCustomInputOpen(true)}
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 52px",
-              gap: "6px",
-              paddingTop: "7px",
+              width: "100%",
+              height: "34px",
+              marginTop: "7px",
+              border: "1px solid #38bdf8",
+              borderRadius: "5px",
+              background: "#0369a1",
+              color: "white",
+              fontSize: "12px",
+              fontWeight: 900,
             }}
           >
-            <input
-              value={customMessage}
-              maxLength={40}
-              placeholder="メッセージ"
-              onChange={(e) => setCustomMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  sendCustomMessage();
-                }
-              }}
-              style={{
-                minWidth: 0,
-                height: "38px",
-                border: "1px solid #64748b",
-                borderRadius: "5px",
-                background: "#020617",
-                color: "white",
-                padding: "0 8px",
-                fontSize: "16px",
-                fontWeight: 800,
-                WebkitTextSizeAdjust: "100%",
-              }}
-            />
-            <button
-              type="button"
-              onClick={sendCustomMessage}
-              style={{
-                height: "38px",
-                border: "1px solid #38bdf8",
-                borderRadius: "5px",
-                background: "#0369a1",
-                color: "white",
-                fontSize: "12px",
-                fontWeight: 900,
-              }}
-            >
-              送信
-            </button>
-          </div>
+            メッセージ入力
+          </button>
           <div
             ref={historyRef}
             style={{
-              maxHeight: "calc(46dvh - 82px)",
+              maxHeight: "calc(46dvh - 78px)",
               overflowY: "auto",
               display: "flex",
               flexDirection: "column",
@@ -328,6 +299,98 @@ export default function ChatControls({
             </button>
           ))}
         </div>
+      )}
+
+      {customInputOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="メッセージ入力を閉じる"
+            onClick={() => setCustomInputOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              padding: 0,
+              border: 0,
+              background: "rgba(0, 0, 0, 0.18)",
+              zIndex: 100000,
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              left: "8px",
+              right: "8px",
+              bottom:
+                "max(8px, calc(env(safe-area-inset-bottom) + 8px))",
+              display: "grid",
+              gridTemplateColumns: "1fr 58px 58px",
+              gap: "7px",
+              padding: "8px",
+              border: "1px solid #38bdf8",
+              borderRadius: "8px",
+              background: "rgba(15, 23, 42, 0.98)",
+              boxShadow: "0 10px 28px rgba(0,0,0,0.55)",
+              zIndex: 100001,
+            }}
+          >
+            <input
+              value={customMessage}
+              maxLength={40}
+              autoFocus
+              placeholder="メッセージ"
+              onChange={(e) => setCustomMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  sendCustomMessage();
+                }
+              }}
+              style={{
+                minWidth: 0,
+                height: "44px",
+                border: "1px solid #64748b",
+                borderRadius: "6px",
+                background: "#020617",
+                color: "white",
+                padding: "0 10px",
+                fontSize: "16px",
+                fontWeight: 800,
+                WebkitTextSizeAdjust: "100%",
+              }}
+            />
+            <button
+              type="button"
+              onClick={sendCustomMessage}
+              style={{
+                height: "44px",
+                border: "1px solid #38bdf8",
+                borderRadius: "6px",
+                background: "#0369a1",
+                color: "white",
+                fontSize: "13px",
+                fontWeight: 900,
+              }}
+            >
+              送信
+            </button>
+            <button
+              type="button"
+              onClick={() => setCustomInputOpen(false)}
+              style={{
+                height: "44px",
+                border: "1px solid #64748b",
+                borderRadius: "6px",
+                background: "#334155",
+                color: "white",
+                fontSize: "13px",
+                fontWeight: 900,
+              }}
+            >
+              閉じる
+            </button>
+          </div>
+        </>
       )}
     </>
   );
