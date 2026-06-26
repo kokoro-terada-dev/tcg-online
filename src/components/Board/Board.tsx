@@ -394,6 +394,9 @@ function CounterPhasePanel({
   const cancelCounterPhase = useGameStore(
     (x) => x.cancelCounterPhase
   );
+  const submitCounterPhase = useGameStore(
+    (x) => x.submitCounterPhase
+  );
   const confirmCounterPhase = useGameStore(
     (x) => x.confirmCounterPhase
   );
@@ -430,6 +433,11 @@ function CounterPhasePanel({
   const canConfirmPlayerOperate =
     localPlayerIndex === null ||
     localPlayerIndex !== phase.playerIndex;
+  const isCounterSubmitted = phase.counterPlayerConfirmed === true;
+  const canEditCounter =
+    canCounterPlayerOperate && !isCounterSubmitted;
+  const canFinalizeCounter =
+    canConfirmPlayerOperate && isCounterSubmitted;
   const counterCardWidth = canCounterPlayerOperate
     ? "clamp(64px, 18vw, 82px)"
     : "clamp(68px, 19vw, 86px)";
@@ -452,7 +460,7 @@ function CounterPhasePanel({
 
   const { setNodeRef, isOver } = useDroppable({
     id: `counter-${phase.playerIndex}`,
-    disabled: !canCounterPlayerOperate,
+    disabled: !canEditCounter,
     data: {
       to: "counter",
       playerIndex: phase.playerIndex,
@@ -466,7 +474,7 @@ function CounterPhasePanel({
         amount: number;
       }
       | {
-        counterAction: "CANCEL" | "CONFIRM";
+        counterAction: "CANCEL" | "SUBMIT" | "CONFIRM";
       }
   ) {
     sendBoardAction({
@@ -476,7 +484,7 @@ function CounterPhasePanel({
   }
 
   function adjust(amount: number) {
-    if (!canCounterPlayerOperate) {
+    if (!canEditCounter) {
       return;
     }
 
@@ -488,7 +496,7 @@ function CounterPhasePanel({
   }
 
   function cancel() {
-    if (!canCounterPlayerOperate) {
+    if (!canEditCounter) {
       return;
     }
 
@@ -498,8 +506,19 @@ function CounterPhasePanel({
     });
   }
 
+  function submit() {
+    if (!canEditCounter) {
+      return;
+    }
+
+    submitCounterPhase();
+    sendCounterAction({
+      counterAction: "SUBMIT",
+    });
+  }
+
   function confirm() {
-    if (!canConfirmPlayerOperate) {
+    if (!canFinalizeCounter) {
       return;
     }
 
@@ -599,7 +618,7 @@ function CounterPhasePanel({
             </CounterRelationCard>
           </div>
 
-          {canCounterPlayerOperate && (
+          {canEditCounter && (
             <div
               style={{
                 display: "grid",
@@ -662,6 +681,10 @@ function CounterPhasePanel({
               ? "rgba(250, 204, 21, 0.16)"
               : "rgba(2, 6, 23, 0.72)",
             display: "flex",
+            flexWrap:
+              isCounterSubmitted && canConfirmPlayerOperate
+                ? "wrap"
+                : "nowrap",
             gap: "5px",
             alignItems: "center",
             overflowX: canCounterPlayerOperate
@@ -670,6 +693,25 @@ function CounterPhasePanel({
             overflowY: "hidden",
           }}
         >
+          {isCounterSubmitted && canConfirmPlayerOperate && (
+            <div
+              style={{
+                width: "100%",
+                marginBottom: "6px",
+                padding: "7px 9px",
+                boxSizing: "border-box",
+                borderRadius: "7px",
+                background: "rgba(14, 165, 233, 0.18)",
+                color: "#e0f2fe",
+                border: "1px solid rgba(125, 211, 252, 0.55)",
+                fontSize: "12px",
+                fontWeight: 1000,
+                textAlign: "center",
+              }}
+            >
+              相手がカウンターしました
+            </div>
+          )}
           {player.counterCards.length === 0 && (
             <div
               style={{
@@ -712,7 +754,7 @@ function CounterPhasePanel({
             justifyContent: "flex-end",
           }}
         >
-          {canCounterPlayerOperate && (
+          {canEditCounter && (
             <button
               type="button"
               onClick={cancel}
@@ -721,7 +763,16 @@ function CounterPhasePanel({
               キャンセル
             </button>
           )}
-          {canConfirmPlayerOperate && (
+          {canEditCounter && (
+            <button
+              type="button"
+              onClick={submit}
+              style={counterButtonStyle("#0369a1", "#ffffff", 42)}
+            >
+              OK
+            </button>
+          )}
+          {canFinalizeCounter && (
             <button
               type="button"
               onClick={confirm}
@@ -1869,6 +1920,11 @@ export default function Board() {
           return;
         }
 
+        if (payload.counterAction === "SUBMIT") {
+          state.submitCounterPhase();
+          return;
+        }
+
         state.confirmCounterPhase();
         state.clearAttackState();
         state.clearCardEffect();
@@ -2306,6 +2362,16 @@ export default function Board() {
 
     const activeCounterPhase =
       useGameStore.getState().counterPhase;
+
+    if (
+      activeCounterPhase?.counterPlayerConfirmed &&
+      activeData.playerIndex === activeCounterPhase.playerIndex &&
+      (activeData.from === "hand" ||
+        activeData.from === "counter" ||
+        overData.to === "counter")
+    ) {
+      return;
+    }
 
     if (
       activeCounterPhase &&

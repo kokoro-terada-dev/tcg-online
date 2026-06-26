@@ -1102,6 +1102,9 @@ export default function GameCard({
                   <button onClick={() => runQuickAction("counterPhase")}>
                     カウンター
                   </button>
+                  <button onClick={() => runQuickAction("effect")}>
+                    効果
+                  </button>
                   <button onClick={() => runQuickAction("damagePhase")}>
                     ダメージ
                   </button>

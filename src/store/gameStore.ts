@@ -116,6 +116,7 @@ export type CounterPhase = {
   targetArea: "leader" | "character";
   targetIndex: number;
   power: number;
+  counterPlayerConfirmed?: boolean;
 } | null;
 
 export type DamagePhase = {
@@ -467,6 +468,8 @@ interface GameState {
   ) => void;
 
   cancelCounterPhase: () => void;
+
+  submitCounterPhase: () => void;
 
   confirmCounterPhase: () => void;
 
@@ -963,7 +966,10 @@ export const useGameStore =
 
       startCounterPhase: (phase) =>
         set(() => ({
-          counterPhase: phase,
+          counterPhase: {
+            ...phase,
+            counterPlayerConfirmed: false,
+          },
           damagePhase: null,
         })),
 
@@ -999,6 +1005,16 @@ export const useGameStore =
             counterPhase: null,
           };
         }),
+
+      submitCounterPhase: () =>
+        set((state) => ({
+          counterPhase: state.counterPhase
+            ? {
+              ...state.counterPhase,
+              counterPlayerConfirmed: true,
+            }
+            : null,
+        })),
 
       confirmCounterPhase: () =>
         setWithHistory((state) => {

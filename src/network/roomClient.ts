@@ -255,7 +255,7 @@ export type BoardActionPayload =
         amount: number;
       }
       | {
-        counterAction: "CANCEL" | "CONFIRM";
+        counterAction: "CANCEL" | "SUBMIT" | "CONFIRM";
       };
   }
   | {
