@@ -224,6 +224,12 @@
   background: #be123c;
 }
 
+.card-marker-trigger {
+  background: #facc15;
+  color: #111827;
+  border-color: #ffffff;
+}
+
 @keyframes card-effect-toast {
   0% {
     opacity: 0;

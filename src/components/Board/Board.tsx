@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { ReactNode } from "react";
 
 import PlayerBoard from "./PlayerBoard";
 import ActionLogBar from "./ActionLogBar";
@@ -50,7 +51,10 @@ import type {
 import type { CardData } from "../../types/card";
 
 import { GAME_LAYOUT } from "../../layout/gameLayout";
-import { getDonImageUrl } from "../../utils/localCardImages";
+import {
+  getCardBackImageUrl,
+  getDonImageUrl,
+} from "../../utils/localCardImages";
 
 type DragFrom =
   | "hand"
@@ -341,6 +345,42 @@ function getCounterTargetCard(
   return player.characters[targetIndex] ?? null;
 }
 
+function findPlayerCardById(
+  player: ReturnType<typeof useGameStore.getState>["players"][number],
+  cardId: string
+) {
+  const allCards = [
+    player.leader,
+    player.stage,
+    ...player.characters,
+    ...player.hand,
+    ...player.deck,
+    ...player.trash,
+    ...player.publicCards,
+    ...player.counterCards,
+    ...player.life,
+    ...player.activeDons,
+    ...player.restDons,
+    ...player.donDeck,
+  ];
+
+  return allCards.find(
+    (card): card is CardData => card?.id === cardId
+  ) ?? null;
+}
+
+function getPowerModifierLabel(card: CardData | null) {
+  const powerModifier = card?.powerModifier ?? 0;
+
+  if (powerModifier === 0) {
+    return null;
+  }
+
+  return powerModifier > 0
+    ? `+${powerModifier}`
+    : `${powerModifier}`;
+}
+
 function CounterPhasePanel({
   phase,
 }: {
@@ -366,6 +406,9 @@ function CounterPhasePanel({
   const clearCardMarkers = useGameStore(
     (x) => x.clearCardMarkers
   );
+  const currentAttackSource = useGameStore(
+    (x) => x.currentAttackSource
+  );
 
   const player = players[phase.playerIndex];
   const targetCard = getCounterTargetCard(
@@ -373,6 +416,14 @@ function CounterPhasePanel({
     phase.targetArea,
     phase.targetIndex
   );
+  const attackSourceCard = currentAttackSource
+    ? findPlayerCardById(
+      players[currentAttackSource.playerIndex],
+      currentAttackSource.cardId
+    )
+    : null;
+  const sourcePowerLabel = getPowerModifierLabel(attackSourceCard);
+  const targetPowerLabel = getPowerModifierLabel(targetCard);
   const canCounterPlayerOperate =
     localPlayerIndex === null ||
     localPlayerIndex === phase.playerIndex;
@@ -380,11 +431,18 @@ function CounterPhasePanel({
     localPlayerIndex === null ||
     localPlayerIndex !== phase.playerIndex;
   const counterCardWidth = canCounterPlayerOperate
-    ? "clamp(58px, 17vw, 72px)"
-    : "clamp(60px, 18vw, 74px)";
+    ? "clamp(64px, 18vw, 82px)"
+    : "clamp(68px, 19vw, 86px)";
   const targetCardWidth = canCounterPlayerOperate
-    ? "clamp(78px, 20vw, 92px)"
-    : "clamp(84px, 24vw, 104px)";
+    ? "clamp(90px, 24vw, 110px)"
+    : "clamp(96px, 26vw, 118px)";
+  const relationCardWidth = attackSourceCard
+    ? "clamp(76px, 21vw, 96px)"
+    : targetCardWidth;
+  const relationPanelWidth = attackSourceCard
+    ? "min(92vw, 260px)"
+    : targetCardWidth;
+  const relationBackgroundWidth = "100%";
   const counterCardOverlap = canCounterPlayerOperate
     ? Math.min(
       48,
@@ -461,11 +519,12 @@ function CounterPhasePanel({
         left: "50%",
         top: "50%",
         transform: "translate(-50%, -50%)",
-        width: "min(94vw, 470px)",
+        width: "min(94vw, 520px)",
         maxWidth: "calc(100vw - 12px)",
-        zIndex: 88000,
+        zIndex: 100010,
         display: "flex",
-        gap: "8px",
+        flexDirection: "column",
+        gap: "10px",
         alignItems: "center",
         justifyContent: "center",
         pointerEvents: "none",
@@ -474,57 +533,81 @@ function CounterPhasePanel({
       {targetCard && (
         <div
           style={{
-            width: targetCardWidth,
+            width: relationBackgroundWidth,
+            boxSizing: "border-box",
+            minHeight: canCounterPlayerOperate
+              ? undefined
+              : "158px",
+            padding: "10px",
+            borderRadius: "8px",
+            border: "1px solid #38bdf8",
+            background: "rgba(15, 23, 42, 0.96)",
+            boxShadow: "0 10px 24px rgba(0,0,0,0.5)",
             pointerEvents: "auto",
             display: "flex",
             flexDirection: "column",
-            gap: "7px",
+            alignItems: "center",
+            gap: "8px",
           }}
         >
           <div
             style={{
-              position: "relative",
-              width: targetCardWidth,
+              width: relationPanelWidth,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
             }}
           >
-            <img
-              src={targetCard.image}
-              draggable={false}
-              style={{
-                width: "100%",
-                borderRadius: "8px",
-                display: "block",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                left: "50%",
-                top: "50%",
-                transform: "translate(-50%, -50%)",
-                minWidth: "70px",
-                padding: "4px 8px",
-                borderRadius: "999px",
-                border: "3px solid #ffffff",
-                background: "#ffffff",
-                color: "#111827",
-                fontSize: "20px",
-                fontWeight: 1000,
-                textAlign: "center",
-                boxShadow: "0 0 12px rgba(0,0,0,0.72)",
-                pointerEvents: "none",
-              }}
+            {attackSourceCard && (
+              <>
+                <CounterRelationCard
+                  card={attackSourceCard}
+                  powerLabel={sourcePowerLabel}
+                  width={relationCardWidth}
+                />
+                <CounterRelationArrow />
+              </>
+            )}
+            <CounterRelationCard
+              card={targetCard}
+              powerLabel={targetPowerLabel}
+              width={relationCardWidth}
             >
-              {phase.power >= 0 ? `+${phase.power}` : phase.power}
-            </div>
+              <div
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  transform: "translate(-50%, -50%)",
+                  minWidth: attackSourceCard ? "48px" : "70px",
+                  padding: attackSourceCard ? "3px 6px" : "4px 8px",
+                  borderRadius: "999px",
+                  border: "3px solid #ffffff",
+                  background: "#ffffff",
+                  color: "#111827",
+                  fontSize: attackSourceCard ? "15px" : "20px",
+                  fontWeight: 1000,
+                  textAlign: "center",
+                  boxShadow: "0 0 12px rgba(0,0,0,0.72)",
+                  pointerEvents: "none",
+                  zIndex: 3,
+                }}
+              >
+                {phase.power >= 0 ? `+${phase.power}` : phase.power}
+              </div>
+            </CounterRelationCard>
           </div>
 
           {canCounterPlayerOperate && (
             <div
               style={{
                 display: "grid",
-                gridTemplateRows: "1fr 1fr",
+                gridTemplateColumns: "1fr 1fr",
                 gap: "7px",
+                width: attackSourceCard
+                  ? "min(240px, 76vw)"
+                  : "min(220px, 70vw)",
               }}
             >
               <button
@@ -549,9 +632,7 @@ function CounterPhasePanel({
       <div
         ref={setNodeRef}
         style={{
-          width: canCounterPlayerOperate
-            ? "min(310px, 58vw)"
-            : "min(340px, 62vw)",
+          width: "100%",
           padding: "8px",
           borderRadius: "8px",
           border: "1px solid #38bdf8",
@@ -655,6 +736,333 @@ function CounterPhasePanel({
   );
 }
 
+function CounterRelationCard({
+  card,
+  powerLabel,
+  width,
+  children,
+}: {
+  card: CardData;
+  powerLabel: string | null;
+  width: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        width,
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          position: "relative",
+          width,
+        }}
+      >
+        <img
+          src={card.image}
+          draggable={false}
+          style={{
+            width: "100%",
+            borderRadius: "8px",
+            display: "block",
+          }}
+        />
+        {powerLabel && (
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "-10px",
+              transform: "translateX(-50%)",
+              padding: "2px clamp(5px, 2vw, 8px)",
+              borderRadius: "999px",
+              background: "#facc15",
+              color: "#111827",
+              fontSize: "clamp(10px, 3.5vw, 14px)",
+              fontWeight: "bold",
+              textAlign: "center",
+              pointerEvents: "none",
+              zIndex: 1500,
+            }}
+          >
+            {powerLabel}
+          </div>
+        )}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CounterRelationArrow() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="38"
+      height="18"
+      viewBox="0 0 38 18"
+      style={{
+        flexShrink: 0,
+        overflow: "visible",
+      }}
+    >
+      <defs>
+        <marker
+          id="counter-relation-arrow-head"
+          markerWidth="8"
+          markerHeight="8"
+          refX="7"
+          refY="4"
+          orient="auto"
+        >
+          <path d="M0,0 L8,4 L0,8 Z" fill="#facc15" />
+        </marker>
+      </defs>
+      <line
+        x1="1"
+        y1="9"
+        x2="36"
+        y2="9"
+        stroke="rgba(15, 23, 42, 0.8)"
+        strokeWidth="8"
+        strokeLinecap="round"
+      />
+      <line
+        x1="1"
+        y1="9"
+        x2="36"
+        y2="9"
+        stroke="#facc15"
+        strokeWidth="4"
+        strokeLinecap="round"
+        markerEnd="url(#counter-relation-arrow-head)"
+      />
+    </svg>
+  );
+}
+
+function DamagePhasePanel({
+  phase,
+}: {
+  phase: NonNullable<ReturnType<typeof useGameStore.getState>["damagePhase"]>;
+}) {
+  const [previewImage, setPreviewImage] =
+    useState<string | null>(null);
+  const players = useGameStore((x) => x.players);
+  const localPlayerIndex = useGameStore((x) => x.localPlayerIndex);
+  const moveDamageLifeToHand = useGameStore(
+    (x) => x.moveDamageLifeToHand
+  );
+  const triggerDamageLife = useGameStore(
+    (x) => x.triggerDamageLife
+  );
+  const showCardEffect = useGameStore(
+    (x) => x.showCardEffect
+  );
+  const highlightPublicArea = useGameStore(
+    (x) => x.highlightPublicArea
+  );
+  const clearAttackState = useGameStore(
+    (x) => x.clearAttackState
+  );
+  const clearCardEffect = useGameStore(
+    (x) => x.clearCardEffect
+  );
+  const clearCardMarkers = useGameStore(
+    (x) => x.clearCardMarkers
+  );
+  const addActionLog = useGameStore(
+    (x) => x.addActionLog
+  );
+
+  const player = players[phase.playerIndex];
+  const lifeCard =
+    player.life[phase.lifeIndex] ??
+    null;
+  const canOperate =
+    localPlayerIndex === null ||
+    localPlayerIndex === phase.playerIndex;
+  const displayImage =
+    canOperate && lifeCard
+      ? lifeCard.image
+      : getCardBackImageUrl();
+
+  function sendDamageAction(
+    damageAction: "TO_HAND" | "TRIGGER",
+    log?: ReturnType<typeof useGameStore.getState>["actionLogs"][number]
+  ) {
+    sendBoardAction({
+      actionType: "DAMAGE_PHASE_ACTION",
+      payload: {
+        damageAction,
+        log,
+      },
+    });
+  }
+
+  function finishCommon() {
+    clearAttackState();
+    clearCardEffect();
+    clearCardMarkers();
+  }
+
+  function moveToHand() {
+    if (!canOperate || !lifeCard) {
+      return;
+    }
+
+    moveDamageLifeToHand();
+    finishCommon();
+    sendDamageAction("TO_HAND");
+  }
+
+  function trigger() {
+    if (!canOperate || !lifeCard) {
+      return;
+    }
+
+    const cardId = lifeCard.id;
+    const log = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      playerIndex: (localPlayerIndex ?? phase.playerIndex) as 0 | 1,
+      actionType: "trigger" as const,
+      createdAt: Date.now(),
+    };
+
+    triggerDamageLife();
+    addActionLog(log);
+    highlightPublicArea(phase.playerIndex);
+    showCardEffect({
+      playerIndex: phase.playerIndex,
+      cardId,
+      nonce: Date.now(),
+      label: "トリガー",
+      background: "#facc15",
+      color: "#111827",
+    });
+    clearAttackState();
+    sendDamageAction("TRIGGER", log);
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: "50%",
+        top: "50%",
+        transform: "translate(-50%, -50%)",
+        width: "min(92vw, 360px)",
+        zIndex: 100010,
+        padding: "12px",
+        borderRadius: "10px",
+        border: "1px solid #facc15",
+        background: "rgba(15, 23, 42, 0.97)",
+        boxShadow: "0 14px 32px rgba(0,0,0,0.6)",
+        pointerEvents: "auto",
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+        alignItems: "center",
+      }}
+    >
+      <div
+        style={{
+          color: "#fef3c7",
+          fontSize: "15px",
+          fontWeight: 1000,
+        }}
+      >
+        ダメージ
+      </div>
+
+      <img
+        src={displayImage}
+        draggable={false}
+        onClick={() => setPreviewImage(displayImage)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setPreviewImage(displayImage);
+        }}
+        style={{
+          width: "clamp(110px, 34vw, 148px)",
+          borderRadius: "8px",
+          boxShadow: "0 8px 18px rgba(0,0,0,0.45)",
+          cursor: "pointer",
+        }}
+      />
+
+      <div
+        style={{
+          color: "#e2e8f0",
+          fontSize: "12px",
+          fontWeight: 800,
+          textAlign: "center",
+        }}
+      >
+        {canOperate
+          ? "ライフを確認してください"
+          : "相手がライフを確認しています"}
+      </div>
+
+      {canOperate && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "8px",
+            width: "100%",
+          }}
+        >
+          <button
+            type="button"
+            onClick={moveToHand}
+            style={counterButtonStyle("#0369a1", "#ffffff", 44)}
+          >
+            手札へ
+          </button>
+          <button
+            type="button"
+            onClick={trigger}
+            style={counterButtonStyle("#facc15", "#111827", 44)}
+          >
+            トリガー発動
+          </button>
+        </div>
+      )}
+
+      {previewImage && (
+        <div
+          onClick={() => setPreviewImage(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000000,
+            background: "rgba(0,0,0,0.86)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "12px",
+            boxSizing: "border-box",
+          }}
+        >
+          <img
+            src={previewImage}
+            draggable={false}
+            style={{
+              maxWidth: "92vw",
+              maxHeight: "92dvh",
+              objectFit: "contain",
+              borderRadius: "12px",
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function counterButtonStyle(
   background: string,
   color: string,
@@ -712,6 +1120,9 @@ export default function Board() {
   );
   const counterPhase = useGameStore(
     (x) => x.counterPhase
+  );
+  const damagePhase = useGameStore(
+    (x) => x.damagePhase
   );
   const communicationMode = useGameStore(
     (x) => x.communicationMode
@@ -1464,6 +1875,59 @@ export default function Board() {
         state.clearCardMarkers();
         return;
       }
+
+      if (action.actionType === "DAMAGE_PHASE_ACTION") {
+        const state = useGameStore.getState();
+        const { payload } = action;
+
+        if (payload.damageAction === "START") {
+          state.startDamagePhase({
+            playerIndex: payload.playerIndex,
+            sourcePlayerIndex: payload.sourcePlayerIndex,
+            sourceCardId: payload.sourceCardId,
+            targetCardId: payload.targetCardId,
+            lifeIndex: payload.lifeIndex,
+          });
+          if (payload.log) {
+            state.addActionLog(payload.log);
+          }
+          return;
+        }
+
+        const phase = state.damagePhase;
+
+        if (!phase) {
+          return;
+        }
+
+        if (payload.damageAction === "TO_HAND") {
+          state.moveDamageLifeToHand();
+          state.clearAttackState();
+          state.clearCardEffect();
+          state.clearCardMarkers();
+          return;
+        }
+
+        const cardId =
+          state.players[phase.playerIndex].life[phase.lifeIndex]?.id;
+        state.triggerDamageLife();
+        state.highlightPublicArea(phase.playerIndex);
+        if (cardId) {
+          state.showCardEffect({
+            playerIndex: phase.playerIndex,
+            cardId,
+            nonce: Date.now(),
+            label: "トリガー",
+            background: "#facc15",
+            color: "#111827",
+          });
+        }
+        state.clearAttackState();
+        if (payload.log) {
+          state.addActionLog(payload.log);
+        }
+        return;
+      }
     });
 
     return () => {
@@ -1993,6 +2457,10 @@ export default function Board() {
 
       {counterPhase && (
         <CounterPhasePanel phase={counterPhase} />
+      )}
+
+      {damagePhase && (
+        <DamagePhasePanel phase={damagePhase} />
       )}
 
       {isSilentMode && <AttackArrow />}

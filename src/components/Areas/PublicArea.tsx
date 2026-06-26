@@ -1,4 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
+import { useEffect, useState } from "react";
 
 import type { CardData } from "../../types/card";
 
@@ -18,6 +19,10 @@ export default function PublicArea({
   const communicationMode = useGameStore(
     (state) => state.communicationMode
   );
+  const publicAreaHighlight = useGameStore(
+    (state) => state.publicAreaHighlight
+  );
+  const [highlightVisible, setHighlightVisible] = useState(false);
   const { setNodeRef, isOver } = useDroppable({
     id: `public-${playerIndex}`,
     data: {
@@ -28,20 +33,40 @@ export default function PublicArea({
 
   const topCard = cards[0];
 
+  useEffect(() => {
+    if (publicAreaHighlight?.playerIndex !== playerIndex) {
+      return;
+    }
+
+    setHighlightVisible(true);
+    const timer = window.setTimeout(
+      () => setHighlightVisible(false),
+      1200
+    );
+
+    return () => window.clearTimeout(timer);
+  }, [publicAreaHighlight, playerIndex]);
+
   return (
     <div
       ref={setNodeRef}
       style={{
         width: "calc(var(--op-trash-width) + 3px)",
         height: "calc(var(--op-trash-height) + 3px)",
-        border: isOver
-          ? GAME_LAYOUT.css.areaBorderActive
-          : GAME_LAYOUT.css.areaBorder,
+        border: highlightVisible
+          ? "3px solid #facc15"
+          : isOver
+            ? GAME_LAYOUT.css.areaBorderActive
+            : GAME_LAYOUT.css.areaBorder,
         borderRadius: GAME_LAYOUT.css.areaRadius,
         background: "#111827",
         position: "relative",
         overflow: "visible",
         userSelect: "none",
+        boxShadow: highlightVisible
+          ? "0 0 20px #facc15, inset 0 0 14px rgba(250, 204, 21, 0.45)"
+          : undefined,
+        transition: "border-color 0.15s ease, box-shadow 0.15s ease",
       }}
     >
       {topCard ? (

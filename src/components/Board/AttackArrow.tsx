@@ -98,7 +98,7 @@ export default function AttackArrow() {
         position: "fixed",
         inset: 0,
         pointerEvents: "none",
-        zIndex: 50000,
+        zIndex: 100002,
         overflow: "visible",
       }}
     >

@@ -7,7 +7,6 @@ import type { CardData } from "../../types/card";
 import GameCard from "../Card/GameCard";
 import { GAME_LAYOUT } from "../../layout/gameLayout";
 import { getCardBackImageUrl } from "../../utils/localCardImages";
-import { useGameStore } from "../../store/gameStore";
 
 type Props = {
   cards: CardData[];
@@ -21,10 +20,6 @@ export default function LifeArea({
   onOpen,
 }: Props) {
   const longPressTimer = useRef<number | null>(null);
-  const localPlayerIndex = useGameStore((x) => x.localPlayerIndex);
-  const isOpponent =
-    localPlayerIndex !== null &&
-    playerIndex !== localPlayerIndex;
 
   const { setNodeRef, isOver } = useDroppable({
     id: `life-${playerIndex}`,
@@ -42,10 +37,6 @@ export default function LifeArea({
   }
 
   function requestOpen() {
-    if (isOpponent) {
-      return;
-    }
-
     onOpen();
   }
 

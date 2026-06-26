@@ -257,6 +257,24 @@ export type BoardActionPayload =
       | {
         counterAction: "CANCEL" | "CONFIRM";
       };
+  }
+  | {
+    roomId: string;
+    actionType: "DAMAGE_PHASE_ACTION";
+    payload:
+      | {
+        damageAction: "START";
+        playerIndex: 0 | 1;
+        sourcePlayerIndex: 0 | 1;
+        sourceCardId: string;
+        targetCardId: string;
+        lifeIndex: number;
+        log?: ActionLog;
+      }
+      | {
+        damageAction: "TO_HAND" | "TRIGGER";
+        log?: ActionLog;
+      };
   };
 
 let roomIdForClient: string | null = null;

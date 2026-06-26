@@ -95,6 +95,7 @@ const MARKER_LABELS: Record<CardMarkerType, string> = {
   confirmRequest: "確認",
   confirmed: "OK",
   note: "！",
+  trigger: "トリガー",
 };
 
 export default function GameCard({
@@ -125,6 +126,34 @@ export default function GameCard({
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
+  }
+
+  function getQuickMenuPosition(
+    rect: DOMRect,
+    menuWidth: number,
+    menuHeight: number
+  ) {
+    const gap = 6;
+    const padding = 8;
+    const rightLeft = rect.right + gap;
+    const leftLeft = rect.left - menuWidth - gap;
+    const fitsRight =
+      rightLeft + menuWidth + padding <= window.innerWidth;
+    const fitsLeft = leftLeft >= padding;
+    const left = fitsRight
+      ? rightLeft
+      : fitsLeft
+        ? leftLeft
+        : Math.min(
+          window.innerWidth - menuWidth - padding,
+          Math.max(padding, rightLeft)
+        );
+    const top = Math.min(
+      window.innerHeight - menuHeight - padding,
+      Math.max(padding, rect.top)
+    );
+
+    return { left, top };
   }
 
   const toggleRotate = useGameStore((x) => x.toggleRotate);
@@ -179,6 +208,9 @@ export default function GameCard({
   const startCounterPhase = useGameStore(
     (x) => x.startCounterPhase
   );
+  const startDamagePhase = useGameStore(
+    (x) => x.startDamagePhase
+  );
   const setCardMarker = useGameStore(
     (x) => x.setCardMarker
   );
@@ -189,6 +221,12 @@ export default function GameCard({
   const isOpponent =
     localPlayerIndex !== null &&
     playerIndex !== localPlayerIndex;
+
+  const isLeaderDamageResponse =
+    !isOpponent &&
+    from === "leader" &&
+    currentAttackTarget?.playerIndex === playerIndex &&
+    currentAttackTarget.cardId === card.id;
 
   const canOperate =
     localPlayerIndex === null ||
@@ -376,6 +414,7 @@ export default function GameCard({
       | "block"
       | "powerPlus"
       | "counterPhase"
+      | "damagePhase"
       | "cancel"
   ) {
     if (!canOpenQuickMenu) {
@@ -568,6 +607,46 @@ export default function GameCard({
           log,
         },
       });
+    } else if (action === "damagePhase") {
+      if (
+        !canOperate ||
+        from !== "leader" ||
+        !currentAttackSource ||
+        currentAttackTarget?.playerIndex !== playerIndex ||
+        currentAttackTarget.cardId !== card.id
+      ) {
+        return;
+      }
+
+      const lifeCard =
+        useGameStore.getState().players[playerIndex].life[0];
+
+      if (!lifeCard) {
+        return;
+      }
+
+      const log = createActionLog("takeHit");
+
+      startDamagePhase({
+        playerIndex: playerIndex as 0 | 1,
+        sourcePlayerIndex: currentAttackSource.playerIndex,
+        sourceCardId: currentAttackSource.cardId,
+        targetCardId: card.id,
+        lifeIndex: 0,
+      });
+      addActionLog(log);
+      sendBoardAction({
+        actionType: "DAMAGE_PHASE_ACTION",
+        payload: {
+          damageAction: "START",
+          playerIndex: playerIndex as 0 | 1,
+          sourcePlayerIndex: currentAttackSource.playerIndex,
+          sourceCardId: currentAttackSource.cardId,
+          targetCardId: card.id,
+          lifeIndex: 0,
+          log,
+        },
+      });
     } else {
       if (!canOperate) {
         return;
@@ -616,6 +695,45 @@ export default function GameCard({
       longPressTriggered.current = true;
     }
   }, [isDragging]);
+
+  useEffect(() => {
+    if (
+      !isSilentMode ||
+      overlay ||
+      !canOpenQuickMenu ||
+      !isLeaderDamageResponse
+    ) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-player-index="${playerIndex}"][data-card-id="${card.id}"]`
+      );
+
+      if (!element) {
+        return;
+      }
+
+      const rect = element.getBoundingClientRect();
+      const menuWidth = 132;
+      const menuHeight = 96;
+
+      setQuickMenuPosition(
+        getQuickMenuPosition(rect, menuWidth, menuHeight)
+      );
+      setQuickMenuOpen(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    canOpenQuickMenu,
+    card.id,
+    isLeaderDamageResponse,
+    isSilentMode,
+    overlay,
+    playerIndex,
+  ]);
 
   function sendCardMenuAction(
     menuAction:
@@ -798,16 +916,10 @@ export default function GameCard({
           e.currentTarget.getBoundingClientRect();
         const menuWidth = 132;
         const menuHeight = isOpponent ? 250 : 300;
-        const left = Math.min(
-          window.innerWidth - menuWidth - 8,
-          Math.max(8, rect.right + 6)
-        );
-        const top = Math.min(
-          window.innerHeight - menuHeight - 8,
-          Math.max(8, rect.top)
-        );
 
-        setQuickMenuPosition({ left, top });
+        setQuickMenuPosition(
+          getQuickMenuPosition(rect, menuWidth, menuHeight)
+        );
         setQuickMenuOpen((open) => !open);
       }}
       onPointerCancel={() => {
@@ -922,8 +1034,17 @@ export default function GameCard({
       )}
 
       {isSilentMode && effectVisible && (
-        <div className="card-effect-toast" aria-live="polite">
-          効果
+        <div
+          className="card-effect-toast"
+          aria-live="polite"
+          style={{
+            background:
+              cardEffectSignal?.background,
+            color:
+              cardEffectSignal?.color,
+          }}
+        >
+          {cardEffectSignal?.label ?? "効果"}
         </div>
       )}
 
@@ -976,6 +1097,17 @@ export default function GameCard({
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
+              {isLeaderDamageResponse ? (
+                <>
+                  <button onClick={() => runQuickAction("counterPhase")}>
+                    カウンター
+                  </button>
+                  <button onClick={() => runQuickAction("damagePhase")}>
+                    ダメージ
+                  </button>
+                </>
+              ) : (
+                <>
               {!isOpponent &&
                 (from === "leader" || from === "character") && (
                 <button onClick={() => runQuickAction("attack")}>
@@ -996,6 +1128,14 @@ export default function GameCard({
                 (from === "leader" || from === "character") && (
                 <button onClick={() => runQuickAction("counterPhase")}>
                   カウンター
+                </button>
+              )}
+              {!isOpponent &&
+                from === "leader" &&
+                currentAttackTarget?.playerIndex === playerIndex &&
+                currentAttackTarget.cardId === card.id && (
+                <button onClick={() => runQuickAction("damagePhase")}>
+                  ダメージ
                 </button>
               )}
               {!isOpponent &&
@@ -1040,12 +1180,16 @@ export default function GameCard({
                   付箋
                 </button>
               )}
-              <button
-                className="card-quick-actions-cancel"
-                onClick={() => runQuickAction("cancel")}
-              >
-                キャンセル
-              </button>
+                </>
+              )}
+              {!isLeaderDamageResponse && (
+                <button
+                  className="card-quick-actions-cancel"
+                  onClick={() => runQuickAction("cancel")}
+                >
+                  キャンセル
+                </button>
+              )}
             </div>
           </>,
           document.body

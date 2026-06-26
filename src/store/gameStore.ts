@@ -89,7 +89,8 @@ export type CardMarkerType =
   | "processing"
   | "confirmRequest"
   | "confirmed"
-  | "note";
+  | "note"
+  | "trigger";
 
 export type CardMarker = {
   id: string;
@@ -104,6 +105,9 @@ export type CardEffectSignal = {
   playerIndex: 0 | 1;
   cardId: string;
   nonce: number;
+  label?: string;
+  background?: string;
+  color?: string;
 } | null;
 
 export type CounterPhase = {
@@ -112,6 +116,19 @@ export type CounterPhase = {
   targetArea: "leader" | "character";
   targetIndex: number;
   power: number;
+} | null;
+
+export type DamagePhase = {
+  playerIndex: 0 | 1;
+  sourcePlayerIndex: 0 | 1;
+  sourceCardId: string;
+  targetCardId: string;
+  lifeIndex: number;
+} | null;
+
+export type PublicAreaHighlight = {
+  playerIndex: 0 | 1;
+  nonce: number;
 } | null;
 
 type PlayersSnapshot = [PlayerState, PlayerState];
@@ -402,6 +419,10 @@ interface GameState {
 
   counterPhase: CounterPhase;
 
+  damagePhase: DamagePhase;
+
+  publicAreaHighlight: PublicAreaHighlight;
+
   addActionLog: (log: ActionLog) => void;
 
   setAttackTarget: (
@@ -448,6 +469,20 @@ interface GameState {
   cancelCounterPhase: () => void;
 
   confirmCounterPhase: () => void;
+
+  startDamagePhase: (
+    phase: Exclude<DamagePhase, null>
+  ) => void;
+
+  moveDamageLifeToHand: () => void;
+
+  triggerDamageLife: () => void;
+
+  clearDamagePhase: () => void;
+
+  highlightPublicArea: (
+    playerIndex: 0 | 1
+  ) => void;
 
   clearActionLogs: () => void;
 
@@ -728,6 +763,10 @@ export const useGameStore =
 
       counterPhase: null,
 
+      damagePhase: null,
+
+      publicAreaHighlight: null,
+
       addActionLog: (log) =>
         set((state) => ({
           actionLogs: [...state.actionLogs, log],
@@ -925,6 +964,7 @@ export const useGameStore =
       startCounterPhase: (phase) =>
         set(() => ({
           counterPhase: phase,
+          damagePhase: null,
         })),
 
       adjustCounterPower: (amount) =>
@@ -989,6 +1029,120 @@ export const useGameStore =
           };
         }),
 
+      startDamagePhase: (phase) =>
+        set(() => ({
+          damagePhase: phase,
+          counterPhase: null,
+        })),
+
+      moveDamageLifeToHand: () =>
+        setWithHistory((state) => {
+          const phase = state.damagePhase;
+
+          if (!phase) {
+            return {};
+          }
+
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+          const player = players[phase.playerIndex];
+          const index = phase.lifeIndex;
+
+          if (index < 0 || index >= player.life.length) {
+            return {
+              players,
+              damagePhase: null,
+            };
+          }
+
+          const card = player.life.splice(index, 1)[0];
+          card.rotated = false;
+          card.isFaceUp = true;
+          player.hand.push(card);
+
+          return {
+            players,
+            damagePhase: null,
+            currentAttackSource: null,
+            currentAttackTarget: null,
+            pendingAttackPlayerIndex: null,
+            cardMarkers: state.cardMarkers.filter(
+              (marker) =>
+                marker.markerType !== "attackSource" &&
+                marker.markerType !== "attackTarget"
+            ),
+            cardEffectSignal: null,
+          };
+        }),
+
+      triggerDamageLife: () =>
+        setWithHistory((state) => {
+          const phase = state.damagePhase;
+
+          if (!phase) {
+            return {};
+          }
+
+          const players = [...state.players] as [
+            PlayerState,
+            PlayerState
+          ];
+          const player = players[phase.playerIndex];
+          const index = phase.lifeIndex;
+
+          if (index < 0 || index >= player.life.length) {
+            return {
+              players,
+              damagePhase: null,
+            };
+          }
+
+          const card = player.life.splice(index, 1)[0];
+          card.rotated = false;
+          card.isFaceUp = true;
+          player.publicCards.unshift(card);
+          const triggerMarker: CardMarker = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            playerIndex: phase.playerIndex,
+            cardId: card.id,
+            markerType: "trigger",
+            createdBy: phase.playerIndex,
+            createdAt: Date.now(),
+          };
+
+          return {
+            players,
+            damagePhase: null,
+            currentAttackSource: null,
+            currentAttackTarget: null,
+            pendingAttackPlayerIndex: null,
+            cardMarkers: state.cardMarkers.filter(
+              (marker) =>
+                marker.markerType !== "attackSource" &&
+                marker.markerType !== "attackTarget"
+            ).concat(triggerMarker),
+            publicAreaHighlight: {
+              playerIndex: phase.playerIndex,
+              nonce: Date.now(),
+            },
+          };
+        }),
+
+      clearDamagePhase: () =>
+        set(() => ({
+          damagePhase: null,
+        })),
+
+      highlightPublicArea: (playerIndex) =>
+        set(() => ({
+          publicAreaHighlight: {
+            playerIndex,
+            nonce: Date.now(),
+          },
+        })),
+
       clearActionLogs: () =>
         set(() => ({
           actionLogs: [],
@@ -998,6 +1152,7 @@ export const useGameStore =
           cardMarkers: [],
           cardEffectSignal: null,
           counterPhase: null,
+          damagePhase: null,
         })),
 
       undoHistory: [],
@@ -1020,6 +1175,8 @@ export const useGameStore =
           currentAttackTarget: null,
           cardMarkers: [],
           cardEffectSignal: null,
+          counterPhase: null,
+          damagePhase: null,
         })),
 
       finishOnlineMulligan: () =>
@@ -1070,6 +1227,10 @@ export const useGameStore =
           cardMarkers: [],
 
           cardEffectSignal: null,
+
+          counterPhase: null,
+
+          damagePhase: null,
 
           mulliganPlayerIndex: 0,
           mulliganWaiting: false,
@@ -1122,6 +1283,10 @@ export const useGameStore =
           cardMarkers: [],
 
           cardEffectSignal: null,
+
+          counterPhase: null,
+
+          damagePhase: null,
 
           mulliganPlayerIndex: null,
           mulliganWaiting: false,
@@ -1880,6 +2045,8 @@ export const useGameStore =
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
             cardEffectSignal: null,
+            counterPhase: null,
+            damagePhase: null,
             turnOrderSelectionPending: false,
             turnOrderDecider: null,
             firstPlayerIndex: null,
@@ -2087,6 +2254,8 @@ export const useGameStore =
           currentAttackTarget: null,
           pendingAttackPlayerIndex: null,
           cardEffectSignal: null,
+          counterPhase: null,
+          damagePhase: null,
           mulliganWaiting: false,
           turnOrderSelectionPending: false,
           turnOrderDecider: null,
@@ -2951,6 +3120,7 @@ export const useGameStore =
             pendingAttackPlayerIndex: null,
             cardEffectSignal: null,
             counterPhase: null,
+            damagePhase: null,
           };
         });
       },
