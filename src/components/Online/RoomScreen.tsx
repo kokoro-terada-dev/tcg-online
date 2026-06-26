@@ -113,6 +113,18 @@ function getLeaderImageUrl(deck: DeckRecipeForRoom | undefined | null) {
     return getLocalCardImage(deck.leaderCardId)?.imageUrl ?? null;
 }
 
+function getDonFallbackImageUrl(deck: DeckRecipe) {
+    for (const cardId of deck.donDeck) {
+        const image = getLocalCardImage(cardId)?.imageUrl;
+
+        if (image) {
+            return image;
+        }
+    }
+
+    return getLocalCardImage("don")?.imageUrl ?? "/cards/don.png";
+}
+
 function getRoleLabel(role: TurnOrderPlayer) {
     return role === "host" ? "HOST" : "GUEST";
 }
@@ -355,11 +367,22 @@ export default function RoomScreen({
                 const guestDeckRecipe =
                     toDeckRecipe(roomState.guestDeckRecipe);
 
+                const ownDeckRecipe =
+                    mode === "host"
+                        ? hostDeckRecipe
+                        : guestDeckRecipe;
+                const donFallbackImageUrl =
+                    getDonFallbackImageUrl(ownDeckRecipe);
+
                 const hostCards =
-                    buildDeckCardsFromRecipe(hostDeckRecipe);
+                    buildDeckCardsFromRecipe(hostDeckRecipe, {
+                        donFallbackImageUrl,
+                    });
 
                 const guestCards =
-                    buildDeckCardsFromRecipe(guestDeckRecipe);
+                    buildDeckCardsFromRecipe(guestDeckRecipe, {
+                        donFallbackImageUrl,
+                    });
 
                 useGameStore
                     .getState()
@@ -664,11 +687,22 @@ export default function RoomScreen({
             const guestDeckRecipe =
                 toDeckRecipe(roomState.guestDeckRecipe);
 
+            const ownDeckRecipe =
+                mode === "host"
+                    ? hostDeckRecipe
+                    : guestDeckRecipe;
+            const donFallbackImageUrl =
+                getDonFallbackImageUrl(ownDeckRecipe);
+
             const hostCards =
-                buildDeckCardsFromRecipe(hostDeckRecipe);
+                buildDeckCardsFromRecipe(hostDeckRecipe, {
+                    donFallbackImageUrl,
+                });
 
             const guestCards =
-                buildDeckCardsFromRecipe(guestDeckRecipe);
+                buildDeckCardsFromRecipe(guestDeckRecipe, {
+                    donFallbackImageUrl,
+                });
 
             const deckOrder = createOnlineDeckOrder(
                 hostCards,

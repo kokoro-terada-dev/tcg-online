@@ -157,11 +157,17 @@ export async function importLocalDeckRecipeFromJsonFile(file: File) {
 function createCardData(
   cardId: string,
   type: CardType,
-  isFaceUp: boolean
+  isFaceUp: boolean,
+  options?: {
+    donFallbackImageUrl?: string;
+  }
 ): CardData {
   const image = getLocalCardImage(cardId);
+  const imageUrl =
+    image?.imageUrl ??
+    (type === "don" ? options?.donFallbackImageUrl : undefined);
 
-  if (!image) {
+  if (!imageUrl) {
     throw new Error(
       `画像ZIPに ${cardId} が見つかりません。画像ZIPを読み込んでください。`
     );
@@ -170,7 +176,7 @@ function createCardData(
   return {
     id: `${cardId}-${crypto.randomUUID()}`,
     name: cardId,
-    image: image.imageUrl,
+    image: imageUrl,
     type,
     rotated: false,
     attachedDonCount: 0,
@@ -178,7 +184,12 @@ function createCardData(
   };
 }
 
-export function buildDeckCardsFromRecipe(recipe: DeckRecipe): CardData[] {
+export function buildDeckCardsFromRecipe(
+  recipe: DeckRecipe,
+  options?: {
+    donFallbackImageUrl?: string;
+  }
+): CardData[] {
   if (!recipe.leaderCardId) {
     throw new Error("リーダーカードが設定されていません。");
   }
@@ -190,7 +201,8 @@ export function buildDeckCardsFromRecipe(recipe: DeckRecipe): CardData[] {
   const leader = createCardData(
     recipe.leaderCardId,
     "leader",
-    true
+    true,
+    options
   );
 
   leader.lifeCount = recipe.leaderLifeCount;
@@ -200,12 +212,13 @@ export function buildDeckCardsFromRecipe(recipe: DeckRecipe): CardData[] {
     createCardData(
       cardId,
       recipe.cardTypes[cardId] ?? "character",
-      false
+      false,
+      options
     )
   );
 
   const donDeck = recipe.donDeck.map((cardId) =>
-    createCardData(cardId, "don", true)
+    createCardData(cardId, "don", true, options)
   );
 
   return [leader, ...mainDeck, ...donDeck];
