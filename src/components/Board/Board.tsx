@@ -536,7 +536,7 @@ function CounterPhasePanel({
       style={{
         position: "fixed",
         left: "50%",
-        top: "50%",
+        top: "42%",
         transform: "translate(-50%, -50%)",
         width: "min(94vw, 520px)",
         maxWidth: "calc(100vw - 12px)",
