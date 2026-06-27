@@ -12,18 +12,14 @@ import {
 } from "./ActionLogBar";
 
 const CHAT_ACTIONS: QuickActionType[] = [
-  "counter",
   "event",
-  "trigger",
   "life",
   "donPlus",
   "donMinus",
-  "ok",
-  "wait",
   "thinking",
-  "takeHit",
+  "confirmRequest",
+  "ok",
   "endTurn",
-  "clearTarget",
 ];
 
 type Props = {
@@ -290,9 +286,13 @@ export default function ChatControls({
               style={{
                 minHeight: "34px",
                 padding: "5px",
-                border: "1px solid #64748b",
+                border:
+                  actionType === "endTurn"
+                    ? "1px solid #f97316"
+                    : "1px solid #64748b",
                 borderRadius: "4px",
-                background: "#1e293b",
+                background:
+                  actionType === "endTurn" ? "#c2410c" : "#1e293b",
                 color: "white",
                 fontSize: "11px",
                 fontWeight: 900,

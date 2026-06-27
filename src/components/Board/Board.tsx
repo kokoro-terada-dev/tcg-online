@@ -631,17 +631,17 @@ function CounterPhasePanel({
             >
               <button
                 type="button"
-                onClick={() => adjust(1000)}
-                style={counterButtonStyle("#facc15", "#111827", 44)}
-              >
-                +1000
-              </button>
-              <button
-                type="button"
                 onClick={() => adjust(-1000)}
                 style={counterButtonStyle("#ef4444", "#ffffff", 44)}
               >
                 -1000
+              </button>
+              <button
+                type="button"
+                onClick={() => adjust(1000)}
+                style={counterButtonStyle("#facc15", "#111827", 44)}
+              >
+                +1000
               </button>
             </div>
           )}
@@ -841,6 +841,32 @@ function CounterRelationCard({
             {powerLabel}
           </div>
         )}
+        {(card.attachedDonCount ?? 0) > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              right: "4px",
+              bottom: "4px",
+              minWidth: "44px",
+              height: "20px",
+              padding: "0 5px",
+              borderRadius: "6px",
+              background: "rgba(255, 255, 255, 0.94)",
+              border: "2px solid #001a3f",
+              color: "#111827",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "10px",
+              fontWeight: 1000,
+              boxShadow: "0 0 8px rgba(0,0,0,0.65)",
+              zIndex: 4,
+              pointerEvents: "none",
+            }}
+          >
+            {`ドン!!×${card.attachedDonCount}`}
+          </div>
+        )}
         {children}
       </div>
     </div>
@@ -912,6 +938,9 @@ function DamagePhasePanel({
   const showCardEffect = useGameStore(
     (x) => x.showCardEffect
   );
+  const setAttackSource = useGameStore(
+    (x) => x.setAttackSource
+  );
   const highlightPublicArea = useGameStore(
     (x) => x.highlightPublicArea
   );
@@ -964,9 +993,18 @@ function DamagePhasePanel({
       return;
     }
 
+    const log = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      playerIndex: (localPlayerIndex ?? phase.playerIndex) as 0 | 1,
+      actionType: "custom" as const,
+      message: "手札へ",
+      createdAt: Date.now(),
+    };
+
     moveDamageLifeToHand();
+    addActionLog(log);
     finishCommon();
-    sendDamageAction("TO_HAND");
+    sendDamageAction("TO_HAND", log);
   }
 
   function trigger() {
@@ -993,7 +1031,10 @@ function DamagePhasePanel({
       background: "#facc15",
       color: "#111827",
     });
-    clearAttackState();
+    setAttackSource({
+      playerIndex: phase.playerIndex,
+      cardId,
+    });
     sendDamageAction("TRIGGER", log);
   }
 
@@ -1961,6 +2002,9 @@ export default function Board() {
           state.clearAttackState();
           state.clearCardEffect();
           state.clearCardMarkers();
+          if (payload.log) {
+            state.addActionLog(payload.log);
+          }
           return;
         }
 
@@ -1978,7 +2022,12 @@ export default function Board() {
             color: "#111827",
           });
         }
-        state.clearAttackState();
+        if (cardId) {
+          state.setAttackSource({
+            playerIndex: phase.playerIndex,
+            cardId,
+          });
+        }
         if (payload.log) {
           state.addActionLog(payload.log);
         }
@@ -2028,6 +2077,13 @@ export default function Board() {
     const player = players[data.playerIndex];
 
     if (!player) {
+      return;
+    }
+
+    if (
+      data.from === "life" &&
+      player.life[0]?.id !== data.cardId
+    ) {
       return;
     }
 
@@ -2412,6 +2468,14 @@ export default function Board() {
       activeData.cardId
     );
 
+    if (fromIndex === -1) {
+      return;
+    }
+
+    if (activeData.from === "life" && fromIndex !== 0) {
+      return;
+    }
+
     const movePayload = {
       playerIndex: activeData.playerIndex,
       cardId: activeData.cardId,
@@ -2792,7 +2856,11 @@ export default function Board() {
       >
         {activeCard ? (
           <img
-            src={activeCard.card.image}
+            src={
+              activeCard.card.isFaceUp === false
+                ? getCardBackImageUrl()
+                : activeCard.card.image
+            }
             style={{
               width:
                 activeCard.from === "donDeck" ||

@@ -121,7 +121,7 @@
 
 .card-quick-actions {
   position: fixed;
-  z-index: 99991;
+  z-index: 100003;
   width: 126px;
   padding: 6px;
   display: flex;

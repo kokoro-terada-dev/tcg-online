@@ -26,6 +26,14 @@ export type RoomState = {
   firstPlayer: TurnOrderPlayer | null;
 };
 
+export type RoomListItem = {
+  roomId: string;
+  hostReady: boolean;
+  hasGuest: boolean;
+  hostDeckSelected: boolean;
+  communicationMode: CommunicationMode;
+};
+
 export type OnlineDeckOrderPayload = {
   player1MainDeckNames: string[];
   player2MainDeckNames: string[];

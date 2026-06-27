@@ -21,7 +21,7 @@ export const ACTION_LABELS: Record<QuickActionType, string> = {
   leaderEffect: "リーダー効果",
   stageEffect: "ステージ効果",
   processing: "処理中",
-  confirmRequest: "確認して",
+  confirmRequest: "確認する",
   confirmed: "確認OK",
   note: "付箋",
   rest: "レスト",

@@ -1,6 +1,7 @@
 import type {
   CommunicationMode,
   DeckRecipeForRoom,
+  RoomListItem,
   RoomState,
   TurnOrderPlayer,
 } from "./types";
@@ -130,6 +131,19 @@ export function getRoom(
   roomId: string
 ) {
   return rooms.get(roomId) ?? null;
+}
+
+export function getJoinableRooms(): RoomListItem[] {
+  return Array.from(rooms.values())
+    .filter((room) => room.guestSocketId === null)
+    .map((room) => ({
+      roomId: room.roomId,
+      hostReady: room.hostReady,
+      hasGuest: false,
+      hostDeckSelected: room.hostDeckRecipe !== null,
+      communicationMode: room.communicationMode,
+    }))
+    .sort((a, b) => a.roomId.localeCompare(b.roomId));
 }
 
 export function canStartGame(

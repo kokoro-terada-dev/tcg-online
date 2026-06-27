@@ -37,6 +37,14 @@ export type RoomStateForClient = {
   firstPlayer: TurnOrderPlayer | null;
 };
 
+export type RoomListItem = {
+  roomId: string;
+  hostReady: boolean;
+  hasGuest: boolean;
+  hostDeckSelected: boolean;
+  communicationMode: CommunicationMode;
+};
+
 export type GameSetupStartPayload = {
   deckOrder: OnlineDeckOrderPayload;
   turnOrderDecider: 0 | 1;
@@ -286,6 +294,9 @@ let ignoredRoomId: string | null = null;
 const roomStateListeners =
   new Set<(roomState: RoomStateForClient) => void>();
 
+const roomListListeners =
+  new Set<(rooms: RoomListItem[]) => void>();
+
 const joinFailedListeners =
   new Set<() => void>();
 
@@ -349,6 +360,16 @@ export function onRoomStateChanged(
 
   return () => {
     roomStateListeners.delete(listener);
+  };
+}
+
+export function onRoomListChanged(
+  listener: (rooms: RoomListItem[]) => void
+) {
+  roomListListeners.add(listener);
+
+  return () => {
+    roomListListeners.delete(listener);
   };
 }
 
@@ -521,6 +542,10 @@ export function joinRoom(
     "join-room",
     normalizedRoomId
   );
+}
+
+export function requestRoomList() {
+  socket.emit("room-list-request");
 }
 
 export function selectDeckForRoom(
@@ -750,6 +775,17 @@ socket.on(
     }
 
     updateRoomState(roomState);
+  }
+);
+
+socket.on(
+  "room-list",
+  (payload?: { rooms?: RoomListItem[] }) => {
+    const rooms = payload?.rooms ?? [];
+
+    for (const listener of roomListListeners) {
+      listener(rooms);
+    }
   }
 );
 

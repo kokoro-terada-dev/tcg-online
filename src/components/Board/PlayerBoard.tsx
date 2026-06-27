@@ -112,6 +112,9 @@ export default function PlayerBoard({
   const openTopDeckCards =
     useGameStore((x) => x.openTopDeckCards);
 
+  const addActionLog =
+    useGameStore((x) => x.addActionLog);
+
   const reorderZoneCards =
     useGameStore(
       (x) => x.reorderZoneCards
@@ -135,6 +138,24 @@ export default function PlayerBoard({
     }
 
     return player.life;
+  }
+
+  function addCustomActionLog(message: string) {
+    const log = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      playerIndex: (localPlayerIndex ?? playerIndex) as 0 | 1,
+      actionType: "custom" as const,
+      message,
+      createdAt: Date.now(),
+    };
+
+    addActionLog(log);
+    sendBoardAction({
+      actionType: "QUICK_ACTION",
+      payload: {
+        log,
+      },
+    });
   }
 
   function getZoneCardIndex(
@@ -197,6 +218,7 @@ export default function PlayerBoard({
     }
 
     moveListCardToPublic(playerIndex, zone, cardId);
+    addCustomActionLog("公開");
   }
 
   function handleListCardToTrash(
@@ -273,6 +295,7 @@ export default function PlayerBoard({
     }
 
     openTopDeckCards(playerIndex, count);
+    addCustomActionLog("サーチ中");
 
     sendBoardAction({
       actionType: "OPEN_TOP_DECK_CARDS",

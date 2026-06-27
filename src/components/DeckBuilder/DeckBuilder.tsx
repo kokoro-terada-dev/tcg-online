@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent } from "react";
 
 import type { DeckRecipe, LocalCardImage } from "../../types/deck";
 
@@ -133,6 +133,100 @@ export default function DeckBuilder({
   const [messageAnimationKey, setMessageAnimationKey] =
     useState(0);
 
+  const [previewImage, setPreviewImage] =
+    useState<string | null>(null);
+
+  const previewTimer = useRef<number | null>(null);
+
+  const previewStartPos =
+    useRef<{ x: number; y: number } | null>(null);
+
+  function clearPreviewTimer() {
+    if (previewTimer.current !== null) {
+      clearTimeout(previewTimer.current);
+      previewTimer.current = null;
+    }
+  }
+
+  function startCardPreview(imageUrl: string) {
+    clearPreviewTimer();
+
+    previewTimer.current = window.setTimeout(() => {
+      setPreviewImage(imageUrl);
+      previewTimer.current = null;
+    }, 550);
+  }
+
+  function handlePreviewPointerDown(
+    imageUrl: string,
+    event: PointerEvent
+  ) {
+    previewStartPos.current = {
+      x: event.clientX,
+      y: event.clientY,
+    };
+    startCardPreview(imageUrl);
+  }
+
+  function handlePreviewPointerMove(event: PointerEvent) {
+    if (!previewStartPos.current) {
+      return;
+    }
+
+    const dx = Math.abs(event.clientX - previewStartPos.current.x);
+    const dy = Math.abs(event.clientY - previewStartPos.current.y);
+
+    if (dx > 8 || dy > 8) {
+      clearPreviewTimer();
+      previewStartPos.current = null;
+    }
+  }
+
+  function endCardPreviewPress() {
+    clearPreviewTimer();
+    previewStartPos.current = null;
+  }
+
+  function renderPreviewOverlay() {
+    if (!previewImage) {
+      return null;
+    }
+
+    return (
+      <div
+        onClick={() => setPreviewImage(null)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setPreviewImage(null);
+        }}
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 5000,
+          background: "rgba(2, 6, 23, 0.86)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "12px",
+          boxSizing: "border-box",
+        }}
+      >
+        <img
+          src={previewImage}
+          draggable={false}
+          style={{
+            maxWidth: "94vw",
+            maxHeight: "94dvh",
+            borderRadius: "12px",
+            objectFit: "contain",
+            boxShadow: "0 18px 40px rgba(0,0,0,0.65)",
+          }}
+        />
+      </div>
+    );
+  }
+
+
   function showMessage(nextMessage: string) {
     setMessage(nextMessage);
 
@@ -140,6 +234,8 @@ export default function DeckBuilder({
   }
 
   function openSearchScreen() {
+    clearPreviewTimer();
+    setPreviewImage(null);
     setSearchText("");
     setSeriesFilter("");
     setIsOpeningSearch(true);
@@ -445,12 +541,20 @@ export default function DeckBuilder({
       <img
         src={imageUrl}
         draggable={false}
+        onPointerDown={(event) =>
+          handlePreviewPointerDown(imageUrl, event)
+        }
+        onPointerUp={endCardPreviewPress}
+        onPointerCancel={endCardPreviewPress}
+        onPointerLeave={endCardPreviewPress}
+        onPointerMove={handlePreviewPointerMove}
         style={{
           width: `${size}px`,
           height: "auto",
           borderRadius: "8px",
           display: "block",
           flexShrink: 0,
+          touchAction: "none",
         }}
       />
     );
@@ -994,6 +1098,7 @@ export default function DeckBuilder({
             </div>
           </section>
         </div>
+        {renderPreviewOverlay()}
       </div>
     );
   }
@@ -1137,10 +1242,18 @@ export default function DeckBuilder({
                 <img
                   src={card.imageUrl}
                   draggable={false}
+                  onPointerDown={(event) =>
+                    handlePreviewPointerDown(card.imageUrl, event)
+                  }
+                  onPointerUp={endCardPreviewPress}
+                  onPointerCancel={endCardPreviewPress}
+                  onPointerLeave={endCardPreviewPress}
+                  onPointerMove={handlePreviewPointerMove}
                   style={{
                     width: "100%",
                     borderRadius: "8px",
                     display: "block",
+                    touchAction: "none",
                   }}
                 />
 
@@ -1202,6 +1315,8 @@ export default function DeckBuilder({
           </div>
         )}
       </div>
+
+      {renderPreviewOverlay()}
     </div>
   );
 }

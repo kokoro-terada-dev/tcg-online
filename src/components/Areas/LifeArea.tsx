@@ -113,6 +113,7 @@ export default function LifeArea({
             }}
             playerIndex={playerIndex}
             from="life"
+            draggableDisabled={index !== 0}
           />
         </div>
       ))}

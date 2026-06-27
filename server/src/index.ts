@@ -7,6 +7,7 @@ import {
     canStartGame,
     createRoom,
     findRoomBySocketId,
+    getJoinableRooms,
     joinRoom,
     leaveRoom,
     removeRoom,
@@ -103,6 +104,12 @@ io.on("connection", (socket) => {
 
         socket.emit("room-created", room);
         io.to(room.roomId).emit("room-state", room);
+    });
+
+    socket.on("room-list-request", () => {
+        socket.emit("room-list", {
+            rooms: getJoinableRooms(),
+        });
     });
 
     socket.on(

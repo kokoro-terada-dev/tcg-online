@@ -17,8 +17,10 @@ import {
     onGuestLeft,
     onJoinFailed,
     onRoomClosed,
+    onRoomListChanged,
     onRoomStateChanged,
     ready,
+    requestRoomList,
     rollTurnOrder,
     selectDeckForRoom,
     selectTurnOrder,
@@ -29,6 +31,7 @@ import {
 import type {
     DeckRecipeForRoom,
     GameSetupStartPayload,
+    RoomListItem,
     RoomStateForClient,
     TurnOrderPlayer
 } from "../../network/roomClient";
@@ -308,6 +311,12 @@ export default function RoomScreen({
     const [roomCodeInput, setRoomCodeInput] =
         useState("");
 
+    const [roomList, setRoomList] =
+        useState<RoomListItem[]>([]);
+
+    const [roomListLoading, setRoomListLoading] =
+        useState(false);
+
     const [selectedDeckId, setSelectedDeckId] =
         useState("");
 
@@ -427,6 +436,8 @@ export default function RoomScreen({
         const offRoomState = onRoomStateChanged(
             (nextRoomState) => {
                 setRoomState(nextRoomState);
+                setRoomList([]);
+                setRoomListLoading(false);
                 setTurnOrderWaiting(false);
                 useGameStore
                     .getState()
@@ -461,6 +472,22 @@ export default function RoomScreen({
             offGuestLeft();
         };
     }, [onBack]);
+
+    useEffect(() => {
+        const offRoomList = onRoomListChanged((rooms) => {
+            setRoomList(rooms);
+            setRoomListLoading(false);
+        });
+
+        if (mode === "guest") {
+            setRoomListLoading(true);
+            requestRoomList();
+        }
+
+        return () => {
+            offRoomList();
+        };
+    }, [mode]);
 
     useEffect(() => {
         if (mode === "host") {
@@ -546,6 +573,26 @@ export default function RoomScreen({
         }
 
         joinRoom(roomCodeInput);
+    }
+
+    function handleJoinListedRoom(
+        roomId: string
+    ) {
+        const normalizedRoomId = roomId.trim().toUpperCase();
+
+        if (!normalizedRoomId) {
+            return;
+        }
+
+        setError("");
+        setRoomCodeInput(normalizedRoomId);
+        joinRoom(normalizedRoomId);
+    }
+
+    function handleRefreshRoomList() {
+        setError("");
+        setRoomListLoading(true);
+        requestRoomList();
     }
 
     function handleBack() {
@@ -763,6 +810,71 @@ export default function RoomScreen({
                             >
                                 入室
                             </button>
+                        </div>
+                        <div style={roomListHeaderStyle}>
+                            <div>
+                                <div style={roomListTitleStyle}>
+                                    作成中のルーム
+                                </div>
+                                <div style={roomListHelpStyle}>
+                                    入室できるルームだけ表示します。
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                style={refreshButtonStyle}
+                                onClick={handleRefreshRoomList}
+                                disabled={roomListLoading}
+                            >
+                                {roomListLoading ? "更新中" : "更新"}
+                            </button>
+                        </div>
+
+                        <div style={roomListStyle}>
+                            {roomList.length === 0 ? (
+                                <div style={emptyRoomListStyle}>
+                                    {roomListLoading
+                                        ? "ルーム一覧を更新しています..."
+                                        : "入室可能なルームはありません"}
+                                </div>
+                            ) : (
+                                roomList.map((room) => (
+                                    <div
+                                        key={room.roomId}
+                                        style={roomListItemStyle}
+                                    >
+                                        <div style={roomListItemInfoStyle}>
+                                            <div style={roomListCodeStyle}>
+                                                {room.roomId}
+                                            </div>
+                                            <div style={roomListMetaStyle}>
+                                                {room.communicationMode === "silent"
+                                                    ? "通話なし"
+                                                    : "通話あり"}
+                                                {" / "}
+                                                {room.hostDeckSelected
+                                                    ? "デッキ選択済み"
+                                                    : "デッキ未選択"}
+                                                {" / "}
+                                                {room.hostReady
+                                                    ? "HOST READY"
+                                                    : "HOST準備中"}
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            style={roomListJoinButtonStyle}
+                                            onClick={() =>
+                                                handleJoinListedRoom(room.roomId)
+                                            }
+                                        >
+                                            入室
+                                        </button>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </section>
                 ) : (
@@ -1112,6 +1224,100 @@ const joinBoxStyle: CSSProperties = {
     display: "grid",
     gridTemplateColumns: "1fr 92px",
     gap: "8px",
+};
+
+const roomListHeaderStyle: CSSProperties = {
+    marginTop: "16px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+};
+
+const roomListTitleStyle: CSSProperties = {
+    color: "#f8fafc",
+    fontSize: "15px",
+    fontWeight: 1000,
+};
+
+const roomListHelpStyle: CSSProperties = {
+    marginTop: "3px",
+    color: "#94a3b8",
+    fontSize: "11px",
+    fontWeight: 800,
+};
+
+const refreshButtonStyle: CSSProperties = {
+    minWidth: "76px",
+    minHeight: "36px",
+    border: "1px solid rgba(125, 211, 252, 0.7)",
+    borderRadius: "9px",
+    background: "rgba(8, 47, 73, 0.84)",
+    color: "#e0f2fe",
+    fontSize: "13px",
+    fontWeight: 1000,
+};
+
+const roomListStyle: CSSProperties = {
+    marginTop: "8px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+};
+
+const emptyRoomListStyle: CSSProperties = {
+    minHeight: "48px",
+    border: "1px dashed rgba(148, 163, 184, 0.5)",
+    borderRadius: "10px",
+    color: "#cbd5e1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "12px",
+    fontWeight: 900,
+};
+
+const roomListItemStyle: CSSProperties = {
+    minHeight: "56px",
+    border: "1px solid rgba(96, 165, 250, 0.45)",
+    borderRadius: "10px",
+    background: "rgba(15, 23, 42, 0.78)",
+    padding: "8px",
+    display: "grid",
+    gridTemplateColumns: "1fr 72px",
+    gap: "8px",
+    alignItems: "center",
+};
+
+const roomListItemInfoStyle: CSSProperties = {
+    minWidth: 0,
+};
+
+const roomListCodeStyle: CSSProperties = {
+    color: "#bfdbfe",
+    fontSize: "22px",
+    fontWeight: 1000,
+    letterSpacing: "4px",
+};
+
+const roomListMetaStyle: CSSProperties = {
+    marginTop: "3px",
+    color: "#cbd5e1",
+    fontSize: "11px",
+    fontWeight: 800,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+};
+
+const roomListJoinButtonStyle: CSSProperties = {
+    minHeight: "38px",
+    border: "none",
+    borderRadius: "9px",
+    background: "#2563eb",
+    color: "white",
+    fontSize: "13px",
+    fontWeight: 1000,
 };
 
 const playerPanelStyle: CSSProperties = {

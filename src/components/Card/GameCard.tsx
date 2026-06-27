@@ -42,6 +42,7 @@ type Props = {
   playerIndex: number;
   from: CardFrom;
   overlay?: boolean;
+  draggableDisabled?: boolean;
   onPreview?: (image: string | null) => void;
 };
 
@@ -103,6 +104,7 @@ export default function GameCard({
   playerIndex,
   from,
   overlay = false,
+  draggableDisabled = false,
   onPreview,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -234,6 +236,7 @@ export default function GameCard({
 
   const isDraggable =
     !overlay &&
+    !draggableDisabled &&
     canOperate &&
     from !== "leader";
 
@@ -1171,16 +1174,6 @@ export default function GameCard({
               {isOpponent && from !== "stage" && (
                 <button onClick={() => runQuickAction("target3")}>
                   対象③
-                </button>
-              )}
-              {isOpponent && (
-                <button onClick={() => runQuickAction("confirmed")}>
-                  確認OK
-                </button>
-              )}
-              {isOpponent && (
-                <button onClick={() => runQuickAction("note")}>
-                  付箋
                 </button>
               )}
                 </>

@@ -361,6 +361,22 @@ function createOnlineDeckOrder(
   };
 }
 
+function moveOpeningDonToActive(
+  players: [PlayerState, PlayerState],
+  firstPlayerIndex: 0 | 1
+) {
+  const player = players[firstPlayerIndex];
+  const don = player.donDeck.shift();
+
+  if (!don) {
+    return;
+  }
+
+  don.rotated = false;
+  don.isFaceUp = true;
+  player.activeDons.unshift(don);
+}
+
 interface MoveParams {
   playerIndex: number;
 
@@ -1211,12 +1227,29 @@ export const useGameStore =
         })),
 
       confirmTurnOrder: (firstPlayerIndex) =>
-        set(() => ({
-          turnOrderSelectionPending: false,
-          firstPlayerIndex,
-          mulliganPlayerIndex: 0,
-          mulliganWaiting: false,
-        })),
+        set((state) => {
+          if (state.firstPlayerIndex !== null) {
+            return {
+              turnOrderSelectionPending: false,
+              mulliganPlayerIndex: 0,
+              mulliganWaiting: false,
+            };
+          }
+
+          const players = [
+            ...state.players,
+          ] as [PlayerState, PlayerState];
+
+          moveOpeningDonToActive(players, firstPlayerIndex);
+
+          return {
+            players,
+            turnOrderSelectionPending: false,
+            firstPlayerIndex,
+            mulliganPlayerIndex: 0,
+            mulliganWaiting: false,
+          };
+        }),
 
       startGame: (
         player1Deck: CardData[],
@@ -1972,6 +2005,9 @@ export const useGameStore =
 
           const card =
             source.splice(index, 1)[0];
+
+          card.isFaceUp = false;
+          card.rotated = false;
 
           player.deck.push(card);
 
