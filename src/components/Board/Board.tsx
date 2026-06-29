@@ -383,8 +383,14 @@ function getPowerModifierLabel(card: CardData | null) {
 
 function CounterPhasePanel({
   phase,
+  minimized,
+  onMinimize,
+  onRestore,
 }: {
   phase: NonNullable<ReturnType<typeof useGameStore.getState>["counterPhase"]>;
+  minimized: boolean;
+  onMinimize: () => void;
+  onRestore: () => void;
 }) {
   const players = useGameStore((x) => x.players);
   const localPlayerIndex = useGameStore((x) => x.localPlayerIndex);
@@ -460,7 +466,7 @@ function CounterPhasePanel({
 
   const { setNodeRef, isOver } = useDroppable({
     id: `counter-${phase.playerIndex}`,
-    disabled: !canEditCounter,
+    disabled: minimized || !canEditCounter,
     data: {
       to: "counter",
       playerIndex: phase.playerIndex,
@@ -475,6 +481,9 @@ function CounterPhasePanel({
       }
       | {
         counterAction: "CANCEL" | "SUBMIT" | "CONFIRM";
+      }
+      | {
+        counterAction: "MINIMIZE" | "RESTORE";
       }
   ) {
     sendBoardAction({
@@ -529,6 +538,115 @@ function CounterPhasePanel({
     sendCounterAction({
       counterAction: "CONFIRM",
     });
+  }
+
+  function minimize() {
+    if (!canCounterPlayerOperate) {
+      return;
+    }
+
+    onMinimize();
+    sendCounterAction({
+      counterAction: "MINIMIZE",
+    });
+  }
+
+  function restore() {
+    if (!canCounterPlayerOperate) {
+      return;
+    }
+
+    onRestore();
+    sendCounterAction({
+      counterAction: "RESTORE",
+    });
+  }
+
+  if (minimized) {
+    return (
+      <div
+        style={{
+          position: "fixed",
+          left: "50%",
+          top: "max(56px, calc(env(safe-area-inset-top) + 56px))",
+          transform: "translateX(-50%)",
+          width: "min(92vw, 360px)",
+          minHeight: "42px",
+          padding: "6px 8px",
+          boxSizing: "border-box",
+          borderRadius: "8px",
+          border: "1px solid #38bdf8",
+          background: "rgba(15, 23, 42, 0.96)",
+          boxShadow: "0 10px 24px rgba(0,0,0,0.48)",
+          zIndex: 100010,
+          display: "grid",
+          gridTemplateColumns: "1fr auto",
+          alignItems: "center",
+          gap: "8px",
+          pointerEvents: "auto",
+        }}
+      >
+        <div
+          style={{
+            minWidth: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            color: "#e0f2fe",
+            fontSize: "12px",
+            fontWeight: 1000,
+            overflow: "hidden",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span>カウンター</span>
+          <span
+            style={{
+              color: "#cbd5e1",
+              fontSize: "11px",
+              fontWeight: 900,
+            }}
+          >
+            {player.counterCards.length}枚
+          </span>
+          <span
+            style={{
+              minWidth: "54px",
+              padding: "3px 7px",
+              borderRadius: "999px",
+              background: "#facc15",
+              color: "#111827",
+              textAlign: "center",
+              fontSize: "12px",
+              fontWeight: 1000,
+            }}
+          >
+            {phase.power >= 0 ? `+${phase.power}` : phase.power}
+          </span>
+        </div>
+
+        {canCounterPlayerOperate ? (
+          <button
+            type="button"
+            onClick={restore}
+            style={counterButtonStyle("#0369a1", "#ffffff", 32)}
+          >
+            開く
+          </button>
+        ) : (
+          <div
+            style={{
+              color: "#cbd5e1",
+              fontSize: "11px",
+              fontWeight: 900,
+              whiteSpace: "nowrap",
+            }}
+          >
+            相手が盤面操作中
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -663,12 +781,25 @@ function CounterPhasePanel({
         <div
           style={{
             marginBottom: "6px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "8px",
             color: "#e0f2fe",
             fontSize: "12px",
             fontWeight: 1000,
           }}
         >
-          カウンター
+          <span>カウンター</span>
+          {canCounterPlayerOperate && (
+            <button
+              type="button"
+              onClick={minimize}
+              style={counterButtonStyle("#334155", "#ffffff", 30)}
+            >
+              最小化
+            </button>
+          )}
         </div>
 
         <div
@@ -1251,7 +1382,18 @@ export default function Board() {
   const [unreadChatCount, setUnreadChatCount] =
     useState(0);
 
+  const [counterPanelMinimized, setCounterPanelMinimized] =
+    useState(false);
+
   const chatHistoryOpenRef = useRef(false);
+
+  const counterPhaseKey = counterPhase
+    ? `${counterPhase.playerIndex}-${counterPhase.targetCardId}-${counterPhase.targetArea}-${counterPhase.targetIndex}`
+    : null;
+
+  useEffect(() => {
+    setCounterPanelMinimized(false);
+  }, [counterPhaseKey]);
 
   function toggleChatHistory() {
     setChatHistoryOpen((open) => {
@@ -1966,6 +2108,16 @@ export default function Board() {
           return;
         }
 
+        if (payload.counterAction === "MINIMIZE") {
+          setCounterPanelMinimized(true);
+          return;
+        }
+
+        if (payload.counterAction === "RESTORE") {
+          setCounterPanelMinimized(false);
+          return;
+        }
+
         state.confirmCounterPhase();
         state.clearAttackState();
         state.clearCardEffect();
@@ -2586,7 +2738,12 @@ export default function Board() {
       </div>
 
       {counterPhase && (
-        <CounterPhasePanel phase={counterPhase} />
+        <CounterPhasePanel
+          phase={counterPhase}
+          minimized={counterPanelMinimized}
+          onMinimize={() => setCounterPanelMinimized(true)}
+          onRestore={() => setCounterPanelMinimized(false)}
+        />
       )}
 
       {damagePhase && (

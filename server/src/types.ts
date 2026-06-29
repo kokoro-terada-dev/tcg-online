@@ -337,5 +337,8 @@ export type BoardActionPayload =
       }
       | {
         counterAction: "CANCEL" | "SUBMIT" | "CONFIRM";
+      }
+      | {
+        counterAction: "MINIMIZE" | "RESTORE";
       };
   };
