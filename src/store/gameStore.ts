@@ -34,6 +34,11 @@ export type MulliganResultPayload = {
   deckOrder: string[];
 };
 
+export type MulliganChoice = {
+  playerIndex: 0 | 1;
+  action: MulliganAction;
+};
+
 export type QuickActionType =
   | "attack"
   | "target"
@@ -41,6 +46,7 @@ export type QuickActionType =
   | "target2"
   | "target3"
   | "effect"
+  | "effectNone"
   | "characterEffect"
   | "leaderEffect"
   | "stageEffect"
@@ -79,6 +85,12 @@ export type AttackTarget = {
   cardId: string;
 } | null;
 
+export type PendingOnAttackEffect = {
+  source: Exclude<AttackTarget, null>;
+  target: Exclude<AttackTarget, null>;
+  targetLog?: ActionLog;
+} | null;
+
 export type CardMarkerType =
   | "attackSource"
   | "attackTarget"
@@ -86,6 +98,7 @@ export type CardMarkerType =
   | "target2"
   | "target3"
   | "effect"
+  | "effectNone"
   | "processing"
   | "confirmRequest"
   | "confirmed"
@@ -130,6 +143,11 @@ export type DamagePhase = {
 export type PublicAreaHighlight = {
   playerIndex: 0 | 1;
   nonce: number;
+} | null;
+
+export type MatchResult = {
+  winnerPlayerIndex: 0 | 1;
+  loserPlayerIndex: 0 | 1;
 } | null;
 
 type PlayersSnapshot = [PlayerState, PlayerState];
@@ -415,6 +433,7 @@ interface GameState {
   communicationMode: CommunicationMode;
 
   mulliganWaiting: boolean;
+  mulliganChoices: MulliganChoice[];
 
   turnOrderSelectionPending: boolean;
 
@@ -429,6 +448,7 @@ interface GameState {
   currentAttackTarget: AttackTarget;
 
   pendingAttackPlayerIndex: 0 | 1 | null;
+  pendingOnAttackEffect: PendingOnAttackEffect;
 
   cardMarkers: CardMarker[];
 
@@ -439,6 +459,8 @@ interface GameState {
   damagePhase: DamagePhase;
 
   publicAreaHighlight: PublicAreaHighlight;
+  matchResult: MatchResult;
+  autoEffectMenuTarget: AttackTarget;
 
   addActionLog: (log: ActionLog) => void;
 
@@ -446,6 +468,12 @@ interface GameState {
     target: AttackTarget,
     log?: ActionLog
   ) => void;
+
+  setPendingOnAttackEffect: (
+    pending: PendingOnAttackEffect
+  ) => void;
+
+  clearPendingOnAttackEffect: () => void;
 
   setAttackSource: (
     source: AttackTarget,
@@ -487,6 +515,8 @@ interface GameState {
 
   submitCounterPhase: () => void;
 
+  reopenCounterPhase: () => void;
+
   confirmCounterPhase: () => void;
 
   startDamagePhase: (
@@ -502,6 +532,18 @@ interface GameState {
   highlightPublicArea: (
     playerIndex: 0 | 1
   ) => void;
+
+  setMatchResult: (
+    result: Exclude<MatchResult, null>
+  ) => void;
+
+  clearMatchResult: () => void;
+
+  setAutoEffectMenuTarget: (
+    target: AttackTarget
+  ) => void;
+
+  clearAutoEffectMenuTarget: () => void;
 
   clearActionLogs: () => void;
 
@@ -762,6 +804,8 @@ export const useGameStore =
 
       mulliganWaiting: false,
 
+      mulliganChoices: [],
+
       turnOrderSelectionPending: false,
 
       turnOrderDecider: null,
@@ -776,6 +820,8 @@ export const useGameStore =
 
       pendingAttackPlayerIndex: null,
 
+      pendingOnAttackEffect: null,
+
       cardMarkers: [],
 
       cardEffectSignal: null,
@@ -785,6 +831,10 @@ export const useGameStore =
       damagePhase: null,
 
       publicAreaHighlight: null,
+
+      matchResult: null,
+
+      autoEffectMenuTarget: null,
 
       addActionLog: (log) =>
         set((state) => ({
@@ -869,6 +919,7 @@ export const useGameStore =
       setAttackTarget: (target, log) =>
         set((state) => ({
           currentAttackTarget: target,
+          pendingOnAttackEffect: null,
           cardMarkers: target
             ? [
               ...state.cardMarkers.filter(
@@ -891,9 +942,20 @@ export const useGameStore =
             : state.actionLogs,
         })),
 
+      setPendingOnAttackEffect: (pending) =>
+        set(() => ({
+          pendingOnAttackEffect: pending,
+        })),
+
+      clearPendingOnAttackEffect: () =>
+        set(() => ({
+          pendingOnAttackEffect: null,
+        })),
+
       clearAttackTarget: () =>
         set(() => ({
           currentAttackTarget: null,
+          pendingOnAttackEffect: null,
           cardMarkers: get().cardMarkers.filter(
             (marker) => marker.markerType !== "attackTarget"
           ),
@@ -904,6 +966,7 @@ export const useGameStore =
           currentAttackSource: null,
           currentAttackTarget: null,
           pendingAttackPlayerIndex: null,
+          pendingOnAttackEffect: null,
           cardMarkers: get().cardMarkers.filter(
             (marker) =>
               marker.markerType !== "attackSource" &&
@@ -1032,6 +1095,16 @@ export const useGameStore =
             : null,
         })),
 
+      reopenCounterPhase: () =>
+        set((state) => ({
+          counterPhase: state.counterPhase
+            ? {
+              ...state.counterPhase,
+              counterPlayerConfirmed: false,
+            }
+            : null,
+        })),
+
       confirmCounterPhase: () =>
         setWithHistory((state) => {
           const phase = state.counterPhase;
@@ -1100,6 +1173,7 @@ export const useGameStore =
             currentAttackSource: null,
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
+            pendingOnAttackEffect: null,
             cardMarkers: state.cardMarkers.filter(
               (marker) =>
                 marker.markerType !== "attackSource" &&
@@ -1150,6 +1224,7 @@ export const useGameStore =
             currentAttackSource: null,
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
+            pendingOnAttackEffect: null,
             cardMarkers: state.cardMarkers.filter(
               (marker) =>
                 marker.markerType !== "attackSource" &&
@@ -1175,16 +1250,38 @@ export const useGameStore =
           },
         })),
 
+      setMatchResult: (result) =>
+        set(() => ({
+          matchResult: result,
+        })),
+
+      clearMatchResult: () =>
+        set(() => ({
+          matchResult: null,
+        })),
+
+      setAutoEffectMenuTarget: (target) =>
+        set(() => ({
+          autoEffectMenuTarget: target,
+        })),
+
+      clearAutoEffectMenuTarget: () =>
+        set(() => ({
+          autoEffectMenuTarget: null,
+        })),
+
       clearActionLogs: () =>
         set(() => ({
           actionLogs: [],
           currentAttackSource: null,
           currentAttackTarget: null,
           pendingAttackPlayerIndex: null,
+          pendingOnAttackEffect: null,
           cardMarkers: [],
           cardEffectSignal: null,
           counterPhase: null,
           damagePhase: null,
+          autoEffectMenuTarget: null,
         })),
 
       undoHistory: [],
@@ -1205,10 +1302,12 @@ export const useGameStore =
             communicationMode === "voice" ? [] : get().actionLogs,
           currentAttackSource: null,
           currentAttackTarget: null,
+          pendingOnAttackEffect: null,
           cardMarkers: [],
           cardEffectSignal: null,
           counterPhase: null,
           damagePhase: null,
+          autoEffectMenuTarget: null,
         })),
 
       finishOnlineMulligan: () =>
@@ -1224,6 +1323,7 @@ export const useGameStore =
           firstPlayerIndex: null,
           mulliganPlayerIndex: null,
           mulliganWaiting: false,
+          mulliganChoices: [],
         })),
 
       confirmTurnOrder: (firstPlayerIndex) =>
@@ -1233,6 +1333,7 @@ export const useGameStore =
               turnOrderSelectionPending: false,
               mulliganPlayerIndex: 0,
               mulliganWaiting: false,
+              mulliganChoices: [],
             };
           }
 
@@ -1248,6 +1349,7 @@ export const useGameStore =
             firstPlayerIndex,
             mulliganPlayerIndex: 0,
             mulliganWaiting: false,
+            mulliganChoices: [],
           };
         }),
 
@@ -1272,6 +1374,7 @@ export const useGameStore =
           currentAttackTarget: null,
 
           pendingAttackPlayerIndex: null,
+          pendingOnAttackEffect: null,
 
           cardMarkers: [],
 
@@ -1280,9 +1383,12 @@ export const useGameStore =
           counterPhase: null,
 
           damagePhase: null,
+          matchResult: null,
+          autoEffectMenuTarget: null,
 
           mulliganPlayerIndex: 0,
           mulliganWaiting: false,
+          mulliganChoices: [],
 
           turnOrderSelectionPending: false,
           turnOrderDecider: null,
@@ -1328,6 +1434,7 @@ export const useGameStore =
           currentAttackTarget: null,
 
           pendingAttackPlayerIndex: null,
+          pendingOnAttackEffect: null,
 
           cardMarkers: [],
 
@@ -1336,9 +1443,12 @@ export const useGameStore =
           counterPhase: null,
 
           damagePhase: null,
+          matchResult: null,
+          autoEffectMenuTarget: null,
 
           mulliganPlayerIndex: null,
           mulliganWaiting: false,
+          mulliganChoices: [],
 
           turnOrderSelectionPending: false,
           turnOrderDecider: null,
@@ -1659,6 +1769,38 @@ export const useGameStore =
           if (!card) {
             return { players };
           }
+
+          const cardCost =
+            typeof card.cost === "number" &&
+              Number.isFinite(card.cost) &&
+              card.cost > 0
+              ? card.cost
+              : 0;
+          const shouldPayCost =
+            from === "hand" &&
+            (to === "character" || to === "stage" || to === "public") &&
+            cardCost > 0 &&
+            player.activeDons.length >= cardCost;
+
+          if (shouldPayCost) {
+            for (let i = 0; i < cardCost; i++) {
+              const don = player.activeDons.shift();
+
+              if (don) {
+                player.restDons.unshift({
+                  ...don,
+                  rotated: true,
+                  isFaceUp: true,
+                });
+              }
+            }
+          }
+
+          const counterDelta =
+            state.counterPhase?.playerIndex === playerIndex
+              ? (to === "counter" ? card.counter ?? 0 : 0) -
+              (from === "counter" ? card.counter ?? 0 : 0)
+              : 0;
           // 手札・盤面は表
           if (
             to === "hand" ||
@@ -1785,6 +1927,14 @@ export const useGameStore =
 
           return {
             players,
+            autoEffectMenuTarget: state.autoEffectMenuTarget,
+            counterPhase:
+              counterDelta !== 0 && state.counterPhase
+                ? {
+                  ...state.counterPhase,
+                  power: state.counterPhase.power + counterDelta,
+                }
+                : state.counterPhase,
             cardMarkers: markerCanRemain
               ? state.cardMarkers
               : state.cardMarkers.filter(
@@ -1803,7 +1953,6 @@ export const useGameStore =
                 : state.currentAttackTarget,
           };
         }),
-
 
       removeDon: (
         playerIndex: number,
@@ -2308,7 +2457,10 @@ export const useGameStore =
           cardEffectSignal: null,
           counterPhase: null,
           damagePhase: null,
+          matchResult: null,
+          autoEffectMenuTarget: null,
           mulliganWaiting: false,
+          mulliganChoices: [],
           turnOrderSelectionPending: false,
           turnOrderDecider: null,
           firstPlayerIndex: null,
@@ -2343,6 +2495,15 @@ export const useGameStore =
 
           return {
             players,
+            mulliganChoices: [
+              ...state.mulliganChoices.filter(
+                (choice) => choice.playerIndex !== playerIndex
+              ),
+              {
+                playerIndex,
+                action: "mulligan",
+              },
+            ],
             mulliganPlayerIndex:
               state.localPlayerIndex === null ? null : 0,
             mulliganWaiting:
@@ -2362,6 +2523,15 @@ export const useGameStore =
 
       keepHand: (playerIndex: 0 | 1) => {
         set((state) => ({
+          mulliganChoices: [
+            ...state.mulliganChoices.filter(
+              (choice) => choice.playerIndex !== playerIndex
+            ),
+            {
+              playerIndex,
+              action: "keep",
+            },
+          ],
           mulliganPlayerIndex:
             state.localPlayerIndex === null ? null : 0,
           mulliganWaiting:
@@ -2422,6 +2592,15 @@ export const useGameStore =
 
           return {
             players,
+            mulliganChoices: [
+              ...state.mulliganChoices.filter(
+                (choice) => choice.playerIndex !== result.playerIndex
+              ),
+              {
+                playerIndex: result.playerIndex,
+                action: result.action,
+              },
+            ],
           };
         }),
 
@@ -3173,6 +3352,9 @@ export const useGameStore =
             cardEffectSignal: null,
             counterPhase: null,
             damagePhase: null,
+            matchResult: null,
+            autoEffectMenuTarget: null,
+            mulliganChoices: [],
           };
         });
       },

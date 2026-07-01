@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+local-data/
 *.zip
 public/cards.zip
 public/cards/

@@ -17,6 +17,7 @@ export const ACTION_LABELS: Record<QuickActionType, string> = {
   target2: "対象②",
   target3: "対象③",
   effect: "効果",
+  effectNone: "効果なし",
   characterEffect: "キャラクター効果",
   leaderEffect: "リーダー効果",
   stageEffect: "ステージ効果",

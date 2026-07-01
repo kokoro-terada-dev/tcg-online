@@ -68,6 +68,39 @@
   z-index: 1001;
 }
 
+.hand-counter-badge {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: min(46px, 60%);
+  padding: 0;
+  box-sizing: border-box;
+  border-radius: 0 6px 6px 0;
+  background: rgba(125, 211, 252, 0.72);
+  color: #0f172a;
+  border: 2px solid rgba(125, 211, 252, 0.72);
+  border-left-width: 0;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.68);
+  font-size: clamp(8px, 2.4vw, 10px);
+  font-weight: 1000;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  z-index: 1250;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hand-counter-badge > span {
+  display: block;
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+
 .card-menu {
   position: absolute;
 
@@ -209,6 +242,10 @@
 
 .card-marker-effect {
   background: #7c3aed;
+}
+
+.card-marker-effectNone {
+  background: #475569;
 }
 
 .card-marker-processing {

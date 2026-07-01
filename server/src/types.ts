@@ -65,8 +65,8 @@ export type BoardActionPayload =
       playerIndex: number;
       cardId: string;
       fromIndex?: number;
-      from: "hand" | "character" | "stage" | "trash" | "life" | "deck" | "counter";
-      to: "hand" | "character" | "stage" | "trash" | "life" | "deck" | "counter";
+      from: "hand" | "character" | "stage" | "public" | "trash" | "life" | "deck" | "counter";
+      to: "hand" | "character" | "stage" | "public" | "trash" | "life" | "deck" | "counter";
       slotIndex?: number;
     };
   }
@@ -262,6 +262,30 @@ export type BoardActionPayload =
   }
   | {
     roomId: string;
+    actionType: "SET_PENDING_ON_ATTACK_EFFECT";
+    payload: {
+      sourcePlayerIndex: 0 | 1;
+      sourceCardId: string;
+      targetPlayerIndex: 0 | 1;
+      targetArea: "leader" | "character";
+      targetIndex: number;
+      log: {
+        id: string;
+        playerIndex: 0 | 1;
+        actionType: "target";
+        createdAt: number;
+      };
+    };
+  }
+  | {
+    roomId: string;
+    actionType: "RESOLVE_PENDING_ON_ATTACK_EFFECT";
+    payload: {
+      useEffect: boolean;
+    };
+  }
+  | {
+    roomId: string;
     actionType: "CARD_QUICK_ACTION";
     payload: {
       playerIndex: 0 | 1;
@@ -330,15 +354,60 @@ export type BoardActionPayload =
         targetCardId: string;
         targetArea: "leader" | "character";
         targetIndex: number;
+        log?: {
+          id: string;
+          playerIndex: 0 | 1;
+          actionType: "counter";
+          createdAt: number;
+        };
       }
       | {
         counterAction: "ADJUST";
         amount: number;
       }
       | {
-        counterAction: "CANCEL" | "SUBMIT" | "CONFIRM";
+        counterAction: "CANCEL" | "SUBMIT" | "CONFIRM" | "INSUFFICIENT";
       }
       | {
         counterAction: "MINIMIZE" | "RESTORE";
       };
+  }
+  | {
+    roomId: string;
+    actionType: "DAMAGE_PHASE_ACTION";
+    payload:
+      | {
+        damageAction: "START";
+        playerIndex: 0 | 1;
+        sourcePlayerIndex: 0 | 1;
+        sourceCardId: string;
+        targetCardId: string;
+        lifeIndex: number;
+        log?: {
+          id: string;
+          playerIndex: 0 | 1;
+          actionType: "takeHit";
+          createdAt: number;
+        };
+      }
+      | {
+        damageAction: "TO_HAND" | "TRIGGER";
+        log?: {
+          id: string;
+          playerIndex: 0 | 1;
+          actionType:
+            | "trigger"
+            | "custom";
+          message?: string;
+          createdAt: number;
+        };
+      };
+  }
+  | {
+    roomId: string;
+    actionType: "MATCH_RESULT";
+    payload: {
+      winnerPlayerIndex: 0 | 1;
+      loserPlayerIndex: 0 | 1;
+    };
   };

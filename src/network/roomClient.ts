@@ -58,8 +58,8 @@ export type BoardActionPayload =
       playerIndex: number;
       cardId: string;
       fromIndex?: number;
-      from: "hand" | "character" | "stage" | "trash" | "life" | "deck" | "counter";
-      to: "hand" | "character" | "stage" | "trash" | "life" | "deck" | "counter";
+      from: "hand" | "character" | "stage" | "public" | "trash" | "life" | "deck" | "counter";
+      to: "hand" | "character" | "stage" | "public" | "trash" | "life" | "deck" | "counter";
       slotIndex?: number;
     };
   }
@@ -214,6 +214,25 @@ export type BoardActionPayload =
   }
   | {
     roomId: string;
+    actionType: "SET_PENDING_ON_ATTACK_EFFECT";
+    payload: {
+      sourcePlayerIndex: 0 | 1;
+      sourceCardId: string;
+      targetPlayerIndex: 0 | 1;
+      targetArea: "leader" | "character";
+      targetIndex: number;
+      log: ActionLog;
+    };
+  }
+  | {
+    roomId: string;
+    actionType: "RESOLVE_PENDING_ON_ATTACK_EFFECT";
+    payload: {
+      useEffect: boolean;
+    };
+  }
+  | {
+    roomId: string;
     actionType: "CARD_QUICK_ACTION";
     payload: {
       playerIndex: 0 | 1;
@@ -226,6 +245,7 @@ export type BoardActionPayload =
         | "target2"
         | "target3"
         | "effect"
+        | "effectNone"
         | "processing"
         | "confirmRequest"
         | "confirmed"
@@ -263,7 +283,7 @@ export type BoardActionPayload =
         amount: number;
       }
       | {
-        counterAction: "CANCEL" | "SUBMIT" | "CONFIRM";
+        counterAction: "CANCEL" | "SUBMIT" | "CONFIRM" | "INSUFFICIENT";
       }
       | {
         counterAction: "MINIMIZE" | "RESTORE";
@@ -286,6 +306,14 @@ export type BoardActionPayload =
         damageAction: "TO_HAND" | "TRIGGER";
         log?: ActionLog;
       };
+  }
+  | {
+    roomId: string;
+    actionType: "MATCH_RESULT";
+    payload: {
+      winnerPlayerIndex: 0 | 1;
+      loserPlayerIndex: 0 | 1;
+    };
   };
 
 let roomIdForClient: string | null = null;

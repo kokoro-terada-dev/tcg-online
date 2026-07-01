@@ -50,6 +50,11 @@ import type {
 } from "../../types/deck";
 
 import {
+    applyCardMasterToDeckRecipe,
+    loadCardMaster
+} from "../../utils/cardMaster";
+
+import {
     buildDeckCardsFromRecipe,
     getAllLocalDeckRecipes,
     getLocalDeckRecipe
@@ -349,7 +354,7 @@ export default function RoomScreen({
     }, [mode]);
 
     useEffect(() => {
-        const handleGameSetup = (
+        const handleGameSetup = async (
             setup: GameSetupStartPayload | OnlineDeckOrderPayload
         ) => {
             const deckOrder =
@@ -370,11 +375,19 @@ export default function RoomScreen({
             }
 
             try {
+                const cardMaster = await loadCardMaster();
+
                 const hostDeckRecipe =
-                    toDeckRecipe(roomState.hostDeckRecipe);
+                    applyCardMasterToDeckRecipe(
+                        toDeckRecipe(roomState.hostDeckRecipe),
+                        cardMaster
+                    );
 
                 const guestDeckRecipe =
-                    toDeckRecipe(roomState.guestDeckRecipe);
+                    applyCardMasterToDeckRecipe(
+                        toDeckRecipe(roomState.guestDeckRecipe),
+                        cardMaster
+                    );
 
                 const ownDeckRecipe =
                     mode === "host"
@@ -386,11 +399,13 @@ export default function RoomScreen({
                 const hostCards =
                     buildDeckCardsFromRecipe(hostDeckRecipe, {
                         donFallbackImageUrl,
+                        cardMaster,
                     });
 
                 const guestCards =
                     buildDeckCardsFromRecipe(guestDeckRecipe, {
                         donFallbackImageUrl,
+                        cardMaster,
                     });
 
                 useGameStore
@@ -706,7 +721,7 @@ export default function RoomScreen({
         });
     }
 
-    function handleStart() {
+    async function handleStart() {
         setError("");
 
         if (!roomState) {
@@ -728,11 +743,19 @@ export default function RoomScreen({
         }
 
         try {
+            const cardMaster = await loadCardMaster();
+
             const hostDeckRecipe =
-                toDeckRecipe(roomState.hostDeckRecipe);
+                applyCardMasterToDeckRecipe(
+                    toDeckRecipe(roomState.hostDeckRecipe),
+                    cardMaster
+                );
 
             const guestDeckRecipe =
-                toDeckRecipe(roomState.guestDeckRecipe);
+                applyCardMasterToDeckRecipe(
+                    toDeckRecipe(roomState.guestDeckRecipe),
+                    cardMaster
+                );
 
             const ownDeckRecipe =
                 mode === "host"
@@ -744,11 +767,13 @@ export default function RoomScreen({
             const hostCards =
                 buildDeckCardsFromRecipe(hostDeckRecipe, {
                     donFallbackImageUrl,
+                    cardMaster,
                 });
 
             const guestCards =
                 buildDeckCardsFromRecipe(guestDeckRecipe, {
                     donFallbackImageUrl,
+                    cardMaster,
                 });
 
             const deckOrder = createOnlineDeckOrder(

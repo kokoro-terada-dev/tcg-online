@@ -5,6 +5,11 @@ export type CardType =
   | "stage"
   | "don";
 
+export type CardEffect =
+  | "onPlay"
+  | "onAttack"
+  | "onKo";
+
 export type AreaType =
   | "hand"
   | "character"
@@ -27,6 +32,10 @@ export interface CardData {
   name: string;
   image: string;
   type: CardType;
+  cost?: number | null;
+  power?: number | null;
+  counter?: number | null;
+  effects?: CardEffect[];
   rotated: boolean;
   attachedDonCount: number;
   isFaceUp: boolean;

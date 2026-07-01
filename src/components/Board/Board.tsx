@@ -76,6 +76,24 @@ type DragCardInfo = {
   from: DragFrom;
 };
 
+type EventPlayedNotice = {
+  id: number;
+  playerIndex: number;
+  cardName: string;
+  cardImage: string;
+} | null;
+
+type KoNotice = {
+  id: number;
+  playerIndex: number;
+  cardName: string;
+} | null;
+
+type CounterNotice = {
+  id: number;
+  message: string;
+} | null;
+
 type MovableCardArea =
   | "hand"
   | "character"
@@ -381,6 +399,84 @@ function getPowerModifierLabel(card: CardData | null) {
     : `${powerModifier}`;
 }
 
+function getCardInArea(
+  player: ReturnType<typeof useGameStore.getState>["players"][number],
+  area: MovableCardArea,
+  cardId: string
+) {
+  const index = findCardIndexInArea(player, area, cardId);
+
+  if (index === -1) {
+    return undefined;
+  }
+
+  if (area === "hand") {
+    return player.hand[index];
+  }
+
+  if (area === "deck") {
+    return player.deck[index];
+  }
+
+  if (area === "trash") {
+    return player.trash[index];
+  }
+
+  if (area === "life") {
+    return player.life[index];
+  }
+
+  if (area === "public") {
+    return player.publicCards[index];
+  }
+
+  if (area === "counter") {
+    return player.counterCards[index];
+  }
+
+  if (area === "character") {
+    return player.characters[index] ?? undefined;
+  }
+
+  if (area === "stage") {
+    return player.stage ?? undefined;
+  }
+
+  return undefined;
+}
+
+function cardHasEffect(
+  card: CardData | undefined,
+  effect: "onPlay" | "onAttack" | "onKo"
+) {
+  return card?.effects?.includes(effect) === true;
+}
+
+function getTotalPowerLabel(card: CardData | null) {
+  if (typeof card?.power !== "number") {
+    return null;
+  }
+
+  const attachedDonPower = (card.attachedDonCount ?? 0) * 1000;
+  const powerModifier = card.powerModifier ?? 0;
+
+  return `${card.power + attachedDonPower + powerModifier}`;
+}
+
+function getPowerWithoutAttachedDonLabel(card: CardData | null) {
+  if (typeof card?.power !== "number") {
+    return null;
+  }
+
+  const powerModifier = card.powerModifier ?? 0;
+
+  return `${card.power + powerModifier}`;
+}
+
+function getMulliganChoiceLabel(action: "keep" | "mulligan") {
+  return action === "keep" ? "キープ" : "マリガン";
+}
+
 function CounterPhasePanel({
   phase,
   minimized,
@@ -402,6 +498,9 @@ function CounterPhasePanel({
   );
   const submitCounterPhase = useGameStore(
     (x) => x.submitCounterPhase
+  );
+  const reopenCounterPhase = useGameStore(
+    (x) => x.reopenCounterPhase
   );
   const confirmCounterPhase = useGameStore(
     (x) => x.confirmCounterPhase
@@ -433,6 +532,8 @@ function CounterPhasePanel({
     : null;
   const sourcePowerLabel = getPowerModifierLabel(attackSourceCard);
   const targetPowerLabel = getPowerModifierLabel(targetCard);
+  const sourceBasePowerLabel = getTotalPowerLabel(attackSourceCard);
+  const targetBasePowerLabel = getPowerWithoutAttachedDonLabel(targetCard);
   const canCounterPlayerOperate =
     localPlayerIndex === null ||
     localPlayerIndex === phase.playerIndex;
@@ -480,7 +581,7 @@ function CounterPhasePanel({
         amount: number;
       }
       | {
-        counterAction: "CANCEL" | "SUBMIT" | "CONFIRM";
+        counterAction: "CANCEL" | "SUBMIT" | "CONFIRM" | "INSUFFICIENT";
       }
       | {
         counterAction: "MINIMIZE" | "RESTORE";
@@ -537,6 +638,17 @@ function CounterPhasePanel({
     clearCardMarkers();
     sendCounterAction({
       counterAction: "CONFIRM",
+    });
+  }
+
+  function insufficient() {
+    if (!canFinalizeCounter) {
+      return;
+    }
+
+    reopenCounterPhase();
+    sendCounterAction({
+      counterAction: "INSUFFICIENT",
     });
   }
 
@@ -701,6 +813,7 @@ function CounterPhasePanel({
                 <CounterRelationCard
                   card={attackSourceCard}
                   powerLabel={sourcePowerLabel}
+                  basePowerLabel={sourceBasePowerLabel}
                   width={relationCardWidth}
                 />
                 <CounterRelationArrow />
@@ -709,6 +822,7 @@ function CounterPhasePanel({
             <CounterRelationCard
               card={targetCard}
               powerLabel={targetPowerLabel}
+              basePowerLabel={targetBasePowerLabel}
               width={relationCardWidth}
             >
               <div
@@ -906,6 +1020,15 @@ function CounterPhasePanel({
           {canFinalizeCounter && (
             <button
               type="button"
+              onClick={insufficient}
+              style={counterButtonStyle("#dc2626", "#ffffff", 42)}
+            >
+              足りない
+            </button>
+          )}
+          {canFinalizeCounter && (
+            <button
+              type="button"
               onClick={confirm}
               style={counterButtonStyle("#0369a1", "#ffffff", 42)}
             >
@@ -921,11 +1044,13 @@ function CounterPhasePanel({
 function CounterRelationCard({
   card,
   powerLabel,
+  basePowerLabel,
   width,
   children,
 }: {
   card: CardData;
   powerLabel: string | null;
+  basePowerLabel: string | null;
   width: string;
   children?: ReactNode;
 }) {
@@ -955,21 +1080,51 @@ function CounterRelationCard({
           <div
             style={{
               position: "absolute",
-              left: "50%",
-              top: "-10px",
-              transform: "translateX(-50%)",
-              padding: "2px clamp(5px, 2vw, 8px)",
-              borderRadius: "999px",
+              right: "4px",
+              bottom: (card.attachedDonCount ?? 0) > 0 ? "28px" : "4px",
+              minWidth: "44px",
+              height: "20px",
+              padding: "0 5px",
+              borderRadius: "6px",
               background: "#facc15",
+              border: "2px solid rgba(255,255,255,0.85)",
               color: "#111827",
-              fontSize: "clamp(10px, 3.5vw, 14px)",
-              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "10px",
+              fontWeight: 1000,
               textAlign: "center",
+              boxShadow: "0 0 8px rgba(0,0,0,0.65)",
               pointerEvents: "none",
-              zIndex: 1500,
+              zIndex: 5,
             }}
           >
             {powerLabel}
+          </div>
+        )}
+        {basePowerLabel && (
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "30%",
+              transform: "translate(-50%, -50%)",
+              minWidth: "58px",
+              padding: "4px 8px",
+              borderRadius: "999px",
+              background: "rgba(15, 23, 42, 0.94)",
+              border: "2px solid #38bdf8",
+              color: "#e0f2fe",
+              fontSize: "clamp(14px, 4.2vw, 18px)",
+              fontWeight: 1000,
+              textAlign: "center",
+              boxShadow: "0 0 10px rgba(0,0,0,0.72)",
+              zIndex: 4,
+              pointerEvents: "none",
+            }}
+          >
+            {basePowerLabel}
           </div>
         )}
         {(card.attachedDonCount ?? 0) > 0 && (
@@ -1347,6 +1502,15 @@ export default function Board() {
   const damagePhase = useGameStore(
     (x) => x.damagePhase
   );
+  const matchResult = useGameStore(
+    (x) => x.matchResult
+  );
+  const clearMatchResult = useGameStore(
+    (x) => x.clearMatchResult
+  );
+  const mulliganChoices = useGameStore(
+    (x) => x.mulliganChoices
+  );
   const communicationMode = useGameStore(
     (x) => x.communicationMode
   );
@@ -1385,7 +1549,100 @@ export default function Board() {
   const [counterPanelMinimized, setCounterPanelMinimized] =
     useState(false);
 
+  const [eventPlayedNotice, setEventPlayedNotice] =
+    useState<EventPlayedNotice>(null);
+  const [koNotice, setKoNotice] =
+    useState<KoNotice>(null);
+  const [counterNotice, setCounterNotice] =
+    useState<CounterNotice>(null);
+  const [showMulliganNotice, setShowMulliganNotice] =
+    useState(false);
+  const [turnEndRefreshRequest, setTurnEndRefreshRequest] =
+    useState(false);
+
   const chatHistoryOpenRef = useRef(false);
+
+  function showEventPlayedNotice(
+    playerIndex: number,
+    card: CardData | undefined
+  ) {
+    if (!card || card.type !== "event") {
+      return;
+    }
+
+    setEventPlayedNotice({
+      id: Date.now(),
+      playerIndex,
+      cardName: card.name,
+      cardImage: card.image,
+    });
+  }
+
+  function showKoNotice(
+    playerIndex: number,
+    card: CardData | undefined
+  ) {
+    if (!card || !cardHasEffect(card, "onKo")) {
+      return;
+    }
+
+    setKoNotice({
+      id: Date.now(),
+      playerIndex,
+      cardName: card.name,
+    });
+  }
+
+  function triggerOnPlayEffect(
+    playerIndex: number,
+    card: CardData | undefined
+  ) {
+    if (!card || !cardHasEffect(card, "onPlay")) {
+      return;
+    }
+
+    const state = useGameStore.getState();
+    const log = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      playerIndex: (state.localPlayerIndex ?? playerIndex) as 0 | 1,
+      actionType: "characterEffect" as const,
+      createdAt: Date.now(),
+    };
+    const pointer = {
+      playerIndex: playerIndex as 0 | 1,
+      cardId: card.id,
+    };
+    const targetIndex = state.players[playerIndex].characters.findIndex(
+      (item) => item?.id === card.id
+    );
+
+    if (targetIndex === -1) {
+      return;
+    }
+
+    state.showCardEffect({
+      ...pointer,
+      nonce: Date.now(),
+    });
+    state.setCardMarker(
+      {
+        ...pointer,
+        markerType: "effect",
+        createdBy: log.playerIndex,
+      },
+      log
+    );
+    sendBoardAction({
+      actionType: "CARD_QUICK_ACTION",
+      payload: {
+        playerIndex: playerIndex as 0 | 1,
+        targetArea: "character",
+        targetIndex,
+        quickAction: "effect",
+        log,
+      },
+    });
+  }
 
   const counterPhaseKey = counterPhase
     ? `${counterPhase.playerIndex}-${counterPhase.targetCardId}-${counterPhase.targetArea}-${counterPhase.targetIndex}`
@@ -1394,6 +1651,89 @@ export default function Board() {
   useEffect(() => {
     setCounterPanelMinimized(false);
   }, [counterPhaseKey]);
+
+  useEffect(() => {
+    if (!eventPlayedNotice) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setEventPlayedNotice((current) =>
+        current?.id === eventPlayedNotice.id ? null : current
+      );
+    }, 2200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [eventPlayedNotice]);
+
+  useEffect(() => {
+    if (!koNotice) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setKoNotice((current) =>
+        current?.id === koNotice.id ? null : current
+      );
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [koNotice]);
+
+  useEffect(() => {
+    if (!counterNotice) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setCounterNotice((current) =>
+        current?.id === counterNotice.id ? null : current
+      );
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [counterNotice]);
+
+  useEffect(() => {
+    if (!matchResult) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      clearMatchResult();
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [clearMatchResult, matchResult]);
+
+  const mulliganNoticeKey = mulliganChoices
+    .map((choice) => `${choice.playerIndex}:${choice.action}`)
+    .sort()
+    .join("|");
+
+  useEffect(() => {
+    if (mulliganChoices.length === 0) {
+      setShowMulliganNotice(false);
+      return;
+    }
+
+    setShowMulliganNotice(true);
+    const timer = window.setTimeout(() => {
+      setShowMulliganNotice(false);
+    }, 2400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [mulliganNoticeKey, mulliganChoices.length]);
 
   function toggleChatHistory() {
     setChatHistoryOpen((open) => {
@@ -1418,6 +1758,17 @@ export default function Board() {
     sendBoardAction({
       actionType: "CLEAR_CARD_ACTIONS",
       payload: {},
+    });
+  }
+
+  function refreshOwnPlayer() {
+    refreshPlayer(ownPlayerIndex);
+
+    sendBoardAction({
+      actionType: "REFRESH_PLAYER",
+      payload: {
+        playerIndex: ownPlayerIndex,
+      },
     });
   }
 
@@ -1507,6 +1858,12 @@ export default function Board() {
           return;
         }
 
+        const movedCard = getCardInArea(
+          player,
+          payload.from,
+          cardIdForThisClient
+        );
+
         state.moveCard({
           playerIndex: payload.playerIndex,
           cardId: cardIdForThisClient,
@@ -1514,6 +1871,16 @@ export default function Board() {
           to: payload.to,
           slotIndex: payload.slotIndex,
         });
+
+        if (
+          payload.from === "hand" &&
+          payload.to === "public"
+        ) {
+          showEventPlayedNotice(payload.playerIndex, movedCard);
+        }
+        if (payload.from === "character" && payload.to === "trash") {
+          showKoNotice(payload.playerIndex, movedCard);
+        }
 
         return;
       }
@@ -1914,10 +2281,19 @@ export default function Board() {
         );
         const currentLocalPlayerIndex =
           useGameStore.getState().localPlayerIndex;
+        const isOpponentLog =
+          currentLocalPlayerIndex !== null &&
+          action.payload.log.playerIndex !== currentLocalPlayerIndex;
 
         if (
-          currentLocalPlayerIndex !== null &&
-          action.payload.log.playerIndex !== currentLocalPlayerIndex &&
+          isOpponentLog &&
+          action.payload.log.actionType === "endTurn"
+        ) {
+          setTurnEndRefreshRequest(true);
+        }
+
+        if (
+          isOpponentLog &&
           !chatHistoryOpenRef.current
         ) {
           setUnreadChatCount((count) => count + 1);
@@ -1944,6 +2320,44 @@ export default function Board() {
             action.payload.log
           );
         }
+        return;
+      }
+
+      if (action.actionType === "SET_PENDING_ON_ATTACK_EFFECT") {
+        const state = useGameStore.getState();
+        const targetPlayer =
+          state.players[action.payload.targetPlayerIndex];
+        const targetCardId = getTargetCardIdByInfo(
+          targetPlayer,
+          action.payload.targetArea,
+          action.payload.targetIndex
+        );
+
+        if (!state.currentAttackSource || !targetCardId) {
+          return;
+        }
+
+        state.setPendingOnAttackEffect({
+          source: state.currentAttackSource,
+          target: {
+            playerIndex: action.payload.targetPlayerIndex,
+            cardId: targetCardId,
+          },
+          targetLog: action.payload.log,
+        });
+        return;
+      }
+
+      if (action.actionType === "RESOLVE_PENDING_ON_ATTACK_EFFECT") {
+        const state = useGameStore.getState();
+        const pending = state.pendingOnAttackEffect;
+
+        if (!pending) {
+          return;
+        }
+
+        state.setAttackTarget(pending.target, pending.targetLog);
+        state.clearPendingOnAttackEffect();
         return;
       }
 
@@ -1978,6 +2392,9 @@ export default function Board() {
             payload.log
           );
         } else if (payload.quickAction === "target") {
+          if (state.currentAttackTarget) {
+            return;
+          }
           state.setAttackTarget(pointer, payload.log);
         } else if (
           payload.quickAction === "target1" ||
@@ -2013,6 +2430,15 @@ export default function Board() {
           ) {
             state.setAttackSource(pointer, payload.log);
           }
+        } else if (payload.quickAction === "effectNone") {
+          state.setCardMarker(
+            {
+              ...pointer,
+              markerType: "effectNone",
+              createdBy: payload.log?.playerIndex ?? payload.playerIndex,
+            },
+            payload.log
+          );
         } else if (payload.quickAction === "rest") {
           state.toggleRotate(payload.playerIndex, cardId);
           if (payload.log) {
@@ -2108,6 +2534,16 @@ export default function Board() {
           return;
         }
 
+        if (payload.counterAction === "INSUFFICIENT") {
+          state.reopenCounterPhase();
+          setCounterPanelMinimized(false);
+          setCounterNotice({
+            id: Date.now(),
+            message: "カウンターが足りません",
+          });
+          return;
+        }
+
         if (payload.counterAction === "MINIMIZE") {
           setCounterPanelMinimized(true);
           return;
@@ -2122,6 +2558,12 @@ export default function Board() {
         state.clearAttackState();
         state.clearCardEffect();
         state.clearCardMarkers();
+        return;
+      }
+
+      if (action.actionType === "MATCH_RESULT") {
+        const state = useGameStore.getState();
+        state.setMatchResult(action.payload);
         return;
       }
 
@@ -2222,7 +2664,11 @@ export default function Board() {
       return;
     }
 
-    if (!canOperatePlayer(data.playerIndex)) {
+    const canDragOpponentHandToTrash =
+      !canOperatePlayer(data.playerIndex) &&
+      data.from === "hand";
+
+    if (!canOperatePlayer(data.playerIndex) && !canDragOpponentHandToTrash) {
       return;
     }
 
@@ -2282,7 +2728,13 @@ export default function Board() {
     }
 
     setActiveCard({
-      card,
+      card: canDragOpponentHandToTrash
+        ? {
+          ...card,
+          image: getCardBackImageUrl(),
+          isFaceUp: false,
+        }
+        : card,
       playerIndex: data.playerIndex,
       from: data.from,
     });
@@ -2319,7 +2771,12 @@ export default function Board() {
       return;
     }
 
-    if (!canOperatePlayer(activeData.playerIndex)) {
+    const isOpponentHandToTrash =
+      !canOperatePlayer(activeData.playerIndex) &&
+      activeData.from === "hand" &&
+      overData.to === "trash";
+
+    if (!canOperatePlayer(activeData.playerIndex) && !isOpponentHandToTrash) {
       return;
     }
 
@@ -2628,6 +3085,12 @@ export default function Board() {
       return;
     }
 
+    const movedCard = getCardInArea(
+      player,
+      activeData.from,
+      activeData.cardId
+    );
+
     const movePayload = {
       playerIndex: activeData.playerIndex,
       cardId: activeData.cardId,
@@ -2638,12 +3101,30 @@ export default function Board() {
     };
 
     store.moveCard(movePayload);
+    if (activeData.from === "hand" && overData.to === "public") {
+      showEventPlayedNotice(activeData.playerIndex, movedCard);
+    }
+    if (activeData.from === "character" && overData.to === "trash") {
+      showKoNotice(activeData.playerIndex, movedCard);
+    }
+    if (activeData.from === "hand" && overData.to === "character") {
+      window.setTimeout(() => {
+        triggerOnPlayEffect(activeData.playerIndex, movedCard);
+      }, 0);
+    }
 
     sendBoardAction({
       actionType: "MOVE_CARD",
       payload: movePayload,
     });
   }
+
+  const ownMulliganChoice = mulliganChoices.find(
+    (choice) => choice.playerIndex === ownPlayerIndex
+  );
+  const opponentMulliganChoice = mulliganChoices.find(
+    (choice) => choice.playerIndex === opponentPlayerIndex
+  );
 
   return (
     <DndContext
@@ -2748,6 +3229,326 @@ export default function Board() {
 
       {damagePhase && (
         <DamagePhasePanel phase={damagePhase} />
+      )}
+
+      {showMulliganNotice && opponentMulliganChoice && (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            top: "25%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 100015,
+            width: "min(220px, 72vw)",
+            padding: "10px 12px",
+            borderRadius: "10px",
+            border: "2px solid #38bdf8",
+            background: "rgba(15, 23, 42, 0.95)",
+            color: "#e0f2fe",
+            boxShadow: "0 16px 34px rgba(0,0,0,0.48)",
+            pointerEvents: "none",
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+            textAlign: "center",
+            fontSize: "13px",
+            fontWeight: 1000,
+          }}
+        >
+          <div>マリガン結果</div>
+          <div
+            style={{
+              fontSize: "14px",
+              fontWeight: 1000,
+            }}
+          >
+            {getMulliganChoiceLabel(opponentMulliganChoice.action)}
+          </div>
+          <div
+            style={{
+              display: "none",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "6px",
+              fontSize: "12px",
+            }}
+          >
+            <div>
+              自分：
+              {ownMulliganChoice
+                ? getMulliganChoiceLabel(ownMulliganChoice.action)
+                : "選択中"}
+            </div>
+            <div>
+              相手：
+              {opponentMulliganChoice
+                ? getMulliganChoiceLabel(opponentMulliganChoice.action)
+                : "選択中"}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {matchResult && (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            top: "25%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 100020,
+            background: "transparent",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "0",
+            boxSizing: "border-box",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              minWidth: "150px",
+              borderRadius: "12px",
+              border: `2px solid ${
+                matchResult.winnerPlayerIndex === opponentPlayerIndex
+                  ? "#facc15"
+                  : "#94a3b8"
+              }`,
+              background: "rgba(15, 23, 42, 0.95)",
+              color:
+                matchResult.winnerPlayerIndex === opponentPlayerIndex
+                  ? "#facc15"
+                  : "#cbd5e1",
+              padding: "16px 22px",
+              textAlign: "center",
+              boxShadow: "0 16px 34px rgba(0,0,0,0.48)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "28px",
+                fontWeight: 1000,
+                lineHeight: 1,
+              }}
+            >
+              {matchResult.winnerPlayerIndex === opponentPlayerIndex
+                ? "WIN"
+                : "LOSE"}
+            </div>
+            <div
+              style={{
+                display: "none",
+                color:
+                  matchResult.winnerPlayerIndex === opponentPlayerIndex
+                    ? "#facc15"
+                    : "#cbd5e1",
+                fontSize: "24px",
+                fontWeight: 1000,
+              }}
+            >
+              {matchResult.winnerPlayerIndex === opponentPlayerIndex
+                ? "勝利"
+                : "敗北"}
+            </div>
+            <button
+              type="button"
+              onClick={clearMatchResult}
+              style={{
+                marginTop: "14px",
+                width: "100%",
+                minHeight: "44px",
+                borderRadius: "8px",
+                border: "1px solid #38bdf8",
+                background: "#0369a1",
+                color: "white",
+                fontWeight: 900,
+                display: "none",
+              }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
+      {matchResult && (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            top: "75%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 100020,
+            background: "transparent",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "0",
+            boxSizing: "border-box",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              minWidth: "150px",
+              borderRadius: "12px",
+              border: `2px solid ${
+                matchResult.winnerPlayerIndex === ownPlayerIndex
+                  ? "#facc15"
+                  : "#94a3b8"
+              }`,
+              background: "rgba(15, 23, 42, 0.95)",
+              color:
+                matchResult.winnerPlayerIndex === ownPlayerIndex
+                  ? "#facc15"
+                  : "#cbd5e1",
+              padding: "16px 22px",
+              textAlign: "center",
+              boxShadow: "0 16px 34px rgba(0,0,0,0.48)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "28px",
+                fontWeight: 1000,
+                lineHeight: 1,
+              }}
+            >
+              {matchResult.winnerPlayerIndex === ownPlayerIndex
+                ? "WIN"
+                : "LOSE"}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {eventPlayedNotice && (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            top: "42%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 86000,
+            minWidth: "180px",
+            maxWidth: "82vw",
+            padding: "12px 16px",
+            borderRadius: "10px",
+            border: "2px solid #facc15",
+            background: "rgba(15, 23, 42, 0.94)",
+            color: "white",
+            textAlign: "center",
+            boxShadow: "0 16px 34px rgba(0,0,0,0.45)",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              color: "#facc15",
+              fontSize: "16px",
+              fontWeight: 1000,
+              lineHeight: 1.1,
+            }}
+          >
+            イベント発動
+          </div>
+          <div
+            style={{
+              marginTop: "5px",
+              fontSize: "11px",
+              fontWeight: 900,
+              color: "#e2e8f0",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <img
+              src={eventPlayedNotice.cardImage}
+              alt=""
+              draggable={false}
+              style={{
+                width: "clamp(42px, 12vw, 58px)",
+                borderRadius: "5px",
+                display: "block",
+                margin: "0 auto",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.42)",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {koNotice && (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            top: "40%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 86000,
+            minWidth: "160px",
+            maxWidth: "82vw",
+            padding: "11px 15px",
+            borderRadius: "10px",
+            border: "2px solid #fca5a5",
+            background: "rgba(127, 29, 29, 0.94)",
+            color: "white",
+            textAlign: "center",
+            boxShadow: "0 16px 34px rgba(0,0,0,0.45)",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              color: "#fecaca",
+              fontSize: "16px",
+              fontWeight: 1000,
+              lineHeight: 1.1,
+            }}
+          >
+            [KO時]
+          </div>
+          <div
+            style={{
+              marginTop: "5px",
+              fontSize: "11px",
+              fontWeight: 900,
+              color: "#fee2e2",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {koNotice.cardName}
+          </div>
+        </div>
+      )}
+
+      {counterNotice && (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            top: "34%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 100020,
+            minWidth: "180px",
+            maxWidth: "82vw",
+            padding: "10px 14px",
+            borderRadius: "10px",
+            border: "2px solid #fca5a5",
+            background: "rgba(127, 29, 29, 0.94)",
+            color: "white",
+            textAlign: "center",
+            fontSize: "13px",
+            fontWeight: 1000,
+            boxShadow: "0 16px 34px rgba(0,0,0,0.45)",
+            pointerEvents: "none",
+          }}
+        >
+          {counterNotice.message}
+        </div>
       )}
 
       {isSilentMode && <AttackArrow />}
@@ -2882,14 +3683,7 @@ export default function Board() {
               type="button"
               onClick={() => {
                 setBoardMenuOpen(false);
-                refreshPlayer(ownPlayerIndex);
-
-                sendBoardAction({
-                  actionType: "REFRESH_PLAYER",
-                  payload: {
-                    playerIndex: ownPlayerIndex,
-                  },
-                });
+                refreshOwnPlayer();
               }}
               style={{
                 width: "100%",
@@ -2904,6 +3698,89 @@ export default function Board() {
             >
               リフレッシュ
             </button>
+          </div>
+        </div>
+      )}
+
+      {turnEndRefreshRequest && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000000,
+            background: "rgba(0, 0, 0, 0.72)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "16px",
+            boxSizing: "border-box",
+          }}
+        >
+          <div
+            style={{
+              width: "min(360px, 92vw)",
+              borderRadius: "12px",
+              background: "#0f172a",
+              color: "white",
+              border: "2px solid #38bdf8",
+              padding: "16px",
+              boxShadow: "0 0 24px rgba(0,0,0,0.7)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "15px",
+                fontWeight: 900,
+                lineHeight: 1.6,
+              }}
+            >
+              <div>{"\u76f8\u624b\u304c\u30bf\u30fc\u30f3\u7d42\u4e86\u3057\u307e\u3057\u305f\u3002"}</div>
+              <div>{"\u30ea\u30d5\u30ec\u30c3\u30b7\u30e5\u3057\u307e\u3059\u304b\uff1f"}</div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "10px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setTurnEndRefreshRequest(false);
+                  refreshOwnPlayer();
+                }}
+                style={{
+                  minHeight: "44px",
+                  borderRadius: "8px",
+                  border: "1px solid #38bdf8",
+                  background: "#0369a1",
+                  color: "white",
+                  fontWeight: 900,
+                }}
+              >
+                {"\u306f\u3044"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTurnEndRefreshRequest(false)}
+                style={{
+                  minHeight: "44px",
+                  borderRadius: "8px",
+                  border: "1px solid #64748b",
+                  background: "#334155",
+                  color: "white",
+                  fontWeight: 900,
+                }}
+              >
+                {"\u3044\u3044\u3048"}
+              </button>
+            </div>
           </div>
         </div>
       )}

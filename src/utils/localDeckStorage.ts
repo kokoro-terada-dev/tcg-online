@@ -6,6 +6,10 @@ import type {
 } from "../types/deck";
 
 import { getLocalCardImage } from "./localCardImages";
+import {
+  getCardMasterEntry,
+  type CardMaster,
+} from "./cardMaster";
 
 const STORAGE_KEY = "opcg-local-deck-recipes-v1";
 
@@ -160,12 +164,14 @@ function createCardData(
   isFaceUp: boolean,
   options?: {
     donFallbackImageUrl?: string;
+    cardMaster?: CardMaster | null;
   }
 ): CardData {
   const image = getLocalCardImage(cardId);
   const imageUrl =
     image?.imageUrl ??
     (type === "don" ? options?.donFallbackImageUrl : undefined);
+  const master = getCardMasterEntry(options?.cardMaster, cardId);
 
   if (!imageUrl) {
     throw new Error(
@@ -178,6 +184,10 @@ function createCardData(
     name: cardId,
     image: imageUrl,
     type,
+    cost: master?.cost ?? null,
+    power: master?.power ?? null,
+    counter: master?.counter ?? null,
+    effects: master?.effects ?? [],
     rotated: false,
     attachedDonCount: 0,
     isFaceUp,
@@ -188,6 +198,7 @@ export function buildDeckCardsFromRecipe(
   recipe: DeckRecipe,
   options?: {
     donFallbackImageUrl?: string;
+    cardMaster?: CardMaster | null;
   }
 ): CardData[] {
   if (!recipe.leaderCardId) {
