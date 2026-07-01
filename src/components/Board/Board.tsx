@@ -1762,6 +1762,12 @@ export default function Board() {
   }
 
   function refreshOwnPlayer() {
+    const state = useGameStore.getState();
+    state.clearAttackState();
+    state.clearCardEffect();
+    state.clearCardMarkers();
+    setQuickChatOpen(false);
+
     refreshPlayer(ownPlayerIndex);
 
     sendBoardAction({
@@ -1987,8 +1993,12 @@ export default function Board() {
 
       if (action.actionType === "REFRESH_PLAYER") {
         const { payload } = action;
+        const state = useGameStore.getState();
 
-        useGameStore.getState().refreshPlayer(
+        state.clearAttackState();
+        state.clearCardEffect();
+        state.clearCardMarkers();
+        state.refreshPlayer(
           payload.playerIndex
         );
 
