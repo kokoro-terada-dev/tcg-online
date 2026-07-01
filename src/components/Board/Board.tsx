@@ -474,7 +474,7 @@ function getPowerWithoutAttachedDonLabel(card: CardData | null) {
 }
 
 function getMulliganChoiceLabel(action: "keep" | "mulligan") {
-  return action === "keep" ? "キープ" : "マリガン";
+  return action === "keep" ? "\u30ad\u30fc\u30d7" : "\u30de\u30ea\u30ac\u30f3";
 }
 
 function CounterPhasePanel({
@@ -711,7 +711,7 @@ function CounterPhasePanel({
             whiteSpace: "nowrap",
           }}
         >
-          <span>カウンター</span>
+          <span>{"\u30ab\u30a6\u30f3\u30bf\u30fc"}</span>
           <span
             style={{
               color: "#cbd5e1",
@@ -719,7 +719,7 @@ function CounterPhasePanel({
               fontWeight: 900,
             }}
           >
-            {player.counterCards.length}枚
+            {player.counterCards.length}{"\u679a"}
           </span>
           <span
             style={{
@@ -743,7 +743,7 @@ function CounterPhasePanel({
             onClick={restore}
             style={counterButtonStyle("#0369a1", "#ffffff", 32)}
           >
-            開く
+            {"\u958b\u304f"}
           </button>
         ) : (
           <div
@@ -754,7 +754,7 @@ function CounterPhasePanel({
               whiteSpace: "nowrap",
             }}
           >
-            相手が盤面操作中
+            {"\u76f8\u624b\u304c\u76e4\u9762\u64cd\u4f5c\u4e2d"}
           </div>
         )}
       </div>
@@ -904,14 +904,14 @@ function CounterPhasePanel({
             fontWeight: 1000,
           }}
         >
-          <span>カウンター</span>
+          <span>{"\u30ab\u30a6\u30f3\u30bf\u30fc"}</span>
           {canCounterPlayerOperate && (
             <button
               type="button"
               onClick={minimize}
               style={counterButtonStyle("#334155", "#ffffff", 30)}
             >
-              最小化
+              {"\u6700\u5c0f\u5316"}
             </button>
           )}
         </div>
@@ -954,7 +954,7 @@ function CounterPhasePanel({
                 textAlign: "center",
               }}
             >
-              相手がカウンターしました
+              {"\u76f8\u624b\u304c\u30ab\u30a6\u30f3\u30bf\u30fc\u3057\u307e\u3057\u305f"}
             </div>
           )}
           {player.counterCards.length === 0 && (
@@ -966,8 +966,8 @@ function CounterPhasePanel({
               }}
             >
               {canCounterPlayerOperate
-                ? "手札からカードを置いてください"
-                : "相手がカウンターします"}
+                ? "\u624b\u672d\u304b\u3089\u30ab\u30fc\u30c9\u3092\u7f6e\u3044\u3066\u304f\u3060\u3055\u3044"
+                : "\u76f8\u624b\u304c\u30ab\u30a6\u30f3\u30bf\u30fc\u3057\u307e\u3059"}
             </div>
           )}
           {player.counterCards.map((card, index) => (
@@ -995,7 +995,7 @@ function CounterPhasePanel({
           style={{
             marginTop: "7px",
             display: "flex",
-            gap: "6px",
+            gap: "12px",
             justifyContent: "flex-end",
           }}
         >
@@ -1005,7 +1005,7 @@ function CounterPhasePanel({
               onClick={cancel}
               style={counterButtonStyle("#475569", "#ffffff", 42)}
             >
-              キャンセル
+              {"\u30ad\u30e3\u30f3\u30bb\u30eb"}
             </button>
           )}
           {canEditCounter && (
@@ -1023,7 +1023,7 @@ function CounterPhasePanel({
               onClick={insufficient}
               style={counterButtonStyle("#dc2626", "#ffffff", 42)}
             >
-              足りない
+              {"\u8db3\u308a\u306a\u3044"}
             </button>
           )}
           {canFinalizeCounter && (
@@ -1150,7 +1150,7 @@ function CounterRelationCard({
               pointerEvents: "none",
             }}
           >
-            {`ドン!!×${card.attachedDonCount}`}
+            {`\u30c9\u30f3!!\u00d7${card.attachedDonCount}`}
           </div>
         )}
         {children}
@@ -1283,7 +1283,7 @@ function DamagePhasePanel({
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       playerIndex: (localPlayerIndex ?? phase.playerIndex) as 0 | 1,
       actionType: "custom" as const,
-      message: "手札へ",
+      message: "\u624b\u672d\u3078",
       createdAt: Date.now(),
     };
 
@@ -1313,7 +1313,7 @@ function DamagePhasePanel({
       playerIndex: phase.playerIndex,
       cardId,
       nonce: Date.now(),
-      label: "トリガー",
+      label: "\u30c8\u30ea\u30ac\u30fc",
       background: "#facc15",
       color: "#111827",
     });
@@ -1352,7 +1352,7 @@ function DamagePhasePanel({
           fontWeight: 1000,
         }}
       >
-        ダメージ
+        {"\u30c0\u30e1\u30fc\u30b8"}
       </div>
 
       <img
@@ -1380,8 +1380,8 @@ function DamagePhasePanel({
         }}
       >
         {canOperate
-          ? "ライフを確認してください"
-          : "相手がライフを確認しています"}
+          ? "\u30e9\u30a4\u30d5\u3092\u30c1\u30a7\u30c3\u30af\u3057\u3066\u304f\u3060\u3055\u3044"
+          : "\u76f8\u624b\u304c\u30e9\u30a4\u30d5\u3092\u30c1\u30a7\u30c3\u30af\u3057\u307e\u3059"}
       </div>
 
       {canOperate && (
@@ -1398,14 +1398,14 @@ function DamagePhasePanel({
             onClick={moveToHand}
             style={counterButtonStyle("#0369a1", "#ffffff", 44)}
           >
-            手札へ
+            {"\u624b\u672d\u3078"}
           </button>
           <button
             type="button"
             onClick={trigger}
             style={counterButtonStyle("#facc15", "#111827", 44)}
           >
-            トリガー発動
+            {"\u30c8\u30ea\u30ac\u30fc\u767a\u52d5"}
           </button>
         </div>
       )}
@@ -1780,7 +1780,7 @@ export default function Board() {
 
   function requestMatchExit() {
     const result = window.confirm(
-      "対戦終了を相手に申請しますか？"
+      "\u5bfe\u6226\u7d42\u4e86\u3092\u76f8\u624b\u306b\u7533\u8acb\u3057\u307e\u3059\u304b\uff1f"
     );
 
     if (!result) {
@@ -1804,7 +1804,7 @@ export default function Board() {
   useEffect(() => {
     const offOpponentDisconnected = onOpponentDisconnected(() => {
       window.alert(
-        "相手が切断しました。ルーム画面に戻ります。"
+        "\u76f8\u624b\u304c\u5207\u65ad\u3057\u307e\u3057\u305f\u3002\u30eb\u30fc\u30e0\u753b\u9762\u306b\u623b\u308a\u307e\u3059\u3002"
       );
 
       returnToRoomAfterDisconnect();
@@ -1830,7 +1830,7 @@ export default function Board() {
       setIncomingExitRequest(false);
 
       window.alert(
-        "相手が試合終了をキャンセルしました。"
+        "\u76f8\u624b\u304c\u8a66\u5408\u7d42\u4e86\u3092\u30ad\u30e3\u30f3\u30bb\u30eb\u3057\u307e\u3057\u305f\u3002"
       );
     });
 
@@ -2549,7 +2549,7 @@ export default function Board() {
           setCounterPanelMinimized(false);
           setCounterNotice({
             id: Date.now(),
-            message: "カウンターが足りません",
+            message: "\u30ab\u30a6\u30f3\u30bf\u30fc\u304c\u8db3\u308a\u307e\u305b\u3093",
           });
           return;
         }
@@ -2621,7 +2621,7 @@ export default function Board() {
             playerIndex: phase.playerIndex,
             cardId,
             nonce: Date.now(),
-            label: "トリガー",
+            label: "\u30c8\u30ea\u30ac\u30fc",
             background: "#facc15",
             color: "#111827",
           });
@@ -3265,7 +3265,7 @@ export default function Board() {
             fontWeight: 1000,
           }}
         >
-          <div>マリガン結果</div>
+          <div>{"\u30de\u30ea\u30ac\u30f3\u7d50\u679c"}</div>
           <div
             style={{
               fontSize: "14px",
@@ -3283,16 +3283,16 @@ export default function Board() {
             }}
           >
             <div>
-              自分：
+              {"\u81ea\u5206\uff1a"}
               {ownMulliganChoice
                 ? getMulliganChoiceLabel(ownMulliganChoice.action)
-                : "選択中"}
+                 : "\u9078\u629e\u4e2d"}
             </div>
             <div>
-              相手：
+              {"\u76f8\u624b\uff1a"}
               {opponentMulliganChoice
                 ? getMulliganChoiceLabel(opponentMulliganChoice.action)
-                : "選択中"}
+                 : "\u9078\u629e\u4e2d"}
             </div>
           </div>
         </div>
@@ -3357,8 +3357,8 @@ export default function Board() {
               }}
             >
               {matchResult.winnerPlayerIndex === opponentPlayerIndex
-                ? "勝利"
-                : "敗北"}
+                ? "\u52dd\u5229"
+                : "\u6557\u5317"}
             </div>
             <button
               type="button"
@@ -3460,7 +3460,7 @@ export default function Board() {
               lineHeight: 1.1,
             }}
           >
-            イベント発動
+            {"\u30a4\u30d9\u30f3\u30c8\u767a\u52d5"}
           </div>
           <div
             style={{
@@ -3517,7 +3517,7 @@ export default function Board() {
               lineHeight: 1.1,
             }}
           >
-            [KO時]
+            {"[KO\u6642]"}
           </div>
           <div
             style={{
@@ -3569,8 +3569,8 @@ export default function Board() {
         cardMarkers.length > 0) && (
         <button
           type="button"
-          aria-label="処理終了"
-          title="処理終了"
+          aria-label="\u51e6\u7406\u7d42\u4e86"
+          title="\u51e6\u7406\u7d42\u4e86"
           onClick={clearCardActions}
           style={{
             position: "fixed",
@@ -3588,10 +3588,9 @@ export default function Board() {
             zIndex: 90000,
           }}
         >
-          処理終了
+          {"\u51e6\u7406\u7d42\u4e86"}
         </button>
       )}
-
       {isSilentMode && <ChatControls
         senderPlayerIndex={ownPlayerIndex as 0 | 1}
         quickChatOpen={quickChatOpen}
@@ -3606,8 +3605,8 @@ export default function Board() {
 
       <button
         type="button"
-        aria-label="メニュー"
-        title="メニュー"
+        aria-label="\u30e1\u30cb\u30e5\u30fc"
+        title="\u30e1\u30cb\u30e5\u30fc"
         onClick={() => setBoardMenuOpen(true)}
         style={{
           position: "fixed",
@@ -3624,7 +3623,7 @@ export default function Board() {
           zIndex: 90000,
         }}
       >
-        ☰
+        {"\u2630"}
       </button>
 
       {boardMenuOpen && (
@@ -3653,8 +3652,8 @@ export default function Board() {
           >
             <button
               type="button"
-              aria-label="閉じる"
-              title="閉じる"
+              aria-label="\u9589\u3058\u308b"
+              title="\u9589\u3058\u308b"
               onClick={() => setBoardMenuOpen(false)}
               style={{
                 display: "block",
@@ -3668,9 +3667,8 @@ export default function Board() {
                 fontSize: "22px",
               }}
             >
-              ×
+              {"\u00d7"}
             </button>
-
             <button
               type="button"
               disabled={exitRequestWaiting}
@@ -3686,7 +3684,7 @@ export default function Board() {
                 fontWeight: 900,
               }}
             >
-              {exitRequestWaiting ? "確認待ち" : "対戦終了"}
+              {exitRequestWaiting ? "\u78ba\u8a8d\u5f85\u3061" : "\u5bfe\u6226\u7d42\u4e86"}
             </button>
 
             <button
@@ -3706,7 +3704,7 @@ export default function Board() {
                 fontWeight: 900,
               }}
             >
-              リフレッシュ
+              {"\u30ea\u30d5\u30ec\u30c3\u30b7\u30e5"}
             </button>
           </div>
         </div>
@@ -3761,6 +3759,20 @@ export default function Board() {
             >
               <button
                 type="button"
+                onClick={() => setTurnEndRefreshRequest(false)}
+                style={{
+                  minHeight: "44px",
+                  borderRadius: "8px",
+                  border: "1px solid #64748b",
+                  background: "#334155",
+                  color: "white",
+                  fontWeight: 900,
+                }}
+              >
+                {"\u62d2\u5426"}
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setTurnEndRefreshRequest(false);
                   refreshOwnPlayer();
@@ -3774,21 +3786,7 @@ export default function Board() {
                   fontWeight: 900,
                 }}
               >
-                {"\u306f\u3044"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setTurnEndRefreshRequest(false)}
-                style={{
-                  minHeight: "44px",
-                  borderRadius: "8px",
-                  border: "1px solid #64748b",
-                  background: "#334155",
-                  color: "white",
-                  fontWeight: 900,
-                }}
-              >
-                {"\u3044\u3044\u3048"}
+                {"\u540c\u610f"}
               </button>
             </div>
           </div>
@@ -3830,7 +3828,7 @@ export default function Board() {
                 fontWeight: 900,
               }}
             >
-              相手が試合終了を希望しています。
+              {"\u76f8\u624b\u304c\u8a66\u5408\u7d42\u4e86\u3092\u5e0c\u671b\u3057\u3066\u3044\u307e\u3059\u3002"}
             </div>
 
             <div
@@ -3839,7 +3837,7 @@ export default function Board() {
                 lineHeight: 1.5,
               }}
             >
-              同意すると、両者ともルーム画面へ戻ります。
+              {"\u540c\u610f\u3059\u308b\u3068\u3001\u4e21\u8005\u3068\u3082\u30eb\u30fc\u30e0\u753b\u9762\u3078\u623b\u308a\u307e\u3059\u3002"}
             </div>
 
             <div
@@ -3864,7 +3862,7 @@ export default function Board() {
                   fontWeight: 900,
                 }}
               >
-                拒否
+                {"\u62d2\u5426"}
               </button>
 
               <button
@@ -3883,7 +3881,7 @@ export default function Board() {
                   fontWeight: 900,
                 }}
               >
-                同意
+                {"\u540c\u610f"}
               </button>
             </div>
           </div>
