@@ -1,6 +1,269 @@
 {
   "version": 1,
   "cards": {
+    "ST31-001": {
+      "type": "character",
+      "cost": 5,
+      "power": 3000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST31-002": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST31-003": {
+      "type": "character",
+      "cost": 2,
+      "power": 3000,
+      "counter": 1000,
+      "effects": []
+    },
+    "ST31-004": {
+      "type": "character",
+      "cost": 7,
+      "power": 9000,
+      "counter": null,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST31-005": {
+      "type": "stage",
+      "cost": null,
+      "power": null,
+      "counter": null,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST32-001": {
+      "type": "character",
+      "cost": 1,
+      "power": 2000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST32-002": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST32-003": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": null,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST32-004": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST32-005": {
+      "type": "character",
+      "cost": 1,
+      "power": 2000,
+      "counter": 2000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST33-001": {
+      "type": "character",
+      "cost": 2,
+      "power": 1000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST33-002": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": [
+        "onAttack",
+        "onKo"
+      ]
+    },
+    "ST33-003": {
+      "type": "character",
+      "cost": 2,
+      "power": 3000,
+      "counter": 2000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST33-004": {
+      "type": "character",
+      "cost": 6,
+      "power": 6000,
+      "counter": 2000,
+      "effects": []
+    },
+    "ST33-005": {
+      "type": "character",
+      "cost": 6,
+      "power": 6000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST34-001": {
+      "type": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": null,
+      "effects": [
+        "onKo"
+      ]
+    },
+    "ST34-002": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST34-003": {
+      "type": "character",
+      "cost": 1,
+      "power": 2000,
+      "counter": 2000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST34-004": {
+      "type": "character",
+      "cost": 10,
+      "power": 12000,
+      "counter": null,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST34-005": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 2000,
+      "effects": [
+        "onAttack"
+      ]
+    },
+    "ST35-001": {
+      "type": "character",
+      "cost": 4,
+      "power": 4000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST35-002": {
+      "type": "character",
+      "cost": 4,
+      "power": 4000,
+      "counter": 2000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST35-003": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 2000,
+      "effects": [
+        "onAttack"
+      ]
+    },
+    "ST35-004": {
+      "type": "character",
+      "cost": 7,
+      "power": 6000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST35-005": {
+      "type": "character",
+      "cost": 5,
+      "power": 5000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST36-001": {
+      "type": "character",
+      "cost": 3,
+      "power": 3000,
+      "counter": 2000,
+      "effects": [
+        "onKo"
+      ]
+    },
+    "ST36-002": {
+      "type": "character",
+      "cost": 4,
+      "power": 6000,
+      "counter": null,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST36-003": {
+      "type": "character",
+      "cost": 4,
+      "power": 4000,
+      "counter": 2000,
+      "effects": []
+    },
+    "ST36-004": {
+      "type": "character",
+      "cost": 1,
+      "power": 2000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "ST36-005": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
     "ST10-010": {
       "type": "character",
       "cost": 4,
