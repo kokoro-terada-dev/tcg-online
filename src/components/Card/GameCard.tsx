@@ -187,12 +187,6 @@ export default function GameCard({
   const setAttackTarget = useGameStore(
     (x) => x.setAttackTarget
   );
-  const clearAttackTarget = useGameStore(
-    (x) => x.clearAttackTarget
-  );
-  const clearAttackState = useGameStore(
-    (x) => x.clearAttackState
-  );
   const addActionLog = useGameStore(
     (x) => x.addActionLog
   );
@@ -205,10 +199,7 @@ export default function GameCard({
   const clearCardEffect = useGameStore(
     (x) => x.clearCardEffect
   );
-  const clearCardMarkers = useGameStore(
-    (x) => x.clearCardMarkers
-  );
-  const pendingOnAttackEffect = useGameStore(
+const pendingOnAttackEffect = useGameStore(
     (x) => x.pendingOnAttackEffect
   );
   const setPendingOnAttackEffect = useGameStore(
@@ -225,6 +216,9 @@ export default function GameCard({
   );
   const setCardMarker = useGameStore(
     (x) => x.setCardMarker
+  );
+  const addEffectTargetArrow = useGameStore(
+    (x) => x.addEffectTargetArrow
   );
   const cardMarkers = useGameStore(
     (x) => x.cardMarkers
@@ -315,6 +309,41 @@ export default function GameCard({
   const isCurrentAttackTarget =
     currentAttackTarget?.playerIndex === playerIndex &&
     currentAttackTarget.cardId === card.id;
+  const currentAttackSourceArea = (() => {
+    if (!currentAttackSource) {
+      return null;
+    }
+
+    const sourcePlayer =
+      useGameStore.getState().players[currentAttackSource.playerIndex];
+
+    if (
+      sourcePlayer.publicCards.some(
+        (item) => item.id === currentAttackSource.cardId
+      )
+    ) {
+      return "public";
+    }
+
+    if (
+      sourcePlayer.leader?.id === currentAttackSource.cardId ||
+      sourcePlayer.characters.some(
+        (item) => item?.id === currentAttackSource.cardId
+      )
+    ) {
+      return "battle";
+    }
+
+    return "other";
+  })();
+  const isOwnAttackTargetSelection =
+    isOpponent &&
+    from !== "stage" &&
+    currentAttackSource !== null &&
+    currentAttackSource.playerIndex === localPlayerIndex &&
+    currentAttackSourceArea === "battle" &&
+    !currentAttackTarget &&
+    !pendingOnAttackEffect;
   const markersForThisCard = cardMarkers.filter(
     (marker) =>
       marker.playerIndex === playerIndex &&
@@ -452,6 +481,7 @@ export default function GameCard({
       | "counterPhase"
       | "damagePhase"
       | "effectNone"
+      | "detail"
       | "cancel"
   ) {
     if (!canOpenQuickMenu) {
@@ -459,25 +489,12 @@ export default function GameCard({
     }
 
     if (action === "cancel") {
-      if (isAutoEffectMenuTarget) {
-        clearAutoEffectMenuTarget();
-        setQuickMenuOpen(false);
-        return;
-      }
-      if (isPendingOnAttackSource) {
-        clearPendingOnAttackEffect();
-        setQuickMenuOpen(false);
-        return;
-      }
-      clearAttackState();
-      clearAttackTarget();
-      clearCardEffect();
-      clearCardMarkers();
-      sendBoardAction({
-        actionType: "CLEAR_CARD_ACTIONS",
-        payload: {},
-      });
       setQuickMenuOpen(false);
+      return;
+    }
+
+    if (action === "detail") {
+      openCardMenu();
       return;
     }
 
@@ -565,6 +582,9 @@ export default function GameCard({
         },
         log
       );
+      if (currentAttackSource) {
+        addEffectTargetArrow(currentAttackSource, pointer, action);
+      }
       sendQuickAction(action, log);
     } else if (action === "effect") {
       if (!canOperate && !isLeaderDamageResponse) {
@@ -1366,27 +1386,29 @@ export default function GameCard({
                   +1000
                 </button>
               )}
-              {isOpponent &&
-                from !== "stage" &&
-                !currentAttackTarget &&
-                !pendingOnAttackEffect && (
+              {isOwnAttackTargetSelection && (
                 <button onClick={() => runQuickAction("target")}>
-                  対象
+                  {"\u5bfe\u8c61"}
                 </button>
               )}
               {isOpponent && from !== "stage" && (
                 <button onClick={() => runQuickAction("target1")}>
-                  対象①
+                  {"\u5bfe\u8c61\u2460"}
                 </button>
               )}
               {isOpponent && from !== "stage" && (
                 <button onClick={() => runQuickAction("target2")}>
-                  対象②
+                  {"\u5bfe\u8c61\u2461"}
                 </button>
               )}
               {isOpponent && from !== "stage" && (
                 <button onClick={() => runQuickAction("target3")}>
-                  対象③
+                  {"\u5bfe\u8c61\u2462"}
+                </button>
+              )}
+              {isOpponent && (
+                <button onClick={() => runQuickAction("detail")}>
+                  {"\u8a73\u7d30"}
                 </button>
               )}
                 </>
@@ -1396,7 +1418,7 @@ export default function GameCard({
                   className="card-quick-actions-cancel"
                   onClick={() => runQuickAction("cancel")}
                 >
-                  キャンセル
+                  {"\u9589\u3058\u308b"}
                 </button>
               )}
             </div>

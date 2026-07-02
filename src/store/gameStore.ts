@@ -91,6 +91,14 @@ export type PendingOnAttackEffect = {
   targetLog?: ActionLog;
 } | null;
 
+export type EffectTargetArrow = {
+  id: string;
+  source: Exclude<AttackTarget, null>;
+  target: Exclude<AttackTarget, null>;
+  markerType: "target1" | "target2" | "target3";
+  createdAt: number;
+};
+
 export type CardMarkerType =
   | "attackSource"
   | "attackTarget"
@@ -452,6 +460,8 @@ interface GameState {
 
   cardMarkers: CardMarker[];
 
+  effectTargetArrows: EffectTargetArrow[];
+
   cardEffectSignal: CardEffectSignal;
 
   counterPhase: CounterPhase;
@@ -496,6 +506,14 @@ interface GameState {
   ) => void;
 
   clearCardMarkers: () => void;
+
+  addEffectTargetArrow: (
+    source: Exclude<AttackTarget, null>,
+    target: Exclude<AttackTarget, null>,
+    markerType: "target1" | "target2" | "target3"
+  ) => void;
+
+  clearEffectTargetArrows: () => void;
 
   showCardEffect: (
     signal: Exclude<CardEffectSignal, null>
@@ -824,6 +842,8 @@ export const useGameStore =
 
       cardMarkers: [],
 
+      effectTargetArrows: [],
+
       cardEffectSignal: null,
 
       counterPhase: null,
@@ -847,6 +867,7 @@ export const useGameStore =
           currentAttackTarget: source
             ? null
             : state.currentAttackTarget,
+          effectTargetArrows: [],
           cardMarkers: source
             ? [
               ...state.cardMarkers.filter(
@@ -897,6 +918,7 @@ export const useGameStore =
               cardId,
             },
             currentAttackTarget: null,
+            effectTargetArrows: [],
             cardMarkers: [
               ...state.cardMarkers.filter(
                 (marker) =>
@@ -956,6 +978,7 @@ export const useGameStore =
         set(() => ({
           currentAttackTarget: null,
           pendingOnAttackEffect: null,
+          effectTargetArrows: [],
           cardMarkers: get().cardMarkers.filter(
             (marker) => marker.markerType !== "attackTarget"
           ),
@@ -967,6 +990,7 @@ export const useGameStore =
           currentAttackTarget: null,
           pendingAttackPlayerIndex: null,
           pendingOnAttackEffect: null,
+          effectTargetArrows: [],
           cardMarkers: get().cardMarkers.filter(
             (marker) =>
               marker.markerType !== "attackSource" &&
@@ -983,6 +1007,19 @@ export const useGameStore =
             "target2",
             "target3",
           ];
+          const targetMarkerTypes: CardMarkerType[] = [
+            "target1",
+            "target2",
+            "target3",
+          ];
+          const shouldToggleOff =
+            targetMarkerTypes.includes(marker.markerType) &&
+            state.cardMarkers.some(
+              (item) =>
+                item.markerType === marker.markerType &&
+                item.playerIndex === marker.playerIndex &&
+                item.cardId === marker.cardId
+            );
           const nextMarkers = state.cardMarkers.filter(
             (item) => {
               if (
@@ -1013,6 +1050,13 @@ export const useGameStore =
             }
           }
 
+          if (shouldToggleOff) {
+            return {
+              cardMarkers: nextMarkers,
+              actionLogs: state.actionLogs,
+            };
+          }
+
           return {
             cardMarkers: [
               ...nextMarkers,
@@ -1031,6 +1075,44 @@ export const useGameStore =
       clearCardMarkers: () =>
         set(() => ({
           cardMarkers: [],
+          effectTargetArrows: [],
+        })),
+
+      addEffectTargetArrow: (source, target, markerType) =>
+        set((state) => {
+          const shouldToggleOff = state.effectTargetArrows.some(
+            (arrow) =>
+              arrow.markerType === markerType &&
+              arrow.target.playerIndex === target.playerIndex &&
+              arrow.target.cardId === target.cardId
+          );
+          const nextArrows = state.effectTargetArrows.filter(
+            (arrow) => arrow.markerType !== markerType
+          );
+
+          if (shouldToggleOff) {
+            return {
+              effectTargetArrows: nextArrows,
+            };
+          }
+
+          return {
+            effectTargetArrows: [
+              ...nextArrows,
+              {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                source,
+                target,
+                markerType,
+                createdAt: Date.now(),
+              },
+            ].slice(-12),
+          };
+        }),
+
+      clearEffectTargetArrows: () =>
+        set(() => ({
+          effectTargetArrows: [],
         })),
 
       showCardEffect: (signal) =>
@@ -1174,6 +1256,7 @@ export const useGameStore =
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
             pendingOnAttackEffect: null,
+            effectTargetArrows: [],
             cardMarkers: state.cardMarkers.filter(
               (marker) =>
                 marker.markerType !== "attackSource" &&
@@ -1225,6 +1308,7 @@ export const useGameStore =
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
             pendingOnAttackEffect: null,
+            effectTargetArrows: [],
             cardMarkers: state.cardMarkers.filter(
               (marker) =>
                 marker.markerType !== "attackSource" &&
@@ -1278,6 +1362,7 @@ export const useGameStore =
           pendingAttackPlayerIndex: null,
           pendingOnAttackEffect: null,
           cardMarkers: [],
+          effectTargetArrows: [],
           cardEffectSignal: null,
           counterPhase: null,
           damagePhase: null,
@@ -1304,6 +1389,7 @@ export const useGameStore =
           currentAttackTarget: null,
           pendingOnAttackEffect: null,
           cardMarkers: [],
+          effectTargetArrows: [],
           cardEffectSignal: null,
           counterPhase: null,
           damagePhase: null,
@@ -2245,6 +2331,7 @@ export const useGameStore =
             currentAttackSource: null,
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
+            effectTargetArrows: [],
             cardEffectSignal: null,
             counterPhase: null,
             damagePhase: null,
@@ -2454,6 +2541,7 @@ export const useGameStore =
           currentAttackSource: null,
           currentAttackTarget: null,
           pendingAttackPlayerIndex: null,
+          effectTargetArrows: [],
           cardEffectSignal: null,
           counterPhase: null,
           damagePhase: null,
@@ -3349,6 +3437,7 @@ export const useGameStore =
             currentAttackSource: null,
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
+            effectTargetArrows: [],
             cardEffectSignal: null,
             counterPhase: null,
             damagePhase: null,

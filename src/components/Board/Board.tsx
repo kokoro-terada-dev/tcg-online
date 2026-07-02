@@ -995,7 +995,7 @@ function CounterPhasePanel({
           style={{
             marginTop: "7px",
             display: "flex",
-            gap: "12px",
+            gap: "20px",
             justifyContent: "flex-end",
           }}
         >
@@ -2419,6 +2419,13 @@ export default function Board() {
             },
             payload.log
           );
+          if (state.currentAttackSource) {
+            state.addEffectTargetArrow(
+              state.currentAttackSource,
+              pointer,
+              payload.quickAction
+            );
+          }
         } else if (payload.quickAction === "effect") {
           state.showCardEffect({
             ...pointer,
