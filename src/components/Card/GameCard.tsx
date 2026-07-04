@@ -162,10 +162,7 @@ export default function GameCard({
   const toggleRotate = useGameStore((x) => x.toggleRotate);
   const toggleCardFace = useGameStore((x) => x.toggleCardFace);
   const startAttack = useGameStore((x) => x.startAttack);
-  const setAttackSource = useGameStore(
-    (x) => x.setAttackSource
-  );
-  const changePower = useGameStore((x) => x.changePower);
+const changePower = useGameStore((x) => x.changePower);
   const changeCountModifier = useGameStore(
     (x) => x.changeCountModifier
   );
@@ -175,14 +172,14 @@ export default function GameCard({
     (x) => x.communicationMode
   );
   const isSilentMode = communicationMode === "silent";
-  const returnAttachedDonsToRest = useGameStore(
-    (x) => x.returnAttachedDonsToRest
-  );
   const currentAttackSource = useGameStore(
     (x) => x.currentAttackSource
   );
   const currentAttackTarget = useGameStore(
     (x) => x.currentAttackTarget
+  );
+  const activeEffectSource = useGameStore(
+    (x) => x.activeEffectSource
   );
   const setAttackTarget = useGameStore(
     (x) => x.setAttackTarget
@@ -199,7 +196,7 @@ export default function GameCard({
   const clearCardEffect = useGameStore(
     (x) => x.clearCardEffect
   );
-const pendingOnAttackEffect = useGameStore(
+  const pendingOnAttackEffect = useGameStore(
     (x) => x.pendingOnAttackEffect
   );
   const setPendingOnAttackEffect = useGameStore(
@@ -216,6 +213,9 @@ const pendingOnAttackEffect = useGameStore(
   );
   const setCardMarker = useGameStore(
     (x) => x.setCardMarker
+  );
+  const setActiveEffectSource = useGameStore(
+    (x) => x.setActiveEffectSource
   );
   const addEffectTargetArrow = useGameStore(
     (x) => x.addEffectTargetArrow
@@ -574,16 +574,17 @@ const pendingOnAttackEffect = useGameStore(
         return;
       }
       const log = createActionLog(action);
-      setCardMarker(
-        {
-          ...pointer,
-          markerType: action,
-          createdBy: (localPlayerIndex ?? playerIndex) as 0 | 1,
-        },
-        log
-      );
-      if (currentAttackSource) {
-        addEffectTargetArrow(currentAttackSource, pointer, action);
+      if (activeEffectSource) {
+        addEffectTargetArrow(activeEffectSource, pointer, action);
+      } else {
+        setCardMarker(
+          {
+            ...pointer,
+            markerType: action,
+            createdBy: (localPlayerIndex ?? playerIndex) as 0 | 1,
+          },
+          log
+        );
       }
       sendQuickAction(action, log);
     } else if (action === "effect") {
@@ -611,9 +612,7 @@ const pendingOnAttackEffect = useGameStore(
         },
         from === "public" ? undefined : log
       );
-      if (from === "public") {
-        setAttackSource(pointer, log);
-      }
+      setActiveEffectSource(pointer);
       sendQuickAction(action, log);
       if (isPendingOnAttackSource && pendingOnAttackEffect) {
         setAttackTarget(
@@ -980,11 +979,23 @@ const pendingOnAttackEffect = useGameStore(
 
   const powerModifier = card.powerModifier ?? 0;
   const countModifier = card.countModifier ?? 0;
-  const visibleStatusLabel =
-    card.statusLabel &&
-      !card.statusLabel.includes("アクティブ")
-      ? "×"
-      : null;
+  const statusLabelTokens = (card.statusLabel ?? "")
+    .split(" ")
+    .filter((label) => label.length > 0);
+  const visibleStatusTokens = statusLabelTokens.filter(
+    (label) => !label.includes("\u30a2\u30af\u30c6\u30a3\u30d6")
+  );
+  const visibleStatusLabel = visibleStatusTokens.join(" ") || null;
+  const hasDisabledBadge = visibleStatusTokens.includes("\u00d7");
+  const hasAttachBadge = visibleStatusTokens.includes("\u4ed8\u4e0e");
+
+  function getNextStatusLabel(token: string) {
+    const nextTokens = statusLabelTokens.includes(token)
+      ? statusLabelTokens.filter((label) => label !== token)
+      : [...statusLabelTokens, token];
+
+    return nextTokens.join(" ");
+  }
   const displayImage =
     from === "donDeck"
       ? getDonDeckImageUrl()
@@ -1196,8 +1207,26 @@ const pendingOnAttackEffect = useGameStore(
       />
 
       {powerModifier !== 0 && (
-        <div className="power-modifier">
+        <div className="card-badge power-modifier">
           {powerModifier > 0 ? `+${powerModifier}` : powerModifier}
+        </div>
+      )}
+
+      {countModifier !== 0 && (
+        <div className="card-badge cost-modifier">
+          {countModifier > 0 ? `+${countModifier}` : countModifier}
+        </div>
+      )}
+
+      {hasDisabledBadge && (
+        <div className="card-badge status-label status-label-x">
+          {"\u00d7"}
+        </div>
+      )}
+
+      {hasAttachBadge && (
+        <div className="card-badge status-label status-label-attach">
+          {"\u4ed8\u4e0e"}
         </div>
       )}
 
@@ -1207,15 +1236,6 @@ const pendingOnAttackEffect = useGameStore(
         </div>
       )}
 
-      {countModifier !== 0 && (
-        <div className="count-modifier">
-          {countModifier > 0 ? `+${countModifier}` : countModifier}
-        </div>
-      )}
-
-      {visibleStatusLabel && (
-        <div className="status-label">{visibleStatusLabel}</div>
-      )}
 
       {isSilentMode && isCurrentAttackTarget && (
         <div
@@ -1638,148 +1658,169 @@ const pendingOnAttackEffect = useGameStore(
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: "20px",
-                    alignItems: "center",
+                    gap: "12px",
+                    alignItems: "stretch",
+                    minWidth: "142px",
                   }}
                 >
-                  <button
-                    style={menuButtonStylePowerPlus}
-                    onClick={() => {
-                      changePower(playerIndex, card.id, 1000);
-
-                      sendCardMenuAction(
-                        "CHANGE_POWER",
-                        {
-                          amount: 1000,
-                        }
-                      );
-                    }}
-                  >
-                    パワー+1000
-                  </button>
-
-                  <button
-                    style={menuButtonStylePowerMinus}
-                    onClick={() => {
-                      changePower(playerIndex, card.id, -1000);
-
-                      sendCardMenuAction(
-                        "CHANGE_POWER",
-                        {
-                          amount: -1000,
-                        }
-                      );
-                    }}
-                  >
-                    パワー-1000
-                  </button>
-
-                  <button
-                    style={menuButtonStyle}
-                    onClick={() => {
-                      setStatusLabel(playerIndex, card.id, "×");
-
-                      sendCardMenuAction(
-                        "SET_STATUS_LABEL",
-                        {
-                          label: "×",
-                        }
-                      );
-                    }}
-                  >
-                    ×
-                  </button>
-
-                  <button
+                  <div
                     style={{
-                      ...menuButtonStyle,
-                      background: "#22c55e",
-                    }}
-                    onClick={() => {
-                      changeCountModifier(playerIndex, card.id, 1);
-
-                      sendCardMenuAction(
-                        "CHANGE_COUNT_MODIFIER",
-                        {
-                          amount: 1,
-                        }
-                      );
+                      color: "#e2e8f0",
+                      fontSize: "12px",
+                      fontWeight: 900,
+                      textAlign: "center",
                     }}
                   >
-                    +1
-                  </button>
-
-                  <button
+                    {"\u30d1\u30ef\u30fc"}
+                  </div>
+                  <div
                     style={{
-                      ...menuButtonStyle,
-                      background: "#ef4444",
-                    }}
-                    onClick={() => {
-                      changeCountModifier(playerIndex, card.id, -1);
-
-                      sendCardMenuAction(
-                        "CHANGE_COUNT_MODIFIER",
-                        {
-                          amount: -1,
-                        }
-                      );
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "8px",
                     }}
                   >
-                    -1
-                  </button>
+                    <button
+                      style={{
+                        ...menuButtonStylePowerMinus,
+                        width: "100%",
+                      }}
+                      onClick={() => {
+                        changePower(playerIndex, card.id, -1000);
+
+                        sendCardMenuAction(
+                          "CHANGE_POWER",
+                          {
+                            amount: -1000,
+                          }
+                        );
+                      }}
+                    >
+                      -
+                    </button>
+                    <button
+                      style={{
+                        ...menuButtonStylePowerPlus,
+                        width: "100%",
+                      }}
+                      onClick={() => {
+                        changePower(playerIndex, card.id, 1000);
+
+                        sendCardMenuAction(
+                          "CHANGE_POWER",
+                          {
+                            amount: 1000,
+                          }
+                        );
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
 
                   <div
                     style={{
-                      height: "46px",
-                      display: "flex",
-                      alignItems: "flex-end",
-                      justifyContent: "center",
+                      color: "#e2e8f0",
+                      fontSize: "12px",
+                      fontWeight: 900,
+                      textAlign: "center",
+                    }}
+                  >
+                    {"\u30b3\u30b9\u30c8"}
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "8px",
                     }}
                   >
                     <button
                       style={{
                         ...menuButtonStyle,
-                        height: "44px",
-                        fontSize: "11px",
-                        lineHeight: 1.1,
-                        textAlign: "center",
-
-                        display: "flex",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        flexDirection: "column",
-
-                        background: "#fa9e15",
-                        color: "#111827",
-
-                        opacity:
-                          card.attachedDonCount > 0 && canOperate ? 1 : 0,
-
-                        pointerEvents:
-                          card.attachedDonCount > 0 && canOperate
-                            ? "auto"
-                            : "none",
+                        width: "100%",
+                        background: "#ef4444",
                       }}
                       onClick={() => {
-                        if (!canOperate) {
-                          return;
-                        }
-                        returnAttachedDonsToRest(playerIndex, card.id);
+                        changeCountModifier(playerIndex, card.id, -1);
 
                         sendCardMenuAction(
-                          "RETURN_ATTACHED_DONS_TO_REST"
+                          "CHANGE_COUNT_MODIFIER",
+                          {
+                            amount: -1,
+                          }
                         );
                       }}
                     >
-                      付与ドン!!
-                      <br />
-                      を戻す
+                      -
+                    </button>
+                    <button
+                      style={{
+                        ...menuButtonStyle,
+                        width: "100%",
+                        background: "#22c55e",
+                      }}
+                      onClick={() => {
+                        changeCountModifier(playerIndex, card.id, 1);
+
+                        sendCardMenuAction(
+                          "CHANGE_COUNT_MODIFIER",
+                          {
+                            amount: 1,
+                          }
+                        );
+                      }}
+                    >
+                      +
                     </button>
                   </div>
 
                   <button
                     style={{
                       ...menuButtonStyle,
+                      width: "100%",
+                    }}
+                    onClick={() => {
+                      const nextLabel = getNextStatusLabel("\u00d7");
+                      setStatusLabel(playerIndex, card.id, nextLabel);
+
+                      sendCardMenuAction(
+                        "SET_STATUS_LABEL",
+                        {
+                          label: nextLabel,
+                        }
+                      );
+                    }}
+                  >
+                    {"\u00d7"}
+                  </button>
+
+                  <button
+                    style={{
+                      ...menuButtonStyle,
+                      width: "100%",
+                      background: "#38bdf8",
+                      color: "#0f172a",
+                    }}
+                    onClick={() => {
+                      const nextLabel = getNextStatusLabel("\u4ed8\u4e0e");
+                      setStatusLabel(playerIndex, card.id, nextLabel);
+
+                      sendCardMenuAction(
+                        "SET_STATUS_LABEL",
+                        {
+                          label: nextLabel,
+                        }
+                      );
+                    }}
+                  >
+                    {"\u4ed8\u4e0e"}
+                  </button>
+
+                  <button
+                    style={{
+                      ...menuButtonStyle,
+                      width: "100%",
                       background: "#ff2222",
                       color: "#ffffff",
                       textAlign: "center",
@@ -1792,7 +1833,7 @@ const pendingOnAttackEffect = useGameStore(
                     className="card-menu-close"
                     onClick={() => setMenuOpen(false)}
                   >
-                    閉じる
+                    {"\u9589\u3058\u308b"}
                   </button>
                 </div>
               </div>

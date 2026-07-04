@@ -1,71 +1,54 @@
-.power-modifier {
+.card-badge {
   position: absolute;
-  top: calc(var(--op-card-height) * -0.18);
   left: 50%;
   transform: translateX(-50%);
+  min-width: 32px;
+  max-width: calc(var(--op-card-width) * 1.2);
+  padding: 2px clamp(5px, 2vw, 8px);
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 2px solid white;
+  font-size: clamp(8px, 3.2vw, 14px);
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
 
+.power-modifier {
+  top: calc(var(--op-card-height) * -0.18);
   background: #facc15;
   color: #111827;
-
-  padding: 2px clamp(5px, 2vw, 8px);
-  border-radius: 999px;
-
-  font-size: clamp(10px, 3.5vw, 14px);
-  font-weight: bold;
-
   z-index: 1500;
 }
 
-.status-label {
-  position: absolute;
-
-  top: calc(var(--op-card-height) * 0.24);
-  left: 50%;
-
-  transform: translateX(-50%);
-
-  min-width: calc(var(--op-card-width) * 1.1);
-
-  padding: 2px 8px;
-
-  border-radius: 999px;
-
-  background: #ff4727;
-
-  color: #0f172a;
-
-  border: 2px solid white;
-
-  font-size: clamp(8px, 2.6vw, 10px);
-
-  font-weight: 900;
-
-  text-align: center;
-
-  white-space: nowrap;
-
-  box-shadow:
-    0 0 8px rgba(0,0,0,0.7);
-
-  z-index: 1000;
-}
-
-.count-modifier {
-  position: absolute;
+.cost-modifier {
   top: calc(var(--op-card-height) * 0.02);
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 40px;
-  padding: 2px 8px;
-  border-radius: 999px;
   background: #16a34a;
   color: #ffffff;
-  border: 2px solid white;
-  font-size: clamp(11px, 3vw, 14px);
-  font-weight: 900;
-  text-align: center;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
-  z-index: 1001;
+  z-index: 1300;
+}
+
+.status-label {
+  font-size: clamp(8px, 2.6vw, 10px);
+}
+
+.status-label-x {
+  top: calc(var(--op-card-height) * 0.22);
+  background: #ef4444;
+  color: #ffffff;
+  z-index: 1400;
+}
+
+.status-label-attach {
+  top: calc(var(--op-card-height) * 0.40);
+  background: #38bdf8;
+  color: #0f172a;
+  z-index: 1200;
 }
 
 .hand-counter-badge {
@@ -187,7 +170,7 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  z-index: 1300;
+  z-index: 1800;
   transform: translate(-50%, -50%);
   padding: 5px 10px;
   border: 2px solid #ffffff;
@@ -204,7 +187,7 @@
   position: absolute;
   top: -4px;
   right: -4px;
-  z-index: 1350;
+  z-index: 1700;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;

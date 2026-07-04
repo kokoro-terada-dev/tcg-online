@@ -1632,6 +1632,7 @@ export default function Board() {
       },
       log
     );
+    state.setActiveEffectSource(pointer);
     sendBoardAction({
       actionType: "CARD_QUICK_ACTION",
       payload: {
@@ -2052,7 +2053,7 @@ export default function Board() {
 
         if (
           payload.menuAction === "SET_STATUS_LABEL" &&
-          payload.label
+          payload.label !== undefined
         ) {
           state.setStatusLabel(
             payload.playerIndex,
@@ -2411,19 +2412,20 @@ export default function Board() {
           payload.quickAction === "target2" ||
           payload.quickAction === "target3"
         ) {
-          state.setCardMarker(
-            {
-              ...pointer,
-              markerType: payload.quickAction,
-              createdBy: payload.log?.playerIndex ?? payload.playerIndex,
-            },
-            payload.log
-          );
-          if (state.currentAttackSource) {
+          if (state.activeEffectSource) {
             state.addEffectTargetArrow(
-              state.currentAttackSource,
+              state.activeEffectSource,
               pointer,
               payload.quickAction
+            );
+          } else {
+            state.setCardMarker(
+              {
+                ...pointer,
+                markerType: payload.quickAction,
+                createdBy: payload.log?.playerIndex ?? payload.playerIndex,
+              },
+              payload.log
             );
           }
         } else if (payload.quickAction === "effect") {
@@ -2441,12 +2443,7 @@ export default function Board() {
               ? undefined
               : payload.log
           );
-          if (
-            payload.targetArea === "public" &&
-            payload.log
-          ) {
-            state.setAttackSource(pointer, payload.log);
-          }
+          state.setActiveEffectSource(pointer);
         } else if (payload.quickAction === "effectNone") {
           state.setCardMarker(
             {

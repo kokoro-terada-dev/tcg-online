@@ -460,6 +460,8 @@ interface GameState {
 
   cardMarkers: CardMarker[];
 
+  activeEffectSource: AttackTarget;
+
   effectTargetArrows: EffectTargetArrow[];
 
   cardEffectSignal: CardEffectSignal;
@@ -506,6 +508,10 @@ interface GameState {
   ) => void;
 
   clearCardMarkers: () => void;
+
+  setActiveEffectSource: (
+    source: AttackTarget
+  ) => void;
 
   addEffectTargetArrow: (
     source: Exclude<AttackTarget, null>,
@@ -842,6 +848,8 @@ export const useGameStore =
 
       cardMarkers: [],
 
+      activeEffectSource: null,
+
       effectTargetArrows: [],
 
       cardEffectSignal: null,
@@ -867,7 +875,6 @@ export const useGameStore =
           currentAttackTarget: source
             ? null
             : state.currentAttackTarget,
-          effectTargetArrows: [],
           cardMarkers: source
             ? [
               ...state.cardMarkers.filter(
@@ -978,6 +985,7 @@ export const useGameStore =
         set(() => ({
           currentAttackTarget: null,
           pendingOnAttackEffect: null,
+          activeEffectSource: null,
           effectTargetArrows: [],
           cardMarkers: get().cardMarkers.filter(
             (marker) => marker.markerType !== "attackTarget"
@@ -990,6 +998,7 @@ export const useGameStore =
           currentAttackTarget: null,
           pendingAttackPlayerIndex: null,
           pendingOnAttackEffect: null,
+          activeEffectSource: null,
           effectTargetArrows: [],
           cardMarkers: get().cardMarkers.filter(
             (marker) =>
@@ -1075,19 +1084,29 @@ export const useGameStore =
       clearCardMarkers: () =>
         set(() => ({
           cardMarkers: [],
+          activeEffectSource: null,
           effectTargetArrows: [],
+        })),
+
+      setActiveEffectSource: (source) =>
+        set(() => ({
+          activeEffectSource: source,
         })),
 
       addEffectTargetArrow: (source, target, markerType) =>
         set((state) => {
+          const isSameSource = (arrow: EffectTargetArrow) =>
+            arrow.source.playerIndex === source.playerIndex &&
+            arrow.source.cardId === source.cardId;
           const shouldToggleOff = state.effectTargetArrows.some(
             (arrow) =>
+              isSameSource(arrow) &&
               arrow.markerType === markerType &&
               arrow.target.playerIndex === target.playerIndex &&
               arrow.target.cardId === target.cardId
           );
           const nextArrows = state.effectTargetArrows.filter(
-            (arrow) => arrow.markerType !== markerType
+            (arrow) => !(isSameSource(arrow) && arrow.markerType === markerType)
           );
 
           if (shouldToggleOff) {
@@ -1256,6 +1275,7 @@ export const useGameStore =
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
             pendingOnAttackEffect: null,
+            activeEffectSource: null,
             effectTargetArrows: [],
             cardMarkers: state.cardMarkers.filter(
               (marker) =>
@@ -1308,6 +1328,7 @@ export const useGameStore =
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
             pendingOnAttackEffect: null,
+            activeEffectSource: null,
             effectTargetArrows: [],
             cardMarkers: state.cardMarkers.filter(
               (marker) =>
@@ -1362,6 +1383,7 @@ export const useGameStore =
           pendingAttackPlayerIndex: null,
           pendingOnAttackEffect: null,
           cardMarkers: [],
+          activeEffectSource: null,
           effectTargetArrows: [],
           cardEffectSignal: null,
           counterPhase: null,
@@ -1389,6 +1411,7 @@ export const useGameStore =
           currentAttackTarget: null,
           pendingOnAttackEffect: null,
           cardMarkers: [],
+          activeEffectSource: null,
           effectTargetArrows: [],
           cardEffectSignal: null,
           counterPhase: null,
@@ -2331,6 +2354,7 @@ export const useGameStore =
             currentAttackSource: null,
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
+            activeEffectSource: null,
             effectTargetArrows: [],
             cardEffectSignal: null,
             counterPhase: null,
@@ -2520,14 +2544,7 @@ export const useGameStore =
           const card = allCards.find((x) => x.id === cardId);
 
           if (card) {
-            const hasVisibleDisabledLabel =
-              card.statusLabel !== undefined &&
-              !card.statusLabel.includes("アクティブ");
-
-            card.statusLabel =
-              label === "×" && hasVisibleDisabledLabel
-                ? undefined
-                : label;
+            card.statusLabel = label.length > 0 ? label : undefined;
           }
 
           return { players };
@@ -2541,6 +2558,7 @@ export const useGameStore =
           currentAttackSource: null,
           currentAttackTarget: null,
           pendingAttackPlayerIndex: null,
+          activeEffectSource: null,
           effectTargetArrows: [],
           cardEffectSignal: null,
           counterPhase: null,
@@ -3437,6 +3455,7 @@ export const useGameStore =
             currentAttackSource: null,
             currentAttackTarget: null,
             pendingAttackPlayerIndex: null,
+            activeEffectSource: null,
             effectTargetArrows: [],
             cardEffectSignal: null,
             counterPhase: null,
