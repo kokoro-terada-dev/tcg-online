@@ -1,3 +1,21 @@
+:root {
+  --op-power: #facc15;
+  --op-power-soft: #fef3c7;
+  --op-power-text: #111827;
+  --op-cost: #16a34a;
+  --op-cost-soft: #bbf7d0;
+  --op-cost-text: #064e3b;
+  --op-remove: #ef4444;
+  --op-remove-soft: #fecaca;
+  --op-remove-text: #7f1d1d;
+  --op-attach: #38bdf8;
+  --op-attach-soft: #bae6fd;
+  --op-attach-text: #0f172a;
+  --op-effect: #7c3aed;
+  --op-effect-soft: #ddd6fe;
+  --op-effect-text: #ffffff;
+  --op-trigger: #facc15;
+}
 .card-badge {
   position: absolute;
   left: 50%;
@@ -21,14 +39,14 @@
 
 .power-modifier {
   top: calc(var(--op-card-height) * -0.18);
-  background: #facc15;
-  color: #111827;
+  background: var(--op-power);
+  color: var(--op-power-text);
   z-index: 1500;
 }
 
 .cost-modifier {
   top: calc(var(--op-card-height) * 0.02);
-  background: #16a34a;
+  background: var(--op-cost);
   color: #ffffff;
   z-index: 1300;
 }
@@ -39,15 +57,20 @@
 
 .status-label-x {
   top: calc(var(--op-card-height) * 0.22);
-  background: #ef4444;
+  left: 0;
+  transform: none;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  background: var(--op-remove);
   color: #ffffff;
   z-index: 1400;
 }
 
 .status-label-attach {
   top: calc(var(--op-card-height) * 0.40);
-  background: #38bdf8;
-  color: #0f172a;
+  background: var(--op-attach);
+  color: var(--op-attach-text);
   z-index: 1200;
 }
 
@@ -62,7 +85,7 @@
   box-sizing: border-box;
   border-radius: 0 6px 6px 0;
   background: rgba(125, 211, 252, 0.72);
-  color: #0f172a;
+  color: var(--op-attach-text);
   border: 2px solid rgba(125, 211, 252, 0.72);
   border-left-width: 0;
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.68);
@@ -175,8 +198,8 @@
   padding: 5px 10px;
   border: 2px solid #ffffff;
   border-radius: 5px;
-  background: #7c3aed;
-  color: #ffffff;
+  background: var(--op-effect);
+  color: var(--op-effect-text);
   font-size: 12px;
   font-weight: 900;
   pointer-events: none;
@@ -224,7 +247,7 @@
 }
 
 .card-marker-effect {
-  background: #7c3aed;
+  background: var(--op-effect);
 }
 
 .card-marker-effectNone {
@@ -245,8 +268,8 @@
 }
 
 .card-marker-trigger {
-  background: #facc15;
-  color: #111827;
+  background: var(--op-power);
+  color: var(--op-power-text);
   border-color: #ffffff;
 }
 
@@ -374,28 +397,37 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: 6px;
+  box-sizing: border-box;
 }
 
 .card-menu-modal {
   width: min(700px, 94vw);
+  max-width: calc(100vw - 12px);
+  max-height: calc(100dvh - 12px);
 
-  padding: 14px;
+  padding: clamp(8px, 3vw, 14px);
+  box-sizing: border-box;
+  overflow: auto;
 
   background: #1e293b;
   border: 2px solid #64748b;
   border-radius: 14px;
 
   display: flex;
+  flex-wrap: nowrap;
 
-  gap: 16px;
+  gap: clamp(4px, 1.8vw, 12px);
 
   align-items: flex-start;
+  align-content: flex-start;
+  justify-content: center;
 
   z-index: 999999;
 }
 
 .card-menu-modal button {
-  padding: 8px 10px;
+  padding: 6px 8px;
 
   border: none;
   border-radius: var(--op-card-radius);
@@ -406,25 +438,34 @@
   display: flex;
 
   flex-direction: column;
-  width: 150px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 
-  height: 44px;
+  height: clamp(36px, 10vw, 44px);
 
   border: none;
 
   border-radius: 10px;
 
-  font-size: 16px;
+  font-size: clamp(13px, 4vw, 16px);
 
   font-weight: bold;
 
   cursor: pointer;
 
-  flex-shrink: 0;
+  flex-shrink: 1;
 
   gap: 8px;
 
-  flex: 1;
+  flex: 0 1 auto;
+}
+
+.card-menu-buttons {
+  width: clamp(104px, 28vw, 142px);
+  max-width: 100%;
+  flex: 0 0 clamp(104px, 28vw, 142px);
+  min-width: 0;
 }
 
 .card-menu-close {

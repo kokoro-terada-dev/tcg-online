@@ -53,9 +53,9 @@ const menuButtonStyle = {
   fontWeight: 1000,
   borderRadius: "8px",
   padding: "10px 10px",
-  border: "1px solid #475569",
-  background: "#54c9ff",
-  color: "#ffffff",
+  border: "1px solid var(--op-attach)",
+  background: "var(--op-attach-soft)",
+  color: "var(--op-attach-text)",
   cursor: "pointer",
 };
 
@@ -66,9 +66,9 @@ const menuButtonStylePowerPlus = {
   fontWeight: 1000,
   borderRadius: "8px",
   padding: "10px 10px",
-  border: "1px solid #475569",
-  background: "#facc15",
-  color: "#ffffff",
+  border: "1px solid var(--op-power)",
+  background: "var(--op-power-soft)",
+  color: "var(--op-power-text)",
   cursor: "pointer",
 };
 
@@ -79,25 +79,25 @@ const menuButtonStylePowerMinus = {
   fontWeight: 1000,
   borderRadius: "8px",
   padding: "10px 10px",
-  border: "1px solid #475569",
-  background: "#ef4444",
-  color: "#ffffff",
+  border: "1px solid var(--op-remove)",
+  background: "var(--op-remove-soft)",
+  color: "var(--op-remove-text)",
   cursor: "pointer",
 };
 
 const MARKER_LABELS: Record<CardMarkerType, string> = {
-  attackSource: "攻",
-  attackTarget: "↓",
-  target1: "①",
-  target2: "②",
-  target3: "③",
-  effect: "効果",
-  effectNone: "効果なし",
-  processing: "処理中",
-  confirmRequest: "確認",
+  attackSource: "\u653b",
+  attackTarget: "\u2193",
+  target1: "\u2460",
+  target2: "\u2461",
+  target3: "\u2462",
+  effect: "\u52b9\u679c",
+  effectNone: "\u52b9\u679c\u306a\u3057",
+  processing: "\u51e6\u7406\u4e2d",
+  confirmRequest: "\u78ba\u8a8d",
   confirmed: "OK",
-  note: "！",
-  trigger: "トリガー",
+  note: "\uff01",
+  trigger: "\u30c8\u30ea\u30ac\u30fc",
 };
 
 export default function GameCard({
@@ -985,7 +985,6 @@ const changePower = useGameStore((x) => x.changePower);
   const visibleStatusTokens = statusLabelTokens.filter(
     (label) => !label.includes("\u30a2\u30af\u30c6\u30a3\u30d6")
   );
-  const visibleStatusLabel = visibleStatusTokens.join(" ") || null;
   const hasDisabledBadge = visibleStatusTokens.includes("\u00d7");
   const hasAttachBadge = visibleStatusTokens.includes("\u4ed8\u4e0e");
 
@@ -1538,14 +1537,17 @@ const changePower = useGameStore((x) => x.changePower);
                 <div
                   style={{
                     position: "relative",
-                    flexShrink: 0,
+                    flexShrink: 1,
+                    maxWidth: "100%",
                   }}
                 >
                   <img
                     src={card.image}
                     draggable={false}
                     style={{
-                      width: "min(500px, 60vw)",
+                      width: "clamp(140px, calc(100vw - 150px), 500px)",
+                      maxWidth: "100%",
+                      height: "auto",
                       borderRadius: "10px",
                       transform: "rotate(0deg)",
                       display: "block",
@@ -1557,16 +1559,16 @@ const changePower = useGameStore((x) => x.changePower);
                     <div
                       style={{
                         position: "absolute",
-                        top: "8px",
+                        top: "52px",
                         right: "8px",
                         minWidth: "72px",
                         height: "36px",
                         padding: "0 12px",
                         borderRadius: "999px",
                         background:
-                          powerModifier > 0 ? "#facc15" : "#ef4444",
+                          powerModifier > 0 ? "var(--op-power)" : "var(--op-remove)",
                         color:
-                          powerModifier > 0 ? "#111827" : "#ffffff",
+                          powerModifier > 0 ? "var(--op-power-text)" : "#ffffff",
                         border: "2px solid white",
                         display: "flex",
                         justifyContent: "center",
@@ -1587,14 +1589,14 @@ const changePower = useGameStore((x) => x.changePower);
                     <div
                       style={{
                         position: "absolute",
-                        top: "52px",
+                        top: "96px",
                         right: "8px",
                         minWidth: "52px",
                         height: "32px",
                         padding: "0 10px",
                         borderRadius: "999px",
                         background:
-                          countModifier > 0 ? "#22c55e" : "#ef4444",
+                          countModifier > 0 ? "var(--op-cost)" : "var(--op-remove)",
                         color: "#ffffff",
                         border: "2px solid white",
                         display: "flex",
@@ -1612,23 +1614,45 @@ const changePower = useGameStore((x) => x.changePower);
                     </div>
                   )}
 
-                  {visibleStatusLabel && (
+                  {hasDisabledBadge && (
                     <div
                       style={{
                         position: "absolute",
-                        top: countModifier !== 0 ? "92px" : "52px",
+                        top: countModifier !== 0 ? "136px" : "96px",
                         right: "8px",
                         padding: "4px 10px",
                         borderRadius: "999px",
-                        background: "#38bdf8",
-                        color: "#0f172a",
+                        background: "var(--op-remove)",
+                        color: "#ffffff",
                         border: "2px solid white",
                         fontSize: "12px",
                         fontWeight: 900,
                         boxShadow: "0 0 10px rgba(0,0,0,0.8)",
                       }}
                     >
-                      {visibleStatusLabel}
+                      {"\u00d7"}
+                    </div>
+                  )}
+
+                  {hasAttachBadge && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: countModifier !== 0
+                          ? hasDisabledBadge ? "176px" : "136px"
+                          : hasDisabledBadge ? "136px" : "96px",
+                        right: "8px",
+                        padding: "4px 10px",
+                        borderRadius: "999px",
+                        background: "var(--op-attach)",
+                        color: "var(--op-attach-text)",
+                        border: "2px solid white",
+                        fontSize: "12px",
+                        fontWeight: 900,
+                        boxShadow: "0 0 10px rgba(0,0,0,0.8)",
+                      }}
+                    >
+                      {"\u4ed8\u4e0e"}
                     </div>
                   )}
 
@@ -1642,13 +1666,13 @@ const changePower = useGameStore((x) => x.changePower);
                         borderRadius: "999px",
                         background: "#ffffff",
                         color: "#111827",
-                        border: "2px solid #facc15",
+                        border: "2px solid var(--op-power)",
                         fontSize: "12px",
                         fontWeight: 900,
                         boxShadow: "0 0 10px rgba(0,0,0,0.8)",
                       }}
                     >
-                      DON×{card.attachedDonCount}
+                      {"DON\u00d7"}{card.attachedDonCount}
                     </div>
                   )}
                 </div>
@@ -1658,9 +1682,12 @@ const changePower = useGameStore((x) => x.changePower);
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: "12px",
+                    gap: "7px",
                     alignItems: "stretch",
-                    minWidth: "142px",
+                    width: "clamp(104px, 28vw, 142px)",
+                    maxWidth: "100%",
+                    flex: "0 0 clamp(104px, 28vw, 142px)",
+                    minWidth: 0,
                   }}
                 >
                   <div
@@ -1677,7 +1704,7 @@ const changePower = useGameStore((x) => x.changePower);
                     style={{
                       display: "grid",
                       gridTemplateColumns: "1fr 1fr",
-                      gap: "8px",
+                      gap: "3px",
                     }}
                   >
                     <button
@@ -1732,14 +1759,16 @@ const changePower = useGameStore((x) => x.changePower);
                     style={{
                       display: "grid",
                       gridTemplateColumns: "1fr 1fr",
-                      gap: "8px",
+                      gap: "3px",
                     }}
                   >
                     <button
                       style={{
                         ...menuButtonStyle,
                         width: "100%",
-                        background: "#ef4444",
+                        background: "var(--op-remove-soft)",
+                        color: "var(--op-remove-text)",
+                        border: "1px solid var(--op-remove)",
                       }}
                       onClick={() => {
                         changeCountModifier(playerIndex, card.id, -1);
@@ -1758,7 +1787,9 @@ const changePower = useGameStore((x) => x.changePower);
                       style={{
                         ...menuButtonStyle,
                         width: "100%",
-                        background: "#22c55e",
+                        background: "var(--op-cost-soft)",
+                        color: "var(--op-cost-text)",
+                        border: "1px solid var(--op-cost)",
                       }}
                       onClick={() => {
                         changeCountModifier(playerIndex, card.id, 1);
@@ -1779,6 +1810,9 @@ const changePower = useGameStore((x) => x.changePower);
                     style={{
                       ...menuButtonStyle,
                       width: "100%",
+                      background: "var(--op-remove-soft)",
+                      color: "var(--op-remove-text)",
+                      border: "1px solid var(--op-remove)",
                     }}
                     onClick={() => {
                       const nextLabel = getNextStatusLabel("\u00d7");
@@ -1799,8 +1833,9 @@ const changePower = useGameStore((x) => x.changePower);
                     style={{
                       ...menuButtonStyle,
                       width: "100%",
-                      background: "#38bdf8",
-                      color: "#0f172a",
+                      background: "var(--op-attach-soft)",
+                      color: "var(--op-attach-text)",
+                      border: "1px solid var(--op-attach)",
                     }}
                     onClick={() => {
                       const nextLabel = getNextStatusLabel("\u4ed8\u4e0e");
@@ -1906,7 +1941,7 @@ function DonBadge({
         touchAction: "none",
       }}
     >
-      ﾄﾞﾝ!!×{displayAttachedDonCount}
+      {"\u30c9\u30f3!!\u00d7"}{displayAttachedDonCount}
     </div>
   );
 }
