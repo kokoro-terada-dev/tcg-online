@@ -5,6 +5,7 @@ import DeckSelect from "./components/DeckSelect/DeckSelect";
 import MulliganScreen from "./components/Mulligan/MulliganScreen";
 import RoomScreen from "./components/Online/RoomScreen";
 import SoloApp from "./solo/App";
+import SettingsScreen, { BACKGROUND_STORAGE_KEY, readBackgroundColor } from "./components/Settings/SettingsScreen";
 import TurnOrderScreen from "./components/TurnOrder/TurnOrderScreen";
 
 import {
@@ -17,12 +18,23 @@ import { useGameStore } from "./store/gameStore";
 
 type AppScreen =
   | "top"
+  | "settings"
   | "solo"
   | "online-menu"
   | "host-room"
   | "guest-room";
 
 function App() {
+  const [backgroundColor, setBackgroundColor] = useState(readBackgroundColor);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--app-background", backgroundColor);
+    try {
+      localStorage.setItem(BACKGROUND_STORAGE_KEY, backgroundColor);
+    } catch {
+      // Keep the selection for this session when storage is unavailable.
+    }
+  }, [backgroundColor]);
   const [screen, setScreen] =
     useState<AppScreen>("top");
 
@@ -62,6 +74,10 @@ function App() {
     confirmTurnOrder,
     finishOnlineMulligan,
   ]);
+
+  if (screen === "settings") {
+    return <SettingsScreen color={backgroundColor} onChange={setBackgroundColor} onBack={() => setScreen("top")} />;
+  }
 
   if (screen === "solo") {
     return (
@@ -154,6 +170,7 @@ function App() {
   return (
     <DeckSelect
       onOpenSoloMode={() => setScreen("solo")}
+      onOpenSettings={() => setScreen("settings")}
       onOpenOnlineMenu={() => setScreen("online-menu")}
     />
   );

@@ -16,11 +16,13 @@ type ScreenMode = "select" | "builder";
 type DeckSelectProps = {
   onOpenSoloMode: () => void;
   onOpenOnlineMenu: () => void;
+  onOpenSettings: () => void;
 };
 
 export default function DeckSelect({
   onOpenSoloMode,
   onOpenOnlineMenu,
+  onOpenSettings,
 }: DeckSelectProps) {
   const [mode, setMode] = useState<ScreenMode>("select");
 
@@ -80,9 +82,9 @@ export default function DeckSelect({
 
   return (
     <div style={pageStyle}>
-      <div style={bgGlowStyle} />
 
       <div style={containerStyle}>
+        <button style={{ alignSelf: "flex-end", padding: "8px 16px", borderRadius: "8px", border: "1px solid #64748b", background: "#1e293b", color: "white", cursor: "pointer" }} onClick={onOpenSettings}>設定</button>
         <div style={titleBlockStyle}>
           <div style={smallTitleStyle}>
             ONLINE CARD BATTLE
@@ -185,31 +187,23 @@ export default function DeckSelect({
 }
 
 const pageStyle: CSSProperties = {
-  minHeight: "100dvh",
+  height: "100dvh",
   background:
-    "radial-gradient(circle at top, #1e3a8a 0%, #0f172a 38%, #020617 100%)",
+    "var(--app-background, #0f172a)",
   color: "white",
   padding: "18px",
   boxSizing: "border-box",
-  overflow: "hidden",
+  overflowY: "auto",
+  touchAction: "pan-y",
   position: "relative",
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   justifyContent: "center",
 };
 
-const bgGlowStyle: CSSProperties = {
-  position: "absolute",
-  width: "280px",
-  height: "280px",
-  borderRadius: "999px",
-  background: "rgba(59,130,246,0.22)",
-  filter: "blur(48px)",
-  top: "-60px",
-  right: "-80px",
-};
-
 const containerStyle: CSSProperties = {
+  margin: "auto 0",
+  flexShrink: 0,
   width: "100%",
   maxWidth: "420px",
   position: "relative",

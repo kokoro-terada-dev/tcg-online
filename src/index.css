@@ -9,7 +9,7 @@ body,
 
   overflow: hidden;
 
-  background: #0f172a;
+  background: var(--app-background, #0f172a);
 
   font-family: sans-serif;
 
@@ -53,6 +53,7 @@ select {
 }
 
 .board-root {
+  background: var(--app-background, #0f172a);
   width: 100vw;
   height: 100dvh;
 
