@@ -1,0 +1,116 @@
+:root {
+  /* 盤面全体 */
+  --op-board-width: 100%;
+  --op-board-padding: clamp(4px, 0.8dvh, 16px);
+  --op-board-gap: clamp(6px, 1.4vw, 12px);
+  --op-board-inner-gap: clamp(6px, 1.2dvh, 20px);
+  --op-section-gap: clamp(6px, 1.2dvh, 20px);
+  --op-top-hand-gap: clamp(10px, 2dvh, 24px);
+  --op-character-top-gap: clamp(6px, 1.4dvh, 20px);
+
+  /* 通常カード */
+  --op-card-width: clamp(82px, 7.2vw, 110px);
+  --op-card-height: calc(var(--op-card-width) * 1.4);
+
+  /* リーダー */
+  --op-leader-width: calc(var(--op-card-width) * 1.08);
+  --op-leader-height: calc(var(--op-leader-width) * 1.4);
+
+  /* デッキ/トラッシュ表示枠 */
+  --op-deck-width: calc(var(--op-card-width) * 1.02);
+  --op-deck-height: calc(var(--op-card-height) * 1.03);
+  --op-trash-width: calc(var(--op-card-width) * 1.02);
+  --op-trash-height: calc(var(--op-card-height) * 1.03);
+
+  /* ライフ表示枠 */
+  --op-life-width: calc(var(--op-card-width) * 1.18);
+  --op-life-height: calc(var(--op-card-height) * 1.22);
+  --op-life-stack-gap: clamp(12px, 1.8vw, 18px);
+  --op-life-stack-offset-y: -4px;
+
+  /* DON */
+  --op-don-width: calc(var(--op-card-width) * 0.52);
+  --op-don-height: calc(var(--op-don-width) * 1.37);
+  --op-don-rotated-width: var(--op-don-height);
+  --op-don-rotated-height: var(--op-don-width);
+
+  /* 余白 */
+  --op-character-gap: clamp(18px, 2.4vw, 35px);
+  --op-main-area-gap: clamp(12px, 2.4vw, 32px);
+  --op-don-area-gap: clamp(14px, 2.2vw, 50px);
+  --op-active-don-offset-left: clamp(50px, 7vw, 100px);
+  --op-active-rest-gap: clamp(28px, 4vw, 56px);
+  --op-trash-offset-left: clamp(100px, 12vw, 205px);
+  --op-trash-lift: clamp(-20px, -1.6dvh, 0px);
+  --op-hand-min-height: calc(var(--op-card-height) * 1.1);
+  --op-hand-padding: clamp(6px, 0.9vw, 12px);
+
+  /* 共通見た目 */
+  --op-card-radius: 8px;
+  --op-area-radius: 10px;
+  --op-area-border: 2px solid gray;
+  --op-area-border-active: 3px solid #38bdf8;
+  --op-counter-font-size: clamp(16px, 2vw, 20px);
+}
+
+/* iPhoneなど狭い画面向け。
+   iPhone11固定ではなく、横幅と実表示高さの両方から縮尺を決める。 */
+@media (max-width: 767px) {
+  :root {
+    --op-board-width: 100%;
+    --op-board-padding: clamp(1px, 0.45dvh, 4px);
+    --op-board-gap: clamp(2px, 0.8vw, 5px);
+    --op-board-inner-gap: clamp(2px, 0.65dvh, 6px);
+    --op-section-gap: clamp(2px, 0.75dvh, 8px);
+    --op-top-hand-gap: clamp(6px, 1.4dvh, 16px);
+    --op-character-top-gap: clamp(3px, 0.9dvh, 10px);
+
+    --op-card-width: clamp(48px, min(13.6vw, 8dvh), 60px);
+    --op-card-height: calc(var(--op-card-width) * 1.36);
+
+    --op-leader-width: calc(var(--op-card-width) * 1.12);
+    --op-leader-height: calc(var(--op-leader-width) * 1.36);
+
+    --op-deck-width: calc(var(--op-card-width) * 1.04);
+    --op-deck-height: calc(var(--op-card-height) * 1.04);
+    --op-trash-width: calc(var(--op-card-width) * 0.92);
+    --op-trash-height: calc(var(--op-card-height) * 0.92);
+
+    --op-life-width: calc(var(--op-card-width) * 1.34);
+    --op-life-height: calc(var(--op-card-height) * 1.28);
+    --op-life-stack-gap: clamp(7px, 2.4vw, 11px);
+    --op-life-stack-offset-y: calc(var(--op-card-width) * -0.17);
+
+    --op-don-width: calc(var(--op-card-width) * 0.72);
+    --op-don-height: calc(var(--op-don-width) * 1.38);
+    --op-don-rotated-width: var(--op-don-height);
+    --op-don-rotated-height: var(--op-don-width);
+
+    --op-character-gap: clamp(8px, 3.5vw, 18px);
+    --op-main-area-gap: clamp(8px, 5vw, 22px);
+    --op-don-area-gap: clamp(4px, 2vw, 10px);
+    --op-active-don-offset-left: clamp(26px, 9vw, 58px);
+    --op-active-rest-gap: clamp(12px, 5vw, 34px);
+    --op-trash-offset-left: clamp(34px, 13vw, 78px);
+    --op-trash-lift: clamp(-14px, -1.6dvh, 0px);
+    --op-hand-min-height: calc(var(--op-card-height) * 1.08);
+    --op-hand-padding: clamp(2px, 0.9vw, 5px);
+
+    --op-counter-font-size: clamp(13px, 4vw, 18px);
+  }
+}
+
+/* 高さが低い端末では縦方向の余白をさらに詰める */
+@media (max-width: 767px) and (max-height: 700px) {
+  :root {
+    --op-card-width: clamp(45px, min(12.8vw, 7.2dvh), 56px);
+    --op-board-inner-gap: 2px;
+    --op-section-gap: 2px;
+    --op-top-hand-gap: 5px;
+    --op-character-top-gap: 2px;
+    --op-main-area-gap: clamp(6px, 4vw, 16px);
+    --op-character-gap: clamp(6px, 3vw, 14px);
+    --op-trash-lift: clamp(-8px, -1.2dvh, 0px);
+    --op-hand-min-height: calc(var(--op-card-height) * 1.02);
+  }
+}

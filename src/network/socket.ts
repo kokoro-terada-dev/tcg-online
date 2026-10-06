@@ -10,8 +10,15 @@ export const socket = io(
   {
     transports: ["polling", "websocket"],
     reconnection: true,
+    autoConnect: false,
   }
 );
+
+export function connectSocket() {
+  if (!socket.connected) {
+    socket.connect();
+  }
+}
 
 export let isHost = false;
 

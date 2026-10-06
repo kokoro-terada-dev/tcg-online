@@ -1,0 +1,285 @@
+.power-modifier {
+  position: absolute;
+  top: calc(var(--op-card-height) * -0.18);
+  left: 50%;
+  transform: translateX(-50%);
+
+  background: #facc15;
+  color: #111827;
+
+  padding: 2px clamp(5px, 2vw, 8px);
+  border-radius: 999px;
+
+  font-size: clamp(10px, 3.5vw, 14px);
+  font-weight: bold;
+
+  z-index: 60;
+}
+
+.status-label {
+  position: absolute;
+
+  top: calc(var(--op-card-height) * 0.24);
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  min-width: calc(var(--op-card-width) * 1.1);
+
+  padding: 2px 8px;
+
+  border-radius: 999px;
+
+  background: #ff4727;
+
+  color: #0f172a;
+
+  border: 2px solid white;
+
+  font-size: clamp(8px, 2.6vw, 10px);
+
+  font-weight: 900;
+
+  text-align: center;
+
+  white-space: nowrap;
+
+  box-shadow:
+    0 0 8px rgba(0,0,0,0.7);
+
+  z-index: 1000;
+}
+
+.card-menu {
+  position: absolute;
+
+  top: 0;
+  left: calc(100% + 8px);
+
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  width: 160px;
+
+  padding: 8px;
+
+  background: #1e293b;
+
+  border: 2px solid #64748b;
+
+  border-radius: 10px;
+
+  z-index: 999999;
+}
+
+.card-menu button {
+  padding: 6px 8px;
+
+  border: none;
+  border-radius: 6px;
+
+  cursor: pointer;
+
+  font-weight: bold;
+}
+
+.card-menu-close {
+  background: #dc2626;
+  color: white;
+}
+
+.game-card {
+  user-select: none;
+
+  -webkit-user-select: none;
+
+  -moz-user-select: none;
+
+  -ms-user-select: none;
+
+  -webkit-user-drag: none;
+}
+
+/* 通常カード：手札・キャラクター・ステージなど */
+.game-card-hand,
+.game-card-character,
+.game-card-stage {
+  width: calc(var(--op-card-width) * 0.93);
+  height: calc(var(--op-card-height) * 0.95);
+}
+
+.game-card-leader {
+  width: var(--op-leader-width);
+  height: var(--op-leader-height);
+}
+
+.game-card-donDeck,
+.game-card-activeDon,
+.game-card-restDon {
+  width: var(--op-don-width);
+  height: var(--op-don-height);
+  transition: none !important;
+}
+
+.game-card-donDeck img,
+.game-card-activeDon img,
+.game-card-restDon img {
+  transition: none !important;
+}
+
+.game-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--op-card-radius);
+  pointer-events: none;
+}
+
+.game-card.rotated:not(.game-card-life) img {
+  transform: rotate(90deg);
+}
+
+.card-menu-backdrop {
+  position: fixed;
+  inset: 0;
+
+  z-index: 999998;
+
+  background: transparent;
+}
+
+.game-card-life {
+  width: calc(var(--op-card-width) * 0.89);
+  height: calc(var(--op-card-width) * 0.65);
+}
+
+.game-card-life img {
+  width: calc(var(--op-card-width) * 0.64);
+  height: calc(var(--op-card-width) * 0.89);
+
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+
+  transform: rotate(90deg);
+  transform-origin: center;
+
+  position: relative;
+  left: calc(var(--op-card-width) * 0.09);
+  top: calc(var(--op-card-width) * 0.09);
+}
+
+.game-card-deck{
+  width: calc(var(--op-deck-width) * 0.82);
+  height: calc(var(--op-deck-height) * 0.81);
+}
+
+.game-card-deck img {
+  width: calc(var(--op-deck-width) * 0.95);
+  height: calc(var(--op-deck-height) * 0.97);
+  object-fit: cover;
+
+  border-radius: var(--op-card-radius);
+
+  display: block;
+}
+
+.game-card-trash {
+  width: calc(var(--op-trash-width) * 0.82);
+  height: calc(var(--op-trash-height) * 0.81);
+}
+
+.game-card-trash img {
+  width: calc(var(--op-trash-width) * 0.95);
+  height: calc(var(--op-trash-height) * 0.97);
+  object-fit: cover;
+
+  border-radius: var(--op-card-radius);
+
+  display: block;
+}
+
+.card-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999998;
+
+  background: rgba(0, 0, 0, 0.55);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.card-menu-modal {
+  width: min(700px, 94vw);
+
+  padding: 14px;
+
+  background: #1e293b;
+  border: 2px solid #64748b;
+  border-radius: 14px;
+
+  display: flex;
+
+  gap: 16px;
+
+  align-items: flex-start;
+
+  z-index: 999999;
+}
+
+.card-menu-modal button {
+  padding: 8px 10px;
+
+  border: none;
+  border-radius: var(--op-card-radius);
+
+  cursor: pointer;
+
+  font-weight: bold;
+  display: flex;
+
+  flex-direction: column;
+  width: 150px;
+
+  height: 44px;
+
+  border: none;
+
+  border-radius: 10px;
+
+  font-size: 16px;
+
+  font-weight: bold;
+
+  cursor: pointer;
+
+  flex-shrink: 0;
+
+  gap: 8px;
+
+  flex: 1;
+}
+
+.card-menu-close {
+  background: #dc2626;
+  color: white;
+}
+
+.card-menu-side {
+  display: flex;
+  flex-direction: column;
+  gap: 50px;
+}
+
+.card-menu-info {
+  width: 150px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: white;
+  font-weight: bold;
+  line-height: 1.8;
+}

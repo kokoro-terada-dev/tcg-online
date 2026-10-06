@@ -14,10 +14,12 @@ import {
 type ScreenMode = "select" | "builder";
 
 type DeckSelectProps = {
+  onOpenSoloMode: () => void;
   onOpenOnlineMenu: () => void;
 };
 
 export default function DeckSelect({
+  onOpenSoloMode,
   onOpenOnlineMenu,
 }: DeckSelectProps) {
   const [mode, setMode] = useState<ScreenMode>("select");
@@ -129,6 +131,22 @@ export default function DeckSelect({
 
           <button
             style={{
+              ...soloButtonStyle,
+              opacity: isZipLoaded ? 1 : 0.45,
+            }}
+            disabled={!isZipLoaded}
+            onClick={onOpenSoloMode}
+          >
+            <span style={buttonMainTextStyle}>
+              一人回し
+            </span>
+            <span style={buttonSubTextStyle}>
+              anyPhone版の盤面で練習する
+            </span>
+          </button>
+
+          <button
+            style={{
               ...battleButtonStyle,
               opacity: isZipLoaded ? 1 : 0.45,
             }}
@@ -146,7 +164,7 @@ export default function DeckSelect({
 
         {!isZipLoaded && (
           <div style={warningStyle}>
-            画像ZIPを読み込むと対戦に進めます。
+            画像ZIPを読み込むと対戦・一人回しに進めます。
           </div>
         )}
 
@@ -258,6 +276,15 @@ const menuButtonStyle: CSSProperties = {
   cursor: "pointer",
   boxShadow:
     "0 8px 0 #0f172a, 0 12px 20px rgba(0,0,0,0.35)",
+};
+
+const soloButtonStyle: CSSProperties = {
+  ...menuButtonStyle,
+  border: "1px solid #67e8f9",
+  background:
+    "linear-gradient(180deg, #0891b2 0%, #0e7490 100%)",
+  boxShadow:
+    "0 8px 0 #164e63, 0 12px 24px rgba(8,145,178,0.25)",
 };
 
 const battleButtonStyle: CSSProperties = {

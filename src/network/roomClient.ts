@@ -5,6 +5,7 @@ import type {
 } from "../store/gameStore";
 
 import {
+  connectSocket,
   socket,
   setHost
 } from "./socket";
@@ -528,6 +529,7 @@ export function leaveRoom() {
   const wasCreatingRoom = createRoomPending;
 
   if (roomId) {
+    connectSocket();
     socket.emit("leave-room", { roomId });
   }
 
@@ -552,6 +554,8 @@ export function createRoom() {
   ignoredRoomId = null;
   setHost(true);
 
+  connectSocket();
+
   socket.emit("create-room");
 }
 
@@ -569,6 +573,8 @@ export function joinRoom(
 
   roomIdForClient = normalizedRoomId;
 
+  connectSocket();
+
   socket.emit(
     "join-room",
     normalizedRoomId
@@ -576,6 +582,7 @@ export function joinRoom(
 }
 
 export function requestRoomList() {
+  connectSocket();
   socket.emit("room-list-request");
 }
 
@@ -585,6 +592,8 @@ export function selectDeckForRoom(
   if (!roomIdForClient) {
     return;
   }
+
+  connectSocket();
 
   socket.emit(
     "deck-selected",
@@ -600,6 +609,8 @@ export function ready() {
     return;
   }
 
+  connectSocket();
+
   socket.emit(
     "ready",
     roomIdForClient
@@ -612,6 +623,8 @@ export function setRoomCommunicationMode(
   if (!roomIdForClient) {
     return;
   }
+
+  connectSocket();
 
   socket.emit("set-communication-mode", {
     roomId: roomIdForClient,
@@ -635,6 +648,8 @@ export function rollTurnOrder(
     return;
   }
 
+  connectSocket();
+
   socket.emit(
     "roll-turn-order",
     {
@@ -656,6 +671,8 @@ export function selectTurnOrder(
     return;
   }
 
+  connectSocket();
+
   socket.emit(
     "select-turn-order",
     {
@@ -673,6 +690,8 @@ export function sendGameSetup(
     return;
   }
 
+  connectSocket();
+
   socket.emit(
     "game-setup",
     {
@@ -688,6 +707,8 @@ export function sendGameTurnOrderSelected(
   if (!roomIdForClient) {
     return;
   }
+
+  connectSocket();
 
   socket.emit(
     "game-turn-order-selected",
@@ -705,6 +726,8 @@ export function sendMulliganResult(
     return;
   }
 
+  connectSocket();
+
   socket.emit(
     "mulligan-result",
     {
@@ -721,6 +744,8 @@ export function sendBoardAction(
     return;
   }
 
+  connectSocket();
+
   socket.emit(
     "board-action",
     {
@@ -735,6 +760,8 @@ export function sendMatchExitRequest() {
     return;
   }
 
+  connectSocket();
+
   socket.emit(
     "match-exit-request",
     {
@@ -748,6 +775,8 @@ export function sendMatchExitAccepted() {
     return;
   }
 
+  connectSocket();
+
   socket.emit(
     "match-exit-accepted",
     {
@@ -760,6 +789,8 @@ export function sendMatchExitRejected() {
   if (!roomIdForClient) {
     return;
   }
+
+  connectSocket();
 
   socket.emit(
     "match-exit-rejected",
@@ -777,6 +808,7 @@ socket.on(
     if (leaveAfterCreate) {
       leaveAfterCreate = false;
       ignoredRoomId = roomState.roomId;
+      connectSocket();
       socket.emit("leave-room", {
         roomId: roomState.roomId,
       });

@@ -4,6 +4,7 @@ import Board from "./components/Board/Board";
 import DeckSelect from "./components/DeckSelect/DeckSelect";
 import MulliganScreen from "./components/Mulligan/MulliganScreen";
 import RoomScreen from "./components/Online/RoomScreen";
+import SoloApp from "./solo/App";
 import TurnOrderScreen from "./components/TurnOrder/TurnOrderScreen";
 
 import {
@@ -16,6 +17,7 @@ import { useGameStore } from "./store/gameStore";
 
 type AppScreen =
   | "top"
+  | "solo"
   | "online-menu"
   | "host-room"
   | "guest-room";
@@ -60,6 +62,14 @@ function App() {
     confirmTurnOrder,
     finishOnlineMulligan,
   ]);
+
+  if (screen === "solo") {
+    return (
+      <SoloApp
+        onBackToTop={() => setScreen("top")}
+      />
+    );
+  }
 
   if (isStarted) {
     if (turnOrderSelectionPending) {
@@ -143,6 +153,7 @@ function App() {
 
   return (
     <DeckSelect
+      onOpenSoloMode={() => setScreen("solo")}
       onOpenOnlineMenu={() => setScreen("online-menu")}
     />
   );
