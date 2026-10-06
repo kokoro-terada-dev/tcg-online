@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { loadCardMaster } from "../../../utils/cardMaster";
 
 import type { CSSProperties } from "react";
 
@@ -206,7 +207,7 @@ export default function DeckSelect({
     return player1DeckId !== null && player2DeckId !== null;
   }
 
-  function handleStart() {
+  async function handleStart() {
     setError("");
 
     if (!isZipLoaded) {
@@ -229,8 +230,9 @@ export default function DeckSelect({
     }
 
     try {
-      const player1Cards = buildDeckCardsFromRecipe(player1Recipe);
-      const player2Cards = buildDeckCardsFromRecipe(player2Recipe);
+      const cardMaster = await loadCardMaster();
+      const player1Cards = buildDeckCardsFromRecipe(player1Recipe, cardMaster);
+      const player2Cards = buildDeckCardsFromRecipe(player2Recipe, cardMaster);
 
       startGame(player1Cards, player2Cards);
     } catch (e) {

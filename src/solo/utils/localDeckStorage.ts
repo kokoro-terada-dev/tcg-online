@@ -6,6 +6,7 @@ import type {
 } from "../types/deck";
 
 import { getLocalCardImage } from "./localCardImages";
+import { getCardMasterEntry, type CardMaster } from "../../utils/cardMaster";
 
 const STORAGE_KEY = "opcg-local-deck-recipes-v1";
 
@@ -157,7 +158,8 @@ export async function importLocalDeckRecipeFromJsonFile(file: File) {
 function createCardData(
   cardId: string,
   type: CardType,
-  isFaceUp: boolean
+  isFaceUp: boolean,
+  cardMaster?: CardMaster | null
 ): CardData {
   const image = getLocalCardImage(cardId);
 
@@ -172,13 +174,17 @@ function createCardData(
     name: cardId,
     image: image.imageUrl,
     type,
+    cost: getCardMasterEntry(cardMaster, cardId)?.cost ?? null,
     rotated: false,
     attachedDonCount: 0,
     isFaceUp,
   };
 }
 
-export function buildDeckCardsFromRecipe(recipe: DeckRecipe): CardData[] {
+export function buildDeckCardsFromRecipe(
+  recipe: DeckRecipe,
+  cardMaster?: CardMaster | null
+): CardData[] {
   if (!recipe.leaderCardId) {
     throw new Error("リーダーカードが設定されていません。");
   }
@@ -200,7 +206,8 @@ export function buildDeckCardsFromRecipe(recipe: DeckRecipe): CardData[] {
     createCardData(
       cardId,
       recipe.cardTypes[cardId] ?? "character",
-      false
+      false,
+      cardMaster
     )
   );
 

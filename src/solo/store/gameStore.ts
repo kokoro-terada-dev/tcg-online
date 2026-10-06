@@ -694,6 +694,21 @@ export const useGameStore =
           player.characters[
             slotIndex
           ] = card;
+
+          const cardCost = card.cost;
+          if (
+            from === "hand" &&
+            typeof cardCost === "number" &&
+            Number.isFinite(cardCost) &&
+            Number.isInteger(cardCost) &&
+            cardCost > 0 &&
+            player.activeDons.length >= cardCost
+          ) {
+            const paidDons = player.activeDons.splice(0, cardCost);
+            for (const don of paidDons) {
+              player.restDons.unshift({ ...don, rotated: true, isFaceUp: true });
+            }
+          }
         }
 
         return { players };
