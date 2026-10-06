@@ -318,6 +318,15 @@
         "onPlay"
       ]
     },
+    "OP01-016": {
+      "type": "character",
+      "cost": 1,
+      "power": 2000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
     "OP05-077": {
       "type": "event",
       "cost": 2,
@@ -5695,6 +5704,839 @@
       "effects": [
         "onPlay"
       ]
+    },
+    "OP17-001": {
+      "type": "leader",
+      "cost": null,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-002": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-003": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-004": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-005": {
+      "type": "character",
+      "cost": 10,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-006": {
+      "type": "character",
+      "cost": 7,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-007": {
+      "type": "character",
+      "cost": 7,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-008": {
+      "type": "character",
+      "cost": 6,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-009": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-010": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-011": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-012": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-013": {
+      "type": "character",
+      "cost": 6,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-014": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-015": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-016": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-017": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-018": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-019": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-020": {
+      "type": "leader",
+      "cost": null,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-021": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-022": {
+      "type": "character",
+      "cost": 10,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-023": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-024": {
+      "type": "character",
+      "cost": 8,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-025": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-026": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-027": {
+      "type": "character",
+      "cost": 7,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-028": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-029": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-030": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-031": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-032": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-033": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-034": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-035": {
+      "type": "character",
+      "cost": 7,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-036": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-037": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-038": {
+      "type": "event",
+      "cost": 0,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-039": {
+      "type": "leader",
+      "cost": null,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-040": {
+      "type": "character",
+      "cost": 6,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-041": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-042": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-043": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-044": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-045": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-046": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-047": {
+      "type": "character",
+      "cost": 9,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-048": {
+      "type": "character",
+      "cost": 7,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-049": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-050": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-051": {
+      "type": "character",
+      "cost": 7,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-052": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-053": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-054": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-055": {
+      "type": "event",
+      "cost": 0,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-056": {
+      "type": "event",
+      "cost": 0,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-057": {
+      "type": "stage",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-058": {
+      "type": "leader",
+      "cost": null,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-059": {
+      "type": "character",
+      "cost": 7,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-060": {
+      "type": "character",
+      "cost": 6,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-061": {
+      "type": "character",
+      "cost": 9,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-062": {
+      "type": "character",
+      "cost": 10,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-063": {
+      "type": "character",
+      "cost": 10,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-064": {
+      "type": "character",
+      "cost": 9,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-065": {
+      "type": "character",
+      "cost": 9,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-066": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-067": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-068": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-069": {
+      "type": "character",
+      "cost": 9,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-070": {
+      "type": "character",
+      "cost": 6,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-071": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-072": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-073": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-074": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-075": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-076": {
+      "type": "event",
+      "cost": 0,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-077": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-078": {
+      "type": "event",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-079": {
+      "type": "leader",
+      "cost": null,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-080": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-081": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-082": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-083": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-084": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-085": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-086": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-087": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-088": {
+      "type": "character",
+      "cost": 7,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-089": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-090": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-091": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-092": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-093": {
+      "type": "character",
+      "cost": 8,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-094": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-095": {
+      "type": "character",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-096": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-097": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-098": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-099": {
+      "type": "leader",
+      "cost": null,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-100": {
+      "type": "character",
+      "cost": 7,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-101": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-102": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-103": {
+      "type": "character",
+      "cost": 6,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-104": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-105": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-106": {
+      "type": "character",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-107": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-108": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-109": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-110": {
+      "type": "character",
+      "cost": 7,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-111": {
+      "type": "character",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-112": {
+      "type": "character",
+      "cost": 10,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-113": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-114": {
+      "type": "character",
+      "cost": 6,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-115": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-116": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-117": {
+      "type": "stage",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-118": {
+      "type": "character",
+      "cost": 10,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "OP17-119": {
+      "type": "character",
+      "cost": 6,
+      "power": null,
+      "counter": null,
+      "effects": []
     }
   }
 }
