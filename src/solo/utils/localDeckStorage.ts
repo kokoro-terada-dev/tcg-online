@@ -175,6 +175,7 @@ function createCardData(
     image: image.imageUrl,
     type,
     cost: getCardMasterEntry(cardMaster, cardId)?.cost ?? null,
+    counter: getCardMasterEntry(cardMaster, cardId)?.counter ?? null,
     rotated: false,
     attachedDonCount: 0,
     isFaceUp,

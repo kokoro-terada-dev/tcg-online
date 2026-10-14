@@ -240,6 +240,10 @@ export default function GameCard({
         }}
       />
 
+      {from === "hand" && typeof card.counter === "number" && card.counter > 0 && (
+        <div className="solo-hand-counter-badge"><span>+{card.counter}</span></div>
+      )}
+
       {powerModifier !== 0 && (
         <div className="power-modifier">
           {powerModifier > 0 ? `+${powerModifier}` : powerModifier}

@@ -26,6 +26,7 @@ export interface CardData {
   image: string;
   type: CardType;
   cost?: number | null;
+  counter?: number | null;
   rotated: boolean;
   attachedDonCount: number;
   isFaceUp: boolean;
