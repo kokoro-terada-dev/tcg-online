@@ -1894,6 +1894,7 @@ export const useGameStore =
           selectedDonStack: null,
           undoHistory: [],
           turnStartSnapshot: null,
+          mulliganPlayerIndex: 0,
         };
       });
     },
