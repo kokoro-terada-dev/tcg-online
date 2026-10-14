@@ -6,6 +6,8 @@ import type { CSSProperties } from "react";
 import { useGameStore } from "../../store/gameStore";
 
 import DeckBuilder from "../DeckBuilder/DeckBuilder";
+import HandSelectScreen from "../HandSelect/HandSelectScreen";
+import type { CardData } from "../../types/card";
 
 import type { DeckRecipe } from "../../types/deck";
 
@@ -104,6 +106,8 @@ export default function DeckSelect({
   onBackToTop,
 }: Props) {
   const [mode, setMode] = useState<ScreenMode>("select");
+  const [startMode, setStartMode] = useState<"mulligan" | "hand">("mulligan");
+  const [pendingDecks, setPendingDecks] = useState<[CardData[], CardData[]] | null>(null);
 
   const [editingDeckId, setEditingDeckId] =
     useState<string | null>(null);
@@ -234,7 +238,11 @@ export default function DeckSelect({
       const player1Cards = buildDeckCardsFromRecipe(player1Recipe, cardMaster);
       const player2Cards = buildDeckCardsFromRecipe(player2Recipe, cardMaster);
 
-      startGame(player1Cards, player2Cards);
+      if (startMode === "hand") {
+        setPendingDecks([player1Cards, player2Cards]);
+      } else {
+        startGame(player1Cards, player2Cards);
+      }
     } catch (e) {
       setError(
         e instanceof Error
@@ -242,6 +250,10 @@ export default function DeckSelect({
           : "デッキ読み込みに失敗しました。"
       );
     }
+  }
+
+  if (pendingDecks) {
+    return <HandSelectScreen decks={pendingDecks} onBack={() => setPendingDecks(null)} onComplete={(hands) => startGame(pendingDecks[0], pendingDecks[1], hands)} />;
   }
 
   if (mode === "builder") {
@@ -264,7 +276,7 @@ export default function DeckSelect({
         background: "#111827",
         color: "white",
         padding: "12px",
-        paddingBottom: "132px",
+        paddingBottom: "190px",
         boxSizing: "border-box",
         overflowY: "auto",
         overflowX: "hidden",
@@ -491,7 +503,7 @@ export default function DeckSelect({
           padding: "10px",
           boxSizing: "border-box",
           boxShadow: "0 -4px 16px rgba(0,0,0,0.45)",
-          marginBottom: "20px"
+          paddingBottom: "max(10px, env(safe-area-inset-bottom))"
         }}
       >
         <div
@@ -545,6 +557,14 @@ export default function DeckSelect({
           >
             開始
           </button>
+          <div role="radiogroup" aria-label="開始モード" style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "8px" }}>
+            {([ ["mulligan", "マリガン"], ["hand", "手札選択"] ] as const).map(([value, label]) => (
+              <label key={value} style={{ ...buttonStyle, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", background: startMode === value ? "#2563eb" : "#1e293b" }}>
+                <input type="radio" name="solo-start-mode" value={value} checked={startMode === value} onChange={() => setStartMode(value)} />
+                {label}
+              </label>
+            ))}
+          </div>
         </div>
       </div>
     </div>

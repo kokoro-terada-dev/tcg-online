@@ -68,15 +68,22 @@ function shuffleCards(cards: CardData[]) {
 }
 
 function createPlayer(
-  deck: CardData[]
+  deck: CardData[],
+  selectedHandIds?: string[]
 ): PlayerState {
   const leader =
     deck.find((x) => x.type === "leader") ||
     null;
 
-  const mainDeck = shuffle(
-    deck.filter((x) => x.type !== "leader" && x.type !== "don")
-  );
+  const mainCards = deck.filter((x) => x.type !== "leader" && x.type !== "don");
+  const selectedHand = selectedHandIds
+    ? [...new Set(selectedHandIds)].slice(0, 5).flatMap((id) => {
+      const card = mainCards.find((item) => item.id === id);
+      return card ? [{ ...card, isFaceUp: true }] : [];
+    })
+    : [];
+  const selectedIds = new Set(selectedHand.map((card) => card.id));
+  const mainDeck = shuffle(mainCards.filter((card) => !selectedIds.has(card.id)));
 
   const donCards = deck
     .filter((x) => x.type === "don")
@@ -91,7 +98,7 @@ function createPlayer(
 
   const life = mainDeck.splice(0, lifeCount);
 
-  const hand = mainDeck.splice(0, 5);
+  const hand = [...selectedHand, ...mainDeck.splice(0, 5 - selectedHand.length)];
 
   return {
     hand,
@@ -153,7 +160,8 @@ interface GameState {
 
   startGame: (
     player1Deck: CardData[],
-    player2Deck: CardData[]
+    player2Deck: CardData[],
+    selectedHands?: [string[], string[]]
   ) => void;
 
   drawCard: (
@@ -357,17 +365,18 @@ export const useGameStore =
 
     startGame: (
       player1Deck: CardData[],
-      player2Deck: CardData[]
+      player2Deck: CardData[],
+      selectedHands?: [string[], string[]]
     ) =>
       set(() => ({
         players: [
-          createPlayer(player1Deck),
-          createPlayer(player2Deck),
+          createPlayer(player1Deck, selectedHands?.[0]),
+          createPlayer(player2Deck, selectedHands?.[1]),
         ],
 
         isStarted: true,
 
-        mulliganPlayerIndex: 0,
+        mulliganPlayerIndex: selectedHands ? null : 0,
 
         undoHistory: [],
 
