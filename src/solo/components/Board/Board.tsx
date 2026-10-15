@@ -363,7 +363,7 @@ export default function Board({
               justifyContent: "center",
               alignItems: "center",
 
-              gap: "4px",
+              gap: "6px",
               padding: "2px 4px",
 
               fontSize: "clamp(10px, 2.8vw, 12px)",
