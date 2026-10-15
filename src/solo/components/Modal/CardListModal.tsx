@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 
 import type { CardData } from "../../types/card";
+import { useGameStore } from "../../store/gameStore";
 
 import { getCardBackImageUrl } from "../../utils/localCardImages";
 
@@ -75,14 +76,24 @@ export default function CardListModal({
   onToggleFace,
   onOpenTopCards,
   onReorder,
+  zone,
+  playerIndex,
 }: Props) {
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   if (!open) {
     return null;
   }
 
   const isDeck = title === "Deck";
-  const [previewImage, setPreviewImage] =
-    useState<string | null>(null);
+  function summonCard(cardId: string): boolean {
+    const store = useGameStore.getState();
+    const player = store.players[playerIndex];
+    if (!player || !player.trash.some((card) => card.id === cardId)) return false;
+    const slotIndex = player.characters.findIndex((card) => card === null);
+    if (slotIndex === -1) return false;
+    store.moveCard({ playerIndex, cardId, from: "trash", to: "character", slotIndex });
+    return true;
+  }
   const isHiddenList = title === "Deck" || title === "Life";
 
   const actionButtonStyle = {
@@ -292,6 +303,7 @@ export default function CardListModal({
                     onToggleFace={onToggleFace}
                     onHand={onHand}
                     onTrash={onTrash}
+                    onSummon={zone === "trash" ? summonCard : undefined}
                     onBottom={onBottom}
                     onLifeTop={onLifeTop}
                     onPreview={setPreviewImage}
@@ -386,6 +398,7 @@ function SortableCardRow({
   onBottom,
   onLifeTop,
   onPreview,
+  onSummon,
 }: {
   card: CardData;
   isOpen: boolean;
@@ -396,6 +409,7 @@ function SortableCardRow({
   onBottom: (cardId: string) => void;
   onLifeTop: (cardId: string) => void;
   onPreview: (image: string) => void;
+  onSummon?: (cardId: string) => boolean;
 }) {
   const {
     attributes,
@@ -408,6 +422,7 @@ function SortableCardRow({
   });
 
   const previewTimer = useRef<number | null>(null);
+  const cardImageRef = useRef<HTMLImageElement | null>(null);
 
   function clearPreviewTimer() {
     if (previewTimer.current !== null) {
@@ -445,6 +460,7 @@ function SortableCardRow({
       }}
     >
       <img
+        ref={cardImageRef}
         src={isOpen ? card.image : getCardBackImageUrl()}
         draggable={false}
         onTouchStart={(e) => {
@@ -523,8 +539,20 @@ function SortableCardRow({
           onPointerDown={pressButton}
           onPointerUp={releaseButton}
           onPointerCancel={releaseButton}
-          onPointerLeave={releaseButton} onClick={() => onTrash(card.id)}>
-          トラッシュへ
+          onPointerLeave={releaseButton} onClick={() => {
+            if (!onSummon) {
+              onTrash(card.id);
+              return;
+            }
+            if (!onSummon(card.id)) {
+              cardImageRef.current?.getAnimations().forEach((animation) => animation.cancel());
+              cardImageRef.current?.animate(
+                [0, -6, 6, -5, 5, 0].map((x) => ({ transform: `translateX(${x}px)` })),
+                { duration: 320, easing: "ease-in-out" }
+              );
+            }
+          }}>
+          {onSummon ? "登場" : "トラッシュへ"}
         </button>
 
         <button
