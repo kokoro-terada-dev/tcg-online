@@ -154,6 +154,8 @@ interface MoveParams {
 }
 
 interface GameState {
+  handSelectionMode: boolean;
+  handSelectionPending: boolean;
   players: [PlayerState, PlayerState];
 
   isStarted: boolean;
@@ -358,6 +360,8 @@ export const useGameStore =
     ],
 
     isStarted: false,
+    handSelectionMode: false,
+    handSelectionPending: false,
 
     undoHistory: [],
 
@@ -375,6 +379,8 @@ export const useGameStore =
         ],
 
         isStarted: true,
+        handSelectionMode: Boolean(selectedHands),
+        handSelectionPending: false,
 
         mulliganPlayerIndex: selectedHands ? null : 0,
 
@@ -1903,7 +1909,8 @@ export const useGameStore =
           selectedDonStack: null,
           undoHistory: [],
           turnStartSnapshot: null,
-          mulliganPlayerIndex: 0,
+          mulliganPlayerIndex: state.handSelectionMode ? null : 0,
+          handSelectionPending: state.handSelectionMode,
         };
       });
     },

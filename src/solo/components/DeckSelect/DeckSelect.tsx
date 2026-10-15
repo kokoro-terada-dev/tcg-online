@@ -276,9 +276,10 @@ export default function DeckSelect({
         background: "#111827",
         color: "white",
         padding: "12px",
-        paddingBottom: "190px",
         boxSizing: "border-box",
-        overflowY: "auto",
+        overflowY: "hidden",
+        display: "flex",
+        flexDirection: "column",
         overflowX: "hidden",
         WebkitOverflowScrolling: "touch",
       }}
@@ -286,6 +287,9 @@ export default function DeckSelect({
       <div
         style={{
           maxWidth: "760px",
+          width: "100%",
+          flex: 1,
+          minHeight: 0,
           margin: "0 auto",
           display: "flex",
           flexDirection: "column",
@@ -385,6 +389,7 @@ export default function DeckSelect({
           </div>
         )}
 
+        <div style={{ overflowY: "auto", touchAction: "pan-y", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: "12px" }}>
         {decks.length === 0 ? (
           <div
             style={{
@@ -489,11 +494,12 @@ export default function DeckSelect({
             );
           })
         )}
+        </div>
       </div>
 
       <div
         style={{
-          position: "fixed",
+          flexShrink: 0,
           left: 0,
           right: 0,
           bottom: 0,
@@ -549,6 +555,8 @@ export default function DeckSelect({
             onClick={handleStart}
             style={{
               ...primaryButtonStyle,
+              gridRow: 2,
+              gridColumn: 2,
               minWidth: "86px",
               height: "44px",
               opacity: canStart() ? 1 : 0.45,
@@ -557,9 +565,9 @@ export default function DeckSelect({
           >
             開始
           </button>
-          <div role="radiogroup" aria-label="開始モード" style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "8px" }}>
+          <div role="radiogroup" aria-label="開始モード" style={{ gridRow: 1, gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
             {([ ["mulligan", "マリガン"], ["hand", "手札選択"] ] as const).map(([value, label]) => (
-              <label key={value} style={{ ...buttonStyle, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", background: startMode === value ? "#2563eb" : "#1e293b" }}>
+              <label key={value} style={{ ...buttonStyle, display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", background: startMode === value ? "#2563eb" : "#1e293b" ,padding: "1px 12px",}}>
                 <input type="radio" name="solo-start-mode" value={value} checked={startMode === value} onChange={() => setStartMode(value)} />
                 {label}
               </label>

@@ -355,6 +355,7 @@ export default function Board({
           </div>
 
           <div
+            className="solo-board-controls"
             style={{
               flexShrink: 0,
 
@@ -409,6 +410,8 @@ export default function Board({
             </button>
 
             <button
+              title="リセット"
+              aria-label="リセット"
               onClick={() => {
                 const ok = window.confirm(
                   "リセットしますか？"
@@ -419,10 +422,12 @@ export default function Board({
                 }
               }}
             >
-              reset
+              🔄
             </button>
 
             <button
+              title="デッキ選択へ戻る"
+              aria-label="デッキ選択へ戻る"
               onClick={() => {
                 const result = window.confirm(
                   "試合を終了し、戻ります"

@@ -1,3 +1,24 @@
+.solo-board-controls button {
+  width: 36px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #7dd3fc;
+  border-radius: 4px;
+  background: #38bdf8;
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.solo-board-controls button:disabled {
+  opacity: 0.4;
+}
+
 .solo-hand-counter-badge {
   position: absolute;
   left: 0;

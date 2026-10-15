@@ -626,7 +626,7 @@ export default function DeckBuilder({
           color: "white",
           padding: "12px",
           boxSizing: "border-box",
-          overflowY: "auto",
+          overflowY: "hidden",
           overflowX: "hidden",
           WebkitOverflowScrolling: "touch",
         }}
@@ -634,6 +634,8 @@ export default function DeckBuilder({
         <div
           style={{
             maxWidth: "720px",
+            width: "100%",
+            height: "100%",
             margin: "0 auto",
             display: "flex",
             flexDirection: "column",
@@ -722,6 +724,7 @@ export default function DeckBuilder({
             </div>
           )}
 
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", touchAction: "pan-y", display: "flex", flexDirection: "column", gap: "12px" }}>
           {decks.length === 0 ? (
             <div
               style={{
@@ -782,6 +785,7 @@ export default function DeckBuilder({
               </div>
             ))
           )}
+          </div>
         </div>
       </div>
     );

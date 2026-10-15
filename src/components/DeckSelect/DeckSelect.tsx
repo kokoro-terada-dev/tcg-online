@@ -95,7 +95,7 @@ export default function DeckSelect({
           </h1>
 
           <div style={subTitleStyle}>
-            Local Images / Deck Edit / Online Match
+            カードゲームがデジタルで遊べます
           </div>
         </div>
 
@@ -143,7 +143,7 @@ export default function DeckSelect({
               一人回し
             </span>
             <span style={buttonSubTextStyle}>
-              anyPhone版の盤面で練習する
+              2つのデッキを一人で操作
             </span>
           </button>
 
