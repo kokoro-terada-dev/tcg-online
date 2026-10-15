@@ -57,7 +57,7 @@ export default function TrashArea({
           ? GAME_LAYOUT.css.areaBorderActive
           : GAME_LAYOUT.css.areaBorder,
         borderRadius: GAME_LAYOUT.css.areaRadius,
-        background: "#111827",
+        background: "var(--solo-area-background, #111827)",
         position: "relative",
         overflow: "visible",
         userSelect: "none",
@@ -107,7 +107,7 @@ export default function TrashArea({
       ) : (
         <div
           style={{
-            color: "white",
+            color: "var(--solo-area-text, white)",
             height: "100%",
             display: "flex",
             justifyContent: "center",
@@ -141,11 +141,10 @@ export default function TrashArea({
           width: "34px",
           height: "20px",
 
-          color: "white",
+          background: "var(--solo-area-raised, #0f172a)",
+          color: "var(--solo-area-raised-text, white)",
 
-          background: "rgba(15,23,42,0.92)",
-
-          border: "2px solid #94a3b8",
+          border: "var(--op-area-border)",
 
           borderRadius: "6px",
 

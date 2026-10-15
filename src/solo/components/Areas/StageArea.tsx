@@ -33,7 +33,7 @@ export default function StageArea({
                     ? GAME_LAYOUT.css.areaBorderActive
                     : GAME_LAYOUT.css.areaBorder,
                 borderRadius: GAME_LAYOUT.css.cardRadius,
-                background: "#0f172a",
+                background: "var(--solo-area-background, #111827)",
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
@@ -41,7 +41,7 @@ export default function StageArea({
         >{!card && (
             <div
                 style={{
-                    color: "white",
+                    color: "var(--solo-area-text, white)",
                     width: "100%",
                     height: "100%",
                     display: "flex",

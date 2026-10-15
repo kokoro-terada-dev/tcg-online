@@ -40,8 +40,8 @@ export default function DonDeckArea({
             ? GAME_LAYOUT.css.areaBorderActive
             : GAME_LAYOUT.css.areaBorder,
           borderRadius: GAME_LAYOUT.css.cardRadius,
-          background: "#111827",
-          color: "white",
+          background: "var(--solo-area-background, #111827)",
+          color: "var(--solo-area-text, white)",
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",

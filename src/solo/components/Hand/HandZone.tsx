@@ -40,11 +40,11 @@ export default function HandZone({
 
         minHeight: GAME_LAYOUT.css.handMinHeight,
 
-        border: "2px solid #475569",
+        border: "var(--op-area-border)",
 
         borderRadius: GAME_LAYOUT.css.areaRadius,
 
-        background: "#1e293b",
+        background: "var(--solo-area-background, #111827)",
       }}
     >
       {cards.map((card) => (

@@ -397,7 +397,7 @@ export default function Board({
               onClick={undoLastAction}
               disabled={!canUndo}
             >
-              ◀
+              ◀️
             </button>
 
             <button
@@ -406,7 +406,7 @@ export default function Board({
               onClick={returnToTurnStart}
               disabled={!canReturnToTurnStart}
             >
-              ⏮
+              ⏪
             </button>
 
             <button
@@ -438,7 +438,7 @@ export default function Board({
                 }
               }}
             >
-              ×
+              ❌
             </button>
           </div>
 

@@ -37,6 +37,7 @@ export default function LeaderArea({
         height:
           "calc(var(--op-card-height) + 15px)",
         border: GAME_LAYOUT.css.areaBorder,
+        background: "var(--solo-area-background, #111827)",
         borderRadius: GAME_LAYOUT.css.cardRadius,
       }}
     >

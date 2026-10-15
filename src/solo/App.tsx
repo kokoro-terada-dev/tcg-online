@@ -5,6 +5,8 @@ import DeckSelect from "./components/DeckSelect/DeckSelect";
 import MulliganScreen from "./components/Mulligan/MulliganScreen";
 import HandSelectScreen from "./components/HandSelect/HandSelectScreen";
 import type { CardData } from "./types/card";
+import { readBackgroundColor } from "../components/Settings/SettingsScreen";
+import { createAreaTheme } from "./utils/areaTheme";
 
 import { useGameStore } from "./store/gameStore";
 
@@ -45,9 +47,11 @@ function App({
   }
 
   return (
+    <div style={{ width: "100%", height: "100%", ...createAreaTheme(readBackgroundColor()) }}>
     <Board
       resetToDeckSelect={resetToDeckSelect}
     />
+    </div>
   );
 }
 

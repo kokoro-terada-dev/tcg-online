@@ -95,7 +95,7 @@ function CharacterSlot({
 
         justifyContent: "center",
 
-        background: "#0f172a",
+        background: "var(--solo-area-background, #111827)",
       }}
     >
       {card && (

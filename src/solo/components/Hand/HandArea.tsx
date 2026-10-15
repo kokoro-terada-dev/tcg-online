@@ -113,11 +113,11 @@ export default function HandArea({
 
         minHeight: "var(--op-hand-min-height)",
 
-        border: "2px solid #475569",
+        border: "var(--op-area-border)",
 
         borderRadius: "12px",
 
-        background: "#1e293b",
+        background: "var(--solo-area-background, #111827)",
 
         padding: "var(--op-hand-padding)",
 

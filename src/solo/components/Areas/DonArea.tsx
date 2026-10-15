@@ -200,9 +200,9 @@ function DonStack({
 
         borderRadius: GAME_LAYOUT.css.cardRadius,
 
-        background: "#111827",
+        background: "var(--solo-area-background, #111827)",
 
-        color: "white",
+        color: "var(--solo-area-text, white)",
 
         position: "relative",
 
