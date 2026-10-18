@@ -144,6 +144,15 @@ export default function GameCard({
   }
 
   const powerModifier = card.powerModifier ?? 0;
+  const powerByDuration = { turn: 0, opponentTurn: 0 };
+  if (card.powerEffects) {
+    for (const effect of card.powerEffects) {
+      const duration = effect.duration ?? (effect.remainingTurnChanges > 1 ? "opponentTurn" : "turn");
+      powerByDuration[duration] += effect.amount;
+    }
+  } else {
+    powerByDuration.turn = powerModifier;
+  }
 
   return (
     <div
@@ -332,7 +341,7 @@ export default function GameCard({
               </div>
             ) : (
               <div
-                className="card-menu-modal"
+                className={`card-menu-modal${from === "character" ? " solo-character-power-menu" : ""}`}
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
                 onContextMenu={(e) => {
@@ -358,7 +367,17 @@ export default function GameCard({
                     }}
                   />
 
-                  {powerModifier !== 0 && (
+                  {from === "character" && ([ ["turn", "このターン中"], ["opponentTurn", "次の相手ターンまで"] ] as const).map(([duration, label], index) => {
+                    const amount = powerByDuration[duration];
+                    if (amount === 0) return null;
+                    return <div key={duration} title={duration === "turn" ? label : "次の相手のターン終了時まで"}
+                      style={{ position: "absolute", top: `${52 + index * 52}px`, right: "8px", maxWidth: "calc(100% - 16px)", padding: "4px 8px", borderRadius: "10px", background: amount > 0 ? "#facc15" : "#ef4444", color: amount > 0 ? "#111827" : "white", border: "2px solid white", textAlign: "center", boxShadow: "0 0 12px rgba(0,0,0,0.8)", zIndex: 10 }}>
+                      <div style={{ fontSize: "9px", lineHeight: 1.2, overflowWrap: "anywhere" }}>{label}</div>
+                      <div style={{ fontSize: "16px", lineHeight: 1.3, fontWeight: 900 }}>{amount > 0 ? "+" : ""}{amount}</div>
+                    </div>;
+                  })}
+
+                  {from !== "character" && powerModifier !== 0 && (
                     <div
                       style={{
                         position: "absolute",
@@ -392,7 +411,7 @@ export default function GameCard({
                     <div
                       style={{
                         position: "absolute",
-                        top: "96px",
+                        top: from === "character" ? "156px" : "96px",
                         right: "8px",
                         padding: "4px 10px",
                         borderRadius: "999px",
@@ -434,10 +453,21 @@ export default function GameCard({
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: "20px",
+                    gap: from === "character" ? "8px" : "20px",
                     alignItems: "center",
                   }}
                 >
+                  {from === "character" ? (
+                    <>
+                      {([ ["turn", "このターン中"], ["opponentTurn", "次の相手ターンまで"] ] as const).map(([duration, label]) => (
+                        <div key={duration} style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "center", width: "100%", minWidth: 0 }}>
+                          <div style={{ fontSize: "11px", color: "white", textAlign: "center", overflowWrap: "anywhere", lineHeight: 1.3 }}>{label}</div>
+                          <button style={menuButtonStylePowerPlus} onClick={() => changePower(playerIndex, card.id, 1000, duration)}>+1000</button>
+                          <button style={menuButtonStylePowerMinus} onClick={() => changePower(playerIndex, card.id, -1000, duration)}>-1000</button>
+                        </div>
+                      ))}
+                    </>
+                  ) : <>
                   <button
                     style={menuButtonStylePowerPlus}
                     onClick={() =>
@@ -455,6 +485,7 @@ export default function GameCard({
                   >
                     パワー-1000
                   </button>
+                  </>}
 
                   <button
                     style={menuButtonStyle}

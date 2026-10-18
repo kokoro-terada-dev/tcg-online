@@ -32,6 +32,7 @@ export interface CardData {
   isFaceUp: boolean;
   lifeCount?: number;
   powerModifier?: number;
+  powerEffects?: { amount: number; remainingTurnChanges: number; duration?: "turn" | "opponentTurn" }[];
   statusLabel?: "×";
   donCount?: number;
 }

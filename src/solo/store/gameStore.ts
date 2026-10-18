@@ -20,6 +20,22 @@ type SelectedDonStack = {
 
 
 type PlayersSnapshot = [PlayerState, PlayerState];
+type TurnRecord = { turnNumber: number; playerIndex: 0 | 1; players: PlayersSnapshot };
+type UndoSnapshot = {
+  players: PlayersSnapshot;
+  currentTurnNumber: number;
+  currentPlayerIndex: 0 | 1;
+  turnRecords: TurnRecord[];
+  turnStartSnapshot: PlayersSnapshot | null;
+};
+
+function captureUndo(state: GameState): UndoSnapshot {
+  return {
+    players: clonePlayers(state.players), currentTurnNumber: state.currentTurnNumber,
+    currentPlayerIndex: state.currentPlayerIndex, turnRecords: state.turnRecords,
+    turnStartSnapshot: state.turnStartSnapshot,
+  };
+}
 
 const MAX_HISTORY_COUNT = 30;
 
@@ -154,6 +170,12 @@ interface MoveParams {
 }
 
 interface GameState {
+  firstPlayerIndex: 0 | 1;
+  currentPlayerIndex: 0 | 1;
+  currentTurnNumber: number;
+  turnRecords: TurnRecord[];
+  beginDuel: () => void;
+  restoreTurn: (index: number) => void;
   handSelectionMode: boolean;
   handSelectionPending: boolean;
   players: [PlayerState, PlayerState];
@@ -163,7 +185,8 @@ interface GameState {
   startGame: (
     player1Deck: CardData[],
     player2Deck: CardData[],
-    selectedHands?: [string[], string[]]
+    selectedHands?: [string[], string[]],
+    firstPlayerIndex?: 0 | 1
   ) => void;
 
   drawCard: (
@@ -223,7 +246,8 @@ interface GameState {
   changePower: (
     playerIndex: number,
     cardId: string,
-    amount: number
+    amount: number,
+    duration?: "turn" | "opponentTurn"
   ) => void;
 
   setStatusLabel: (
@@ -314,7 +338,7 @@ interface GameState {
     cardId: string
   ) => void;
 
-  undoHistory: PlayersSnapshot[];
+  undoHistory: UndoSnapshot[];
 
   turnStartSnapshot: PlayersSnapshot | null;
 
@@ -333,20 +357,21 @@ export const useGameStore =
       updater: (state: GameState) => Partial<GameState>
     ) => {
       set((state) => {
-        const beforePlayers = clonePlayers(state.players);
+        const before = captureUndo(state);
+        const beforePlayers = before.players;
 
         const result = updater(state);
 
         const afterPlayers = result.players ?? state.players;
 
-        if (isSamePlayers(beforePlayers, afterPlayers)) {
+        if (isSamePlayers(beforePlayers, afterPlayers) && result.currentTurnNumber === undefined) {
           return result;
         }
 
         return {
           ...result,
           undoHistory: [
-            beforePlayers,
+            before,
             ...state.undoHistory,
           ].slice(0, MAX_HISTORY_COUNT),
         };
@@ -360,6 +385,32 @@ export const useGameStore =
     ],
 
     isStarted: false,
+    firstPlayerIndex: 1,
+    currentPlayerIndex: 1,
+    currentTurnNumber: 0,
+    turnRecords: [],
+    beginDuel: () => set((state) => {
+      if (!state.isStarted || state.mulliganPlayerIndex !== null || state.handSelectionPending || state.turnRecords.length) return {};
+      const players = clonePlayers(state.players);
+      const player = players[state.firstPlayerIndex];
+      const don = player.donDeck.shift();
+      if (don) player.activeDons.unshift({ ...don, rotated: false, isFaceUp: true });
+      return {
+        players, currentTurnNumber: 1, currentPlayerIndex: state.firstPlayerIndex,
+        turnRecords: [{ turnNumber: 1, playerIndex: state.firstPlayerIndex, players: clonePlayers(players) }],
+        turnStartSnapshot: clonePlayers(players), undoHistory: [],
+      };
+    }),
+    restoreTurn: (index) => set((state) => {
+      const record = state.turnRecords[index];
+      if (!record) return {};
+      return {
+        players: clonePlayers(record.players), currentTurnNumber: record.turnNumber,
+        currentPlayerIndex: record.playerIndex, selectedDonStack: null, undoHistory: [],
+        turnRecords: state.turnRecords.slice(0, index + 1),
+        turnStartSnapshot: clonePlayers(record.players),
+      };
+    }),
     handSelectionMode: false,
     handSelectionPending: false,
 
@@ -370,7 +421,8 @@ export const useGameStore =
     startGame: (
       player1Deck: CardData[],
       player2Deck: CardData[],
-      selectedHands?: [string[], string[]]
+      selectedHands?: [string[], string[]],
+      firstPlayerIndex: 0 | 1 = get().firstPlayerIndex
     ) =>
       set(() => ({
         players: [
@@ -379,6 +431,10 @@ export const useGameStore =
         ],
 
         isStarted: true,
+        firstPlayerIndex,
+        currentPlayerIndex: firstPlayerIndex,
+        currentTurnNumber: 0,
+        turnRecords: [],
         handSelectionMode: Boolean(selectedHands),
         handSelectionPending: false,
 
@@ -678,6 +734,7 @@ export const useGameStore =
         // キャラクターエリアを離れる時は状態リセット
         if (from === "character") {
           card.powerModifier = 0;
+          card.powerEffects = undefined;
 
           card.statusLabel = undefined;
         }
@@ -902,6 +959,24 @@ export const useGameStore =
 
         const player = players[playerIndex];
 
+        // Short effects expire on every refresh; long effects count side changes.
+        const turnChanged = state.currentPlayerIndex !== playerIndex;
+        for (const owner of players) {
+          for (const card of owner.characters) {
+            if (!card) continue;
+            const effects = card.powerEffects ?? (card.powerModifier
+              ? [{ amount: card.powerModifier, remainingTurnChanges: 1, duration: "turn" as const }]
+              : []);
+            card.powerEffects = effects.filter((effect) =>
+              effect.duration === "opponentTurn" || (!effect.duration && effect.remainingTurnChanges > 1)
+            ).map((effect) => ({
+              ...effect,
+              remainingTurnChanges: effect.remainingTurnChanges - (turnChanged ? 1 : 0),
+            })).filter((effect) => effect.remainingTurnChanges > 0);
+            card.powerModifier = card.powerEffects.reduce((sum, effect) => sum + effect.amount, 0);
+          }
+        }
+
         const targetCards = [
           player.leader,
           player.stage,
@@ -926,7 +1001,7 @@ export const useGameStore =
           card.rotated = false;
 
           // パワー補正リセット
-          card.powerModifier = 0;
+          if (!player.characters.includes(card)) card.powerModifier = 0;
 
           // 付与DONはACTIVE DONへ戻す
           if (card.attachedDonCount > 0) {
@@ -970,6 +1045,13 @@ export const useGameStore =
         return {
           players,
           turnStartSnapshot: clonePlayers(players),
+          currentTurnNumber: state.turnRecords.length + 1,
+          currentPlayerIndex: playerIndex as 0 | 1,
+          turnRecords: [...state.turnRecords, {
+            turnNumber: state.turnRecords.length + 1,
+            playerIndex: playerIndex as 0 | 1,
+            players: clonePlayers(players),
+          }],
         };
       }),
 
@@ -1074,7 +1156,8 @@ export const useGameStore =
     changePower: (
       playerIndex: number,
       cardId: string,
-      amount: number
+      amount: number,
+      duration: "turn" | "opponentTurn" = "turn"
     ) =>
       setWithHistory((state) => {
         const players = [...state.players] as [
@@ -1093,7 +1176,17 @@ export const useGameStore =
         const card = allCards.find((x) => x.id === cardId);
 
         if (card) {
-          card.powerModifier = (card.powerModifier ?? 0) + amount;
+          if (player.characters.includes(card)) {
+            const effects = card.powerEffects ?? (card.powerModifier
+              ? [{ amount: card.powerModifier, remainingTurnChanges: 1 }]
+              : []);
+            card.powerEffects = [...effects, {
+              amount, duration, remainingTurnChanges: duration === "opponentTurn" ? 2 : 1,
+            }];
+            card.powerModifier = card.powerEffects.reduce((sum, effect) => sum + effect.amount, 0);
+          } else {
+            card.powerModifier = (card.powerModifier ?? 0) + amount;
+          }
         }
 
         return { players };
@@ -1132,6 +1225,8 @@ export const useGameStore =
     resetToDeckSelect: () =>
       set(() => ({
         isStarted: false,
+        turnRecords: [],
+        currentTurnNumber: 0,
         undoHistory: [],
         turnStartSnapshot: null,
       })),
@@ -1767,7 +1862,8 @@ export const useGameStore =
       }
 
       set((state) => ({
-        players: clonePlayers(snapshot),
+        ...snapshot,
+        players: clonePlayers(snapshot.players),
         undoHistory: state.undoHistory.slice(1),
         selectedDonStack: null,
       }));
@@ -1789,7 +1885,7 @@ export const useGameStore =
       set((state) => ({
         players: clonePlayers(snapshot),
         undoHistory: [
-          clonePlayers(state.players),
+          captureUndo(state),
           ...state.undoHistory,
         ].slice(0, MAX_HISTORY_COUNT),
         selectedDonStack: null,
@@ -1812,6 +1908,7 @@ export const useGameStore =
             ...card,
             rotated: false,
             powerModifier: 0,
+            powerEffects: undefined,
             statusLabel: undefined,
             attachedDonCount: 0,
             isFaceUp: false,
@@ -1856,6 +1953,7 @@ export const useGameStore =
             type: "don" as const,
             rotated: false,
             powerModifier: 0,
+            powerEffects: undefined,
             statusLabel: undefined,
             attachedDonCount: 0,
             isFaceUp: true,
@@ -1868,6 +1966,7 @@ export const useGameStore =
             ...card,
             rotated: false,
             powerModifier: 0,
+            powerEffects: undefined,
             statusLabel: undefined,
             attachedDonCount: 0,
             isFaceUp: true,
@@ -1889,6 +1988,7 @@ export const useGameStore =
                 ...player.leader,
                 rotated: false,
                 powerModifier: 0,
+                powerEffects: undefined,
                 statusLabel: undefined,
                 attachedDonCount: 0,
                 isFaceUp: true,
@@ -1911,6 +2011,9 @@ export const useGameStore =
           turnStartSnapshot: null,
           mulliganPlayerIndex: state.handSelectionMode ? null : 0,
           handSelectionPending: state.handSelectionMode,
+          turnRecords: [],
+          currentTurnNumber: 0,
+          currentPlayerIndex: state.firstPlayerIndex,
         };
       });
     },

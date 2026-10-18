@@ -7,6 +7,7 @@ import { useGameStore } from "../../store/gameStore";
 
 import DeckBuilder from "../DeckBuilder/DeckBuilder";
 import HandSelectScreen from "../HandSelect/HandSelectScreen";
+import FirstPlayerScreen from "./FirstPlayerScreen";
 import type { CardData } from "../../types/card";
 
 import type { DeckRecipe } from "../../types/deck";
@@ -108,6 +109,9 @@ export default function DeckSelect({
   const [mode, setMode] = useState<ScreenMode>("select");
   const [startMode, setStartMode] = useState<"mulligan" | "hand">("mulligan");
   const [pendingDecks, setPendingDecks] = useState<[CardData[], CardData[]] | null>(null);
+  const [firstPlayer, setFirstPlayer] = useState<0 | 1>(1);
+  const [choosingFirst, setChoosingFirst] = useState(false);
+  const [pendingNames, setPendingNames] = useState<[string, string]>(["", ""]);
 
   const [editingDeckId, setEditingDeckId] =
     useState<string | null>(null);
@@ -238,11 +242,9 @@ export default function DeckSelect({
       const player1Cards = buildDeckCardsFromRecipe(player1Recipe, cardMaster);
       const player2Cards = buildDeckCardsFromRecipe(player2Recipe, cardMaster);
 
-      if (startMode === "hand") {
-        setPendingDecks([player1Cards, player2Cards]);
-      } else {
-        startGame(player1Cards, player2Cards);
-      }
+      setPendingDecks([player1Cards, player2Cards]);
+      setPendingNames([player1Recipe.name, player2Recipe.name]);
+      setChoosingFirst(true);
     } catch (e) {
       setError(
         e instanceof Error
@@ -253,7 +255,12 @@ export default function DeckSelect({
   }
 
   if (pendingDecks) {
-    return <HandSelectScreen decks={pendingDecks} onBack={() => setPendingDecks(null)} onComplete={(hands) => startGame(pendingDecks[0], pendingDecks[1], hands)} />;
+    if (choosingFirst) return <FirstPlayerScreen decks={pendingDecks} names={pendingNames} onBack={() => setPendingDecks(null)} onConfirm={(selected) => {
+      setFirstPlayer(selected);
+      if (startMode === "hand") setChoosingFirst(false);
+      else startGame(pendingDecks[0], pendingDecks[1], undefined, selected);
+    }} />;
+    return <HandSelectScreen decks={pendingDecks} onBack={() => setChoosingFirst(true)} onComplete={(hands) => startGame(pendingDecks[0], pendingDecks[1], hands, firstPlayer)} />;
   }
 
   if (mode === "builder") {

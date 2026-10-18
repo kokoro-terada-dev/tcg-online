@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import PlayerBoard from "./PlayerBoard";
 
@@ -63,17 +64,17 @@ export default function Board({
     (s) => s.undoLastAction
   );
 
-  const returnToTurnStart = useGameStore(
-    (s) => s.returnToTurnStart
-  );
+  const turnRecords = useGameStore((s) => s.turnRecords);
+  const currentTurnNumber = useGameStore((s) => s.currentTurnNumber);
+  const restoreTurn = useGameStore((s) => s.restoreTurn);
+  const beginDuel = useGameStore((s) => s.beginDuel);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  useEffect(() => { beginDuel(); }, [beginDuel]);
 
   const canUndo = useGameStore(
     (s) => s.undoHistory.length > 0
   );
 
-  const canReturnToTurnStart = useGameStore(
-    (s) => s.turnStartSnapshot !== null
-  );
 
   const [activeCard, setActiveCard] =
     useState<DragCardInfo | null>(null);
@@ -401,12 +402,11 @@ export default function Board({
             </button>
 
             <button
-              title="ターン開始時に戻す"
-              aria-label="ターン開始時に戻す"
-              onClick={returnToTurnStart}
-              disabled={!canReturnToTurnStart}
+              title="ターン履歴"
+              aria-label={`${currentTurnNumber}ターン目：ターン履歴を開く`}
+              onClick={() => setHistoryOpen(true)}
             >
-              ⏪
+              {currentTurnNumber}
             </button>
 
             <button
@@ -457,6 +457,28 @@ export default function Board({
           </div>
         </div>
       </div>
+
+      {historyOpen && createPortal(
+        <div onClick={() => setHistoryOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 1000000, background: "rgba(0,0,0,0.75)", padding: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <section role="dialog" aria-modal="true" aria-label="ターン履歴" onClick={(event) => event.stopPropagation()} style={{ width: "100%", maxWidth: "420px", maxHeight: "85dvh", display: "flex", flexDirection: "column", borderRadius: "8px", background: "#111827", color: "white", padding: "16px" }}>
+            <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+              <h2 style={{ margin: 0, fontSize: "18px" }}>ターン履歴</h2>
+              <button aria-label="閉じる" onClick={() => setHistoryOpen(false)} style={{ width: "36px", height: "36px" }}>×</button>
+            </header>
+            <div style={{ overflowY: "auto", touchAction: "pan-y", display: "flex", flexDirection: "column", gap: "8px", minHeight: 0 }}>
+              {turnRecords.map((record, index) => <button key={index} onClick={() => {
+                if (window.confirm(`${record.turnNumber}ターン目（${record.playerIndex === 0 ? "上側" : "下側"}）の開始時に盤面全体を戻しますか？`)) {
+                  restoreTurn(index);
+                  setHistoryOpen(false);
+                  setActiveCard(null);
+                }
+              }} style={{ flexShrink: 0, minHeight: "48px", padding: "12px", borderRadius: "6px", textAlign: "left", border: currentTurnNumber === record.turnNumber ? "2px solid #38bdf8" : "1px solid #64748b", color: "white", background: "#1e293b" }}>
+                {record.turnNumber}ターン目：{record.playerIndex === 0 ? "上側" : "下側"}
+              </button>)}
+            </div>
+          </section>
+        </div>, document.body
+      )}
 
       <DragOverlay
         zIndex={999999}

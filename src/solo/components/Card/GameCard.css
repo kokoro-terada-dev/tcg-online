@@ -1,3 +1,26 @@
+.solo-character-power-menu {
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  touch-action: pan-y;
+  gap: 8px;
+}
+
+.solo-character-power-menu > div:first-child {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.solo-character-power-menu > div:first-child > img {
+  width: 100% !important;
+  max-height: 80dvh;
+  object-fit: contain;
+}
+
+.solo-character-power-menu .card-menu-buttons {
+  flex: 0 0 108px;
+  min-width: 0;
+}
+
 .solo-board-controls button {
   width: 50px;
   height: 30px;
