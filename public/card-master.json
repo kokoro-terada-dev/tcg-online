@@ -273,42 +273,6 @@
         "onPlay"
       ]
     },
-    "EB04-022": {
-      "type": "character",
-      "cost": 5,
-      "power": 7000,
-      "counter": null,
-      "effects": [
-        "onPlay",
-        "onAttack"
-      ]
-    },
-    "EB04-026": {
-      "type": "character",
-      "cost": 4,
-      "power": 6000,
-      "counter": null,
-      "effects": [
-        "onPlay",
-        "onAttack"
-      ]
-    },
-    "EB04-028": {
-      "type": "event",
-      "cost": 5,
-      "power": null,
-      "counter": null,
-      "effects": []
-    },
-    "EB04-058": {
-      "type": "character",
-      "cost": 5,
-      "power": 6000,
-      "counter": 1000,
-      "effects": [
-        "onPlay"
-      ]
-    },
     "PRB02-010": {
       "type": "character",
       "cost": 7,
@@ -3719,7 +3683,7 @@
     },
     "OP13-031": {
       "type": "character",
-      "cost": 5,
+      "cost": 6,
       "power": 6000,
       "counter": null,
       "effects": [
@@ -6542,6 +6506,1729 @@
       "type": "character",
       "cost": 6,
       "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-001": {
+      "type": "leader",
+      "cost": null,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-002": {
+      "type": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-003": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-004": {
+      "type": "character",
+      "cost": 2,
+      "power": 3000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-005": {
+      "type": "character",
+      "cost": 1,
+      "power": 3000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-006": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-007": {
+      "type": "character",
+      "cost": 5,
+      "power": 5000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB01-008": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-009": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-010": {
+      "type": "event",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-011": {
+      "type": "stage",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-012": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-013": {
+      "type": "character",
+      "cost": 4,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-014": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB01-015": {
+      "type": "character",
+      "cost": 1,
+      "power": 1000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB01-016": {
+      "type": "character",
+      "cost": 1,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-017": {
+      "type": "character",
+      "cost": 2,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-018": {
+      "type": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-019": {
+      "type": "event",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-020": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-021": {
+      "type": "leader",
+      "cost": null,
+      "power": 5000,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-022": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-023": {
+      "type": "character",
+      "cost": 4,
+      "power": 6000,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-024": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-025": {
+      "type": "character",
+      "cost": 3,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-026": {
+      "type": "character",
+      "cost": 2,
+      "power": 2000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB01-027": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-028": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-029": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-030": {
+      "type": "stage",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-031": {
+      "type": "character",
+      "cost": 5,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-032": {
+      "type": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-033": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-034": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-035": {
+      "type": "character",
+      "cost": 3,
+      "power": 5000,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-036": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-037": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-038": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-039": {
+      "type": "event",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-040": {
+      "type": "leader",
+      "cost": null,
+      "power": 5000,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-041": {
+      "type": "character",
+      "cost": 6,
+      "power": 8000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-042": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-043": {
+      "type": "character",
+      "cost": 3,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-044": {
+      "type": "character",
+      "cost": 1,
+      "power": 1000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-045": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-046": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-047": {
+      "type": "character",
+      "cost": 2,
+      "power": 4000,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-048": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-049": {
+      "type": "event",
+      "cost": 5,
+      "power": 5000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB01-050": {
+      "type": "event",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-051": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-052": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-053": {
+      "type": "character",
+      "cost": 3,
+      "power": 5000,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-054": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-055": {
+      "type": "character",
+      "cost": 7,
+      "power": 9000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-056": {
+      "type": "character",
+      "cost": 1,
+      "power": 1000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB01-057": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-058": {
+      "type": "character",
+      "cost": 2,
+      "power": 3000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB01-059": {
+      "type": "event",
+      "cost": 6,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-060": {
+      "type": "event",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB01-061": {
+      "type": "character",
+      "cost": 4,
+      "power": 1000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-001": {
+      "type": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-002": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB02-003": {
+      "type": "character",
+      "cost": 3,
+      "power": 3000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-004": {
+      "type": "character",
+      "cost": 8,
+      "power": 10000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-005": {
+      "type": "character",
+      "cost": 2,
+      "power": 3000,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-006": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-007": {
+      "type": "event",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-008": {
+      "type": "event",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-009": {
+      "type": "stage",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-010": {
+      "type": "character",
+      "cost": null,
+      "power": 5000,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-011": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-012": {
+      "type": "character",
+      "cost": 1,
+      "power": 1000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-013": {
+      "type": "character",
+      "cost": 1,
+      "power": 0,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB02-014": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-015": {
+      "type": "character",
+      "cost": 7,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-016": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-017": {
+      "type": "character",
+      "cost": 1,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-018": {
+      "type": "character",
+      "cost": 4,
+      "power": 6000,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-019": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-020": {
+      "type": "event",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-021": {
+      "type": "event",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-022": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-023": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-024": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-025": {
+      "type": "character",
+      "cost": 2,
+      "power": 3000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-026": {
+      "type": "character",
+      "cost": 3,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-027": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-028": {
+      "type": "character",
+      "cost": 5,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-029": {
+      "type": "character",
+      "cost": 3,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-030": {
+      "type": "event",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-031": {
+      "type": "event",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-032": {
+      "type": "character",
+      "cost": 1,
+      "power": 0,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB02-033": {
+      "type": "character",
+      "cost": 1,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-034": {
+      "type": "character",
+      "cost": 4,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-035": {
+      "type": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-036": {
+      "type": "character",
+      "cost": 3,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-037": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-038": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-039": {
+      "type": "event",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-040": {
+      "type": "event",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-041": {
+      "type": "stage",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-042": {
+      "type": "character",
+      "cost": 6,
+      "power": 8000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-043": {
+      "type": "character",
+      "cost": 7,
+      "power": 9000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-044": {
+      "type": "character",
+      "cost": 7,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-045": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-046": {
+      "type": "character",
+      "cost": 3,
+      "power": 3000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB02-047": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-048": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-049": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-050": {
+      "type": "event",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-051": {
+      "type": "event",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-052": {
+      "type": "character",
+      "cost": 10,
+      "power": 11000,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-053": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-054": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-055": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB02-056": {
+      "type": "character",
+      "cost": 5,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-057": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB02-058": {
+      "type": "event",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-059": {
+      "type": "event",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-060": {
+      "type": "stage",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB02-061": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-001": {
+      "type": "leader",
+      "cost": null,
+      "power": 5000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-002": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB03-003": {
+      "type": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-004": {
+      "type": "character",
+      "cost": 3,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-005": {
+      "type": "character",
+      "cost": 3,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-006": {
+      "type": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-007": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-008": {
+      "type": "character",
+      "cost": 3,
+      "power": 5000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-009": {
+      "type": "character",
+      "cost": 1,
+      "power": 0,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB03-010": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-011": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-012": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB03-013": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-014": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-015": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-016": {
+      "type": "character",
+      "cost": 1,
+      "power": 0,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-017": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-018": {
+      "type": "character",
+      "cost": 4,
+      "power": 6000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-019": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-020": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-021": {
+      "type": "character",
+      "cost": 4,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-022": {
+      "type": "character",
+      "cost": 6,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-023": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB03-024": {
+      "type": "character",
+      "cost": 5,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-025": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-026": {
+      "type": "character",
+      "cost": 6,
+      "power": 8000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-027": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-028": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-029": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-030": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB03-031": {
+      "type": "character",
+      "cost": 5,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-032": {
+      "type": "character",
+      "cost": 1,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-033": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-034": {
+      "type": "character",
+      "cost": 7,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-035": {
+      "type": "character",
+      "cost": 4,
+      "power": 4000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB03-036": {
+      "type": "character",
+      "cost": 4,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-037": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB03-038": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-039": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-040": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB03-041": {
+      "type": "character",
+      "cost": 4,
+      "power": 6000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-042": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-043": {
+      "type": "character",
+      "cost": 7,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-044": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-045": {
+      "type": "character",
+      "cost": 4,
+      "power": 6000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-046": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-047": {
+      "type": "character",
+      "cost": 2,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-048": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-049": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-050": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-051": {
+      "type": "character",
+      "cost": 3,
+      "power": 3000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB03-052": {
+      "type": "character",
+      "cost": 3,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-053": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-054": {
+      "type": "character",
+      "cost": 3,
+      "power": 5000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-055": {
+      "type": "character",
+      "cost": 7,
+      "power": 8000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-056": {
+      "type": "character",
+      "cost": 4,
+      "power": 3000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB03-057": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-058": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-059": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB03-060": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-061": {
+      "type": "character",
+      "cost": 7,
+      "power": 8000,
+      "counter": null,
+      "effects": []
+    },
+    "EB03-062": {
+      "type": "character",
+      "cost": 8,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-001": {
+      "type": "leader",
+      "cost": null,
+      "power": 5000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-002": {
+      "type": "character",
+      "cost": 1,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-003": {
+      "type": "character",
+      "cost": 6,
+      "power": 8000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-004": {
+      "type": "character",
+      "cost": 7,
+      "power": 8000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-005": {
+      "type": "character",
+      "cost": 3,
+      "power": 5000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB04-006": {
+      "type": "character",
+      "cost": 1,
+      "power": 0,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB04-007": {
+      "type": "character",
+      "cost": 7,
+      "power": 9000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-008": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-009": {
+      "type": "event",
+      "cost": 0,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-010": {
+      "type": "stage",
+      "cost": 7,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-011": {
+      "type": "character",
+      "cost": 7,
+      "power": 8000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-012": {
+      "type": "character",
+      "cost": 7,
+      "power": 8000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-013": {
+      "type": "character",
+      "cost": 8,
+      "power": 9000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-014": {
+      "type": "character",
+      "cost": 3,
+      "power": 0,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-015": {
+      "type": "character",
+      "cost": 7,
+      "power": 8000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-016": {
+      "type": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-017": {
+      "type": "character",
+      "cost": 6,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-018": {
+      "type": "character",
+      "cost": 4,
+      "power": 4000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB04-019": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-020": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-021": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-022": {
+      "type": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": null,
+      "effects": [
+        "onPlay",
+        "onAttack"
+      ]
+    },
+    "EB04-023": {
+      "type": "character",
+      "cost": 8,
+      "power": 9000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-024": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB04-025": {
+      "type": "character",
+      "cost": 7,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-026": {
+      "type": "character",
+      "cost": 4,
+      "power": 6000,
+      "counter": null,
+      "effects": [
+        "onPlay",
+        "onAttack"
+      ]
+    },
+    "EB04-027": {
+      "type": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-028": {
+      "type": "event",
+      "cost": 5,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-029": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-030": {
+      "type": "character",
+      "cost": 7,
+      "power": 9000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-031": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-032": {
+      "type": "character",
+      "cost": 1,
+      "power": 1000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-033": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-034": {
+      "type": "character",
+      "cost": 2,
+      "power": 1000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-035": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-036": {
+      "type": "character",
+      "cost": 8,
+      "power": 9000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-037": {
+      "type": "character",
+      "cost": 1,
+      "power": 2000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-038": {
+      "type": "character",
+      "cost": 6,
+      "power": 8000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-039": {
+      "type": "character",
+      "cost": 7,
+      "power": 8000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-040": {
+      "type": "event",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-041": {
+      "type": "event",
+      "cost": 3,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-042": {
+      "type": "character",
+      "cost": 1,
+      "power": 2000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB04-043": {
+      "type": "character",
+      "cost": 3,
+      "power": 4000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB04-044": {
+      "type": "character",
+      "cost": 6,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-045": {
+      "type": "character",
+      "cost": 1,
+      "power": 2000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB04-046": {
+      "type": "character",
+      "cost": 2,
+      "power": 1000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-047": {
+      "type": "character",
+      "cost": 3,
+      "power": 3000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB04-048": {
+      "type": "character",
+      "cost": 4,
+      "power": 6000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-049": {
+      "type": "character",
+      "cost": 4,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-050": {
+      "type": "character",
+      "cost": 1,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-051": {
+      "type": "character",
+      "cost": 8,
+      "power": 7000,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-052": {
+      "type": "character",
+      "cost": 4,
+      "power": 4000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-053": {
+      "type": "character",
+      "cost": 2,
+      "power": 1000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-054": {
+      "type": "character",
+      "cost": 7,
+      "power": 7000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-055": {
+      "type": "character",
+      "cost": 4,
+      "power": 5000,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-056": {
+      "type": "character",
+      "cost": 1,
+      "power": 1000,
+      "counter": 2000,
+      "effects": []
+    },
+    "EB04-057": {
+      "type": "character",
+      "cost": 2,
+      "power": 0,
+      "counter": 1000,
+      "effects": []
+    },
+    "EB04-058": {
+      "type": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "effects": [
+        "onPlay"
+      ]
+    },
+    "EB04-059": {
+      "type": "event",
+      "cost": 6,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-060": {
+      "type": "event",
+      "cost": 2,
+      "power": null,
+      "counter": null,
+      "effects": []
+    },
+    "EB04-061": {
+      "type": "character",
+      "cost": 10,
+      "power": 12000,
       "counter": null,
       "effects": []
     },

@@ -144,6 +144,7 @@ export default function GameCard({
   }
 
   const powerModifier = card.powerModifier ?? 0;
+  const hasPowerDuration = from === "character" || from === "leader";
   const powerByDuration = { turn: 0, opponentTurn: 0 };
   if (card.powerEffects) {
     for (const effect of card.powerEffects) {
@@ -159,7 +160,7 @@ export default function GameCard({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`game-card game-card-${from} ${card.rotated ? "rotated" : ""
+      className={`game-card game-card-${from}${from === "character" && card.enteredThisTurn && !overlay ? " solo-character-entered" : ""} ${card.rotated ? "rotated" : ""
         }`}
       style={{
         position: "relative",
@@ -341,7 +342,7 @@ export default function GameCard({
               </div>
             ) : (
               <div
-                className={`card-menu-modal${from === "character" ? " solo-character-power-menu" : ""}`}
+                className={`card-menu-modal${hasPowerDuration ? " solo-character-power-menu" : ""}`}
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
                 onContextMenu={(e) => {
@@ -367,7 +368,7 @@ export default function GameCard({
                     }}
                   />
 
-                  {from === "character" && ([ ["turn", "このターン中"], ["opponentTurn", "次の相手ターンまで"] ] as const).map(([duration, label], index) => {
+                  {hasPowerDuration && ([ ["turn", "このターン中"], ["opponentTurn", "次の相手ターンまで"] ] as const).map(([duration, label], index) => {
                     const amount = powerByDuration[duration];
                     if (amount === 0) return null;
                     return <div key={duration} title={duration === "turn" ? label : "次の相手のターン終了時まで"}
@@ -377,7 +378,7 @@ export default function GameCard({
                     </div>;
                   })}
 
-                  {from !== "character" && powerModifier !== 0 && (
+                  {!hasPowerDuration && powerModifier !== 0 && (
                     <div
                       style={{
                         position: "absolute",
@@ -411,7 +412,7 @@ export default function GameCard({
                     <div
                       style={{
                         position: "absolute",
-                        top: from === "character" ? "156px" : "96px",
+                        top: hasPowerDuration ? "156px" : "96px",
                         right: "8px",
                         padding: "4px 10px",
                         borderRadius: "999px",
@@ -453,11 +454,11 @@ export default function GameCard({
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: from === "character" ? "8px" : "20px",
+                    gap: hasPowerDuration ? "8px" : "20px",
                     alignItems: "center",
                   }}
                 >
-                  {from === "character" ? (
+                  {hasPowerDuration ? (
                     <>
                       {([ ["turn", "このターン中"], ["opponentTurn", "次の相手ターンまで"] ] as const).map(([duration, label]) => (
                         <div key={duration} style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "center", width: "100%", minWidth: 0 }}>

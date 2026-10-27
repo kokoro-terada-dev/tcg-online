@@ -733,6 +733,7 @@ export const useGameStore =
         }
         // キャラクターエリアを離れる時は状態リセット
         if (from === "character") {
+          if (to !== "character") card.enteredThisTurn = false;
           card.powerModifier = 0;
           card.powerEffects = undefined;
 
@@ -766,6 +767,7 @@ export const useGameStore =
           player.characters[
             slotIndex
           ] = card;
+          if (from !== "character") card.enteredThisTurn = true;
 
           const cardCost = card.cost;
           if (
@@ -962,8 +964,9 @@ export const useGameStore =
         // Short effects expire on every refresh; long effects count side changes.
         const turnChanged = state.currentPlayerIndex !== playerIndex;
         for (const owner of players) {
-          for (const card of owner.characters) {
+          for (const card of [...owner.characters, owner.leader]) {
             if (!card) continue;
+            card.enteredThisTurn = false;
             const effects = card.powerEffects ?? (card.powerModifier
               ? [{ amount: card.powerModifier, remainingTurnChanges: 1, duration: "turn" as const }]
               : []);
@@ -1001,7 +1004,7 @@ export const useGameStore =
           card.rotated = false;
 
           // パワー補正リセット
-          if (!player.characters.includes(card)) card.powerModifier = 0;
+          if (!player.characters.includes(card) && card !== player.leader) card.powerModifier = 0;
 
           // 付与DONはACTIVE DONへ戻す
           if (card.attachedDonCount > 0) {
@@ -1176,7 +1179,7 @@ export const useGameStore =
         const card = allCards.find((x) => x.id === cardId);
 
         if (card) {
-          if (player.characters.includes(card)) {
+          if (player.characters.includes(card) || card === player.leader) {
             const effects = card.powerEffects ?? (card.powerModifier
               ? [{ amount: card.powerModifier, remainingTurnChanges: 1 }]
               : []);
@@ -1909,6 +1912,7 @@ export const useGameStore =
             rotated: false,
             powerModifier: 0,
             powerEffects: undefined,
+            enteredThisTurn: false,
             statusLabel: undefined,
             attachedDonCount: 0,
             isFaceUp: false,

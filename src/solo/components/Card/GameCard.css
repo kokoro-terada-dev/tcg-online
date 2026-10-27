@@ -1,3 +1,18 @@
+.solo-character-entered::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(255, 200, 70, 0.85);
+  border-radius: var(--op-card-radius);
+  box-shadow: 0 0 7px 2px rgba(255, 170, 40, 0.45), inset 0 0 5px rgba(255, 200, 70, 0.3);
+  pointer-events: none;
+  z-index: 20;
+}
+
+.solo-character-entered.rotated::after {
+  transform: rotate(90deg);
+}
+
 .solo-character-power-menu {
   max-height: calc(100dvh - 24px);
   overflow-y: auto;
