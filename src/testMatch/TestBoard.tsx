@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { CSSProperties } from "react";
+import TestPlayerBoard from "./TestPlayerBoard";
 import type { CardView, MatchCommand, MatchView, Zone } from "../../server/src/test/protocol";
 import { getCardBackImageUrl, getDonImageUrl, getLocalCardImage } from "../utils/localCardImages";
 import "./testMatch.css";
@@ -23,12 +23,11 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
     if (!selected || !selection) return;
     command({ kind: "move", cardInstanceId: selected.id, from: selection.from, to, ...(slotIndex === undefined ? {} : { slotIndex }) });
   }
-  function cardButton(card: CardView | null, zone: Zone, owner: number, index: number) {
+  function cardButton(card: CardView, zone: Zone, owner: number, _index: number) {
     const mine = owner === match.localPlayerIndex;
-    if (!card) return <button key={`empty-${index}`} className="test-card test-empty" disabled={!mine || !selected || busy || (zone === "character" && selected.kind !== "character") || (zone === "stage" && selected.kind !== "stage")} aria-label={`${labels[zone]}の空き枠${index + 1}`} onClick={() => move(zone, index)}>{index + 1}</button>;
     const url = imageUrl(card);
     const label = card.cardId ?? "裏向きカード";
-    return <button key={card.id} className={`test-card${card.rotated ? " test-card-rest" : ""}${selected?.id === card.id ? " test-card-selected" : ""}`} aria-label={`${labels[zone]} ${label}`} title={label} disabled={busy}
+    return <button key={card.id} data-card-id={card.id} data-player-index={owner} className={`test-match-card test-match-card-${zone}${card.rotated ? " test-match-rest" : ""}${selected?.id === card.id ? " test-match-selected" : ""}`} aria-label={`${labels[zone]} ${label}`} title={label} disabled={busy}
       onClick={() => {
         if (!mine) setPreview(card);
         else { setSelection((current) => current?.id === card.id ? null : { id: card.id, from: zone }); setList(null); }
@@ -36,34 +35,20 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
       {url ? <img src={url} alt={label} draggable={false} /> : <span>{label}</span>}
     </button>;
   }
-  function area(zone: Zone, owner: number, fixed = false) {
-    const cards = match.players[owner as 0 | 1].zones[zone];
-    const stacked = (["deck", "life", "trash", "public", "donDeck"] as Zone[]).includes(zone);
-    const shown = stacked ? cards.slice(0, 1) : cards;
-    return <section className={`test-area test-area-${zone}`} style={{ "--test-area-count": Math.max(1, cards.length) } as CSSProperties} key={zone} aria-label={`${owner === match.localPlayerIndex ? "自分" : "相手"}の${labels[zone]}`}>
-      <h3><span>{zone === "donDeck" ? "DON" : zone === "trash" ? "TRASH" : labels[zone]}</span><button className="test-area-count" aria-label={`${owner === match.localPlayerIndex ? "自分" : "相手"}の${labels[zone]}リスト`} onClick={() => setList({ zone, owner: owner as 0 | 1 })}>{cards.filter(Boolean).length}</button></h3>
-      <div className={fixed ? "test-slots" : "test-card-strip"}>
-        {shown.map((card, index) => cardButton(card, zone, owner, index))}
-      </div>
-    </section>;
-  }
   const targets: Zone[] = selection?.from === "leader" ? [] : selected?.kind === "don" ? ["activeDon", "restDon", "donDeck"] : ["hand", "character", "stage", "trash", "public", "deck", "life"];
   return <main className="test-board">
-    <header className="test-board-header"><strong>テスト対戦 <small>{roomId}</small></strong><button onClick={() => { if (window.confirm("両プレイヤーをルームへ戻しますか？")) onEnd(); }} disabled={busy}>ルームへ戻る</button></header>
     <div className="test-playmat">
-      {([1 - match.localPlayerIndex, match.localPlayerIndex] as const).map((owner) => <section className={`test-player${owner !== match.localPlayerIndex ? " test-player-opponent" : ""}`} key={owner} aria-label={owner === match.localPlayerIndex ? "自分の盤面" : "相手の盤面"}>
-        {area("character", owner, true)}
-        <div className="test-main-row">{area("life", owner)}{area("leader", owner)}{area("stage", owner)}{area("deck", owner)}</div>
-        <div className="test-support-row"><div className="test-don-row">{area("donDeck", owner)}{area("activeDon", owner)}{area("restDon", owner)}</div>{area("trash", owner)}{area("public", owner)}</div>
-        {area("hand", owner)}
-      </section>)}
+      <TestPlayerBoard player={match.players[(1 - match.localPlayerIndex) as 0 | 1]} playerIndex={(1 - match.localPlayerIndex) as 0 | 1} reversed renderCard={(card, zone, index) => cardButton(card, zone, 1 - match.localPlayerIndex, index)} onOpen={(zone) => setList({ zone, owner: (1 - match.localPlayerIndex) as 0 | 1 })} canPlace={() => false} onPlace={() => {}} />
       <nav className="test-board-controls" aria-label="盤面操作">
+        <small>{roomId}</small>
         <button disabled={busy || own.zones.deck.length === 0} onClick={() => command({ kind: "draw" })}>1枚ドロー</button>
         <button disabled={busy || !own.zones.donDeck[0]} onClick={() => {
           const don = own.zones.donDeck[0];
           if (don) command({ kind: "move", cardInstanceId: don.id, from: "donDeck", to: "activeDon" });
         }}>DON追加</button>
+        <button onClick={() => { if (window.confirm("両プレイヤーをルームへ戻しますか？")) onEnd(); }} disabled={busy}>ルームへ戻る</button>
       </nav>
+      <TestPlayerBoard player={own} playerIndex={match.localPlayerIndex} reversed={false} renderCard={(card, zone, index) => cardButton(card, zone, match.localPlayerIndex, index)} onOpen={(zone) => setList({ zone, owner: match.localPlayerIndex })} canPlace={(zone) => !busy && Boolean(selected && selection?.from !== "leader" && selected.kind === zone)} onPlace={move} />
     </div>
     {error && <div role="alert" className="test-error">{error}</div>}
     {selected && selection && <section className="test-board-actions" role="dialog" aria-label="カード操作">
