@@ -17,12 +17,14 @@ type DeckSelectProps = {
   onOpenSoloMode: () => void;
   onOpenOnlineMenu: () => void;
   onOpenSettings: () => void;
+  onOpenTestMatch: () => void;
 };
 
 export default function DeckSelect({
   onOpenSoloMode,
   onOpenOnlineMenu,
   onOpenSettings,
+  onOpenTestMatch,
 }: DeckSelectProps) {
   const [mode, setMode] = useState<ScreenMode>("select");
 
@@ -161,6 +163,9 @@ export default function DeckSelect({
             <span style={buttonSubTextStyle}>
               オンラインルームへ
             </span>
+          </button>
+          <button style={{ ...menuButtonStyle, borderColor: "#34d399" }} onClick={onOpenTestMatch}>
+            <span style={buttonMainTextStyle}>テスト対戦</span>
           </button>
         </div>
 

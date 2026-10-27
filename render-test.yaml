@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: tcg-test-server
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: node dist/test/index.js
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        value: https://tcg-online-theta.vercel.app

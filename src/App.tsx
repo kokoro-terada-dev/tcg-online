@@ -5,6 +5,7 @@ import DeckSelect from "./components/DeckSelect/DeckSelect";
 import MulliganScreen from "./components/Mulligan/MulliganScreen";
 import RoomScreen from "./components/Online/RoomScreen";
 import SoloApp from "./solo/App";
+import TestLobby from "./testMatch/TestLobby";
 import SettingsScreen, { BACKGROUND_STORAGE_KEY, readBackgroundColor } from "./components/Settings/SettingsScreen";
 import TurnOrderScreen from "./components/TurnOrder/TurnOrderScreen";
 
@@ -19,6 +20,7 @@ import { useGameStore } from "./store/gameStore";
 type AppScreen =
   | "top"
   | "settings"
+  | "test-match"
   | "solo"
   | "online-menu"
   | "host-room"
@@ -74,6 +76,10 @@ function App() {
     confirmTurnOrder,
     finishOnlineMulligan,
   ]);
+
+  if (screen === "test-match") {
+    return <TestLobby onBack={() => setScreen("top")} />;
+  }
 
   if (screen === "settings") {
     return <SettingsScreen color={backgroundColor} onChange={setBackgroundColor} onBack={() => setScreen("top")} />;
@@ -170,6 +176,7 @@ function App() {
   return (
     <DeckSelect
       onOpenSoloMode={() => setScreen("solo")}
+      onOpenTestMatch={() => setScreen("test-match")}
       onOpenSettings={() => setScreen("settings")}
       onOpenOnlineMenu={() => setScreen("online-menu")}
     />
