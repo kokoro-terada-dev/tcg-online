@@ -1,0 +1,31 @@
+.test-board { height: 100dvh; display: flex; flex-direction: column; color: white; background: var(--app-background, #0f172a); }
+.test-board button { min-height: 40px; padding: 6px 10px; border: 1px solid #64748b; border-radius: 6px; background: #1e293b; color: white; cursor: pointer; }
+.test-board button:disabled { opacity: .45; cursor: default; }
+.test-board-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #475569; flex-shrink: 0; }
+.test-board-header small { font-weight: normal; font-size: 12px; }
+.test-board-scroll { flex: 1; min-height: 0; overflow-y: auto; touch-action: pan-y; padding: 8px; }
+.test-player { max-width: 760px; margin: 0 auto; padding: 8px 0 16px; }
+.test-player + .test-player { border-top: 2px solid #94a3b8; }
+.test-player h2 { margin: 0 0 8px; font-size: 14px; }
+.test-area { min-width: 0; border: 1px solid #475569; background: rgba(15, 23, 42, .6); padding: 6px; border-radius: 4px; margin-bottom: 6px; }
+.test-area h3 { display: flex; justify-content: space-between; gap: 4px; margin: 0 0 6px; font-size: 10px; font-weight: normal; }
+.test-row { display: flex; gap: 6px; }
+.test-row > .test-area { flex: 1; }
+.test-card-strip { display: flex; gap: 6px; overflow-x: auto; touch-action: pan-x pan-y; min-height: 78px; padding: 3px; }
+.test-card-strip:empty { min-height: 24px; }
+.test-board .test-card { width: 56px; height: 78px; min-height: 0; flex: 0 0 56px; padding: 0; position: relative; overflow: hidden; border-radius: 4px; }
+.test-card img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.test-card span { display: block; font-size: 9px; overflow-wrap: anywhere; }
+.test-card-rest img { transform: rotate(90deg); object-fit: contain; }
+.test-board .test-card-selected { border: 2px solid #facc15; box-shadow: 0 0 4px #facc15; }
+.test-slots { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.test-board .test-slots .test-card { width: 100%; height: auto; aspect-ratio: 5 / 7; }
+.test-empty, .test-stack-empty { color: #94a3b8; font-size: 12px; }
+.test-stack-empty { height: 78px; display: grid; place-items: center; }
+.test-board-actions { flex-shrink: 0; border-top: 1px solid #64748b; background: #111827; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); max-height: 40dvh; overflow-y: auto; touch-action: pan-y; }
+.test-selection-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 12px; overflow-wrap: anywhere; }
+.test-action-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.test-action-grid button { flex: 1 1 90px; font-size: 12px; }
+.test-error { color: #fca5a5; font-size: 12px; padding-bottom: 8px; }
+.test-preview { position: fixed; inset: 0; z-index: 100000; background: rgba(0, 0, 0, .85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
+.test-preview img { width: 360px; max-width: 100%; max-height: calc(100dvh - 100px); object-fit: contain; }

@@ -2,8 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import type { Socket } from "socket.io-client";
 import type { CSSProperties } from "react";
+import type { MatchCommand, MatchView, RoomView, DeckInput } from "../../server/src/test/protocol";
+import { getAllLocalDeckRecipes } from "../utils/localDeckStorage";
+import { getLocalCardImage, hasLocalCardImages } from "../utils/localCardImages";
+import TestBoard from "./TestBoard";
 
-type Room = { roomId: string; host: { socketId: string; ready: boolean }; guest: { socketId: string; ready: boolean } | null };
+type Room = RoomView;
 type Reply = { ok: boolean; error?: string };
 const button: CSSProperties = { minHeight: "44px", borderRadius: "6px", border: "1px solid #64748b", background: "#0369a1", color: "white", fontWeight: 700, padding: "10px 14px", cursor: "pointer" };
 const serverUrl = import.meta.env.VITE_TEST_SERVER_URL?.trim() ||
@@ -16,14 +20,19 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [match, setMatch] = useState<MatchView | null>(null);
+  const [deckId, setDeckId] = useState("");
+  const [decks] = useState(getAllLocalDeckRecipes);
   useEffect(() => {
     if (!serverUrl) return;
     const socket = io(serverUrl, { autoConnect: false, timeout: 60000, reconnection: false });
     socketRef.current = socket;
     socket.on("test-room:state", (next: Room) => { setRoom(next); setMessage(""); setError(""); });
-    socket.on("test-room:closed", (text: string) => { setRoom(null); setMessage(text); });
+    socket.on("test-room:closed", (text: string) => { setRoom(null); setMatch(null); setDeckId(""); setMessage(text); });
+    socket.on("test-match:state", (next: MatchView) => setMatch((current) => current?.matchId === next.matchId && current.revision > next.revision ? current : next));
+    socket.on("test-match:ended", (text: string) => { setMatch(null); setMessage(text); });
     socket.on("connect_error", () => { setBusy(false); setError("テストサーバーに接続できません。起動状態と接続先を確認してください。"); });
-    socket.on("disconnect", () => { setRoom(null); setBusy(false); setError("接続が切れました。ルームを作成または入室し直してください。"); });
+    socket.on("disconnect", () => { setRoom(null); setMatch(null); setDeckId(""); setBusy(false); setError("接続が切れました。ルームを作成または入室し直してください。"); });
     return () => { socket.removeAllListeners(); socket.disconnect(); socketRef.current = null; };
   }, []);
 
@@ -37,13 +46,24 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
       if (err || !reply?.ok) {
         setError(reply?.error ?? "応答を受信できませんでした。再度お試しください。");
         if (err) { socket.disconnect(); setRoom(null); }
-      } else if (event === "test-room:leave") setRoom(null);
+      } else if (event === "test-room:leave") { setRoom(null); setMatch(null); setDeckId(""); }
     };
     socket.connect();
     if (value === undefined) socket.timeout(75000).emit(event, complete);
     else socket.timeout(75000).emit(event, value, complete);
   }
   const mine = room?.host.socketId === socketRef.current?.id ? room?.host : room?.guest;
+  function selectDeck(id: string) {
+    const deck = decks.find((item) => item.id === id);
+    if (!deck?.leaderCardId || deck.mainDeck.length !== 50 || deck.donDeck.length !== 10) { setError("リーダー・メイン50枚・DON10枚のデッキを選択してください"); return; }
+    if (!hasLocalCardImages() || [deck.leaderCardId, ...deck.mainDeck].some((cardId) => !getLocalCardImage(cardId))) {
+      setError("トップページで、このデッキに必要な画像ZIPを読み込んでください"); return;
+    }
+    setDeckId(id);
+    const recipe: DeckInput = { name: deck.name, leaderCardId: deck.leaderCardId, mainDeck: deck.mainDeck, donDeck: deck.donDeck, cardTypes: Object.fromEntries(deck.mainDeck.map((cardId) => [cardId, deck.cardTypes[cardId] ?? "character"])), leaderLifeCount: deck.leaderLifeCount ?? 5 };
+    request("test-room:deck", recipe);
+  }
+  if (match && room) return <TestBoard key={match.matchId} match={match} roomId={room.roomId} busy={busy} error={error} onCommand={(command: MatchCommand) => request("test-match:command", command)} onEnd={() => request("test-match:end")} />;
   return <main style={{ height: "100dvh", overflowY: "auto", touchAction: "pan-y", padding: "16px", background: "var(--app-background, #0f172a)", color: "white" }}>
     <div style={{ maxWidth: "480px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "16px", paddingBottom: "env(safe-area-inset-bottom)" }}>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}><h1 style={{ fontSize: "22px" }}>テスト対戦</h1><button style={button} onClick={onBack}>戻る</button></header>
@@ -57,11 +77,16 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
       </> : <>
         <div style={{ fontSize: "20px", fontWeight: 700 }}>ルームコード：{room.roomId}</div>
         <div style={{ padding: "16px 0", borderBlock: "1px solid #64748b", lineHeight: 2 }}>
-          <div>ホスト：入室済み・{room.host.ready ? "READY" : "準備中"}</div>
-          <div>ゲスト：{room.guest ? `入室済み・${room.guest.ready ? "READY" : "準備中"}` : "入室待ち"}</div>
+          <div>ホスト：入室済み・{room.host.ready ? "READY" : "準備中"}<div>{room.host.deck?.name ?? "デッキ未選択"}</div></div>
+          <div>ゲスト：{room.guest ? `入室済み・${room.guest.ready ? "READY" : "準備中"}` : "入室待ち"}<div>{room.guest?.deck?.name ?? "デッキ未選択"}</div></div>
         </div>
-        <button style={{ ...button, background: mine?.ready ? "#166534" : "#0369a1" }} disabled={busy} onClick={() => request("test-room:ready", !mine?.ready)}>{mine?.ready ? "READY解除" : "READY"}</button>
+        <label>デッキ<select aria-label="使用デッキ" value={deckId} disabled={busy || room.inMatch} onChange={(event) => selectDeck(event.target.value)} style={{ width: "100%", fontSize: "16px", padding: "10px", marginTop: "8px" }}>
+          <option value="">選択してください</option>
+          {decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}
+        </select></label>
+        <button style={{ ...button, background: mine?.ready ? "#166534" : "#0369a1" }} disabled={busy || !mine?.deck} onClick={() => request("test-room:ready", !mine?.ready)}>{mine?.ready ? "READY解除" : "READY"}</button>
         {room.host.ready && room.guest?.ready && <p role="status">両プレイヤー READY</p>}
+        {room.host.socketId === socketRef.current?.id && <button style={button} disabled={busy || !room.host.ready || !room.guest?.ready || room.inMatch} onClick={() => request("test-match:start")}>対戦開始</button>}
         <button style={{ ...button, background: "#334155" }} disabled={busy} onClick={() => request("test-room:leave")}>退出</button>
       </>}
       {message && <p role="status">{message}</p>}

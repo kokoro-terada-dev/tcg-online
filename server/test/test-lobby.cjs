@@ -40,6 +40,10 @@ test("test rooms: isolation, membership, READY, leave and disconnect", async () 
     assert.equal((await request(outsider, "test-room:join", room.roomId)).ok, false);
     assert.equal((await request(outsider, "test-room:ready", true)).ok, false);
     assert.equal((await request(host, "test-room:ready", "true")).ok, false);
+    assert.equal((await request(host, "test-room:ready", true)).ok, false);
+    const recipe = { name: "test", leaderCardId: "leader", leaderLifeCount: 5, mainDeck: Array(50).fill("character"), donDeck: Array(10).fill("don"), cardTypes: { character: "character" } };
+    assert.equal((await request(host, "test-room:deck", recipe)).ok, true);
+    assert.equal((await request(guest, "test-room:deck", recipe)).ok, true);
     await request(host, "test-room:ready", true);
     next = event(host, "test-room:state");
     await request(guest, "test-room:ready", true);
