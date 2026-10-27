@@ -1,5 +1,6 @@
 import { useState } from "react";
 import TestPlayerBoard from "./TestPlayerBoard";
+import TestAttackArrow from "./TestAttackArrow";
 import type { CardView, MatchCommand, MatchView, Zone } from "../../server/src/test/protocol";
 import { getCardBackImageUrl, getDonImageUrl, getLocalCardImage } from "../utils/localCardImages";
 import "./testMatch.css";
@@ -13,8 +14,12 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
   const [preview, setPreview] = useState<CardView | null>(null);
   const [list, setList] = useState<{ zone: Zone; owner: 0 | 1 } | null>(null);
   const own = match.players[match.localPlayerIndex];
+  const [attackSource, setAttackSource] = useState<{ id: string; from: "leader" | "character"; revision: number } | null>(null);
+  const [attackTarget, setAttackTarget] = useState<CardView | null>(null);
+  const choosingAttack = attackSource?.revision === match.revision && Boolean(attackSource && own.zones[attackSource.from].find((card) => card?.id === attackSource.id && !card.rotated));
+  function cancelAttack() { setAttackSource(null); setAttackTarget(null); }
   const selected = selection ? own.zones[selection.from].find((card) => card?.id === selection.id) : null;
-  function command(action: { kind: "draw" } | { kind: "rotate"; cardInstanceId: string; from: Zone } | { kind: "move"; cardInstanceId: string; from: Zone; to: Zone; slotIndex?: number }) {
+  function command(action: { kind: "draw" } | { kind: "attack"; cardInstanceId: string; from: "leader" | "character"; targetId: string } | { kind: "rotate"; cardInstanceId: string; from: Zone } | { kind: "move"; cardInstanceId: string; from: Zone; to: Zone; slotIndex?: number }) {
     if (busy) return;
     onCommand({ ...action, matchId: match.matchId, expectedRevision: match.revision, requestId: crypto.randomUUID() });
     setSelection(null);
@@ -27,8 +32,13 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
     const mine = owner === match.localPlayerIndex;
     const url = imageUrl(card);
     const label = card.cardId ?? "裏向きカード";
-    return <button key={card.id} data-card-id={card.id} data-player-index={owner} className={`test-match-card test-match-card-${zone}${card.rotated ? " test-match-rest" : ""}${selected?.id === card.id ? " test-match-selected" : ""}`} aria-label={`${labels[zone]} ${label}`} title={label} disabled={busy}
+    const attackCandidate = !mine && (zone === "leader" || zone === "character");
+    return <button key={card.id} data-card-id={card.id} data-player-index={owner} className={`test-match-card test-match-card-${zone}${card.rotated ? " test-match-rest" : ""}${selected?.id === card.id ? " test-match-selected" : ""}${choosingAttack && attackCandidate ? " test-attack-candidate" : ""}`} aria-label={`${labels[zone]} ${label}`} title={label} disabled={busy || (choosingAttack && !attackCandidate)}
       onClick={() => {
+        if (choosingAttack) {
+          if (!mine && (zone === "leader" || zone === "character")) setAttackTarget(card);
+          return;
+        }
         if (!mine) setPreview(card);
         else { setSelection((current) => current?.id === card.id ? null : { id: card.id, from: zone }); setList(null); }
       }}>
@@ -38,27 +48,45 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
   const targets: Zone[] = selection?.from === "leader" ? [] : selected?.kind === "don" ? ["activeDon", "restDon", "donDeck"] : ["hand", "character", "stage", "trash", "public", "deck", "life"];
   return <main className="test-board">
     <div className="test-playmat">
-      <TestPlayerBoard player={match.players[(1 - match.localPlayerIndex) as 0 | 1]} playerIndex={(1 - match.localPlayerIndex) as 0 | 1} reversed renderCard={(card, zone, index) => cardButton(card, zone, 1 - match.localPlayerIndex, index)} onOpen={(zone) => setList({ zone, owner: (1 - match.localPlayerIndex) as 0 | 1 })} canPlace={() => false} onPlace={() => {}} />
+      <TestPlayerBoard player={match.players[(1 - match.localPlayerIndex) as 0 | 1]} playerIndex={(1 - match.localPlayerIndex) as 0 | 1} reversed renderCard={(card, zone, index) => cardButton(card, zone, 1 - match.localPlayerIndex, index)} onOpen={(zone) => { if (!choosingAttack) setList({ zone, owner: (1 - match.localPlayerIndex) as 0 | 1 }); }} canPlace={() => false} onPlace={() => {}} />
       <nav className="test-board-controls" aria-label="盤面操作">
         <small>{roomId}</small>
-        <button disabled={busy || own.zones.deck.length === 0} onClick={() => command({ kind: "draw" })}>1枚ドロー</button>
-        <button disabled={busy || !own.zones.donDeck[0]} onClick={() => {
+        <button disabled={busy || choosingAttack || own.zones.deck.length === 0} onClick={() => command({ kind: "draw" })}>1枚ドロー</button>
+        <button disabled={busy || choosingAttack || !own.zones.donDeck[0]} onClick={() => {
           const don = own.zones.donDeck[0];
           if (don) command({ kind: "move", cardInstanceId: don.id, from: "donDeck", to: "activeDon" });
         }}>DON追加</button>
         <button onClick={() => { if (window.confirm("両プレイヤーをルームへ戻しますか？")) onEnd(); }} disabled={busy}>ルームへ戻る</button>
       </nav>
-      <TestPlayerBoard player={own} playerIndex={match.localPlayerIndex} reversed={false} renderCard={(card, zone, index) => cardButton(card, zone, match.localPlayerIndex, index)} onOpen={(zone) => setList({ zone, owner: match.localPlayerIndex })} canPlace={(zone) => !busy && Boolean(selected && selection?.from !== "leader" && selected.kind === zone)} onPlace={move} />
+      <TestPlayerBoard player={own} playerIndex={match.localPlayerIndex} reversed={false} renderCard={(card, zone, index) => cardButton(card, zone, match.localPlayerIndex, index)} onOpen={(zone) => { if (!choosingAttack) setList({ zone, owner: match.localPlayerIndex }); }} canPlace={(zone) => !busy && Boolean(selected && selection?.from !== "leader" && selected.kind === zone)} onPlace={move} />
     </div>
+    <TestAttackArrow attack={match.attack} revision={match.revision} />
+    {choosingAttack && <div className="test-attack-prompt" role="status">相手のリーダー・キャラクターを選択<button onClick={cancelAttack}>キャンセル</button></div>}
     {error && <div role="alert" className="test-error">{error}</div>}
-    {selected && selection && <section className="test-board-actions" role="dialog" aria-label="カード操作">
+    {selected && selection && <div className="test-modal-backdrop" onClick={() => setSelection(null)}><section className="test-board-actions" role="dialog" aria-modal="true" aria-label="カード操作" onClick={(event) => event.stopPropagation()}>
         <div className="test-selection-title"><strong>{selected.cardId ?? labels[selection.from]}</strong><button onClick={() => setSelection(null)}>閉じる</button></div>
+        <div className="test-card-actions-body">
+        {imageUrl(selected) && <img className="test-action-image" src={imageUrl(selected)!} alt={selected.cardId ?? "カード"} />}
         <div className="test-action-grid">
           <button onClick={() => setPreview(selected)}>詳細</button>
+          {(selection.from === "leader" || selection.from === "character") && <button disabled={busy || selected.rotated} onClick={() => {
+            if (selection.from !== "leader" && selection.from !== "character") return;
+            setAttackSource({ id: selected.id, from: selection.from, revision: match.revision }); setAttackTarget(null); setSelection(null);
+          }}>アタック</button>}
           {(["leader", "character", "stage"] as Zone[]).includes(selection.from) && <button disabled={busy} onClick={() => command({ kind: "rotate", cardInstanceId: selected.id, from: selection.from })}>{selected.rotated ? "アクティブ" : "レスト"}</button>}
           {targets.filter((to) => to !== selection.from && (to !== "character" || selected.kind === "character") && (to !== "stage" || selected.kind === "stage")).map((to) => <button key={to} disabled={busy} onClick={() => move(to)}>{to === "character" ? "登場" : `${labels[to]}へ`}</button>)}
         </div>
-    </section>}
+        </div>
+    </section></div>}
+    {choosingAttack && attackTarget && attackSource && <div className="test-modal-backdrop"><section className="test-board-actions" role="dialog" aria-modal="true" aria-label="アタック確認">
+      <h2>アタックしますか？</h2>
+      <div className="test-card-actions-body">
+        {imageUrl(attackTarget) && <img className="test-action-image" src={imageUrl(attackTarget)!} alt={attackTarget.cardId ?? "対象カード"} />}
+        <div className="test-action-grid"><button disabled={busy} onClick={() => setAttackTarget(null)}>いいえ</button><button disabled={busy} onClick={() => {
+          command({ kind: "attack", cardInstanceId: attackSource.id, from: attackSource.from, targetId: attackTarget.id }); cancelAttack();
+        }}>はい</button><button onClick={cancelAttack}>キャンセル</button></div>
+      </div>
+    </section></div>}
     {list && <div className="test-modal-backdrop" onClick={() => setList(null)}>
       <section className="test-card-list" role="dialog" aria-modal="true" aria-label={`${labels[list.zone]}リスト`} onClick={(event) => event.stopPropagation()}>
         <header className="test-selection-title"><strong>{list.owner === match.localPlayerIndex ? "自分" : "相手"}の{labels[list.zone]}</strong><button onClick={() => setList(null)}>閉じる</button></header>

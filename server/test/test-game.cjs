@@ -66,6 +66,34 @@ test("atomic moves, replay protection, full slots, revisions and DON", () => {
   assert.equal(new Set(countCards(game).map((card) => card.id)).size, 122);
 });
 
+test("attacks validate both seats, rest atomically, reject replay and clear on movement", () => {
+  for (const actor of [0, 1]) {
+    const game = createMatch(recipe(), recipe());
+    const source = game.players[actor].zones.leader[0];
+    const target = game.players[1 - actor].zones.leader[0];
+    const attack = () => command(game, { kind: "attack", from: "leader", cardInstanceId: source.id, targetId: target.id });
+    const before = JSON.stringify(game.players);
+    assert.ok(applyCommand(game, 1 - actor, attack()));
+    assert.ok(applyCommand(game, actor, { ...attack(), targetId: source.id }));
+    assert.ok(applyCommand(game, actor, { ...attack(), targetId: game.players[1 - actor].zones.hand[0].id }));
+    assert.equal(JSON.stringify(game.players), before);
+    const action = attack();
+    assert.equal(applyCommand(game, actor, action), null);
+    assert.equal(source.rotated, true);
+    assert.deepEqual(projectMatch(game, 0).attack, projectMatch(game, 1).attack);
+    assert.deepEqual(game.attack, { actor, sourceId: source.id, targetId: target.id });
+    assert.equal(applyCommand(game, actor, action), null);
+    assert.equal(game.revision, 1);
+    assert.ok(applyCommand(game, actor, attack()));
+    const character = game.players[1 - actor].zones.hand[0];
+    assert.equal(applyCommand(game, 1 - actor, command(game, { kind: "move", from: "hand", to: "character", cardInstanceId: character.id })), null);
+    assert.equal(applyCommand(game, actor, command(game, { kind: "rotate", from: "leader", cardInstanceId: source.id })), null);
+    assert.equal(applyCommand(game, actor, { ...attack(), targetId: character.id }), null);
+    assert.equal(applyCommand(game, 1 - actor, command(game, { kind: "move", from: "character", to: "trash", cardInstanceId: character.id })), null);
+    assert.equal(game.attack, null);
+  }
+});
+
 test("socket: both players receive authoritative state; private cards stay private", async () => {
   const { io } = require("socket.io-client");
   const { createTestServer } = require("../dist/test/server.js");
@@ -105,7 +133,12 @@ test("socket: both players receive authoritative state; private cards stay priva
     assert.equal(nextA.revision, 1); assert.equal(nextB.revision, 1);
     assert.deepEqual(nextA.players[0].zones.character, nextB.players[0].zones.character);
     assert.equal(nextB.players[0].zones.character[0].cardId, "character");
-    assert.equal((await request(host, "test-match:command", move)).ok, true);
+    hostEvent = once(host, "test-match:state"); guestEvent = once(guest, "test-match:state");
+    const attack = { matchId: a.matchId, expectedRevision: 1, requestId: randomUUID(), kind: "attack", from: "character", cardInstanceId: move.cardInstanceId, targetId: nextA.players[1].zones.leader[0].id };
+    assert.equal((await request(host, "test-match:command", attack)).ok, true);
+    const [attackA, attackB] = await Promise.all([hostEvent, guestEvent]);
+    assert.deepEqual(attackA.attack, attackB.attack);
+    assert.equal(attackB.players[0].zones.character[0].rotated, true);
     const ended = once(guest, "test-match:ended");
     assert.equal((await request(host, "test-match:end")).ok, true);
     await ended;

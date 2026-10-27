@@ -1,10 +1,11 @@
 import { randomInt, randomUUID } from "node:crypto";
-import type { CardKind, CardView, DeckInput, MatchView, Zone } from "./protocol";
+import type { AttackView, CardKind, CardView, DeckInput, MatchView, Zone } from "./protocol";
 
 type Card = { id: string; cardId: string; kind: CardKind; rotated: boolean; faceUp: boolean };
 type Player = { zones: Record<Zone, (Card | null)[]> };
 export type Match = {
   id: string; revision: number; players: [Player, Player];
+  attack: AttackView | null;
   processed: Map<string, number>;
 };
 const zones: Zone[] = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon"];
@@ -37,7 +38,7 @@ function createPlayer(deck: DeckInput): Player {
 }
 
 export function createMatch(host: DeckInput, guest: DeckInput): Match {
-  return { id: randomUUID(), revision: 0, players: [createPlayer(host), createPlayer(guest)], processed: new Map() };
+  return { id: randomUUID(), revision: 0, players: [createPlayer(host), createPlayer(guest)], attack: null, processed: new Map() };
 }
 
 export function projectMatch(match: Match, viewer: 0 | 1): MatchView {
@@ -47,7 +48,7 @@ export function projectMatch(match: Match, viewer: 0 | 1): MatchView {
       (zone === "hand" ? owner === viewer : zone !== "deck" && card.faceUp);
     return { id: card.id, cardId: visible ? card.cardId : null, kind: visible ? card.kind : null, rotated: card.rotated, faceUp: visible };
   })])) as MatchView["players"][number]["zones"] }));
-  return { matchId: match.id, revision: match.revision, localPlayerIndex: viewer, players: players as MatchView["players"] };
+  return { matchId: match.id, revision: match.revision, localPlayerIndex: viewer, players: players as MatchView["players"], attack: match.attack };
 }
 
 export function applyCommand(match: Match, actor: 0 | 1, value: unknown): string | null {
@@ -67,7 +68,14 @@ export function applyCommand(match: Match, actor: 0 | 1, value: unknown): string
     const index = source.findIndex((card) => card?.id === value.cardInstanceId);
     const card = source[index];
     if (!card) return "自分のカードを選択してください";
-    if (value.kind === "rotate") {
+    if (value.kind === "attack") {
+      if ((from !== "leader" && from !== "character") || card.rotated) return "アクティブのリーダーかキャラクターを選択してください";
+      const opponent = match.players[1 - actor]!;
+      const target = [...opponent.zones.leader, ...opponent.zones.character].find((item) => item?.id === value.targetId);
+      if (!target) return "相手のリーダーかキャラクターを選択してください";
+      card.rotated = true;
+      match.attack = { actor, sourceId: card.id, targetId: target.id };
+    } else if (value.kind === "rotate") {
       if (from !== "leader" && from !== "character" && from !== "stage") return "このカードはレストできません";
       card.rotated = !card.rotated;
     } else if (value.kind === "move") {
@@ -89,6 +97,7 @@ export function applyCommand(match: Match, actor: 0 | 1, value: unknown): string
       if (slot >= 0) player.zones[to][slot] = moved;
       else if (to === "hand") player.zones.hand.push(moved);
       else player.zones[to].unshift(moved);
+      if (match.attack && (match.attack.sourceId === card.id || match.attack.targetId === card.id)) match.attack = null;
     } else return "未対応の操作です";
   }
   match.revision++;

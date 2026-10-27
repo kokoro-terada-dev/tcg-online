@@ -1,4 +1,4 @@
-.test-board { height: 100dvh; overflow: hidden; color: white; background: var(--app-background, #0f172a); }
+.test-board { position: relative; height: 100dvh; overflow: hidden; color: white; background: var(--app-background, #0f172a); }
 .test-board button { min-height: 36px; padding: 6px 10px; border: 1px solid #64748b; border-radius: 6px; background: #1e293b; color: white; cursor: pointer; }
 .test-board button:disabled { cursor: default; }
 .test-playmat { width: 100%; height: 100%; display: flex; flex-direction: column; gap: 4px; padding: 4px; overflow: hidden; }
@@ -9,6 +9,7 @@
 .test-match-card > span { display: block; font-size: 9px; overflow-wrap: anywhere; }
 .test-match-rest:not(.test-match-card-life) img { transform: rotate(90deg); }
 .test-board .test-match-selected { outline: 2px solid #facc15; box-shadow: 0 0 5px #facc15; z-index: 50; }
+.test-board .test-attack-candidate { outline: 2px solid #facc15; box-shadow: 0 0 6px #facc15; }
 .test-standard-slot { border: var(--op-area-border); border-radius: var(--op-card-radius); background: #0f172a; display: flex; align-items: center; justify-content: center; }
 .test-standard-character { width: var(--op-deck-width); height: calc(var(--op-card-height) + 2px); }
 .test-standard-stage { width: var(--op-deck-width); height: calc(var(--op-card-height) + 3px); }
@@ -43,7 +44,14 @@
 .test-board .test-hand-count { position: absolute; right: 6px; bottom: 3px; min-height: 0; padding: 0; border: 0; background: transparent; font-size: clamp(18px,5vw,28px); font-weight: 900; -webkit-text-stroke: 2px black; z-index: 999; }
 .test-board-controls { flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 3px 4px; min-height: 40px; font-size: 10px; }
 .test-board-controls button { min-height: 28px; font-size: 11px; padding: 3px 8px; }
-.test-board-actions { position: fixed; bottom: max(8px,env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(440px,calc(100% - 16px)); border: 1px solid #94a3b8; border-radius: 8px; box-shadow: 0 6px 30px #0009; background: #111827; padding: 10px; max-height: 42dvh; overflow-y: auto; touch-action: pan-y; z-index: 10000; }
+.test-board-actions { width: min(440px,100%); min-height: 0; border: 1px solid #94a3b8; border-radius: 8px; box-shadow: 0 6px 30px #0009; background: #111827; padding: 10px; max-height: calc(100dvh - 24px); overflow-y: auto; touch-action: pan-y; }
+.test-card-actions-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.test-action-image { width: 100%; max-height: 55dvh; object-fit: contain; }
+.test-card-actions-body .test-action-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.test-card-actions-body button { min-width: 0; overflow-wrap: anywhere; }
+.test-board-actions h2 { font-size: 16px; margin: 0 0 12px; }
+.test-attack-arrow { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2000; }
+.test-attack-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(420px,calc(100% - 16px)); padding: 6px; border: 1px solid #facc15; border-radius: 6px; background: #111827; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; z-index: 3000; }
 .test-selection-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 12px; overflow-wrap: anywhere; }
 .test-action-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .test-action-grid button { flex: 1 1 90px; font-size: 12px; }
