@@ -451,6 +451,8 @@ export default function RoomScreen({
         const offRoomState = onRoomStateChanged(
             (nextRoomState) => {
                 setRoomState(nextRoomState);
+                setMessage("");
+                setError("");
                 setRoomList([]);
                 setRoomListLoading(false);
                 setTurnOrderWaiting(false);
@@ -503,6 +505,32 @@ export default function RoomScreen({
             offRoomList();
         };
     }, [mode]);
+
+    useEffect(() => {
+        if (roomState) return;
+        const handleConnecting = () => {
+            setError("");
+            setMessage(mode === "host" ? "ルームを作成しています..." : "ルーム一覧を取得しています...");
+        };
+        const handleError = () => {
+            setRoomListLoading(false);
+            setMessage("");
+            setError("対戦サーバーに接続できません。自動で再接続しています。サーバーの起動状態と接続先を確認してください。");
+        };
+        const timer = window.setTimeout(() => {
+            if (!socket.connected) {
+                setMessage("サーバーの接続を待っています。起動に時間がかかる場合があります...");
+            }
+        }, 15000);
+        if (!socket.connected) setMessage("対戦サーバーに接続しています...");
+        socket.on("connect", handleConnecting);
+        socket.on("connect_error", handleError);
+        return () => {
+            clearTimeout(timer);
+            socket.off("connect", handleConnecting);
+            socket.off("connect_error", handleError);
+        };
+    }, [mode, roomState]);
 
     useEffect(() => {
         if (mode === "host") {

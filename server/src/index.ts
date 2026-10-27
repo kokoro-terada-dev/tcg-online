@@ -39,11 +39,28 @@ const httpServer = createServer(app);
 const allowedOrigins = [
     "https://tcg-online-theta.vercel.app",
     "http://localhost:5173",
+    ...(process.env.ALLOWED_ORIGINS ?? "").split(",").map((origin) => origin.trim()).filter(Boolean),
 ];
+
+function isLocalDevelopmentOrigin(origin: string) {
+    if (process.env.NODE_ENV === "production") return false;
+    try {
+        const url = new URL(origin);
+        return (url.protocol === "http:" || url.protocol === "https:") &&
+            (url.hostname === "localhost" || url.hostname === "127.0.0.1" ||
+                /^192\.168\.\d{1,3}\.\d{1,3}$/.test(url.hostname) ||
+                /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(url.hostname) ||
+                /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(url.hostname));
+    } catch {
+        return false;
+    }
+}
 
 const io = new Server(httpServer, {
     cors: {
-        origin: allowedOrigins,
+        origin: (origin, callback) => {
+            callback(null, !origin || allowedOrigins.includes(origin) || isLocalDevelopmentOrigin(origin));
+        },
     },
 });
 

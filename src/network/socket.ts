@@ -1,9 +1,10 @@
 import { io } from "socket.io-client";
 
 const SERVER_URL =
-  import.meta.env.DEV
-    ? "http://localhost:3000"
-    : "https://tcg-server-u085.onrender.com";
+  import.meta.env.VITE_SERVER_URL?.trim() ||
+  (import.meta.env.DEV
+    ? `${window.location.protocol}//${window.location.hostname}:3000`
+    : "https://tcg-server-u085.onrender.com");
 
 export const socket = io(
   SERVER_URL,
@@ -11,6 +12,7 @@ export const socket = io(
     transports: ["polling", "websocket"],
     reconnection: true,
     autoConnect: false,
+    timeout: 60000,
   }
 );
 
