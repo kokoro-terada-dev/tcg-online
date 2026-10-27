@@ -5,12 +5,14 @@ import { Server } from "socket.io";
 import { applyCommand, createMatch, parseDeck, projectMatch } from "./game";
 import type { Match } from "./game";
 import type { DeckInput, RoomView } from "./protocol";
+import { loadMaster } from "./cardMaster";
 
 type Seat = { socketId: string; ready: boolean; recipe: DeckInput | null };
 type Room = { roomId: string; host: Seat; guest: Seat | null; game: Match | null };
 type Reply = (result: { ok: boolean; error?: string }) => void;
 
 export function createTestServer() {
+  const master = loadMaster();
   const app = express();
   const http = createServer(app);
   const origins = (process.env.ALLOWED_ORIGINS ?? "https://tcg-online-theta.vercel.app").split(",").map((s) => s.trim());
@@ -119,7 +121,7 @@ export function createTestServer() {
       if (!room || room.host.socketId !== socket.id || room.game || !room.host.ready || !room.guest?.ready || !room.host.recipe || !room.guest.recipe) {
         reply({ ok: false, error: "ホストのみ、両者のデッキ選択・READY後に開始できます" }); return;
       }
-      room.game = createMatch(room.host.recipe, room.guest.recipe);
+      room.game = createMatch(room.host.recipe, room.guest.recipe, master);
       publish(room); publishGame(room); reply({ ok: true });
     });
     socket.on("test-match:command", (value: unknown, reply?: Reply) => {

@@ -7,6 +7,36 @@ const recipe = () => ({ name: "test", leaderCardId: "leader", leaderLifeCount: 5
 const command = (game, action, revision = game.revision) => ({ matchId: game.id, expectedRevision: revision, requestId: randomUUID(), ...action });
 const countCards = (game) => game.players.flatMap((player) => Object.values(player.zones).flat()).filter(Boolean);
 
+test("server master snapshots, unknown values and private metadata", () => {
+  const { parseMaster, loadMaster } = require("../dist/test/cardMaster.js");
+  const raw = JSON.stringify({ schemaVersion: 2, cards: {
+    leader: { type: "leader", name: "Example", power: 5000 },
+    character: { type: "character", cost: 0, power: 3000, counter: 1000, traits: ["crew"] }
+  }, effectDefinitions: {} });
+  const master = parseMaster(raw);
+  const game = createMatch(recipe(), recipe(), master);
+  for (const viewer of [0, 1]) {
+    const state = projectMatch(game, viewer);
+    assert.equal(state.masterVersion, master.version);
+    assert.equal(state.players[viewer].zones.hand[0].metadata.counter, 1000);
+    assert.equal(state.players[viewer].zones.hand[0].metadata.cost, 0);
+    assert.equal(state.players[viewer].zones.leader[0].metadata.power, 5000);
+    assert.equal(state.players[viewer].zones.leader[0].metadata.cost, null);
+    assert.ok(state.players[1 - viewer].zones.hand.every(c => c.metadata === null));
+    assert.ok(state.players[viewer].zones.deck.every(c => c.metadata === null));
+    assert.ok(state.players[viewer].zones.life.every(c => c.metadata === null));
+  }
+  assert.equal(projectMatch(createMatch(recipe(), recipe()), 0).players[0].zones.leader[0].metadata, null);
+  const next = parseMaster(raw.replace("5000", "6000"));
+  assert.notEqual(next.version, master.version);
+  assert.equal(projectMatch(game, 0).players[0].zones.leader[0].metadata.power, 5000);
+  assert.ok(Object.isFrozen(master.cards.character));
+  assert.ok(Object.isFrozen(master.cards.character.traits));
+  assert.throws(() => parseMaster(raw.replace("3000", "-1")));
+  assert.throws(() => parseMaster(raw.replace('"schemaVersion":2', '"schemaVersion":999')));
+  assert.equal(loadMaster("/missing/test-card-master.json"), null);
+});
+
 test("deck validation and independent, private initial state", () => {
   assert.equal(parseDeck(null), null);
   assert.equal(parseDeck({ ...recipe(), mainDeck: [] }), null);

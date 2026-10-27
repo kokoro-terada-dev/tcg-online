@@ -1,11 +1,13 @@
 import { randomInt, randomUUID } from "node:crypto";
 import type { AttackView, CardKind, CardView, DeckInput, MatchView, Zone } from "./protocol";
+import type { MasterSnapshot } from "./cardMaster";
 
 type Card = { id: string; cardId: string; kind: CardKind; rotated: boolean; faceUp: boolean };
 type Player = { zones: Record<Zone, (Card | null)[]> };
 export type Match = {
   id: string; revision: number; players: [Player, Player];
   attack: AttackView | null;
+  master: MasterSnapshot | null;
   processed: Map<string, number>;
 };
 const zones: Zone[] = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon"];
@@ -37,8 +39,8 @@ function createPlayer(deck: DeckInput): Player {
   return { zones: { hand, deck: main, life, leader: [leader], character: Array(5).fill(null), stage: [null], trash: [], public: [], donDeck: deck.donDeck.map((id) => ({ ...create(id, "don"), faceUp: true })), activeDon: [], restDon: [] } };
 }
 
-export function createMatch(host: DeckInput, guest: DeckInput): Match {
-  return { id: randomUUID(), revision: 0, players: [createPlayer(host), createPlayer(guest)], attack: null, processed: new Map() };
+export function createMatch(host: DeckInput, guest: DeckInput, master: MasterSnapshot | null = null): Match {
+  return { id: randomUUID(), revision: 0, players: [createPlayer(host), createPlayer(guest)], attack: null, master, processed: new Map() };
 }
 
 export function projectMatch(match: Match, viewer: 0 | 1): MatchView {
@@ -46,9 +48,9 @@ export function projectMatch(match: Match, viewer: 0 | 1): MatchView {
     if (!card) return null;
     const visible = zone === "donDeck" || zone === "activeDon" || zone === "restDon" || zone === "leader" ||
       (zone === "hand" ? owner === viewer : zone !== "deck" && card.faceUp);
-    return { id: card.id, cardId: visible ? card.cardId : null, kind: visible ? card.kind : null, rotated: card.rotated, faceUp: visible };
+    return { id: card.id, cardId: visible ? card.cardId : null, kind: visible ? card.kind : null, rotated: card.rotated, faceUp: visible, metadata: visible ? match.master?.cards[card.cardId] ?? null : null };
   })])) as MatchView["players"][number]["zones"] }));
-  return { matchId: match.id, revision: match.revision, localPlayerIndex: viewer, players: players as MatchView["players"], attack: match.attack };
+  return { matchId: match.id, revision: match.revision, localPlayerIndex: viewer, players: players as MatchView["players"], attack: match.attack, masterVersion: match.master?.version ?? null };
 }
 
 export function applyCommand(match: Match, actor: 0 | 1, value: unknown): string | null {
