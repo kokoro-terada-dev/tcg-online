@@ -25,7 +25,7 @@ export async function startLocalEffectServer(port = 3002) {
         destination: { owner: "SELF", zone: "trash", position: "append", visibility: "faceUp" } }],
       actions: [{ kind: "draw", player: "SELF", amount: 1 }],
     }]);
-    const owner = new EffectMatchOwner(match, catalog); owner.adopt(progression);
+    const owner = new EffectMatchOwner(match, catalog, true); owner.adopt(progression);
     owner.openRegisteredEffect("LOCAL.discard-draw", 0, { instanceId: source.id, generation: 0 }, { status: "certifiedNone" });
     return owner;
   } });

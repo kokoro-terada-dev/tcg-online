@@ -1,7 +1,7 @@
 import type { MovementView, Player } from "./movement/types";
 import type { CardObjectRef, DeepReadonly, Trigger } from "./effects/types";
 export type EffectCatalogQuery = Readonly<{ matchId: string; expectedMovementRevision: number; expectedProgressionRevision: number; source: Readonly<CardObjectRef> }>;
-export type EffectCatalogView = Readonly<{ matchId: string; movementRevision: number; progressionRevision: number; catalogVersion: string | null; source: Readonly<CardObjectRef>;
+export type EffectCatalogView = Readonly<{ matchId: string; movementRevision: number; progressionRevision: number; catalogVersion: string | null; activationEnabled: boolean; source: Readonly<CardObjectRef>;
   effects: readonly Readonly<{ effectId: string; trigger: DeepReadonly<Trigger>; status: "schemaOnly"; timingAvailable: boolean }>[] }>;
 export type EffectSelectionView = Readonly<{ matchId: string; resolutionId: string; selectionId: string; revision: number }> & (
   { kind: "cards"; chooser: Player; mode: "SELECT" | "BLIND_SELECT" | "ORDER"; min: number; max: number; candidates: readonly Readonly<{ token: string; cardId: string | null }>[] } |
@@ -14,4 +14,5 @@ export type EffectTransportView = Readonly<{
 }>;
 export type EffectCommandKind = "beginCosts" | "answerCosts" | "commitCosts" | "cancelCosts" | "start" | "advance" | "answerEffect";
 type Base = Readonly<{ matchId: string; resolutionId: string; requestId: string; expectedMovementRevision: number; expectedProgressionRevision: number }>;
+export type RegisteredEffectCommand = Base & Readonly<{ kind: "activateRegistered"; catalogVersion: string; effectId: string; source: Readonly<CardObjectRef> }>;
 export type EffectCommand = Base & (Readonly<{ kind: "answerCosts" | "answerEffect"; selectionId: string; tokens: readonly string[] }> | Readonly<{ kind: Exclude<EffectCommandKind, "answerCosts" | "answerEffect"> }>);

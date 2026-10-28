@@ -9,7 +9,7 @@ import type { CardView } from "../../server/src/test/protocol";
 
 type Props = { view: EffectTransportView; roomId: string; busy: boolean; error: string; needsSync: boolean;
   onAction: (kind: EffectCommandKind, tokens?: readonly string[]) => void; onSync: () => void; onEnd: () => void;
-  onCatalog?: (instanceId: string) => Promise<EffectCatalogView> };
+  onCatalog?: (instanceId: string) => Promise<EffectCatalogView>; onActivateCatalog?: (catalog: EffectCatalogView, effectId: string) => void };
 export default function TestEffectBoard(props: Props) {
   const { view, busy, needsSync, onAction } = props;
   const [inspected, setInspected] = useState<{ card: CardView; context: string } | null>(null);
@@ -43,7 +43,8 @@ export default function TestEffectBoard(props: Props) {
       {needsSync && <p role="alert">応答を確認できません。再同期してください。</p>}
       </div>
     </section>
-    {inspected?.context === context && props.onCatalog && <EffectCatalogDialog key={`${context}:${inspected.card.id}`} card={inspected.card} onLoad={props.onCatalog} onClose={() => setInspected(null)} />}
+    {inspected?.context === context && props.onCatalog && <EffectCatalogDialog key={`${context}:${inspected.card.id}`} card={inspected.card} onLoad={props.onCatalog} onClose={() => setInspected(null)}
+      {...(props.onActivateCatalog ? { onActivate: props.onActivateCatalog } : {})} />}
   </>;
 }
 function Selection({ selection, disabled, onConfirm }: { selection: NonNullable<EffectTransportView["selection"]>; disabled: boolean; onConfirm: (tokens: readonly string[]) => void }) {

@@ -7,7 +7,7 @@ import { getAllLocalDeckRecipes } from "../utils/localDeckStorage";
 import { getLocalCardImage, hasLocalCardImages } from "../utils/localCardImages";
 import TestBoard from "./TestBoard";
 import TestEffectBoard from "./TestEffectBoard";
-import { acceptEffectView, acceptEffectCatalog, effectCatalogQuery, effectCommand, type EffectTransportView, type EffectCommandKind, type EffectCatalogView } from "./effectClientState";
+import { acceptEffectView, acceptEffectCatalog, effectCatalogQuery, effectCommand, registeredEffectCommand, type EffectTransportView, type EffectCommandKind, type EffectCatalogView, type RegisteredEffectCommand } from "./effectClientState";
 
 type Room = RoomView;
 type Reply = { ok: boolean; error?: string };
@@ -76,16 +76,16 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
     if (value === undefined) socket.timeout(75000).emit(event, complete);
     else socket.timeout(75000).emit(event, value, complete);
   }
-  function effectRequest(kind?: EffectCommandKind, tokens?: readonly string[]) {
+  function effectRequest(kind?: EffectCommandKind, tokens?: readonly string[], activation?: RegisteredEffectCommand) {
     const socket = socketRef.current, current = effectRef.current;
-    if (!socket?.connected || !current || busy || effectFlight.current || (kind !== undefined && needsSync)) return;
+    if (!socket?.connected || !current || busy || effectFlight.current || ((kind !== undefined || activation) && needsSync)) return;
     const sentEpoch = epoch.current, resolutionId = current.effect.resolutionId;
-    const value = kind === undefined ? undefined : effectCommand(current, kind, crypto.randomUUID(), tokens);
+    const value = activation ?? (kind === undefined ? undefined : effectCommand(current, kind, crypto.randomUUID(), tokens));
     effectFlight.current = true; setBusy(true); setError("");
     const complete = (err: Error | null, reply?: { ok: boolean; code?: string; view?: EffectTransportView }) => {
       if (socketRef.current !== socket || epoch.current !== sentEpoch) return;
       effectFlight.current = false; setBusy(false);
-      if (effectRef.current?.effect.resolutionId !== resolutionId) return;
+      if (!activation && effectRef.current?.effect.resolutionId !== resolutionId) return;
       if (err || !reply?.view) { setNeedsSync(true); setError("応答を確認できません。再同期してください。"); return; }
       receiveEffect(reply.view);
       if (!reply.ok) setError(reply.code === "selection_retry" ? "この組み合わせでは支払えません。選び直してください。" : "操作できませんでした。最新の状態を確認してください。");
@@ -107,7 +107,13 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
         resolve(reply.catalog);
       }));
   }
-  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} onCatalog={queryCatalog} />;
+  function activateCatalog(catalog: EffectCatalogView, effectId: string) {
+    const current = effectRef.current;
+    if (!current) return;
+    try { effectRequest(undefined, undefined, registeredEffectCommand(current, catalog, effectId, crypto.randomUUID())); }
+    catch { setError("一覧が更新されています。カードを開き直してください。"); }
+  }
+  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} onCatalog={queryCatalog} onActivateCatalog={activateCatalog} />;
   const mine = room?.host.socketId === socketRef.current?.id ? room?.host : room?.guest;
   function selectDeck(id: string) {
     const deck = decks.find((item) => item.id === id);

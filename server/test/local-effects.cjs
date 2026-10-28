@@ -8,7 +8,7 @@ const { startLocalEffectServer } = require('../dist/test/localEffects.js');
 const recipe = { name: 'Local', leaderCardId: 'LOCAL-LEADER', mainDeck: Array(50).fill('LOCAL-CARD'), donDeck: Array(10).fill('LOCAL-DON'), cardTypes: { 'LOCAL-CARD': 'character' }, leaderLifeCount: 5 };
 const request = (s, event, ...args) => new Promise((resolve, reject) => s.timeout(3000).emit(event, ...args, (error, result) => error ? reject(error) : resolve(result)));
 const once = (s, event) => new Promise((resolve, reject) => { const callback = value => { clearTimeout(timer); resolve(value); }; const timer = setTimeout(() => { s.off(event, callback); reject(Error(event)); }, 3000); s.once(event, callback); });
-async function playFixture(t, expectUnknownMaster = false, deck = recipe) {
+async function playFixture(t, expectUnknownMaster = false, deck = recipe, activate = false) {
   const service = await startLocalEffectServer(0), clients = [];
   t.after(async () => { clients.forEach(s => s.disconnect()); await new Promise(resolve => service.io.close(resolve)); });
   assert.equal(service.http.address().address, '127.0.0.1');
@@ -18,7 +18,16 @@ async function playFixture(t, expectUnknownMaster = false, deck = recipe) {
   const initial = once(host, 'test-effect:state'); assert.equal((await request(host, 'test-match:start')).ok, true); let view = await initial;
   if (expectUnknownMaster) assert.equal(view.effect.masterVersion, null);
   const before = view.movement.players[0].deck.length;
-  for (const [index, kind] of ['beginCosts', 'answerCosts', 'commitCosts', 'advance'].entries()) {
+  if (activate) {
+    const catalog = await request(host, 'test-effect:catalog', { matchId: view.matchId, expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, source: view.movement.players[0].leader[0].ref });
+    assert.equal(catalog.ok, true); assert.equal(catalog.catalog.activationEnabled, true);
+    const c = { kind: 'activateRegistered', matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId: 'activate', expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, source: catalog.catalog.source, catalogVersion: catalog.catalog.catalogVersion, effectId: catalog.catalog.effects[0].effectId };
+    const updated = once(guest, 'test-effect:state'), result = await request(host, 'test-effect:command', c);
+    assert.equal(result.ok, true); view = result.view; assert.equal(view.effect.status, 'waitingForCostSelection');
+    assert.equal((await updated).effect.resolutionId, view.effect.resolutionId);
+    assert.equal((await request(host, 'test-effect:command', c)).replayed, true);
+  }
+  for (const [index, kind] of (activate ? ['answerCosts', 'commitCosts', 'advance'] : ['beginCosts', 'answerCosts', 'commitCosts', 'advance']).entries()) {
     const c = { kind, matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId: `request-${index}`, expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision };
     if (kind === 'answerCosts') { c.selectionId = view.selection.selectionId; c.tokens = [view.selection.candidates[0].token]; }
     const result = await request(host, 'test-effect:command', c); assert.equal(result.ok, true); view = result.view;
@@ -28,6 +37,7 @@ async function playFixture(t, expectUnknownMaster = false, deck = recipe) {
 }
 
 test('local fixture binds loopback and completes the public UI command sequence', t => playFixture(t));
+test('local fixture accepts catalog activation and synchronizes it to the other seat', t => playFixture(t, false, recipe, true));
 
 test('local fixture can run independently of inconsistent real card master types', async t => {
   const directory = mkdtempSync(join(tmpdir(), 'local-effect-master-')), file = join(directory, 'card-master.json');

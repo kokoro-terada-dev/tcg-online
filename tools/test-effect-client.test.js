@@ -7,7 +7,7 @@ const module = { exports: {} };
 const source = fs.readFileSync(new URL("../src/testMatch/effectClientState.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 vm.runInNewContext(compiled, { exports: module.exports, module });
-const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog } = module.exports;
+const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog, registeredEffectCommand } = module.exports;
 const plain = value => JSON.parse(JSON.stringify(value));
 function view() {
   const zones = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon", "attachedDon", "resolving"];
@@ -68,4 +68,18 @@ test("catalog responses reject stale revisions, generations, wrong cards and mat
   for (const patch of [{ matchId: "old" }, { movementRevision: 2 }, { progressionRevision: 6 }, { source: { instanceId: "other", generation: 3 } }, { source: { instanceId: "a", generation: 2 } }]) assert.equal(acceptEffectCatalog(v, q, { ...c, ...patch }), false);
   v.movement.revision++; assert.equal(acceptEffectCatalog(v, q, c), false);
   v.movement.revision--; v.movement.players[0].leader[0] = null; assert.equal(acceptEffectCatalog(v, q, c), false);
+});
+test("registered activation requests contain only the current server context and selected ID", () => {
+  const v = view(); v.movement.players[0].leader[0] = { ...v.movement.players[0].hand[0] };
+  const c = { matchId: 'm', movementRevision: 3, progressionRevision: 7, source: { instanceId: 'a', generation: 3 }, catalogVersion: 'version', activationEnabled: true, effects: [{ effectId: 'TEST.main', timingAvailable: true }] };
+  const command = registeredEffectCommand(v, c, 'TEST.main', 'request');
+  assert.equal(command.kind, 'activateRegistered'); assert.equal(command.resolutionId, 'r'); assert.equal(command.effectId, 'TEST.main');
+  for (const key of ['actor', 'definition', 'rules', 'numericPolicy']) assert.equal(Object.hasOwn(command, key), false);
+  c.source.generation = 99; assert.equal(command.source.generation, 3);
+});
+test("stale, disabled and unlisted registered activations are not sent", () => {
+  const v = view(); v.movement.players[0].leader[0] = { ...v.movement.players[0].hand[0] };
+  const c = { matchId: 'm', movementRevision: 3, progressionRevision: 7, source: { instanceId: 'a', generation: 3 }, catalogVersion: 'version', activationEnabled: true, effects: [{ effectId: 'TEST.main', timingAvailable: true }] };
+  assert.throws(() => registeredEffectCommand(v, c, 'missing', 'request'));
+  for (const patch of [{ activationEnabled: false }, { movementRevision: 2 }, { catalogVersion: null }, { effects: [{ effectId: 'TEST.main', timingAvailable: false }] }]) assert.throws(() => registeredEffectCommand(v, { ...c, ...patch }, 'TEST.main', 'request'));
 });
