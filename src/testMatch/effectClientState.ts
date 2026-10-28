@@ -70,6 +70,13 @@ export function testBattleDecisionCommand(view: EffectTransportView, decision: "
   return { kind: "testBattleDecision", matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
     expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, battleId: view.battle.battleId, decision };
 }
+export function testDamageCommand(view: EffectTransportView, requestId: string): TestBattleCommand {
+  if (!view.testDamageAvailable || view.effect.status !== "idle" || view.progression.finished || view.progression.gate !== "idle" ||
+    !view.battle || view.battle.defender !== view.localPlayerIndex || view.battle.step !== "damage" || !view.battle.decisionComplete || view.battle.settled ||
+    view.battlePower?.attack == null || view.battlePower?.defense == null) throw new Error("No local damage decision");
+  return { kind: "testResolveDamage", matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
+    expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, battleId: view.battle.battleId };
+}
 
 export function acceptEffectView(current: EffectTransportView | null, next: EffectTransportView): boolean {
   return !current || (current.matchId === next.matchId && current.localPlayerIndex === next.localPlayerIndex &&

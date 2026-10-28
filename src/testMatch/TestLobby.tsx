@@ -7,7 +7,7 @@ import { getAllLocalDeckRecipes } from "../utils/localDeckStorage";
 import { getLocalCardImage, hasLocalCardImages } from "../utils/localCardImages";
 import TestBoard from "./TestBoard";
 import TestEffectBoard from "./TestEffectBoard";
-import { acceptEffectView, acceptEffectCatalog, effectCatalogQuery, effectCommand, registeredEffectCommand, testTurnCommand, testPlayCardCommand, testAttackCommand, testBattleDecisionCommand, type EffectTransportView, type EffectCommandKind, type EffectCatalogView, type RegisteredEffectCommand, type TestTurnCommand, type TestPlayCardCommand, type TestBattleCommand } from "./effectClientState";
+import { acceptEffectView, acceptEffectCatalog, effectCatalogQuery, effectCommand, registeredEffectCommand, testTurnCommand, testPlayCardCommand, testAttackCommand, testBattleDecisionCommand, testDamageCommand, type EffectTransportView, type EffectCommandKind, type EffectCatalogView, type RegisteredEffectCommand, type TestTurnCommand, type TestPlayCardCommand, type TestBattleCommand } from "./effectClientState";
 
 type Room = RoomView;
 type Reply = { ok: boolean; error?: string };
@@ -135,7 +135,12 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
     try { effectRequest(undefined, undefined, testBattleDecisionCommand(current, decision, crypto.randomUUID())); }
     catch { setError("判断する手番が変わりました。最新の状態を確認してください。"); }
   }
-  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} onCatalog={queryCatalog} onActivateCatalog={activateCatalog} onTestTurn={switchTestTurn} onTestPlay={playTestCard} onTestAttack={attackTestCard} onTestBattleDecision={decideTestBattle} />;
+  function resolveTestDamage() {
+    const current = effectRef.current; if (!current) return;
+    try { effectRequest(undefined, undefined, testDamageCommand(current, crypto.randomUUID())); }
+    catch { setError("パワー情報またはダメージ判定待ち状態を確認してください。"); }
+  }
+  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} onCatalog={queryCatalog} onActivateCatalog={activateCatalog} onTestTurn={switchTestTurn} onTestPlay={playTestCard} onTestAttack={attackTestCard} onTestBattleDecision={decideTestBattle} onTestResolveDamage={resolveTestDamage} />;
   const mine = room?.host.socketId === socketRef.current?.id ? room?.host : room?.guest;
   function selectDeck(id: string) {
     const deck = decks.find((item) => item.id === id);

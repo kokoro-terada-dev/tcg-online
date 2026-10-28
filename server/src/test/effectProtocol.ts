@@ -15,6 +15,8 @@ export type EffectTransportView = Readonly<{
   testAttackSourceIds?: readonly string[];
   testAttackTargetIds?: readonly string[];
   testBattleDecision?: "passBlock" | "endCounter";
+  testDamageAvailable?: boolean;
+  battlePower?: Readonly<{ attack: number | null; defense: number | null; masterVersion: string | null }> | null;
   battle?: Battle | null;
   // While idle, resolutionId reserves the next resolution; there is no running effect.
   effect: Readonly<{ resolutionId: string; actor: Player; status: "idle" | "prepared" | "resolving" | "completed" | "cancelled" | "blocked" | "waitingForSelection" | "waitingForCostSelection" | "costsReady"; completedSteps: number; masterVersion: string | null }>;
@@ -27,5 +29,5 @@ export type RegisteredEffectCommand = Base & Readonly<{ kind: "activateRegistere
 export type TestTurnCommand = Base & Readonly<{ kind: "testNextTurn" }>;
 export type TestPlayCardCommand = Base & Readonly<{ kind: "testPlayCard"; source: Readonly<CardObjectRef> }>;
 export type TestBattleCommand = Base & (Readonly<{ kind: "testAttack"; source: Readonly<CardObjectRef>; target: Readonly<CardObjectRef> }> |
-  Readonly<{ kind: "testBattleDecision"; battleId: string; decision: "passBlock" | "endCounter" }>);
+  Readonly<{ kind: "testBattleDecision"; battleId: string; decision: "passBlock" | "endCounter" }> | Readonly<{ kind: "testResolveDamage"; battleId: string }>);
 export type EffectCommand = Base & (Readonly<{ kind: "answerCosts" | "answerEffect"; selectionId: string; tokens: readonly string[] }> | Readonly<{ kind: Exclude<EffectCommandKind, "answerCosts" | "answerEffect"> }>);

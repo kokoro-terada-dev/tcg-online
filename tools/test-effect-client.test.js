@@ -7,7 +7,7 @@ const module = { exports: {} };
 const source = fs.readFileSync(new URL("../src/testMatch/effectClientState.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 vm.runInNewContext(compiled, { exports: module.exports, module });
-const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog, registeredEffectCommand, testTurnCommand, testPlayDestination, testPlayCardCommand, canTestAttackSource, canTestAttackTarget, testAttackCommand, testBattleDecisionCommand } = module.exports;
+const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog, registeredEffectCommand, testTurnCommand, testPlayDestination, testPlayCardCommand, canTestAttackSource, canTestAttackTarget, testAttackCommand, testBattleDecisionCommand, testDamageCommand } = module.exports;
 const plain = value => JSON.parse(JSON.stringify(value));
 function view() {
   const zones = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon", "attachedDon", "resolving"];
@@ -130,4 +130,11 @@ test("battle decision commands are limited to the server-designated defender and
 test("battle arrows keep the original attacker and current target in the board adapter", () => {
   const v = view(); v.battle = { attacker: 1, source: { instanceId: 'attacker', generation: 2 }, target: { instanceId: 'defender', generation: 1 } };
   assert.deepEqual(plain(effectBoardView(v).attack), { actor: 1, sourceId: 'attacker', targetId: 'defender' });
+});
+test("damage commands require known server power and the designated defender without sending numbers", () => {
+  const v = view(); v.effect.status = 'idle'; v.localPlayerIndex = 1; v.progression.gate = 'idle'; v.testDamageAvailable = true;
+  v.battle = { battleId: 'battle', attacker: 0, defender: 1, step: 'damage', decisionComplete: true, settled: false };
+  v.battlePower = { attack: 0, defense: 0, masterVersion: 'version' };
+  const c = testDamageCommand(v, 'request'); assert.equal(c.kind, 'testResolveDamage'); assert.equal(Object.hasOwn(c, 'attackPower'), false);
+  v.battlePower.defense = null; assert.throws(() => testDamageCommand(v, 'request')); v.battlePower.defense = 0; v.localPlayerIndex = 0; assert.throws(() => testDamageCommand(v, 'request'));
 });

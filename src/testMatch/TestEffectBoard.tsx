@@ -10,7 +10,7 @@ import type { CardView } from "../../server/src/test/protocol";
 type Props = { view: EffectTransportView; roomId: string; busy: boolean; error: string; needsSync: boolean;
   onAction: (kind: EffectCommandKind, tokens?: readonly string[]) => void; onSync: () => void; onEnd: () => void;
   onCatalog?: (instanceId: string) => Promise<EffectCatalogView>; onActivateCatalog?: (catalog: EffectCatalogView, effectId: string) => void; onTestTurn?: () => void; onTestPlay?: (instanceId: string) => void;
-  onTestAttack?: (sourceId: string, targetId: string) => void; onTestBattleDecision?: (decision: "passBlock" | "endCounter") => void };
+  onTestAttack?: (sourceId: string, targetId: string) => void; onTestBattleDecision?: (decision: "passBlock" | "endCounter") => void; onTestResolveDamage?: () => void };
 export default function TestEffectBoard(props: Props) {
   const { view, busy, needsSync, onAction } = props;
   const [inspected, setInspected] = useState<{ card: CardView; context: string } | null>(null);
@@ -50,6 +50,8 @@ export default function TestEffectBoard(props: Props) {
         !mine || view.effect.status === "waitingForSelection" ? "相手の操作を待っています" :
         view.effect.status === "costsReady" ? "支払いを確定してください" : "効果処理"
       }</p>}
+      {view.battlePower && <p aria-label="判定用パワー">攻撃 {view.battlePower.attack ?? "?"} / 防御 {view.battlePower.defense ?? "?"}
+        {(view.battlePower.attack === null || view.battlePower.defense === null) && <small>（パワー情報不足・未対応）</small>}</p>}
       <div className="test-effect-actions">
         {mine && view.effect.status === "prepared" && <button disabled={disabled} onClick={() => onAction("beginCosts")}>効果を使う</button>}
         {mine && view.effect.status === "costsReady" && <button disabled={disabled} onClick={() => onAction("commitCosts")}>実行</button>}
@@ -59,6 +61,7 @@ export default function TestEffectBoard(props: Props) {
         <button onClick={() => setCollapsed(true)}>盤面を見る</button>
         {view.effect.status === "idle" && view.testTurnSwitchAvailable && props.onTestTurn && <button disabled={disabled} onClick={props.onTestTurn}>テスト手番交代</button>}
         {view.effect.status === "idle" && view.testBattleDecision && props.onTestBattleDecision && <button disabled={disabled} onClick={() => props.onTestBattleDecision!(view.testBattleDecision!)}>{view.testBattleDecision === "passBlock" ? "ブロックしない" : "カウンター終了"}</button>}
+        {view.effect.status === "idle" && view.testDamageAvailable && props.onTestResolveDamage && <button disabled={disabled} onClick={props.onTestResolveDamage}>テストダメージ判定</button>}
       </div>
       {needsSync && <p role="alert">応答を確認できません。再同期してください。</p>}
       </div>
