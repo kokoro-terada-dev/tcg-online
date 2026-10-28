@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
 import type { CardDefinition, CardSetRef, Category, CompiledCard, DonZone, Node, NodeMeta, Value } from "./dsl";
 
-export const COMPILER_VERSION = "v3-subset-compiler.9";
+export const COMPILER_VERSION = "v3-subset-compiler.10";
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 function inspectData(input: unknown): void {
@@ -158,7 +158,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.9", "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.10", "unsupported-v3-schema-version");
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
   ensureMove(typeof input.name === "string" && input.name.trim().length > 0 && input.name.length <= 300, "invalid-v3-card-name");
   ensureMove(input.cardType === "leader" || input.cardType === "character" || input.cardType === "stage", "unsupported-v3-card-type");
@@ -171,7 +171,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   const colors = stringList(input.colors), traits = stringList(input.traits), attributes = stringList(input.attributes);
   ensureMove(["needs_review", "unsupported", "approved"].includes(input.reviewStatus as string), "invalid-v3-review-status");
   dataObject(input.source, ["text", "triggerText", "displayIds", "datasetSha256"]);
-  ensureMove(typeof input.source.text === "string" && input.source.text.length > 0 && input.source.text.length <= 32768 && typeof input.source.triggerText === "string" && input.source.triggerText.length <= 32768, "invalid-v3-source-text");
+  ensureMove(typeof input.source.text === "string" && input.source.text.length <= 32768 && typeof input.source.triggerText === "string" && input.source.triggerText.length <= 32768, "invalid-v3-source-text");
   const displayIds = stringList(input.source.displayIds); ensureMove(displayIds.length > 0, "v3-source-variant-required"); displayIds.forEach(id => label(id));
   ensureMove(typeof input.source.datasetSha256 === "string" && /^[a-f0-9]{64}$/.test(input.source.datasetSha256), "invalid-v3-dataset-hash");
   const source = { text: input.source.text, triggerText: input.source.triggerText, displayIds, datasetSha256: input.source.datasetSha256 };
@@ -216,12 +216,19 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
       return meta;
     },
   };
-  dataArray(input.effects, 32); ensureMove(input.effects.length > 0, "v3-effect-required");
+  dataArray(input.effects, 32);
+  ensureMove(input.effects.length > 0 ? source.text.length > 0 : source.text.trim() === "" && source.triggerText.trim() === "", "v3-unmapped-card-text");
   const effects: CardDefinition["effects"] = input.effects.map(effect => {
     bindings = new Map(); candidateAllowed = false;
-    dataObject(effect, ["id", "kind", "timing", "sourceZones", "optional", "activationConditions", "resolutionConditions", "costs", "actions"]);
+    dataObject(effect, ["id", "kind", "timing", "sourceZones", "optional", "usageLimit", "activationConditions", "resolutionConditions", "costs", "actions"]);
     const id = label(effect.id); ensureMove(!ids.has(id), "duplicate-v3-effect-id"); ids.add(id);
     ensureMove(effect.kind === "activated" && typeof effect.optional === "boolean", "unsupported-v3-effect-kind-or-optionality");
+    let usageLimit: CardDefinition["effects"][number]["usageLimit"] = null;
+    if (effect.usageLimit !== null) {
+      dataObject(effect.usageLimit, ["type", "scope", "count"]);
+      ensureMove(effect.usageLimit.type === "PER_TURN" && effect.usageLimit.scope === "SOURCE_OBJECT", "unsupported-v3-usage-limit");
+      usageLimit = { type: "PER_TURN", scope: "SOURCE_OBJECT", count: count(effect.usageLimit.count) };
+    }
     dataArray(effect.sourceZones, 3); ensureMove(effect.sourceZones.length === 1 && effect.sourceZones[0] === input.cardType, "unsupported-v3-source-zones");
     const timing = context.read("timing", effect.timing), activationConditions = context.read("predicate", effect.activationConditions),
       resolutionConditions = context.read("predicate", effect.resolutionConditions), costs = context.list("cost", effect.costs);
@@ -229,10 +236,10 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
     ensureMove(costs.filter(cost => cost.type === "REST_SOURCE").length <= 1, "v3-duplicate-rest-source-cost");
     ensureMove(costs.filter(cost => cost.type === "DON_RETURN").length <= 1, "v3-multiple-don-return-costs-unsupported");
     const actions = context.list("action", effect.actions); ensureMove(actions.length > 0, "v3-action-required");
-    return { id, kind: "activated", optional: effect.optional, sourceZones: effect.sourceZones as ("leader" | "character" | "stage")[], timing,
+    return { id, kind: "activated", optional: effect.optional, usageLimit, sourceZones: effect.sourceZones as ("leader" | "character" | "stage")[], timing,
       activationConditions, resolutionConditions, costs, actions };
   });
-  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.9", cardId, cardVersion, name: input.name, cardType: input.cardType,
+  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.10", cardId, cardVersion, name: input.name, cardType: input.cardType,
     baseStats: input.baseStats as CardDefinition["baseStats"], colors, traits, attributes, reviewStatus: input.reviewStatus as CardDefinition["reviewStatus"], source, effects };
   inspectData(definition);
   const plan = freezeMovement({ status: "compiled_not_executable" as const, compilerVersion: COMPILER_VERSION, registryHash, definitionHash: digest(canonical(definition)), sourceHash: digest(canonical(source)), definition, requiredHandlers: [...used].sort() });

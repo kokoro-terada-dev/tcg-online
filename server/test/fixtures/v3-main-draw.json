@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "3.0.0-subset.9",
+  "schemaVersion": "3.0.0-subset.10",
   "cardId": "EXAMPLE-NOT-REAL",
   "cardVersion": "fixture.1",
   "name": "合成テスト用カード（実在しません）",
@@ -15,7 +15,7 @@
   },
   "effects": [{
     "id": "main", "kind": "activated", "timing": { "type": "MAIN" },
-    "sourceZones": ["character"], "optional": false,
+    "sourceZones": ["character"], "optional": false, "usageLimit": null,
     "activationConditions": { "type": "all", "conditions": [] },
     "resolutionConditions": { "type": "compare", "left": { "ref": "SELF.lifeCount" }, "op": "lte", "right": 2 },
     "costs": [{ "type": "REST_DON", "count": 1 }],

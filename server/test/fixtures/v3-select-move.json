@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "3.0.0-subset.9", "cardId": "EXAMPLE-SELECTION-NOT-REAL", "cardVersion": "fixture.1",
+  "schemaVersion": "3.0.0-subset.10", "cardId": "EXAMPLE-SELECTION-NOT-REAL", "cardVersion": "fixture.1",
   "name": "合成テスト用の選択（実在しません）", "cardType": "character",
   "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
   "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",
@@ -9,7 +9,7 @@
     "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
   },
   "effects": [{
-    "id": "main", "kind": "activated", "timing": { "type": "MAIN" }, "sourceZones": ["character"], "optional": false,
+    "id": "main", "kind": "activated", "timing": { "type": "MAIN" }, "sourceZones": ["character"], "optional": false, "usageLimit": null,
     "activationConditions": { "type": "all", "conditions": [] }, "resolutionConditions": { "type": "all", "conditions": [] }, "costs": [],
     "actions": [
       { "type": "SELECT", "bindAs": "picked", "selector": {

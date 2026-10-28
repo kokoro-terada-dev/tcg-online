@@ -14,6 +14,7 @@ const key = Buffer.alloc(32, 11); // Synthetic test key only.
 function setup({ actor = 0, optional = false, costs = [], max = null, nextDeckCount, refreshSeed = false, mutate = () => {} } = {}) {
   const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v3-select-move.json'), 'utf8'));
   data.reviewStatus = 'approved'; data.effects[0].optional = optional; data.effects[0].costs = costs;
+  data.effects[0].usageLimit = max === null ? null : { type: 'PER_TURN', scope: 'SOURCE_OBJECT', count: max };
   data.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }]; mutate(data);
   const plan = compileV3CardJson(JSON.stringify(data));
   const record = { status: 'approved', cardId: data.cardId, cardVersion: data.cardVersion, definitionHash: plan.definitionHash, sourceHash: plan.sourceHash,
@@ -43,8 +44,7 @@ function setup({ actor = 0, optional = false, costs = [], max = null, nextDeckCo
       actor: next, effectController: next, source: null, mode: 'rule', resolutionId: null,
       operations: [{ kind: 'attachDon', card: { instanceId: movement.players[next].activeDon[0], generation: 0 }, target: { instanceId: movement.players[next].character[1], generation: 0 } }] }, { status: 'certifiedNone' }).state;
   }
-  const policies = data.effects.map(effect => ({ cardId: data.cardId, effectId: effect.id, maxPerObjectTurn: max }));
-  const options = { mode: 'syntheticNoAbilities', movement, progression, cards: [card], policies, signingKey: key, master: null, now: () => 1000 };
+  const options = { mode: 'syntheticNoAbilities', movement, progression, cards: [card], signingKey: key, master: null, now: () => 1000 };
   const coordinator = new V3SyntheticMatchCoordinator(options);
   const sources = [0, 1].map(player => ({ instanceId: movement.players[player].character[0], generation: 0 }));
   return { c: coordinator, actor, sources, options, data };
@@ -143,7 +143,7 @@ test('a later phase failure rolls back the entire turn, including refresh and se
   assert.equal(c.viewFor(0).turnNumber, 1); assert.equal(c.viewFor(0).activePlayer, 0);
 });
 
-test('source, controller, request conflicts, production and explicit server policy are guarded', () => {
+test('source, controller, request conflicts, production and attempted server-policy overrides are guarded', () => {
   const { c, sources, options } = setup(); const context = c.context();
   assert.throws(() => c.activate(1, 'foreign', context, sources[0], 'main')); assert.throws(() => c.activate(0, 'unknown', context, sources[0], 'missing'));
   assert.throws(() => c.activate(0, 'generation', context, { ...sources[0], generation: 1 }, 'main'));
@@ -155,4 +155,13 @@ test('source, controller, request conflicts, production and explicit server poli
   const previous = process.env.NODE_ENV; process.env.NODE_ENV = 'production';
   try { assert.throws(() => new V3SyntheticMatchCoordinator(options)); assert.throws(() => c.advance(0, 'disabled', c.context())); }
   finally { if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous; }
+});
+
+test('a JSON two-use limit is enforced per source rather than replaced by a hard-coded once limit', () => {
+  const { c, sources } = setup({ max: 2 });
+  for (let i = 0; i < 2; i++) { c.activate(0, `use-${i}`, c.context(), sources[0], 'main'); complete(c, 0); }
+  assert.equal(c.effectsFor(0, sources[0])[0].used, 2); assert.equal(c.effectsFor(0, sources[0])[0].limit, 2);
+  assert.equal(c.effectsFor(0, sources[0])[0].enabled, false);
+  const before = c.snapshotForCoordinator(); assert.throws(() => c.activate(0, 'third', c.context(), sources[0], 'main'));
+  assert.deepEqual(c.snapshotForCoordinator(), before);
 });

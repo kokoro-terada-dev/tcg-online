@@ -15,10 +15,10 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
     const z = match.players[actor].zones, leader = z.leader[0]!, cardId = `V3-SESSION-LEADER-${actor}`;
     imageAliases[cardId] = leader.cardId; leader.cardId = cardId;
     for (let i = 0; i < 2; i++) z.activeDon.push({ ...z.donDeck.shift()!, faceUp: true, rotated: false });
-    return compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.9", cardId, cardVersion: "session-fixture.1", name: "Synthetic session leader", cardType: "leader",
+    return compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.10", cardId, cardVersion: "session-fixture.1", name: "Synthetic session leader", cardType: "leader",
       baseStats: { cost: null, power: null, counter: null, life: null }, colors: [], traits: [], attributes: [], reviewStatus: "approved",
       source: { text: "Synthetic session only: draw once per object turn, or optionally rest one DON and discard one hand to draw. Not a real card or official ruling.", triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-fixture.1").digest("hex") },
-      effects: ["draw", "paidDraw"].map(id => ({ id, kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: id === "paidDraw",
+      effects: ["draw", "paidDraw"].map(id => ({ id, kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: id === "paidDraw", usageLimit: { type: "PER_TURN", scope: "SOURCE_OBJECT", count: 1 },
         activationConditions: always(), resolutionConditions: always(), costs: id === "paidDraw" ? [{ type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }] : [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] })) }));
   });
   const rulesetVersion = "synthetic-session.1", catalog = new ApprovedV3Catalog(plans, plans.map(plan => ({ status: "approved", cardId: plan.definition.cardId, cardVersion: plan.definition.cardVersion,
@@ -33,8 +33,7 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
   }
   const movement = new MatchMovementCapture(match, 1).snapshot().movement;
   const sources = ([0, 1] as const).map(actor => ({ instanceId: movement.players[actor].leader[0]!, generation: 0 }));
-  const coordinator = new V3SyntheticMatchCoordinator({ mode: "syntheticNoAbilities", movement, progression, cards,
-    policies: cards.flatMap(card => card.definition.effects.map(effect => ({ cardId: card.definition.cardId, effectId: effect.id, maxPerObjectTurn: 1 }))), signingKey: key, master: null });
+  const coordinator = new V3SyntheticMatchCoordinator({ mode: "syntheticNoAbilities", movement, progression, cards, signingKey: key, master: null });
   return { matchId: match.id, coordinator, imageAliases, sources };
 }
 export type SyntheticSession = ReturnType<typeof createSyntheticSession>;

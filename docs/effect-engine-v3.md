@@ -79,8 +79,8 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ### Phase 2：限定Compilerと承認ゲート
 
-入力版は3.0.0-subset.9、Compiler版はv3-subset-compiler.9です。
-旧subset.1/2/3/4/5/6/7/8、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
+入力版は3.0.0-subset.10、Compiler版はv3-subset-compiler.10です。
+旧subset.1/2/3/4/5/6/7/8/9、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
 schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
 Compilerは型・未知フィールド・参照先・比較の値型・ID重複・原文範囲・複雑度も検証します。
 sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲外終端です。
@@ -89,6 +89,7 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 
 - timing: MAIN。kindはactivatedのみ。leader/character/stageの自身のゾーンのみ。
 - optional: true/falseを明示。trueは発動条件確認後、コスト選択前に操作者へ確認を出し、辞退なら何も支払わず終了します。
+- usageLimit: null（制限なし）またはPER_TURN/SOURCE_OBJECT/countを必ず明示。countは1〜50。名称単位・試合単位の制限は未対応です。
 - predicate: all / any / not / compare（eq / ne / lt / lte / gt / gte）。
 - value ref: SELF/OPPONENTのlifeCount/handCount、SOURCE/CANDIDATEのcost/power/cardType/rotated、選択済みbindingsのcount。自由なJS式や任意プロパティ参照は不可。
 - cost: REST_DON / DISCARD_HAND（各1〜50、DISCARD_HANDは効果単位の合計も50以下）、REST_SOURCE（引数なし、効果単位で1回のみ）。
@@ -96,7 +97,7 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 - action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD / KO / REST / SET_ACTIVE。
 - selector: CARDS（表向き公開カード、または本人が選ぶ自分の手札。SELECT、UNORDERED）。
 
-未対応：自動誘発、イベント、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL/ORDER、DISCARD_HAND/DON_RETURN以外の選択付きコスト、usageLimit、効果途中の任意分岐、付与、期間、置換、継続、CUSTOM_HANDLER等。
+未対応：自動誘発、イベント、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL/ORDER、DISCARD_HAND/DON_RETURN以外の選択付きコスト、名称/試合単位の使用制限、効果途中の任意分岐、付与、期間、置換、継続、CUSTOM_HANDLER等。
 未知ノードは読込時に拒否します。schemaOnlyの既存ノードが存在してもv3対応済みとは扱いません。
 predicate/action/cost/replacement/selector/duration/timingのRegistryを用意しています。
 replacement/durationは登録なしで、現在は到達する効果形式も未対応です。
@@ -388,8 +389,8 @@ ViteのDEVかつ専用フラグが有効な場合だけ新しい画面を表示�
 | 順序 | 実装内容 | 完了条件 |
 | --- | --- | --- |
 | 現在 | 型付きJSON、承認ゲート、保存可能な選択/制御、複合コスト、任意発動確認 | 合成効果を両端末で選択・支払い・辞退できる。実カードの意味的承認はまだ0件 |
-| 1（次） | 単発fixtureから連続操作できるv3試合進行基盤へ。ターン/プレイヤー/発動回数の管理 | 同じ盤面で複数効果を処理し、1ターン1回等をサーバーで検証。辞退や再送で回数を誤消費しない |
-| 2 | 通常の手札からの使用・登場、対象条件、サーチ/一時公開/並べ替え | 空き枠・支払い・隠し情報・移動先を検証し、選択待ちから正しく再開。相手へ不要な情報を送らない |
+| 1（合成検証まで実装済み） | 単発fixtureから連続操作できるv3試合進行基盤へ。ターン/プレイヤー/発動回数の管理 | 同じ盤面で複数効果を処理し、JSONの個体・ターン単位制限をサーバーで検証。辞退や再送で回数を誤消費しない |
+| 2（着手中） | 通常の手札からの使用・登場、対象条件、サーチ/一時公開/並べ替え | 空き枠・支払い・隠し情報・移動先を検証し、選択待ちから正しく再開。相手へ不要な情報を送らない |
 | 3 | パワー/コスト修正、能力付与、期間管理 | 元の値を壊さず増減を合算し、指定したターン/イベント境界で失効。Registryの実行ハンドラー契約も拡張 |
 | 4 | 登場時/アタック時/KO時等の誘発キューと裁定ポリシー | 発生原因を保持し、同時誘発を順序選択可能。未確認の順序は止まり、無限ループを防ぐ |
 | 5 | バトル全体のv3接続 | アタック→効果→ブロック→カウンター→ダメージ/トリガー→終了をサーバー主導で進める |
@@ -406,11 +407,18 @@ ViteのDEVかつ専用フラグが有効な場合だけ新しい画面を表示�
 matchCoordinator.tsにV3SyntheticMatchCoordinatorを追加しました。mode:syntheticNoAbilities専用の基盤で、単発fixtureとは別のSocket/画面へ接続しています。
 同一のMovementState/Progressionから複数のV3FixtureCoordinatorを順番に生成し、試合ID・盤面・既存トランザクション記録を維持します。
 解決IDは毎回新しく作り、session/frame/movement/progressionのコンテキストと要求レシートを検証します。解決中・選択待ち・blockedでは別効果やターン終了を拒否します。
-発動回数は、合成fixture用の信頼済みサーバー設定でカードID/効果IDごとにmaxPerObjectTurnを明示します。未指定を無制限扱いにはしません。
+発動回数は承認済みカードJSONのusageLimitだけを参照します。別のmaxPerObjectTurn設定は廃止し、サーバー設定でJSONを上書きしません。
 カウント単位はターン番号・操作者・発動元instanceId/generation・効果IDです。実カードの名称単位制限や一度離れて戻ったカードへの制限を裁定する実装ではありません。
 コストなしの場合は発動条件成立後のCOSTS到達で、コストありの場合はPAY_COSTS適用成功でactivationCommittedを確定し、1回だけカウントします。
 任意確認の承認だけ、辞退、発動条件不成立、支払い失敗では消費しません。支払い後に解決条件が不成立でも、すでに確定した分を戻しません。
-このポリシーはDSLのusageLimitとは別の合成テスト設定です。JSON上のusageLimitは引き続き未対応で、実カード承認の代わりにはなりません。
+usageLimitは定義ハッシュに含まれ、countやscopeの変更には再承認が必要です。未指定を無制限扱いにはしません。
+現在の対応範囲はPER_TURN/SOURCE_OBJECTだけで、例は次のとおりです。名称単位などは別のスコープを勝手に推定せずコンパイル時に拒否します。
+
+```json
+"usageLimit": { "type": "PER_TURN", "scope": "SOURCE_OBJECT", "count": 1 }
+```
+
+制限なしはusageLimit:nullを明示します。単発のV3FixtureCoordinatorは1効果の制御だけを扱い、複数回にわたる使用制限はV3SyntheticMatchCoordinatorが検証します。
 endTurnは既存phaseWork契約を使用し、次のmainまでのrefresh/draw/DON checkpointをローカル候補状態で準備してからまとめて確定します。
 リフレッシュでは次の操作者のレストカード/DONをアクティブ化し、付与DONをactiveDonへ戻します。通常ドローとDON追加はphaseWorkの枚数に従います。
 デッキが空になるドローは裁定未対応として停止し、すでに準備したリフレッシュや進行も確定しません。誘発・置換・継続能力がない合成盤面だけが対象です。
@@ -435,7 +443,10 @@ sessionProtocol.tsの専用コマンドはmatchIdとsession/frame/movement/progr
 操作者はSocketの所属から決め、リーダー発動元もサーバー側で選びます。クライアントによるactor/sourceの上書きや未知フィールドは拒否します。
 新しい解決IDへの切替えはsession revisionの増加が必要で、前の効果・前の試合の遅い応答で画面を巻き戻しません。
 候補tokenと手札情報は既存の可視性制御を使います。通信断後の試合復旧はまだ行わず、ルーム作成/入室からやり直します。
-現時点の段階1は「合成ポリシーでの連続操作とターン進行」までです。次にDSL上の使用制限とその承認・失効単位を接続します。
+段階1は「承認済みJSONの使用制限を使う合成盤面での連続操作とターン進行」まで接続済みです。実カードの裁定・名前単位制限を承認したという意味ではありません。
+段階2に向け、effects:[]の効果なしカード定義も受け付けます。ただしsource.textとsource.triggerTextがどちらも空白であることが必要で、未処理の本文やトリガーを空のeffectsで捨てる定義は拒否します。
+効果なしでも通常の承認ゲートは省略しません。読み込んだCSVに対応がないカードを、自動的に効果なしとは判定しません。
+合成例はserver/test/fixtures/v3-vanilla-character.json（needs_reviewのまま）です。
 
 ```powershell
 npm --prefix server run build

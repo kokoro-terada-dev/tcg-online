@@ -63,3 +63,23 @@ test('registry parser bugs cannot inject non-JSON or cyclic compiler plans', () 
     assert.throws(() => compileV3CardJson(JSON.stringify(data), registries));
   }
 });
+
+test('usage limits require an explicit supported scope and remain part of trusted approval hashes', () => {
+  const data = fixture(), unlimited = compile(data); data.effects[0].usageLimit = { type: 'PER_TURN', scope: 'SOURCE_OBJECT', count: 1 };
+  const once = compile(data); assert.notEqual(once.definitionHash, unlimited.definitionHash); assert.equal(once.definition.effects[0].usageLimit.count, 1);
+  for (const patch of [{ count: 0 }, { count: 51 }, { count: 1.5 }, { scope: 'CARD_NAME' }, { type: 'PER_GAME' }, { optional: true }]) {
+    const invalid = structuredClone(data); Object.assign(invalid.effects[0].usageLimit, patch); assert.throws(() => compile(invalid));
+  }
+  delete data.effects[0].usageLimit; assert.throws(() => compile(data));
+  const approvedData = fixture(); approvedData.reviewStatus = 'approved'; const original = compile(approvedData), record = approval(original);
+  approvedData.effects[0].usageLimit = { type: 'PER_TURN', scope: 'SOURCE_OBJECT', count: 2 };
+  assert.throws(() => new ApprovedV3Catalog([compile(approvedData)], [record], 'synthetic-test.1'));
+});
+
+test('no-ability definitions accept blank source text but never silently discard remaining ability or trigger text', () => {
+  const data = fixture(); data.effects = []; data.source.text = ''; data.source.triggerText = '';
+  const plan = compile(data); assert.deepEqual(plan.definition.effects, []); assert.deepEqual(plan.requiredHandlers, []);
+  assert.throws(() => new ApprovedV3Catalog([plan], [], 'synthetic-test.1'));
+  for (const field of ['text', 'triggerText']) { const invalid = structuredClone(data); invalid.source[field] = 'Unmapped ability'; assert.throws(() => compile(invalid)); }
+  const missing = fixture(); missing.source.text = ''; assert.throws(() => compile(missing));
+});

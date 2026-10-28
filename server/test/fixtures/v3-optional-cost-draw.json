@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "3.0.0-subset.9", "cardId": "EXAMPLE-OPTIONAL-NOT-REAL", "cardVersion": "fixture.1",
+  "schemaVersion": "3.0.0-subset.10", "cardId": "EXAMPLE-OPTIONAL-NOT-REAL", "cardVersion": "fixture.1",
   "name": "合成テスト用・任意発動とコスト支払い（実在しません）", "cardType": "leader",
   "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
   "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",
@@ -9,7 +9,7 @@
     "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
   },
   "effects": [{
-    "id": "main", "kind": "activated", "timing": { "type": "MAIN" }, "sourceZones": ["leader"], "optional": true,
+    "id": "main", "kind": "activated", "timing": { "type": "MAIN" }, "sourceZones": ["leader"], "optional": true, "usageLimit": null,
     "activationConditions": { "type": "all", "conditions": [] }, "resolutionConditions": { "type": "all", "conditions": [] },
     "costs": [{ "type": "REST_DON", "count": 1 }, { "type": "DISCARD_HAND", "count": 1 }],
     "actions": [{ "type": "DRAW", "player": "SELF", "count": 1 }]
