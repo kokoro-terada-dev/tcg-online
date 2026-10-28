@@ -5,8 +5,9 @@
 2026-10-28に渡されたeffect_engine_v3_codex_spec.mdを今後の基準とします。
 添付のJSON例は3.0-draftの設計例であり、実行可能な効果や裁定済みfixtureではありません。
 代表18件もNEEDS_MANUAL_RULE_REVIEWであり、正解の状態遷移として自動採用しません。
-今回完了したのはPhase 1の既存調査・CSV監査・監査用型/Schemaです。
-最終版CardDefinition、v3 DSL Compiler/Runtime、承認フロー、実カード効果の実行は未実装です。
+Phase 1の既存調査・CSV監査・監査用型/Schemaは完了しています。
+Phase 2は、以下に記載した限定DSLのCompiler、Registry、承認ゲートまで実装しています。
+v3全命令、レビュー操作画面、Runtime、実カード効果の実行は未実装です。
 
 ## 既存ソースとの対応
 
@@ -73,14 +74,60 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ## 次のPhase
 
-Phase 2ではv3の厳密な型/Schema、Compilerと各Registry、版・原文ハッシュ・承認証跡付きCardDefinitionを整備します。
-まず限定命令を明示的に実装し、それ以外はロード時にunsupportedとして拒否します。既存のkind形式は別版のまま維持します。
+### Phase 2：限定Compilerと承認ゲート
+
+入力版は3.0.0-subset.1です。添付3.0-draftや既存dslVersion:1を暗黙変換しません。
+schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
+Compilerは型・未知フィールド・参照先・比較の値型・ID重複・原文範囲・複雑度も検証します。
+sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲外終端です。
+
+対応するコンパイル命令：
+
+- timing: MAIN。kindはactivatedのみ。leader/character/stageの自身のゾーンのみ。
+- predicate: all / any / not / compare（eq / ne / lt / lte / gt / gte）。
+- value ref: SELF/OPPONENTのlifeCount/handCountのみ。自由なJS式や任意プロパティ参照は不可。
+- cost: REST_DON（1〜50）。
+- action: DRAW / SEQUENCE / IF。
+
+未対応：自動誘発、イベント、KO、対象選択、bindAs、usageLimit、optional、DON_RETURN、付与、期間、置換、継続、CUSTOM_HANDLER等。
+未知ノードは読込時に拒否します。schemaOnlyの既存ノードが存在してもv3対応済みとは扱いません。
+predicate/action/cost/replacement/selector/duration/timingのRegistryを用意しています。
+replacement/selector/durationは登録なしで、現在は到達する効果形式も未対応です。
+拡張はTypeScriptのMapインターフェース拡張と、信頼されたサーバーコードによるparser登録で行います。
+新しい実行ハンドラーや意味論までJSONから注入することはできません。
+Registryはコンパイル時にsealし、重複/後付け登録を拒否します。ハンドラー実装変更時には登録versionを上げます。
+
+CardDefinitionに名称、基本数値（nullと0を区別）、色/特徴/属性、原文、採用表示ID、入力データSHA-256を保持します。
+Compilerは正規化した型付きAST、使用命令一覧、定義/原文/Registryのハッシュ、Compiler版を固定します。
+この正規化はJSONのキー順等を扱うだけで、原文から効果を推測しません。
+結果はcompiled_not_executableであり、承認済みとは別です。
+
+ApprovedV3Catalogの承認記録はサーバーの信頼済み構成として渡します。SocketやカードJSONから受け取る経路はありません。
+記録はカードID/版、定義/原文/Registryハッシュ、Compiler版、ruleset版、承認者、日時、裁定根拠を必須にします。
+カードJSONのapprovedフラグだけでは許可しません。未承認・改変・古い承認・重複・偽造planは拒否します。
+これは承認証跡の整合性確認です。記録に書かれた根拠が正しい公式裁定かを自動判定したり、電子署名を検証したりはしません。
+承認者/根拠の真正性は信頼済みサーバー設定の管理責任で、未確認の裁定をapprovedとして登録してはいけません。
+受理後もapproved_not_executableです。requireExecutionはRuntime未実装として必ず停止します。
+
+```powershell
+cd C:\Users\kensh\workspace_server
+npm run check:effect-v3 -- server/test/fixtures/v3-main-draw.json
+```
+
+上記は架空カードの構造確認のみです。公式カード/裁定のfixtureでも承認データでもありません。
+監査2,885カードから自動的にDSLへ変換・承認したカードは0件です。
+CLIはコンパイル結果の概要を表示するだけで、入力・マスター・承認記録を書き換えません。
+
+### 続く段階
+
+Phase 2の残りでは、対象選択/参照/bindings等のCompiler対応を、実行可能な範囲と分けて拡充します。既存のkind形式は別版のまま維持します。
 Phase 3で保存可能なResolutionFrameと選択待ち/復帰を接続します。Phase 4以降に置換・継続・バトル統合を進めます。
 同時誘発の順序、複数置換の選択、勝敗チェックの位置、トリガー機会、KO誘発時点、継続効果の循環等は
 RulesetPolicyとして根拠と確認状態を保持し、未確認の組合せでは停止する設計とします。今回は裁定を確定していません。
 
 ```powershell
 npm --prefix server run build
+node --test server/test/v3-compiler.cjs server/test/effects-schema.cjs
 node --test tools/audit-effect-cards.test.js tools/test-card-master.test.js
 npm run build
 ```

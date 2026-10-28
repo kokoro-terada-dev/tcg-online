@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "3.0.0-subset.1",
+  "cardId": "EXAMPLE-NOT-REAL",
+  "cardVersion": "fixture.1",
+  "name": "合成テスト用カード（実在しません）",
+  "cardType": "character",
+  "baseStats": { "cost": null, "power": 0, "counter": null, "life": null },
+  "colors": [], "traits": ["テスト/B・W"], "attributes": ["斬"],
+  "reviewStatus": "needs_review",
+  "source": {
+    "text": "合成テスト：DONを1枚レストし、カードを1枚引く。公式カードや裁定の定義ではありません。",
+    "triggerText": "",
+    "displayIds": ["EXAMPLE-NOT-REAL"],
+    "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "effects": [{
+    "id": "main", "kind": "activated", "timing": { "type": "MAIN" },
+    "sourceZones": ["character"], "optional": false,
+    "activationConditions": { "type": "all", "conditions": [] },
+    "resolutionConditions": { "type": "compare", "left": { "ref": "SELF.lifeCount" }, "op": "lte", "right": 2 },
+    "costs": [{ "type": "REST_DON", "count": 1 }],
+    "actions": [{ "type": "SEQUENCE", "actions": [{ "type": "IF", "condition": { "type": "not", "condition": { "type": "any", "conditions": [] } }, "then": [{ "type": "DRAW", "player": "SELF", "count": 1 }], "else": [] }] }]
+  }]
+}

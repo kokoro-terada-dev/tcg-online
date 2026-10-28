@@ -8,6 +8,7 @@
     "dev:effects": "node tools/run-local-effects.js",
     "build:card-master": "node tools/build-card-master.js",
     "audit:effect-cards": "npm --prefix server run build && node tools/audit-effect-cards.js",
+    "check:effect-v3": "npm --prefix server run build && node tools/check-effect-v3.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
