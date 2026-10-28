@@ -8,7 +8,8 @@
 Phase 1の既存調査・CSV監査・監査用型/Schemaは完了しています。
 Phase 2は、以下に記載した限定DSLのCompiler、Registry、承認ゲートまで実装しています。
 Phase 3は署名付き解決フレーム、選択待ち・復元、盤面操作要求を出す制御機械まで実装しています。
-v3全命令、レビュー操作画面、実盤面を変更するCoordinator、実カード効果の実行は未実装です。
+MovementEngineへ接続するローカル限定のFixtureCoordinatorも追加しています。
+v3全命令、レビュー操作画面、実対戦用Coordinator/Socket接続、実カード効果の実行は未実装です。
 
 ## 既存ソースとの対応
 
@@ -165,7 +166,7 @@ sourceの実在/位置、発動タイミング、手番、盤面ルールの合�
 待機中の選択または盤面操作要求、世界revision、フレームrevision、要求レシートを含めます。
 SEQUENCE/IF/スコープを固定プログラムへ展開し、Promise・コールバック内の一時変数だけには依存しません。
 述語評価・候補算出は信頼済みサーバーの純粋なEnvironmentとして注入します。
-現時点では実盤面由来のEnvironmentは未接続で、テスト用の評価器だけで検証しています。
+盤面由来のEnvironmentは下記FixtureCoordinatorにのみ接続しています。既存対戦のEnvironmentは変更していません。
 Environmentのunknownはfalse/0にせず停止し、そのadvance呼出しで変更したフレームを確定しません。
 
 SELECT待ちは2分で期限切れになります。chooserだけへ不透明token/cardIdを送り、他方には候補を送らず、bindingsやrefはどちらのviewにも出しません。
@@ -192,17 +193,55 @@ restoreは同じ承認定義・identity・世界revision・保存先の最新fra
 署名鍵を含む運用構成も未追加です。現行の対戦がサーバー再起動後に復旧できるようになった、という意味ではありません。
 盤面操作だけ適用した直後のクラッシュや派生イベント/勝敗の裁定は、この制御機械だけでは解決しません。
 
-### 続く段階
+### MovementEngineへのローカル限定接続
+
+fixtureCoordinator.tsのV3FixtureCoordinatorはmode:syntheticNoAbilitiesを明示したサーバー内検証専用です。
+NODE_ENV=productionでは生成・書込みを拒否します。通常対戦/一人回し/テストルームのSocketには接続していません。
+このモードは、選択した合成効果以外の誘発・置換・耐性等が存在しない検証盤面だけを前提にしています。
+実カードを一般的に合法処理できるという意味ではありません。
+
+開始時に承認plan、matchId、sourceのinstanceId/generation、所有者/コントローラー/表向き/ゾーン/種類、
+mainEffectの合法タイミング、盤面と進行のturn一致を検証します。
+修正値/付与能力/一時公開を持つ盤面や空デッキは拒否します。進行ゲートはbeginResolutionでロックします。
+選択待ちでwaitForChoice、応答後にacceptChoice、処理完了時だけfinishResolutionを行います。
+失敗でblockedになった場合はゲートをロックしたままにし、自動返金や不明な中止処理は行いません。
+回復/中止UIは未実装なので、現段階のfixtureは作り直して確認します。
+
+fixtureEnvironment.tsは実際のMovementStateから候補を列挙し、双方の可視性と世代を確認します。
+数値は固定した既存マスターのfact、または承認済み定義と同一カードIDの基本値を使います。
+承認定義のnullや欠損マスターはunknownです。付与DON付きカードのpower等、未処理の数値もunknownにします。
+未知の値を0やfalseに置換しません。all/any/not/compareと型付き参照を評価します。
+既存マスターはサーバーが検証用数値の参照元として信頼して渡すもので、CSV原文の自動承認ではありません。
+
+盤面操作は次の限定範囲です。
+
+- PAY_COSTS: REST_DONの合計を先に検証し、ちょうど合計枚数のACTIVE DONをcostトランザクションでレスト。部分支払いはしません。
+- DRAW: デッキ先頭から手札へEFFECT_MOVE。相手のviewには手札内容を送りません。
+- MOVE_CARD: 現在の世代を再検証し、表向きのcharacter/stage/trash/publicから持ち主の手札/トラッシュ/デッキへ移動。leader/DONの通常エリア移動や他人の所有物化は拒否。
+- キャラ退出時の付与DON戻しは既存MovementEngineの自動処理を使用。
+- デッキが空になる/不足するドローは、勝敗・派生イベントのポリシー未実装として盤面を変更せずblocked。正式なデッキ切れ裁定の実装ではありません。
+
+操作ごとにMovementStoreで候補盤面を作り、フレームのsettleWork、進行ゲートまで成功してからまとめてメモリに保持します。
+トランザクションIDはmatchId/workIdのハッシュで固定し、同一要求の再送は盤面を再適用しません。
+書込み要求にはframe/movement/progressionの3つのrevisionとrequestIdを使います。別プレイヤー・古いコンテキスト・変更された再送を拒否します。
+MovementEventは原因・isKO・付与DONの自動戻しを含めてサーバー内部に保持し、上限512件で停止します。
+イベント順序を公式の効果解決順とは解釈せず、まだ誘発をスケジュールしません。直接バウンスをKO扱いにすることもありません。
+
+viewForは公開投影のみです。snapshotForCoordinatorは原盤面・進行・署名付きフレーム・レシート・内部イベントを含むサーバー専用APIで、クライアントへ送信してはいけません。
+DB保存、Coordinator全体の再起動時復元、署名鍵の運用構成、分散ロック、既存Matchへの反映は未実装です。
+メモリ内の1操作の原子性を確認した段階であり、サーバー停止を越えた永続化や再接続を保証するものではありません。
+
+### 次の接続範囲
 
 Phase 2の残りでは、非公開選択や順序選択等のCompiler対応を、実行可能な範囲と分けて拡充します。既存のkind形式は別版のまま維持します。
-次は盤面由来のEnvironment、MovementEngineに接続するCoordinator、進行ゲートとの原子的確定を限定fixtureで整備します。
+次はこの隔離Coordinatorをローカル検証用Socket/画面へ接続する境界を整備します。正式対戦への自動切替や、未承認の実カードへの適用はしません。
 Phase 4以降に置換・継続・バトル統合を進めます。
 同時誘発の順序、複数置換の選択、勝敗チェックの位置、トリガー機会、KO誘発時点、継続効果の循環等は
 RulesetPolicyとして根拠と確認状態を保持し、未確認の組合せでは停止する設計とします。今回は裁定を確定していません。
 
 ```powershell
 npm --prefix server run build
-node --test server/test/v3-compiler.cjs server/test/v3-selection-compiler.cjs server/test/v3-resolution.cjs server/test/effects-schema.cjs
+node --test server/test/v3-compiler.cjs server/test/v3-selection-compiler.cjs server/test/v3-resolution.cjs server/test/v3-fixture-coordinator.cjs
 node --test tools/audit-effect-cards.test.js tools/test-card-master.test.js
 npm run build
 ```
