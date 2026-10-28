@@ -1,0 +1,87 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { io } = require('socket.io-client');
+const { startLocalV3Server } = require('../dist/test/effects/v3/localServer.js');
+const deck = { name: 'Synthetic session', leaderCardId: 'LEADER', mainDeck: Array(50).fill('CARD'), donDeck: Array(10).fill('DON'), cardTypes: { CARD: 'character' }, leaderLifeCount: 5 };
+const request = (socket, event, input = null) => new Promise((resolve, reject) => socket.timeout(3000).emit(event, input, (error, reply) => error ? reject(error) : resolve(reply)));
+const once = (socket, event) => new Promise((resolve, reject) => { const timer = setTimeout(() => reject(Error(event)), 3000); socket.once(event, value => { clearTimeout(timer); resolve(value); }); });
+let sequence = 0;
+const command = (v, kind, extra = {}) => ({ matchId: v.matchId, requestId: `session-${++sequence}`, context: v.context, kind, ...extra });
+async function send(socket, v, kind, extra = {}) {
+  const result = await request(socket, 'v3-session:command', command(v, kind, extra)); assert.equal(result.ok, true, JSON.stringify(result)); return result.sessionView;
+}
+async function setup(t, firstPlayer = 0) {
+  const service = await startLocalV3Server(), clients = [];
+  t.after(async () => { clients.forEach(socket => socket.disconnect()); await new Promise(resolve => service.io.close(resolve)); });
+  for (let i = 0; i < 3; i++) { const socket = io(service.url, { autoConnect: false, reconnection: false }); clients.push(socket); const ready = once(socket, 'connect'); socket.connect(); await ready; }
+  const [host, guest] = clients, created = once(host, 'v3-room:state'); await request(host, 'v3-room:create'); const room = await created;
+  assert.equal((await request(guest, 'v3-room:join', room.roomId)).ok, true);
+  for (const socket of [host, guest]) { assert.equal((await request(socket, 'v3-room:deck', deck)).ok, true); assert.equal((await request(socket, 'v3-room:ready', true)).ok, true); }
+  assert.equal((await request(host, 'v3-session:start', { firstPlayer })).ok, true);
+  return { clients, host, guest, roomId: room.roomId, firstPlayer };
+}
+async function complete(socket, v) {
+  for (let i = 0; i < 16; i++) {
+    if (v.frame.status === 'completed') return v;
+    if (v.frame.status === 'ready') v = await send(socket, v, 'advance');
+    else if (v.frame.status === 'waitingForWork') v = await send(socket, v, 'work');
+    else { const c = v.frame.choice; v = await send(socket, v, 'answer', { selectionId: c.selectionId, tokens: c.options.slice(0, c.min).map(option => option.token) }); }
+  }
+  throw Error('Session resolution did not complete');
+}
+
+for (const actor of [0, 1]) test(`continuous session starts with seat ${actor}, enforces use limits, and continues across both turns`, async t => {
+  const { clients, host } = await setup(t, actor), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView; const matchId = v.matchId;
+  assert.equal(v.frame, null); assert.equal(v.activePlayer, actor); assert.equal(v.effects.every(effect => effect.enabled && effect.used === 0), true);
+  const foreign = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.equal((await request(peer, 'v3-session:command', command(foreign, 'activate', { effectId: 'draw' }))).ok, false);
+  const begin = command(v, 'activate', { effectId: 'draw' }); v = (await request(own, 'v3-session:command', begin)).sessionView;
+  assert.equal((await request(own, 'v3-session:command', begin)).sessionView.context.revision, v.context.revision);
+  v = await complete(own, v); assert.equal(v.movement.players[actor].hand.length, 6);
+  assert.equal(v.effects.find(effect => effect.effectId === 'draw').used, 1); assert.equal(v.effects.find(effect => effect.effectId === 'draw').enabled, false);
+  const denied = await request(own, 'v3-session:command', command(v, 'activate', { effectId: 'draw' })); assert.equal(denied.ok, false); assert.deepEqual(denied.sessionView.context, v.context);
+  const synced = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.equal(synced.movement.players[actor].hand.every(card => card.cardId === null && card.ref === null), true);
+  v = await send(own, v, 'endTurn'); assert.equal(v.activePlayer, 1 - actor); assert.equal(v.turnNumber, 2); assert.equal(v.matchId, matchId); assert.equal(v.frame, null);
+  let other = (await request(peer, 'v3-session:sync')).sessionView; assert.equal(other.movement.players[1 - actor].hand.length, 6);
+  assert.equal(other.effects.every(effect => effect.enabled), true); other = await send(peer, other, 'activate', { effectId: 'draw' }); other = await complete(peer, other);
+  assert.equal(other.movement.players[1 - actor].hand.length, 7); other = await send(peer, other, 'endTurn');
+  v = (await request(own, 'v3-session:sync')).sessionView; assert.equal(v.turnNumber, 3); assert.equal(v.activePlayer, actor); assert.equal(v.matchId, matchId);
+  assert.equal(v.effects.find(effect => effect.effectId === 'draw').enabled, true); assert.equal(v.effects.find(effect => effect.effectId === 'draw').used, 0);
+  v = await send(own, v, 'activate', { effectId: 'draw' }); assert.equal((await complete(own, v)).frame.status, 'completed');
+  assert.equal((await request(host, 'v3-session:end')).ok, true);
+});
+
+test('optional decline keeps the use available, a pending choice blocks turn end, and committed costs sync only once', async t => {
+  const { host, guest } = await setup(t); let v = (await request(host, 'v3-session:sync')).sessionView;
+  v = await send(host, v, 'activate', { effectId: 'paidDraw' }); v = await send(host, v, 'advance');
+  const declined = v.frame.choice; assert.deepEqual((await request(guest, 'v3-session:sync')).sessionView.frame.choice.options, []);
+  const blockedEnd = await request(host, 'v3-session:command', command(v, 'endTurn')); assert.equal(blockedEnd.ok, false); assert.deepEqual(blockedEnd.sessionView.context, v.context);
+  v = await send(host, v, 'answer', { selectionId: declined.selectionId, tokens: [declined.options[1].token] });
+  assert.equal(v.effects.find(effect => effect.effectId === 'paidDraw').used, 0); assert.equal(v.effects.find(effect => effect.effectId === 'paidDraw').enabled, true);
+  v = await send(host, v, 'activate', { effectId: 'paidDraw' }); v = await send(host, v, 'advance'); const accepted = v.frame.choice;
+  v = await send(host, v, 'answer', { selectionId: accepted.selectionId, tokens: [accepted.options[0].token] }); v = await send(host, v, 'advance');
+  const hand = v.frame.choice; assert.equal(v.effects.find(effect => effect.effectId === 'paidDraw').used, 0);
+  v = await send(host, v, 'answer', { selectionId: hand.selectionId, tokens: [hand.options[0].token] }); v = await send(host, v, 'advance');
+  const pay = command(v, 'work'); v = (await request(host, 'v3-session:command', pay)).sessionView;
+  assert.equal((await request(host, 'v3-session:command', pay)).sessionView.context.revision, v.context.revision);
+  assert.equal(v.effects.find(effect => effect.effectId === 'paidDraw').used, 1); assert.equal(v.movement.players[0].hand.length, 4); assert.equal(v.movement.players[0].restDon.length, 1);
+  const peer = (await request(guest, 'v3-session:sync')).sessionView; assert.equal(peer.movement.players[0].restDon.length, 1); assert.equal(peer.movement.players[0].trash.length, 1);
+  assert.equal((await complete(host, v)).movement.players[0].hand.length, 5);
+});
+
+test('continuous and single fixtures are isolated, extra authority is refused, and closing or leaving clears the session', async t => {
+  const { clients, host, guest, roomId } = await setup(t); const old = (await request(host, 'v3-session:sync')).sessionView;
+  assert.equal((await request(host, 'v3:start', { actor: 0, scenario: 'payDraw' })).ok, false);
+  assert.equal((await request(host, 'v3:sync')).ok, false); assert.equal((await request(clients[2], 'v3-session:sync')).ok, false);
+  assert.equal((await request(clients[2], 'v3-room:join', roomId)).ok, false);
+  assert.equal((await request(host, 'v3-session:command', { ...command(old, 'activate', { effectId: 'draw' }), actor: 1 })).ok, false);
+  assert.equal((await request(guest, 'v3-session:end')).ok, false);
+  assert.equal((await request(host, 'v3-session:end')).ok, true); assert.equal((await request(host, 'v3-session:sync')).ok, false);
+  for (const socket of [host, guest]) assert.equal((await request(socket, 'v3-room:ready', true)).ok, true);
+  assert.equal((await request(host, 'v3-session:start', { firstPlayer: 0 })).ok, true);
+  assert.equal((await request(host, 'v3-session:command', command(old, 'endTurn'))).ok, false);
+  await request(guest, 'v3-room:leave'); assert.equal((await request(host, 'v3-session:sync')).ok, false);
+  assert.equal((await request(clients[2], 'v3-room:join', roomId)).ok, true);
+});

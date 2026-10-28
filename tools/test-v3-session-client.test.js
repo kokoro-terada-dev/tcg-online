@@ -1,0 +1,26 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+import ts from "typescript";
+const module = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL("../src/testMatch/v3SessionClient.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module, exports: module.exports });
+const { acceptV3SessionView, v3SessionCommand } = module.exports;
+function view() { return { mode: 'v3-synthetic-session', matchId: 'm', localPlayerIndex: 0, activePlayer: 0, turnNumber: 1, gate: 'idle', frame: null, resolutionActor: null,
+  context: { revision: 0, movementRevision: 0, progressionRevision: 0, resolutionId: null, frameRevision: null }, movement: { revision: 0 }, effects: [{ effectId: 'draw', enabled: true }] }; }
+test('session views allow new resolution IDs only with increasing session revisions, without seat or board rollback', () => {
+  const v = view(); assert.equal(acceptV3SessionView(null, v, 'm'), true);
+  const next = { ...v, frame: { resolutionId: 'r', revision: 0 }, context: { ...v.context, revision: 1, resolutionId: 'r', frameRevision: 0 } };
+  assert.equal(acceptV3SessionView(v, next, 'm'), true); assert.equal(acceptV3SessionView(next, v, 'm'), false);
+  assert.equal(acceptV3SessionView(v, { ...next, context: { ...next.context, revision: 0 } }, 'm'), false);
+  assert.equal(acceptV3SessionView(v, { ...v, localPlayerIndex: 1 }, 'm'), false); assert.equal(acceptV3SessionView(v, v, null), false);
+  assert.equal(acceptV3SessionView(v, { ...v, context: { ...v.context, frameRevision: 1 } }, 'm'), false);
+});
+test('session commands use current context and chooser tokens without sending actor or card authority', () => {
+  const v = view(), command = v3SessionCommand(v, 'activate', 'request', { effectId: 'draw' });
+  assert.equal(command.effectId, 'draw'); assert.equal(Object.hasOwn(command, 'actor'), false); assert.equal(Object.hasOwn(command, 'source'), false);
+  assert.throws(() => v3SessionCommand({ ...v, activePlayer: 1 }, 'activate', 'wrong-turn', { effectId: 'draw' }));
+  v.frame = { status: 'waitingForChoice', choice: { selectionId: 's', chooser: 0, min: 1, max: 1, options: [{ token: 'opaque' }] } }; v.gate = 'choice';
+  assert.equal(v3SessionCommand(v, 'answer', 'answer', { tokens: ['opaque'] }).selectionId, 's');
+  assert.throws(() => v3SessionCommand(v, 'answer', 'forged', { tokens: ['other'] })); assert.throws(() => v3SessionCommand(v, 'endTurn', 'pending'));
+});

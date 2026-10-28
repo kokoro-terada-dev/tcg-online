@@ -403,7 +403,7 @@ ViteのDEVかつ専用フラグが有効な場合だけ新しい画面を表示�
 
 ### 段階1の進捗：連続解決のサーバー内基盤
 
-matchCoordinator.tsにV3SyntheticMatchCoordinatorを追加しました。まだSocketや画面には接続していない、mode:syntheticNoAbilities専用のサーバー内基盤です。
+matchCoordinator.tsにV3SyntheticMatchCoordinatorを追加しました。mode:syntheticNoAbilities専用の基盤で、単発fixtureとは別のSocket/画面へ接続しています。
 同一のMovementState/Progressionから複数のV3FixtureCoordinatorを順番に生成し、試合ID・盤面・既存トランザクション記録を維持します。
 解決IDは毎回新しく作り、session/frame/movement/progressionのコンテキストと要求レシートを検証します。解決中・選択待ち・blockedでは別効果やターン終了を拒否します。
 発動回数は、合成fixture用の信頼済みサーバー設定でカードID/効果IDごとにmaxPerObjectTurnを明示します。未指定を無制限扱いにはしません。
@@ -414,11 +414,34 @@ matchCoordinator.tsにV3SyntheticMatchCoordinatorを追加しました。まだS
 endTurnは既存phaseWork契約を使用し、次のmainまでのrefresh/draw/DON checkpointをローカル候補状態で準備してからまとめて確定します。
 リフレッシュでは次の操作者のレストカード/DONをアクティブ化し、付与DONをactiveDonへ戻します。通常ドローとDON追加はphaseWorkの枚数に従います。
 デッキが空になるドローは裁定未対応として停止し、すでに準備したリフレッシュや進行も確定しません。誘発・置換・継続能力がない合成盤面だけが対象です。
-DB復元・終了時能力・勝敗処理・実カード裁定はこの段階に含めません。次に専用プロトコルと画面へ接続します。
+DB復元・終了時能力・勝敗処理・実カード裁定はこの段階に含めません。
+
+#### 連続操作のローカル検証
+
+従来どおりnpm run dev:effects-v3で起動し、2つのブラウザーで画像ZIP・デッキ選択・同じルームへの入室・READYを行います。
+ホストは操作者欄で初期手番を選び、「連続操作の検証開始」を押します。「単発効果の検証開始」は従来の各ケースのままです。
+連続操作では、選択デッキのリーダー画像だけを使い、サーバー上のカードIDはV3-SESSION-LEADER-0/1へ置き換えます。
+実カードの能力を実行・承認するものではありません。通常の手札からの登場・アタック・勝敗はまだ接続していません。
+両側はアクティブDON2枚で開始し、初期マリガンや先後抽選も行いません。ここは本来の対戦開始手順ではなく合成テストの初期状態です。
+
+- 「1枚ドロー」は各リーダー個体・各ターンに1回。ボタンの0/1、1/1で使用回数を表示します。
+- 「任意発動・コストでドロー」は任意確認→手札1枚選択→DONレスト1枚と手札1枚を一括支払い→1枚ドローです。これも個体・各ターンに1回で、辞退では回数を消費しません。
+- 効果完了後、同じ盤面で別の効果を開始できます。効果途中は新しい効果やターン終了を拒否します。
+- 「ターン終了」は手番側だけが実行でき、次のプレイヤーのリフレッシュ・通常ドロー・DON追加を合成fixtureの範囲で準備します。試合IDと盤面は維持します。
+- 次のターンでは新しいターン番号に従って使用回数を管理します。自分の次の手番で再び効果を使えます。
+- ホストの「ルームへ戻る」でルームコードを維持して両者READY前へ戻します。ゲスト退出ではセッションを破棄し、ホストは部屋に残ります。
+
+sessionProtocol.tsの専用コマンドはmatchIdとsession/frame/movement/progressionの全コンテキストを送ります。
+操作者はSocketの所属から決め、リーダー発動元もサーバー側で選びます。クライアントによるactor/sourceの上書きや未知フィールドは拒否します。
+新しい解決IDへの切替えはsession revisionの増加が必要で、前の効果・前の試合の遅い応答で画面を巻き戻しません。
+候補tokenと手札情報は既存の可視性制御を使います。通信断後の試合復旧はまだ行わず、ルーム作成/入室からやり直します。
+現時点の段階1は「合成ポリシーでの連続操作とターン進行」までです。次にDSL上の使用制限とその承認・失効単位を接続します。
 
 ```powershell
 npm --prefix server run build
 node --test server/test/v3-match-coordinator.cjs server/test/v3-resolution.cjs
+node --test server/test/v3-session-server.cjs
+node --test tools/test-v3-session-client.test.js
 ```
 
 Phase 2の残りでは、非公開選択や順序選択等のCompiler対応を、実行可能な範囲と分けて拡充します。既存のkind形式は別版のまま維持します。

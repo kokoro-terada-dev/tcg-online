@@ -19,6 +19,7 @@ type Active = { coordinator: V3FixtureCoordinator; actor: Seat; cardId: string; 
 type History = Readonly<{ turnNumber: number; actor: Seat; cardId: string; effectId: string; resolutionId: string; committed: boolean; declined: boolean }>;
 type Receipt = { requestId: string; fingerprint: string };
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
+const policyKey = (cardId: string, effectId: string) => JSON.stringify([cardId, effectId]);
 
 // A synthetic-only session boundary. It is not a production match or a card-ruling engine.
 export class V3SyntheticMatchCoordinator {
@@ -39,12 +40,12 @@ export class V3SyntheticMatchCoordinator {
     }
     for (const policy of options.policies) {
       dataObject(policy, ["cardId", "effectId", "maxPerObjectTurn"]); label(policy.cardId); label(policy.effectId);
-      const id = `${policy.cardId}:${policy.effectId}`, card = this.#cards.get(policy.cardId);
+      const id = policyKey(policy.cardId, policy.effectId), card = this.#cards.get(policy.cardId);
       ensureMove(card?.definition.effects.some(effect => effect.id === policy.effectId) && !this.#policies.has(id) &&
         (policy.maxPerObjectTurn === null || Number.isSafeInteger(policy.maxPerObjectTurn) && policy.maxPerObjectTurn >= 1 && policy.maxPerObjectTurn <= 50), "v3-match-invalid-usage-policy");
       this.#policies.set(id, freezeMovement(structuredClone(policy)));
     }
-    for (const card of options.cards) for (const effect of card.definition.effects) ensureMove(this.#policies.has(`${card.definition.cardId}:${effect.id}`), "v3-match-explicit-usage-policy-required");
+    for (const card of options.cards) for (const effect of card.definition.effects) ensureMove(this.#policies.has(policyKey(card.definition.cardId, effect.id)), "v3-match-explicit-usage-policy-required");
     this.#board = freezeMovement(structuredClone(options.movement)); this.#progression = freezeMovement(structuredClone(options.progression));
     this.#key = Uint8Array.from(options.signingKey); this.#master = options.master; this.#now = options.now ?? Date.now;
   }
@@ -53,6 +54,7 @@ export class V3SyntheticMatchCoordinator {
     return { revision: this.#revision, movementRevision: this.#board.revision, progressionRevision: this.#progression.revision,
       resolutionId: frame?.resolutionId ?? null, frameRevision: frame?.revision ?? null };
   }
+  pendingWorkKind() { return this.#active?.coordinator.pendingWorkKind() ?? null; }
   #run(actor: Seat, requestId: string, expected: V3MatchContext, body: object, apply: () => void): { replayed: boolean } {
     ensureMove(process.env.NODE_ENV !== "production" && !this.#busy && (actor === 0 || actor === 1), "v3-match-disabled-or-invalid-actor"); label(requestId);
     dataObject(expected, ["revision", "movementRevision", "progressionRevision", "resolutionId", "frameRevision"]);
@@ -80,7 +82,7 @@ export class V3SyntheticMatchCoordinator {
     reference(source); label(effectId);
     return this.#run(actor, requestId, expected, { kind: "activate", source: { instanceId: source.instanceId, generation: source.generation }, effectId }, () => {
       this.#settled(); ensureMove(this.#history.length < 256 && checkTiming(this.#progression, actor, "mainEffect").allowed, "v3-match-cannot-activate");
-      const object = getCard(this.#board, source), card = this.#cards.get(object.cardId), policy = this.#policies.get(`${object.cardId}:${effectId}`);
+      const object = getCard(this.#board, source), card = this.#cards.get(object.cardId), policy = this.#policies.get(policyKey(object.cardId, effectId));
       ensureMove(card && policy, "v3-match-unregistered-effect");
       const usageKey = JSON.stringify([this.#board.turnNumber, actor, source.instanceId, source.generation, effectId]);
       ensureMove(policy.maxPerObjectTurn === null || (this.#usage.get(usageKey) ?? 0) < policy.maxPerObjectTurn, "v3-match-usage-exhausted");
@@ -142,7 +144,17 @@ export class V3SyntheticMatchCoordinator {
     const active = this.#active?.coordinator.viewFor(viewer);
     return freezeMovement({ mode: "v3-synthetic-session" as const, context: this.context(), movement: active?.movement ?? projectMovementState(this.#board, viewer),
       frame: active?.frame ?? null, turnNumber: this.#progression.turnNumber, activePlayer: this.#progression.activePlayer, phase: this.#progression.phase,
-      gate: this.#progression.gate.kind, history: [...this.#history] });
+      gate: this.#progression.gate.kind, resolutionActor: this.#active?.actor ?? null, history: [...this.#history] });
+  }
+  effectsFor(actor: Seat, source: Readonly<CardObjectRef>) {
+    ensureMove(actor === 0 || actor === 1, "v3-match-actor"); const object = getCard(this.#board, source), card = this.#cards.get(object.cardId);
+    ensureMove(object.owner === actor && object.controller === actor && card, "v3-match-source-policy");
+    const ready = (!this.#active || this.#active.coordinator.viewFor(actor).frame.status === "completed") && checkTiming(this.#progression, actor, "mainEffect").allowed;
+    return card.definition.effects.map(effect => {
+      const policy = this.#policies.get(policyKey(object.cardId, effect.id))!, usageKey = JSON.stringify([this.#board.turnNumber, actor, source.instanceId, source.generation, effect.id]);
+      const used = this.#usage.get(usageKey) ?? 0;
+      return { effectId: effect.id, used, limit: policy.maxPerObjectTurn, enabled: ready && (policy.maxPerObjectTurn === null || used < policy.maxPerObjectTurn) };
+    });
   }
   snapshotForCoordinator() {
     return freezeMovement({ context: this.context(), movement: this.#board, progression: this.#progression, active: this.#active?.coordinator.snapshotForCoordinator() ?? null,

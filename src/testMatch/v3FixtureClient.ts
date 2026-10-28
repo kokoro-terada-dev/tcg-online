@@ -14,7 +14,7 @@ export function v3Command(view: V3FixtureView, kind: V3FixtureCommand["kind"], r
   if (view.actor !== view.localPlayerIndex || view.frame.status !== (kind === "advance" ? "ready" : "waitingForWork")) throw new Error("No current local v3 operation");
   return { ...base, kind };
 }
-export function v3BoardView(view: V3FixtureView): MatchView {
+export function v3BoardView(view: Pick<V3FixtureView, "matchId" | "movement" | "localPlayerIndex" | "imageAliases">): MatchView {
   const zones: readonly Zone[] = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon"];
   return { matchId: view.matchId, revision: view.movement.revision, localPlayerIndex: view.localPlayerIndex, attack: null, masterVersion: null,
     players: view.movement.players.map((player, owner) => ({ zones: Object.fromEntries(zones.map(zone => [zone, player[zone].map((card, index) => card ? {
