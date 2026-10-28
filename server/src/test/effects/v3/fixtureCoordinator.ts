@@ -25,9 +25,10 @@ export class V3FixtureCoordinator {
   #card: ApprovedV3Card; #identity: ResolutionIdentity; #key: Uint8Array; #facts: PinnedMasterFacts; #now: () => number;
   #definitions: readonly ApprovedV3Card[];
   #statEffects: StatEffects;
+  #checkEvents: ((events: readonly MovementEvent[]) => void) | undefined;
   #receipts: Receipt[] = []; #busy = false;
   #events: readonly MovementEvent[] = [];
-  constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; definitions?: readonly ApprovedV3Card[]; statEffects?: StatEffects }>) {
+  constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; definitions?: readonly ApprovedV3Card[]; statEffects?: StatEffects; triggerEvent?: MovementEvent; checkEvents?: (events: readonly MovementEvent[]) => void }>) {
     ensureMove(process.env.NODE_ENV !== "production" && options.mode === "syntheticNoAbilities", "v3-fixture-disabled");
     ensureMove(isApprovedV3Card(options.card), "v3-approved-server-plan-required");
     const definitions = options.definitions ?? [options.card]; dataArray(definitions, 128);
@@ -37,10 +38,16 @@ export class V3FixtureCoordinator {
     validateMovementState(options.movement);
     this.#statEffects = validateStatEffects(options.movement, options.statEffects ?? []);
     const { identity, movement, progression, card } = options;
-    ensureMove(identity.matchId === movement.matchId && movement.turnNumber === progression.turnNumber && checkTiming(progression, identity.actor, "mainEffect").allowed && !progression.battle, "v3-fixture-timing");
+    const trigger = options.triggerEvent;
+    const triggerTiming = trigger && progression.gate.kind === "idle" && progression.phase === "main" && progression.phaseSettled && !progression.outcome;
+    ensureMove(identity.matchId === movement.matchId && movement.turnNumber === progression.turnNumber && (triggerTiming || checkTiming(progression, identity.actor, "mainEffect").allowed) && !progression.battle, "v3-fixture-timing");
     ensureMove(Object.values(movement.cards).every(card => !card.modifierIds.length && !card.grantIds.length) && movement.players.every(zones => zones.deck.length > 0) && movement.reveals.length === 0, "v3-fixture-unmodeled-board");
     const source = getCard(movement, identity.source), at = location(movement, source.instanceId), effect = card.definition.effects.find(effect => effect.id === identity.effectId);
     ensureMove(effect && source.cardId === card.definition.cardId && source.kind === card.definition.cardType && source.owner === identity.actor && source.controller === identity.actor && source.faceUp && at.player === identity.actor && effect.sourceZones.some(zone => zone === at.zone), "v3-fixture-source");
+    ensureMove(trigger ? effect.kind === "triggered" && effect.timing.type === "ON_PLAY" && trigger.kind === "moved" && trigger.from && trigger.to && trigger.from.zone !== trigger.to.zone &&
+      trigger.to.player === identity.actor && trigger.to.zone === at.zone && trigger.after?.instanceId === source.instanceId && trigger.after.generation === source.generation && trigger.after.cardId === source.cardId :
+      effect.kind === "activated" && effect.timing.type === "MAIN", "v3-fixture-trigger-authorization");
+    this.#checkEvents = options.checkEvents;
     this.#board = freezeMovement(structuredClone(movement)); this.#progression = freezeMovement(structuredClone(progression));
     this.#identity = freezeMovement(structuredClone(identity)); this.#card = card; this.#key = Uint8Array.from(options.signingKey); this.#now = options.now ?? Date.now;
     this.#facts = pinMasterFacts(movement, { master: options.master, numericPolicy: "certifiedUnmodified" });
@@ -72,6 +79,7 @@ export class V3FixtureCoordinator {
       const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => draft.statEffects);
       const machine = V3ResolutionMachine.restore(this.#card, this.#identity, this.#key, environment, this.#machine.exportForStorage(), current.frameRevision);
       action(machine, draft); const progression = this.#gate(this.#progression, machine);
+      this.#checkEvents?.(draft.events.slice(this.#events.length));
       // Retain all candidate changes only after frame, movement and progression succeeded.
       this.#board = draft.board; this.#progression = progression; this.#machine = machine; this.#events = freezeMovement(draft.events); this.#statEffects = draft.statEffects;
       this.#receipts.push({ requestId, fingerprint }); return { replayed: false };

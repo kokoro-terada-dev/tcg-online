@@ -12,7 +12,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
 }) {
   const [collapsed, setCollapsed] = useState(false), frame = view.frame, ownTurn = view.activePlayer === view.localPlayerIndex;
   const [revealPreview, setRevealPreview] = useState<string | null>(null);
-  useEffect(() => setCollapsed(false), [view.context.resolutionId, frame?.choice?.selectionId, frame?.status, view.turnNumber]);
+  useEffect(() => setCollapsed(false), [view.context.resolutionId, frame?.choice?.selectionId, frame?.status, view.turnNumber, view.gate, view.pendingTriggerCount]);
   useEffect(() => setRevealPreview(null), [view.context.revision]);
   const idle = view.gate === "idle" && (!frame || frame.status === "completed"), disabled = busy || needsSync;
   const playable = (id: string) => view.playableCards.find(play => play.card.instanceId === id);
@@ -24,6 +24,10 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="v3連続操作検証">
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
       <div hidden={collapsed}><strong>v3検証・連続操作</strong><p>{view.turnNumber}ターン目・{ownTurn ? "自分" : "相手"}のターン</p>
+        {view.gate === "trigger" && <div><p role="status">{view.triggerChooser === view.localPlayerIndex ? "登場時効果を選択" : "相手の登場時効果を待っています"}（{view.pendingTriggerCount}件）</p>
+          <div className="test-effect-actions">{view.triggerChoices.map(choice => <button key={choice.token} disabled={disabled} onClick={() => onAction("trigger", { token: choice.token })}>
+            登場時効果・{view.imageAliases[choice.cardId] ?? choice.cardId}
+          </button>)}</div></div>}
         {view.publicReveals.length > 0 && <div className="v3-public-reveals" aria-label="公開中のカード">{view.publicReveals.map((card, index) => {
           const id = view.imageAliases[card.cardId] ?? card.cardId, image = getLocalCardImage(id)?.imageUrl;
           return <button key={`${card.cardId}:${index}`} onClick={() => setRevealPreview(id)}>{image ? <img src={image} alt={id} draggable={false} /> : id}</button>;

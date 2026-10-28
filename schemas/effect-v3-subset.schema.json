@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:tcg:effect-v3-subset:12",
-  "title": "V3 compiler subset 12; compilation is not execution approval",
+  "$id": "urn:tcg:effect-v3-subset:13",
+  "title": "V3 compiler subset 13; compilation is not execution approval",
   "type": "object", "additionalProperties": false,
   "required": ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"],
   "properties": {
-    "schemaVersion": { "const": "3.0.0-subset.12" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
+    "schemaVersion": { "const": "3.0.0-subset.13" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
     "name": { "$ref": "#/$defs/label" }, "cardType": { "enum": ["leader", "character", "stage"] },
     "baseStats": {
       "type": "object", "additionalProperties": false, "required": ["cost", "power", "counter", "life"],
@@ -128,17 +128,18 @@
       { "required": ["count", "from"], "properties": { "type": { "const": "DON_RETURN" }, "count": { "$ref": "#/$defs/count" }, "from": { "$ref": "#/$defs/donZones" } } },
       { "properties": { "type": { "const": "REST_SOURCE" } } }
     ] },
-    "timing": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "properties": { "type": { "const": "MAIN" } } },
+    "timing": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "properties": { "type": { "enum": ["MAIN", "ON_PLAY"] } } },
     "effect": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "kind", "timing", "sourceZones", "optional", "usageLimit", "activationConditions", "resolutionConditions", "costs", "actions"],
       "properties": {
-        "id": { "$ref": "#/$defs/id" }, "kind": { "const": "activated" }, "timing": { "$ref": "#/$defs/timing" }, "optional": { "type": "boolean" },
+        "id": { "$ref": "#/$defs/id" }, "kind": { "enum": ["activated", "triggered"] }, "timing": { "$ref": "#/$defs/timing" }, "optional": { "type": "boolean" },
         "sourceZones": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "enum": ["leader", "character", "stage"] } },
         "usageLimit": { "oneOf": [{ "type": "null" }, { "type": "object", "additionalProperties": false, "required": ["type", "scope", "count"], "properties": { "type": { "const": "PER_TURN" }, "scope": { "const": "SOURCE_OBJECT" }, "count": { "$ref": "#/$defs/count" } } }] },
         "activationConditions": { "$ref": "#/$defs/predicate" }, "resolutionConditions": { "$ref": "#/$defs/predicate" },
         "costs": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/cost" } }, "actions": { "allOf": [{ "$ref": "#/$defs/actions" }], "minItems": 1 }
-      }
+      },
+      "allOf": [{ "if": { "properties": { "kind": { "const": "triggered" } } }, "then": { "properties": { "timing": { "properties": { "type": { "const": "ON_PLAY" } } }, "sourceZones": { "items": { "enum": ["character", "stage"] } } } }, "else": { "properties": { "timing": { "properties": { "type": { "const": "MAIN" } } } } } }]
     }
   }
 }

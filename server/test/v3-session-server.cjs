@@ -34,6 +34,10 @@ for (const actor of [0, 1]) test(`stat changes sync and expire at their declared
   const { clients } = await setup(t, actor), own = clients[actor], peer = clients[1 - actor];
   let v = (await request(own, 'v3-session:sync')).sessionView;
   v = await send(own, v, 'play', { card: v.playableCards[0].card });
+  if (v.gate === 'trigger') {
+    v = await send(own, v, 'trigger', { token: v.triggerChoices[0].token }); v = await send(own, v, 'advance'); const choice = v.frame.choice;
+    v = await send(own, v, 'answer', { selectionId: choice.selectionId, tokens: [choice.options[1].token] });
+  }
   for (const effectId of ['buff', 'debuff', 'costDown']) {
     v = await send(own, v, 'activate', { effectId }); v = await send(own, v, 'advance'); const choice = v.frame.choice;
     v = await send(own, v, 'answer', { selectionId: choice.selectionId, tokens: [choice.options[0].token] });
@@ -50,6 +54,28 @@ for (const actor of [0, 1]) test(`stat changes sync and expire at their declared
   assert.equal(leader(v, actor).power, 5000); assert.equal(character(v).cost, 2); assert.equal(leader(v, 1 - actor).power, 4000);
   const other = (await request(peer, 'v3-session:sync')).sessionView; v = await send(peer, other, 'endTurn');
   assert.equal(leader(v, 1 - actor).power, 5000); assert.equal(v.publicStats.every(card => !card.powerDelta && !card.costDelta), true);
+});
+
+for (const [actor, accepted] of [[0, true], [1, false]]) test(`entry triggers for seat ${actor} lock normal actions, authorize only the controller and resolve optionally (accepted=${accepted})`, async t => {
+  const { clients } = await setup(t, actor), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView;
+  const play = command(v, 'play', { card: v.playableCards[0].card }); v = (await request(own, 'v3-session:command', play)).sessionView;
+  assert.equal(v.gate, 'trigger'); assert.equal(v.pendingTriggerCount, 1); assert.equal(v.triggerChooser, actor);
+  const pending = v.triggerChoices[0]; assert.equal(pending.effectId, 'enterDraw');
+  assert.equal((await request(own, 'v3-session:command', play)).sessionView.triggerChoices[0].token, pending.token);
+  assert.equal((await request(own, 'v3-session:command', command(v, 'endTurn'))).ok, false);
+  assert.equal((await request(own, 'v3-session:command', command(v, 'activate', { effectId: 'draw' }))).ok, false);
+  let other = (await request(peer, 'v3-session:sync')).sessionView; assert.equal(other.pendingTriggerCount, 1); assert.deepEqual(other.triggerChoices, []);
+  assert.equal((await request(peer, 'v3-session:command', command(other, 'trigger', { token: pending.token }))).ok, false);
+  const resolve = command(v, 'trigger', { token: pending.token }); v = (await request(own, 'v3-session:command', resolve)).sessionView;
+  assert.equal((await request(own, 'v3-session:command', resolve)).sessionView.context.revision, v.context.revision);
+  v = await send(own, v, 'advance'); const choice = v.frame.choice; assert.equal(choice.purpose, 'activation');
+  v = await send(own, v, 'answer', { selectionId: choice.selectionId, tokens: [choice.options[accepted ? 0 : 1].token] });
+  v = await complete(own, v); assert.equal(v.movement.players[actor].hand.length, accepted ? 5 : 4); assert.equal(v.pendingTriggerCount, 0); assert.equal(v.gate, 'idle');
+  assert.equal((await request(own, 'v3-session:command', command(v, 'trigger', { token: pending.token }))).ok, false);
+  other = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.equal(other.movement.players[actor].hand.length, accepted ? 5 : 4); assert.equal(other.movement.players[actor].hand.every(card => card.cardId === null), true);
+  v = await send(own, v, 'endTurn'); assert.equal(typeof v.history.at(-1).triggerEventId, 'string'); assert.equal(v.history.at(-1).declined, !accepted);
 });
 
 for (const actor of [0, 1]) test(`continuous session starts with seat ${actor}, enforces use limits, and continues across both turns`, async t => {

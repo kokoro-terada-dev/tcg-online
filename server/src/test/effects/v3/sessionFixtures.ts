@@ -16,7 +16,7 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
     const z = match.players[actor].zones, leader = z.leader[0]!, cardId = `V3-SESSION-LEADER-${actor}`;
     imageAliases[cardId] = leader.cardId; leader.cardId = cardId;
     for (let i = 0; i < 2; i++) z.activeDon.push({ ...z.donDeck.shift()!, faceUp: true, rotated: false });
-    return compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.12", cardId, cardVersion: "session-fixture.3", name: "Synthetic session leader", cardType: "leader",
+    return compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.13", cardId, cardVersion: "session-fixture.3", name: "Synthetic session leader", cardType: "leader",
       baseStats: { cost: null, power: 5000, counter: null, life: null }, colors: [], traits: [], attributes: [], reviewStatus: "approved",
       source: { text: "Synthetic session only: draw once per object turn, or optionally rest one DON and discard one hand to draw; or look at three cards, reveal up to one character with cost at most three and add it to hand, then return the rest to deck bottom in chosen order. Also select own leader power +1000 through this turn end, opponent leader power -1000 through their next turn end, or own character cost -1 through this turn end. Each effect once per object turn. Not a real card or official ruling.", triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-fixture.3").digest("hex") },
       effects: [...["draw", "paidDraw"].map(id => ({ id, kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: id === "paidDraw", usageLimit: { type: "PER_TURN", scope: "SOURCE_OBJECT", count: 1 },
@@ -45,10 +45,12 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
     const originalId = object.cardId, kind = object.kind, cardId = `V3-SESSION-MAIN-${createHash("sha256").update(JSON.stringify([kind, originalId])).digest("hex")}`;
     ensureMove(!imageAliases[cardId] || imageAliases[cardId] === originalId, "v3-session-image-alias-conflict"); imageAliases[cardId] = originalId; object.cardId = cardId;
     if (mainIds.has(cardId)) continue; mainIds.add(cardId);
-    plans.push(compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.12", cardId, cardVersion: "session-vanilla.1", name: `Synthetic ${kind}`, cardType: kind,
+    plans.push(compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.13", cardId, cardVersion: "session-entry.1", name: `Synthetic ${kind}`, cardType: kind,
       baseStats: { cost: kind === "character" ? 2 : 1, power: kind === "character" ? 2000 : null, counter: kind === "character" ? 1000 : 0, life: null },
-      colors: [], traits: [], attributes: [], reviewStatus: "approved", effects: [],
-      source: { text: "", triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-vanilla.1").digest("hex") } })));
+      colors: [], traits: [], attributes: [], reviewStatus: "approved",
+      effects: [{ id: "enterDraw", kind: "triggered", timing: { type: "ON_PLAY" }, sourceZones: [kind], optional: true, usageLimit: null,
+        activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] }],
+      source: { text: "Synthetic entry only: when this card enters its field zone, optionally draw one card. Not an official ability.", triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-entry.1").digest("hex") } })));
   }
   const rulesetVersion = "synthetic-session.1", catalog = new ApprovedV3Catalog(plans, plans.map(plan => ({ status: "approved", cardId: plan.definition.cardId, cardVersion: plan.definition.cardVersion,
     definitionHash: plan.definitionHash, sourceHash: plan.sourceHash, compilerVersion: plan.compilerVersion, registryHash: plan.registryHash, rulesetVersion,

@@ -8,10 +8,14 @@ export function acceptV3SessionView(current: V3SessionView | null, next: V3Sessi
   return next.context.revision !== current.context.revision || next.context.resolutionId === current.context.resolutionId && next.context.frameRevision === current.context.frameRevision &&
     next.context.movementRevision === current.context.movementRevision && next.context.progressionRevision === current.context.progressionRevision;
 }
-export type SessionDetails = Readonly<{ effectId?: string; tokens?: readonly string[]; card?: Readonly<{ instanceId: string; generation: number }> }>;
+export type SessionDetails = Readonly<{ effectId?: string; token?: string; tokens?: readonly string[]; card?: Readonly<{ instanceId: string; generation: number }> }>;
 export function v3SessionCommand(view: V3SessionView, kind: V3SessionCommand["kind"], requestId: string, details: SessionDetails = {}): V3SessionCommand {
   const base = { matchId: view.matchId, requestId, context: { ...view.context } }, ownTurn = view.activePlayer === view.localPlayerIndex;
   const idle = view.gate === "idle" && (!view.frame || view.frame.status === "completed");
+  if (kind === "trigger") {
+    if (view.gate !== "trigger" || view.triggerChooser !== view.localPlayerIndex || !view.triggerChoices.some(choice => choice.token === details.token)) throw Error("Trigger is unavailable");
+    return { ...base, kind, token: details.token! };
+  }
   if (kind === "activate") {
     if (!ownTurn || !idle || !view.effects.some(effect => effect.effectId === details.effectId && effect.enabled)) throw Error("Effect is unavailable");
     return { ...base, kind, effectId: details.effectId! };

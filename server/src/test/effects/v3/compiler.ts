@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
 import type { CardDefinition, CardSetRef, Category, CompiledCard, DonZone, Node, NodeMeta, Value } from "./dsl";
 
-export const COMPILER_VERSION = "v3-subset-compiler.12";
+export const COMPILER_VERSION = "v3-subset-compiler.13";
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 function inspectData(input: unknown): void {
@@ -105,6 +105,7 @@ export function builtinV3Registries(): V3Registries {
     return { type: "MODIFY_STAT", ...meta, cards: c.cards(n.cards), stat: n.stat, amount: n.amount, duration: c.read("duration", n.duration) };
   });
   r.timing.register("MAIN", "1", (n, c) => ({ type: "MAIN", ...c.fields(n, []) }));
+  r.timing.register("ON_PLAY", "1", (n, c) => ({ type: "ON_PLAY", ...c.fields(n, []) }));
   for (const type of ["all", "any"] as const) r.predicate.register(type, "1", (n, c) => ({ type, ...c.fields(n, ["conditions"]), conditions: c.list("predicate", n.conditions) }));
   r.predicate.register("not", "1", (n, c) => ({ type: "not", ...c.fields(n, ["condition"]), condition: c.read("predicate", n.condition) }));
   r.predicate.register("compare", "2", (n, c) => {
@@ -197,7 +198,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.12", "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.13", "unsupported-v3-schema-version");
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
   ensureMove(typeof input.name === "string" && input.name.trim().length > 0 && input.name.length <= 300, "invalid-v3-card-name");
   ensureMove(input.cardType === "leader" || input.cardType === "character" || input.cardType === "stage", "unsupported-v3-card-type");
@@ -261,7 +262,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
     bindings = new Map(); candidateAllowed = false;
     dataObject(effect, ["id", "kind", "timing", "sourceZones", "optional", "usageLimit", "activationConditions", "resolutionConditions", "costs", "actions"]);
     const id = label(effect.id); ensureMove(!ids.has(id), "duplicate-v3-effect-id"); ids.add(id);
-    ensureMove(effect.kind === "activated" && typeof effect.optional === "boolean", "unsupported-v3-effect-kind-or-optionality");
+    ensureMove((effect.kind === "activated" || effect.kind === "triggered") && typeof effect.optional === "boolean", "unsupported-v3-effect-kind-or-optionality");
     let usageLimit: CardDefinition["effects"][number]["usageLimit"] = null;
     if (effect.usageLimit !== null) {
       dataObject(effect.usageLimit, ["type", "scope", "count"]);
@@ -271,14 +272,16 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
     dataArray(effect.sourceZones, 3); ensureMove(effect.sourceZones.length === 1 && effect.sourceZones[0] === input.cardType, "unsupported-v3-source-zones");
     const timing = context.read("timing", effect.timing), activationConditions = context.read("predicate", effect.activationConditions),
       resolutionConditions = context.read("predicate", effect.resolutionConditions), costs = context.list("cost", effect.costs);
+    ensureMove(effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_PLAY" && input.cardType !== "leader", "v3-kind-timing-mismatch");
+    ensureMove(effect.kind !== "triggered" || activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-on-play-event-conditions-unresolved");
     ensureMove(costs.reduce((sum, cost) => sum + (cost.type === "DISCARD_HAND" ? cost.count : 0), 0) <= 50, "v3-discard-cost-limit");
     ensureMove(costs.filter(cost => cost.type === "REST_SOURCE").length <= 1, "v3-duplicate-rest-source-cost");
     ensureMove(costs.filter(cost => cost.type === "DON_RETURN").length <= 1, "v3-multiple-don-return-costs-unsupported");
     const actions = context.list("action", effect.actions); ensureMove(actions.length > 0, "v3-action-required");
-    return { id, kind: "activated", optional: effect.optional, usageLimit, sourceZones: effect.sourceZones as ("leader" | "character" | "stage")[], timing,
+    return { id, kind: effect.kind, optional: effect.optional, usageLimit, sourceZones: effect.sourceZones as ("leader" | "character" | "stage")[], timing,
       activationConditions, resolutionConditions, costs, actions };
   });
-  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.12", cardId, cardVersion, name: input.name, cardType: input.cardType,
+  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.13", cardId, cardVersion, name: input.name, cardType: input.cardType,
     baseStats: input.baseStats as CardDefinition["baseStats"], colors, traits, attributes, reviewStatus: input.reviewStatus as CardDefinition["reviewStatus"], source, effects };
   inspectData(definition);
   const plan = freezeMovement({ status: "compiled_not_executable" as const, compilerVersion: COMPILER_VERSION, registryHash, definitionHash: digest(canonical(definition)), sourceHash: digest(canonical(source)), definition, requiredHandlers: [...used].sort() });

@@ -53,20 +53,20 @@ export interface SelectorMap {
 export interface DurationMap {
   TURN_END: NodeMeta & { type: "TURN_END"; player: Player; occurrence: 1 | 2 };
 }
-export interface TimingMap { MAIN: NodeMeta & { type: "MAIN" } }
+export interface TimingMap { MAIN: NodeMeta & { type: "MAIN" }; ON_PLAY: NodeMeta & { type: "ON_PLAY" } }
 export interface Categories { predicate: PredicateMap; action: ActionMap; cost: CostMap; replacement: ReplacementMap; selector: SelectorMap; duration: DurationMap; timing: TimingMap }
 export type Category = keyof Categories;
 export type Node<C extends Category> = Categories[C][keyof Categories[C]];
 export type Predicate = Node<"predicate">;
 export type Action = Node<"action">;
 export type Effect = {
-  id: string; kind: "activated"; timing: Node<"timing">;
+  id: string; kind: "activated" | "triggered"; timing: Node<"timing">;
   sourceZones: ("leader" | "character" | "stage")[]; optional: boolean;
   usageLimit: { type: "PER_TURN"; scope: "SOURCE_OBJECT"; count: number } | null;
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };
 export type CardDefinition = {
-  schemaVersion: "3.0.0-subset.12"; cardId: string; cardVersion: string;
+  schemaVersion: "3.0.0-subset.13"; cardId: string; cardVersion: string;
   name: string; cardType: "leader" | "character" | "stage";
   baseStats: { cost: number | null; power: number | null; counter: number | null; life: number | null };
   colors: string[]; traits: string[]; attributes: string[];
