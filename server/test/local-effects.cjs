@@ -18,6 +18,7 @@ async function playFixture(t, expectUnknownMaster = false, deck = recipe, cancel
   const initial = once(host, 'test-effect:state'); assert.equal((await request(host, 'test-match:start')).ok, true); let view = await initial;
   if (expectUnknownMaster) assert.equal(view.effect.masterVersion, null);
   assert.equal(view.effect.status, 'idle'); assert.equal(view.selection, null);
+  assert.equal(view.movement.players[0].activeDon.length, 1); assert.equal(view.movement.players[0].donDeck.length, 9);
   const idleId = view.effect.resolutionId;
   const denied = await request(host, 'test-effect:command', { kind: 'start', matchId: view.matchId, resolutionId: idleId, requestId: 'idle-start', expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision });
   assert.equal(denied.ok, false); assert.equal(denied.view.effect.status, 'idle');
@@ -88,7 +89,7 @@ test('different leaders can switch both ways and the guest can resolve its own r
   const oldTurn = { kind: 'testNextTurn', ...base('host-turn') }, updates = clients.map(socket => once(socket, 'test-effect:state'));
   const changed = await request(host, 'test-effect:command', oldTurn); assert.equal(changed.ok, true);
   const [hostView, guestView] = await Promise.all(updates); assert.equal(hostView.testTurnSwitchAvailable, false); assert.equal(guestView.testTurnSwitchAvailable, true);
-  view = guestView; assert.equal(view.progression.turnNumber, 2); assert.equal(view.progression.activePlayer, 1); assert.equal(view.movement.players[1].hand.length, 5);
+  view = guestView; assert.equal(view.progression.turnNumber, 2); assert.equal(view.progression.activePlayer, 1); assert.equal(view.movement.players[1].hand.length, 6); assert.equal(view.movement.players[1].activeDon.length, 2);
   const catalog = await request(guest, 'test-effect:catalog', { matchId: view.matchId, expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, source: view.movement.players[1].leader[0].ref });
   assert.equal(catalog.ok, true); assert.equal(catalog.catalog.effects.length, 1); assert.equal(catalog.catalog.effects[0].timingAvailable, true);
   const activation = await request(guest, 'test-effect:command', { kind: 'activateRegistered', ...base('guest-effect'), effectId: catalog.catalog.effects[0].effectId, catalogVersion: catalog.catalog.catalogVersion, source: catalog.catalog.source });
@@ -100,7 +101,7 @@ test('different leaders can switch both ways and the guest can resolve its own r
     if (kind === 'answerCosts') { command.selectionId = view.selection.selectionId; command.tokens = [view.selection.candidates[0].token]; }
     const result = await request(guest, 'test-effect:command', command); assert.equal(result.ok, true); view = result.view;
   }
-  assert.equal(view.effect.status, 'idle'); assert.equal(view.movement.players[1].hand.length, 5); assert.equal(view.movement.players[1].trash.length, 1);
+  assert.equal(view.effect.status, 'idle'); assert.equal(view.movement.players[1].hand.length, 6); assert.equal(view.movement.players[1].trash.length, 1);
   assert.equal((await request(host, 'test-effect:sync')).view.movement.players[1].hand.every(card => card.cardId === null), true);
   const back = { kind: 'testNextTurn', ...base('guest-turn') };
   const result = await request(guest, 'test-effect:command', back); assert.equal(result.ok, true); assert.equal(result.view.progression.activePlayer, 0); assert.equal(result.view.progression.turnNumber, 3);

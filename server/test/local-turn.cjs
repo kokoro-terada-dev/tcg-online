@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const { createMatch } = require('../dist/test/game.js');
 const { createProgression } = require('../dist/test/progression/state.js');
 const { applySystemEvent } = require('../dist/test/progression/transitions.js');
-const { nextLocalTurnCheckpoint } = require('../dist/test/localTurnCheckpoint.js');
+const { nextLocalTurnCheckpoint, openingLocalTurnCheckpoint } = require('../dist/test/localTurnCheckpoint.js');
+const { MovementStore } = require('../dist/test/movement/engine.js');
 const { EffectCatalog } = require('../dist/test/effects/effectCatalog.js');
 const { EffectMatchOwner } = require('../dist/test/effects/effectMatchOwner.js');
 const { OwnedEffectEndpoint } = require('../dist/test/effects/ownedEffectEndpoint.js');
@@ -13,13 +14,14 @@ function setup(first = 0, enabled = true) {
   const owner = new EffectMatchOwner(match, catalog, true); let p = createProgression(first);
   while (true) { p = applySystemEvent(p, p.revision, { kind: 'settlePhase', phaseToken: p.phaseToken }); if (p.phase === 'main') break; p = applySystemEvent(p, p.revision, { kind: 'advancePhase', phaseToken: p.phaseToken }); }
   owner.adopt(p); owner.prepareRegisteredIdle({ status: 'certifiedNone' }, undefined, enabled);
+  if (enabled) owner.initializeLocalTurnStart();
   const endpoint = new OwnedEffectEndpoint(owner);
   function command(actor, requestId = 'turn', patch = {}) { const v = endpoint.viewFor(actor); return { kind: 'testNextTurn', matchId: v.matchId, resolutionId: v.effect.resolutionId, requestId, expectedMovementRevision: v.movement.revision, expectedProgressionRevision: v.progression.revision, ...patch }; }
   function activate(actor, requestId = 'activate') { const v = endpoint.viewFor(actor); return endpoint.handle(actor, { ...command(actor, requestId), kind: 'activateRegistered', source: v.movement.players[actor].leader[0].ref, effectId: 'TEST.draw', catalogVersion: catalog.version }); }
   function step(actor, kind) { const v = endpoint.viewFor(actor); return endpoint.handle(actor, { ...command(actor, kind), kind, ...(kind === 'answerCosts' ? { selectionId: v.selection.selectionId, tokens: [v.selection.candidates[0].token] } : {}) }); }
   return { owner, match, endpoint, command, activate, step };
 }
-test('local turn switch alternates either first seat with matching board/progression turns and no card movement', () => {
+test('local turns initialize either first seat and apply draw/DON only to the incoming player', () => {
   for (const first of [0, 1]) {
     const s = setup(first), before = s.owner.snapshot(), v = s.endpoint.viewFor(first);
     assert.equal(v.testTurnSwitchAvailable, true); assert.equal(s.endpoint.viewFor(1 - first).testTurnSwitchAvailable, false);
@@ -27,7 +29,10 @@ test('local turn switch alternates either first seat with matching board/progres
     const next = s.owner.snapshot(); assert.equal(next.activeResolutionId, null); assert.equal(next.movement.turnNumber, 2); assert.equal(next.progression.turnNumber, 2);
     assert.equal(next.progression.activePlayer, 1 - first); assert.equal(next.progression.firstPlayer, first); assert.equal(next.progression.phaseSettled, true);
     assert.equal(next.movement.revision, before.movement.revision + 1); assert.notEqual(result.view.effect.resolutionId, v.effect.resolutionId);
-    assert.deepEqual(next.movement.cards, before.movement.cards); assert.deepEqual(next.movement.players, before.movement.players);
+    assert.equal(before.movement.players[first].activeDon.length, 1); assert.equal(before.movement.players[first].hand.length, 5);
+    assert.deepEqual(next.movement.players[first], before.movement.players[first]);
+    assert.equal(next.movement.players[1 - first].hand.length, 6); assert.equal(next.movement.players[1 - first].activeDon.length, 2);
+    assert.equal(next.movement.players[1 - first].deck.length, before.movement.players[1 - first].deck.length - 1);
     assert.equal(s.endpoint.viewFor(1 - first).testTurnSwitchAvailable, true); assert.equal(s.activate(first).ok, false);
     assert.equal(s.activate(1 - first).ok, true);
   }
@@ -68,11 +73,44 @@ test('client authority, accessors and malformed payloads never select a phase or
   let reads = 0; const c = s.command(0); Object.defineProperty(c, 'expectedProgressionRevision', { enumerable: true, get() { reads++; return 0; } });
   assert.equal(s.endpoint.handle(0, c).code, 'invalid_command'); assert.equal(reads, 0);
 });
-test('checkpoint failures are atomic and never acknowledge real turn-start work', () => {
+test('checkpoint failures are atomic and preserve both prior states', () => {
   const s = setup(), before = s.owner.snapshot();
   const locked = applySystemEvent(before.progression, before.progression.revision, { kind: 'beginResolution', resolutionId: 'pending', controller: 0 });
   assert.throws(() => nextLocalTurnCheckpoint(before.movement, locked, 0, 'tx'));
   const full = { ...before.movement, revision: 4096, appliedTransactions: Array.from({ length: 4096 }, (_, i) => `tx-${i}`) };
   assert.throws(() => nextLocalTurnCheckpoint(full, before.progression, 0, 'over-limit'));
   assert.equal(s.owner.snapshot().movement, before.movement); assert.equal(s.owner.snapshot().progression, before.progression);
+});
+
+test('refresh returns attached DON and activates only the incoming player field and DON', () => {
+  const s = setup(), state = s.owner.snapshot(), board = state.movement, leader = board.cards[board.players[0].leader[0]];
+  const don = board.cards[board.players[0].activeDon[0]];
+  const altered = new MovementStore(board).commit({ transactionId: 'refresh-fixture', matchId: board.matchId, expectedRevision: board.revision, turnNumber: 1, actor: 0, effectController: null, source: null, mode: 'rule', resolutionId: null,
+    operations: [{ kind: 'attachDon', card: { instanceId: don.instanceId, generation: don.generation }, target: { instanceId: leader.instanceId, generation: leader.generation } }, { kind: 'setRest', card: { instanceId: leader.instanceId, generation: leader.generation }, rotated: true }] }, { status: 'certifiedNone' }).state;
+  const guest = nextLocalTurnCheckpoint(altered, state.progression, 0, 'guest-turn');
+  assert.equal(guest.movement.cards[leader.instanceId].rotated, true); assert.equal(guest.movement.players[0].attachedDon.length, 1);
+  const host = nextLocalTurnCheckpoint(guest.movement, guest.progression, 1, 'host-turn');
+  assert.equal(host.movement.players[0].attachedDon.length, 0); assert.equal(host.movement.cards[leader.instanceId].rotated, false);
+  assert.equal(host.movement.players[0].activeDon.length, 3); assert.equal(host.movement.cards[don.instanceId].attachedTo, null);
+});
+
+test('opening cannot apply twice and remaining DON are added without fabricating cards', () => {
+  const s = setup(), before = s.owner.snapshot(); assert.throws(() => s.owner.initializeLocalTurnStart());
+  assert.throws(() => openingLocalTurnCheckpoint(before.movement, before.progression, 'again'));
+  const altered = structuredClone(before.movement), zones = altered.players[1];
+  const moved = zones.donDeck.splice(0, zones.donDeck.length - 1); zones.activeDon.push(...moved);
+  for (const id of moved) altered.cards[id].faceUp = true;
+  const next = nextLocalTurnCheckpoint(altered, before.progression, 0, 'last-don');
+  assert.equal(next.movement.players[1].activeDon.length, 10); assert.equal(next.movement.players[1].donDeck.length, 0);
+  assert.equal(Object.keys(next.movement.cards).length, Object.keys(before.movement.cards).length);
+});
+
+test('deck-out and unresolved transient state stop the local transition without partial refresh', () => {
+  const s = setup(), before = s.owner.snapshot(), altered = structuredClone(before.movement), zones = altered.players[1];
+  const moved = zones.deck.splice(1); zones.trash.push(...moved);
+  for (const id of moved) altered.cards[id].faceUp = true;
+  const copy = structuredClone(altered);
+  assert.throws(() => nextLocalTurnCheckpoint(altered, before.progression, 0, 'deck-out'), /deck-outcome/); assert.deepEqual(altered, copy);
+  const unsupported = structuredClone(before.movement); unsupported.cards[unsupported.players[1].leader[0]].modifierIds = ['unknown-modifier'];
+  assert.throws(() => nextLocalTurnCheckpoint(unsupported, before.progression, 0, 'modifiers'), /transient-state/);
 });

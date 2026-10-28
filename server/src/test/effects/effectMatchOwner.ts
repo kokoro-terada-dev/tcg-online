@@ -14,7 +14,7 @@ import type { CardObjectRef } from "./types";
 import type { EffectCatalog } from "./effectCatalog";
 import type { EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand } from "../effectProtocol";
 import { projectMovementState } from "../movement/projection";
-import { nextLocalTurnCheckpoint } from "../localTurnCheckpoint";
+import { nextLocalTurnCheckpoint, openingLocalTurnCheckpoint } from "../localTurnCheckpoint";
 import type { TestTurnCommand } from "../effectProtocol";
 
 type Mode = "legacy" | "automated" | "faulted" | "closed";
@@ -75,6 +75,15 @@ export class EffectMatchOwner {
     ensureMove(typeof allowTestTurnSwitch === "boolean" && (!allowTestTurnSwitch || (process.env.NODE_ENV !== "production" && rules.status === "certifiedNone")), "invalid-test-turn-policy");
     const pinnedRules: MovementRules = rules.status === "evaluate" ? Object.freeze({ status: "evaluate", check: rules.check.bind(rules) }) : Object.freeze({ status: rules.status });
     this.#idle = { resolutionId: randomUUID(), rules: pinnedRules, numericPolicy, allowTestTurnSwitch };
+  }
+  initializeLocalTurnStart(): void {
+    ensureMove(!this.#busy && this.#mode === "automated" && !this.#active && this.#idle?.allowTestTurnSwitch &&
+      process.env.NODE_ENV !== "production" && this.#current(), "local-opening-unavailable");
+    this.#busy = true;
+    try {
+      const next = openingLocalTurnCheckpoint(this.#board!, this.#progression!, randomUUID());
+      ensureMove(this.#current(), "owner-legacy-conflict"); this.#board = next;
+    } finally { this.#busy = false; }
   }
   openEffect(identity: ResolutionIdentity, definition: unknown, rules: MovementRules,
     numericPolicy?: MasterFactOptions["numericPolicy"]): void {

@@ -30,6 +30,7 @@ export async function startLocalEffectServer(port = 3002) {
     })));
     const owner = new EffectMatchOwner(match, catalog, true); owner.adopt(progression);
     owner.prepareRegisteredIdle({ status: "certifiedNone" }, undefined, true);
+    owner.initializeLocalTurnStart();
     return owner;
   } });
   try {
