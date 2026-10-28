@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import TestBoard from "./TestBoard";
-import { effectBoardView, type EffectTransportView, type EffectCommandKind } from "./effectClientState";
+import { effectBoardView, testPlayDestination, type EffectTransportView, type EffectCommandKind } from "./effectClientState";
 import { getCardBackImageUrl, getLocalCardImage } from "../utils/localCardImages";
 import "./testEffect.css";
 import EffectCatalogDialog from "./EffectCatalogDialog";
@@ -9,7 +9,7 @@ import type { CardView } from "../../server/src/test/protocol";
 
 type Props = { view: EffectTransportView; roomId: string; busy: boolean; error: string; needsSync: boolean;
   onAction: (kind: EffectCommandKind, tokens?: readonly string[]) => void; onSync: () => void; onEnd: () => void;
-  onCatalog?: (instanceId: string) => Promise<EffectCatalogView>; onActivateCatalog?: (catalog: EffectCatalogView, effectId: string) => void; onTestTurn?: () => void };
+  onCatalog?: (instanceId: string) => Promise<EffectCatalogView>; onActivateCatalog?: (catalog: EffectCatalogView, effectId: string) => void; onTestTurn?: () => void; onTestPlay?: (instanceId: string) => void };
 export default function TestEffectBoard(props: Props) {
   const { view, busy, needsSync, onAction } = props;
   const [inspected, setInspected] = useState<{ card: CardView; context: string } | null>(null);
@@ -31,7 +31,9 @@ export default function TestEffectBoard(props: Props) {
   let board;
   try { board = effectBoardView(view); } catch { return <main><p role="alert">この盤面形式はまだ表示できません。</p><button onClick={props.onEnd}>ルームへ戻る</button></main>; }
   return <>
-    <TestBoard match={board} roomId={props.roomId} busy={busy} error={props.error} readOnly onCommand={() => {}} onEnd={props.onEnd}
+    <TestBoard key={`${view.effect.resolutionId}:${view.movement.revision}:${view.progression.revision}`} match={board} roomId={props.roomId} busy={busy} error={props.error} readOnly onCommand={() => {}} onEnd={props.onEnd}
+      onTestPlay={view.testPlayAvailable && props.onTestPlay && !disabled ? card => props.onTestPlay!(card.id) : undefined}
+      canTestPlay={card => testPlayDestination(view, card.id) !== null}
       onInspectEffects={props.onCatalog && !disabled ? card => setInspected({ card, context }) : undefined} />
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="効果処理">
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>

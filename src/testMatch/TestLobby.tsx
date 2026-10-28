@@ -7,7 +7,7 @@ import { getAllLocalDeckRecipes } from "../utils/localDeckStorage";
 import { getLocalCardImage, hasLocalCardImages } from "../utils/localCardImages";
 import TestBoard from "./TestBoard";
 import TestEffectBoard from "./TestEffectBoard";
-import { acceptEffectView, acceptEffectCatalog, effectCatalogQuery, effectCommand, registeredEffectCommand, testTurnCommand, type EffectTransportView, type EffectCommandKind, type EffectCatalogView, type RegisteredEffectCommand, type TestTurnCommand } from "./effectClientState";
+import { acceptEffectView, acceptEffectCatalog, effectCatalogQuery, effectCommand, registeredEffectCommand, testTurnCommand, testPlayCardCommand, type EffectTransportView, type EffectCommandKind, type EffectCatalogView, type RegisteredEffectCommand, type TestTurnCommand, type TestPlayCardCommand } from "./effectClientState";
 
 type Room = RoomView;
 type Reply = { ok: boolean; error?: string };
@@ -76,7 +76,7 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
     if (value === undefined) socket.timeout(75000).emit(event, complete);
     else socket.timeout(75000).emit(event, value, complete);
   }
-  function effectRequest(kind?: EffectCommandKind, tokens?: readonly string[], sessionCommand?: RegisteredEffectCommand | TestTurnCommand) {
+  function effectRequest(kind?: EffectCommandKind, tokens?: readonly string[], sessionCommand?: RegisteredEffectCommand | TestTurnCommand | TestPlayCardCommand) {
     const socket = socketRef.current, current = effectRef.current;
     if (!socket?.connected || !current || busy || effectFlight.current || (kind !== undefined && current.effect.status === "idle") || ((kind !== undefined || sessionCommand) && needsSync)) return;
     const sentEpoch = epoch.current, resolutionId = current.effect.resolutionId;
@@ -119,7 +119,13 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
     try { effectRequest(undefined, undefined, testTurnCommand(current, crypto.randomUUID())); }
     catch { setError("今は手番を交代できません。最新の状態を確認してください。"); }
   }
-  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} onCatalog={queryCatalog} onActivateCatalog={activateCatalog} onTestTurn={switchTestTurn} />;
+  function playTestCard(instanceId: string) {
+    const current = effectRef.current;
+    if (!current) return;
+    try { effectRequest(undefined, undefined, testPlayCardCommand(current, instanceId, crypto.randomUUID())); }
+    catch { setError("今は登場できません。手番と空き枠を確認してください。"); }
+  }
+  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} onCatalog={queryCatalog} onActivateCatalog={activateCatalog} onTestTurn={switchTestTurn} onTestPlay={playTestCard} />;
   const mine = room?.host.socketId === socketRef.current?.id ? room?.host : room?.guest;
   function selectDeck(id: string) {
     const deck = decks.find((item) => item.id === id);

@@ -5,11 +5,12 @@ import type { CardView, MatchCommand, MatchView, Zone } from "../../server/src/t
 import { getCardBackImageUrl, getDonImageUrl, getLocalCardImage } from "../utils/localCardImages";
 import "./testMatch.css";
 
-type Props = { match: MatchView; roomId: string; busy: boolean; error: string; onCommand: (command: MatchCommand) => void; onEnd: () => void; readOnly?: boolean; onInspectEffects?: (card: CardView) => void };
+type Props = { match: MatchView; roomId: string; busy: boolean; error: string; onCommand: (command: MatchCommand) => void; onEnd: () => void; readOnly?: boolean; onInspectEffects?: (card: CardView) => void;
+  onTestPlay?: (card: CardView) => void; canTestPlay?: (card: CardView) => boolean };
 const labels: Record<Zone, string> = { hand: "手札", deck: "デッキ", life: "ライフ", trash: "トラッシュ", public: "公開", character: "キャラクター", stage: "ステージ", leader: "リーダー", donDeck: "DONデッキ", activeDon: "ACTIVE DON", restDon: "REST DON" };
 const imageUrl = (card: CardView) => !card.cardId ? getCardBackImageUrl() : getLocalCardImage(card.cardId)?.imageUrl ?? (card.kind === "don" ? getDonImageUrl() : null);
 
-export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd, readOnly = false, onInspectEffects }: Props) {
+export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd, readOnly = false, onInspectEffects, onTestPlay, canTestPlay }: Props) {
   const [selection, setSelection] = useState<{ id: string; from: Zone } | null>(null);
   const [preview, setPreview] = useState<CardView | null>(null);
   const [list, setList] = useState<{ zone: Zone; owner: 0 | 1 } | null>(null);
@@ -39,7 +40,10 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
           if (!mine && (zone === "leader" || zone === "character")) setAttackTarget(card);
           return;
         }
-        if (readOnly && mine && card.faceUp && card.cardId && ["leader", "character", "stage"].includes(zone) && onInspectEffects) { setList(null); onInspectEffects(card); }
+        if (readOnly && mine && zone === "hand" && card.faceUp && (card.kind === "character" || card.kind === "stage") && onTestPlay) {
+          setSelection({ id: card.id, from: zone }); setList(null);
+        }
+        else if (readOnly && mine && card.faceUp && card.cardId && ["leader", "character", "stage"].includes(zone) && onInspectEffects) { setList(null); onInspectEffects(card); }
         else if (!mine || readOnly) setPreview(card);
         else { setSelection((current) => current?.id === card.id ? null : { id: card.id, from: zone }); setList(null); }
       }}>
@@ -70,12 +74,17 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
         {imageUrl(selected) && <img className="test-action-image" src={imageUrl(selected)!} alt={selected.cardId ?? "カード"} />}
         <div className="test-action-grid">
           <button onClick={() => setPreview(selected)}>詳細</button>
+          {readOnly ? <>
+            <button disabled={busy || !onTestPlay || !canTestPlay?.(selected)} onClick={() => { onTestPlay?.(selected); setSelection(null); }}>テスト登場</button>
+            {!canTestPlay?.(selected) && <small>空き枠なし</small>}
+          </> : <>
           {(selection.from === "leader" || selection.from === "character") && <button disabled={busy || selected.rotated} onClick={() => {
             if (selection.from !== "leader" && selection.from !== "character") return;
             setAttackSource({ id: selected.id, from: selection.from, revision: match.revision }); setAttackTarget(null); setSelection(null);
           }}>アタック</button>}
           {(["leader", "character", "stage"] as Zone[]).includes(selection.from) && <button disabled={busy} onClick={() => command({ kind: "rotate", cardInstanceId: selected.id, from: selection.from })}>{selected.rotated ? "アクティブ" : "レスト"}</button>}
           {targets.filter((to) => to !== selection.from && (to !== "character" || selected.kind === "character") && (to !== "stage" || selected.kind === "stage")).map((to) => <button key={to} disabled={busy} onClick={() => move(to)}>{to === "character" ? "登場" : `${labels[to]}へ`}</button>)}
+          </>}
         </div>
         </div>
     </section></div>}

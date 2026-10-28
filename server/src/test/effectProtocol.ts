@@ -9,6 +9,7 @@ export type EffectSelectionView = Readonly<{ matchId: string; resolutionId: stri
 export type EffectTransportView = Readonly<{
   matchId: string; localPlayerIndex: Player; movement: MovementView;
   testTurnSwitchAvailable?: boolean;
+  testPlayAvailable?: boolean;
   // While idle, resolutionId reserves the next resolution; there is no running effect.
   effect: Readonly<{ resolutionId: string; actor: Player; status: "idle" | "prepared" | "resolving" | "completed" | "cancelled" | "blocked" | "waitingForSelection" | "waitingForCostSelection" | "costsReady"; completedSteps: number; masterVersion: string | null }>;
   progression: Readonly<{ revision: number; turnNumber: number; activePlayer: Player; phase: string; gate: "idle" | "resolving" | "choice"; chooser: Player | null; finished: boolean; winner: Player | null; defeatedPlayers?: readonly Player[] }>;
@@ -18,4 +19,5 @@ export type EffectCommandKind = "beginCosts" | "answerCosts" | "commitCosts" | "
 type Base = Readonly<{ matchId: string; resolutionId: string; requestId: string; expectedMovementRevision: number; expectedProgressionRevision: number }>;
 export type RegisteredEffectCommand = Base & Readonly<{ kind: "activateRegistered"; catalogVersion: string; effectId: string; source: Readonly<CardObjectRef> }>;
 export type TestTurnCommand = Base & Readonly<{ kind: "testNextTurn" }>;
+export type TestPlayCardCommand = Base & Readonly<{ kind: "testPlayCard"; source: Readonly<CardObjectRef> }>;
 export type EffectCommand = Base & (Readonly<{ kind: "answerCosts" | "answerEffect"; selectionId: string; tokens: readonly string[] }> | Readonly<{ kind: Exclude<EffectCommandKind, "answerCosts" | "answerEffect"> }>);

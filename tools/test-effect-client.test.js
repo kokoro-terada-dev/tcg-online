@@ -7,7 +7,7 @@ const module = { exports: {} };
 const source = fs.readFileSync(new URL("../src/testMatch/effectClientState.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 vm.runInNewContext(compiled, { exports: module.exports, module });
-const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog, registeredEffectCommand, testTurnCommand } = module.exports;
+const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog, registeredEffectCommand, testTurnCommand, testPlayDestination, testPlayCardCommand } = module.exports;
 const plain = value => JSON.parse(JSON.stringify(value));
 function view() {
   const zones = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon", "attachedDon", "resolving"];
@@ -101,4 +101,15 @@ test("test turn commands use only the current reserved context and both revision
 test("hidden test control, other seat, pending phase and finished matches cannot send a turn switch", () => {
   const v = view(); v.effect.status = 'idle'; v.testTurnSwitchAvailable = true; v.progression = { revision: 7, activePlayer: 0, phase: 'main', gate: 'idle', finished: false };
   for (const patch of [{ testTurnSwitchAvailable: false }, { effect: { ...v.effect, status: 'resolving' } }, { localPlayerIndex: 1 }, ...[{ phase: 'draw' }, { gate: 'choice' }, { finished: true }].map(p => ({ progression: { ...v.progression, ...p } }))]) assert.throws(() => testTurnCommand({ ...v, ...patch }, 'request'));
+});
+test("test placement derives the destination from the card and sends only its reference", () => {
+  const v = view(); v.effect.status = 'idle'; v.testPlayAvailable = true; v.progression = { revision: 7, activePlayer: 0, phase: 'main', gate: 'idle', finished: false };
+  assert.equal(testPlayDestination(v, 'a'), 'character'); const c = testPlayCardCommand(v, 'a', 'request');
+  assert.deepEqual(plain(c), { kind: 'testPlayCard', matchId: 'm', resolutionId: 'r', requestId: 'request', expectedMovementRevision: 3, expectedProgressionRevision: 7, source: { instanceId: 'a', generation: 3 } });
+  v.movement.players[0].hand[0].ref.generation++; assert.equal(c.source.generation, 3);
+});
+test("full slots, wrong seat, hidden controls and non-idle states cannot build a play request", () => {
+  const v = view(); v.effect.status = 'idle'; v.testPlayAvailable = true; v.progression = { revision: 7, activePlayer: 0, phase: 'main', gate: 'idle', finished: false };
+  for (const patch of [{ testPlayAvailable: false }, { localPlayerIndex: 1 }, { effect: { ...v.effect, status: 'resolving' } }, { progression: { ...v.progression, finished: true } }]) assert.throws(() => testPlayCardCommand({ ...v, ...patch }, 'a', 'request'));
+  v.movement.players[0].character.fill(v.movement.players[0].hand[0]); assert.equal(testPlayDestination(v, 'a'), null); assert.throws(() => testPlayCardCommand(v, 'a', 'request'));
 });

@@ -16,6 +16,8 @@ import type { EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand } f
 import { projectMovementState } from "../movement/projection";
 import { localDeckOutProgression, nextLocalTurnCheckpoint, openingLocalTurnCheckpoint } from "../localTurnCheckpoint";
 import type { TestTurnCommand } from "../effectProtocol";
+import type { TestPlayCardCommand } from "../effectProtocol";
+import { playLocalHandCard } from "../localCardPlay";
 
 type Mode = "legacy" | "automated" | "faulted" | "closed";
 type OwnerFailure = Readonly<{ ok: false; code: "owner_unavailable" | "legacy_conflict" }>;
@@ -234,6 +236,45 @@ export class EffectMatchOwner {
     receipts.set(command.requestId, { fingerprint, ok, code });
     return respond(ok, code, command.requestId);
   }
+  playTestCard(actor: Player, input: unknown): EffectCommandResponse {
+    player(actor);
+    const respond = (ok: boolean, code: EffectCommandResponse["code"], requestId?: string, replayed = false): EffectCommandResponse => {
+      const view = this.effectViewFor(actor); ensureMove(view !== null, "owner-unavailable");
+      return freezeMovement({ ok, code, ...(requestId === undefined ? {} : { requestId }), replayed, view });
+    };
+    let command: TestPlayCardCommand;
+    try {
+      dataObject(input, ["kind", "matchId", "resolutionId", "requestId", "expectedMovementRevision", "expectedProgressionRevision", "source"]);
+      ensureMove(input.kind === "testPlayCard", "invalid-test-play-kind");
+      id(input.matchId); id(input.resolutionId, 64); id(input.requestId); reference(input.source as CardObjectRef);
+      ensureMove(Number.isSafeInteger(input.expectedMovementRevision) && (input.expectedMovementRevision as number) >= 0 &&
+        Number.isSafeInteger(input.expectedProgressionRevision) && (input.expectedProgressionRevision as number) >= 0, "invalid-test-play-revision");
+      command = { kind: "testPlayCard", matchId: input.matchId, resolutionId: input.resolutionId, requestId: input.requestId,
+        expectedMovementRevision: input.expectedMovementRevision as number, expectedProgressionRevision: input.expectedProgressionRevision as number,
+        source: { instanceId: (input.source as CardObjectRef).instanceId, generation: (input.source as CardObjectRef).generation } };
+    } catch { return respond(false, "invalid_command"); }
+    if (this.#busy) return respond(false, "busy", command.requestId);
+    if (command.matchId !== this.snapshot().movement?.matchId) return respond(false, "wrong_context", command.requestId);
+    const fingerprint = JSON.stringify(command), receipts = this.#sessionReceipts[actor], receipt = receipts.get(command.requestId);
+    if (receipt) return receipt.fingerprint === fingerprint ? respond(receipt.ok, receipt.code, command.requestId, true) : respond(false, "request_conflict", command.requestId);
+    if (receipts.size >= 1024) return respond(false, "request_limit", command.requestId);
+    let ok = false;
+    try {
+      ensureMove(process.env.NODE_ENV !== "production" && this.#mode === "automated" && this.#current() && !this.#active && this.#idle?.allowTestTurnSwitch,
+        "local-play-disabled-or-busy");
+      ensureMove(command.resolutionId === this.#idle.resolutionId && command.expectedMovementRevision === this.#board!.revision &&
+        command.expectedProgressionRevision === this.#progression!.revision, "stale-local-play");
+      this.#busy = true;
+      try {
+        const movement = playLocalHandCard(this.#board!, this.#progression!, actor, command.source, randomUUID()), resolutionId = randomUUID();
+        ensureMove(this.#current(), "owner-legacy-conflict");
+        this.#board = movement; this.#idle = { ...this.#idle, resolutionId }; ok = true;
+      } finally { this.#busy = false; }
+    } catch { /* Return only the public view; private card references stay server-side. */ }
+    const code = ok ? "applied" : "operation_rejected";
+    receipts.set(command.requestId, { fingerprint, ok, code });
+    return respond(ok, code, command.requestId);
+  }
   effectViewFor(viewer: Player): EffectTransportView | null {
     player(viewer);
     if (this.#busy || this.#mode !== "automated" || !this.#current()) return null;
@@ -242,6 +283,7 @@ export class EffectMatchOwner {
     const progression = this.#progression;
     return freezeMovement({ matchId: this.#board.matchId, localPlayerIndex: viewer, movement: projectMovementState(this.#board, viewer),
       testTurnSwitchAvailable: this.#idle.allowTestTurnSwitch && process.env.NODE_ENV !== "production" && checkTiming(progression, viewer, "endMain").allowed,
+      testPlayAvailable: this.#idle.allowTestTurnSwitch && process.env.NODE_ENV !== "production" && checkTiming(progression, viewer, "playCard").allowed,
       effect: { resolutionId: this.#idle.resolutionId, actor: progression.activePlayer, status: "idle", completedSteps: 0, masterVersion: this.#legacy.master?.version ?? null },
       progression: { revision: progression.revision, turnNumber: progression.turnNumber, activePlayer: progression.activePlayer,
         phase: progression.phase, gate: progression.gate.kind, chooser: progression.gate.kind === "choice" ? progression.gate.chooser : null,
