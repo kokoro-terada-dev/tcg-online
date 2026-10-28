@@ -152,3 +152,14 @@ test('unknown cost feasibility never becomes payable, and an unpayable bundle bl
   s.env.canPayCosts = () => false; s.machine.advance('not-payable', 0);
   assert.equal(s.machine.viewFor(0).status, 'blocked'); assert.equal(s.machine.viewFor(0).choice, null); assert.equal(s.machine.workForCoordinator(), null);
 });
+
+test('REST_SOURCE requires feasibility without a card choice and preserves payment identity across restore', () => {
+  const s = setup(d => { d.effects[0].costs = [{ type: 'REST_SOURCE' }]; d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }]; });
+  const initial = s.machine.exportForStorage(); assert.throws(() => s.machine.advance('unknown-source', 0)); assert.equal(s.machine.exportForStorage(), initial);
+  s.env.canPayCosts = () => true; s.machine.advance('source-plan', 0);
+  const work = s.machine.workForCoordinator(); assert.equal(work.type, 'PAY_COSTS'); assert.deepEqual(work.discarded, []);
+  assert.equal(s.machine.viewFor(0).choice, null);
+  const restored = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, s.machine.exportForStorage(), 1);
+  assert.deepEqual(restored.workForCoordinator(), work); s.setWorld(1); restored.settleWork('source-paid', 1, work.workId, 'applied', 1);
+  restored.advance('after-payment', 2); assert.equal(restored.workForCoordinator().type, 'DRAW');
+});

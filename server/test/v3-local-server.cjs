@@ -105,9 +105,9 @@ for (const actor of [0, 1]) test(`private hand selection and discard/draw cannot
   assert.equal((await request(peer, 'v3:sync')).view.movement.players[actor].hand.every(card => card.cardId === null && card.ref === null), true);
 });
 
-for (const actor of [0, 1]) test(`private composite cost for seat ${actor} pays hand and DON together without leaking its selection`, async t => {
+for (const actor of [0, 1]) for (const scenario of ['discardCostDraw', 'sourceCostDraw']) test(`private composite cost ${scenario} for seat ${actor} pays together without leaking its selection`, async t => {
   const { host, clients } = await setup(t), controller = clients[actor], peer = clients[1 - actor];
-  assert.equal((await request(host, 'v3:start', { actor, scenario: 'discardCostDraw' })).ok, true);
+  assert.equal((await request(host, 'v3:start', { actor, scenario })).ok, true);
   let v = (await request(controller, 'v3:sync')).view; const revision = v.movement.revision;
   v = (await request(controller, 'v3:command', command(v, 'advance', 'cost-start'))).view;
   assert.equal(v.frame.choice.purpose, 'cost'); assert.equal(v.movement.revision, revision);
@@ -121,7 +121,9 @@ for (const actor of [0, 1]) test(`private composite cost for seat ${actor} pays 
   const pay = command(v, 'work', 'cost-pay'); v = (await request(controller, 'v3:command', pay)).view;
   assert.equal((await request(controller, 'v3:command', pay)).view.movement.revision, revision + 1);
   assert.equal(v.movement.players[actor].hand.length, 4); assert.equal(v.movement.players[actor].restDon.length, 1); assert.equal(v.movement.players[actor].trash.length, 1);
+  assert.equal(v.movement.players[actor].leader[0].rotated, scenario === 'sourceCostDraw');
   const paidPeer = (await request(peer, 'v3:sync')).view; assert.equal(paidPeer.movement.revision, revision + 1); assert.equal(paidPeer.movement.players[actor].hand.every(card => card.cardId === null && card.ref === null), true);
+  assert.equal(paidPeer.movement.players[actor].leader[0].rotated, scenario === 'sourceCostDraw');
   v = (await request(controller, 'v3:command', command(v, 'advance', 'draw-plan'))).view;
   v = (await request(controller, 'v3:command', command(v, 'work', 'draw'))).view;
   v = (await request(controller, 'v3:command', command(v, 'advance', 'finish'))).view; assert.equal(v.frame.status, 'completed'); assert.equal(v.movement.players[actor].hand.length, 5);

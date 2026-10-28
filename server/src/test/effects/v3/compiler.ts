@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
 import type { CardDefinition, CardSetRef, Category, CompiledCard, Node, NodeMeta, Value } from "./dsl";
 
-export const COMPILER_VERSION = "v3-subset-compiler.5";
+export const COMPILER_VERSION = "v3-subset-compiler.6";
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 function inspectData(input: unknown): void {
@@ -134,6 +134,7 @@ export function builtinV3Registries(): V3Registries {
   });
   for (const type of ["KO", "REST", "SET_ACTIVE"] as const) r.action.register(type, "1", (n, c) => ({ type, ...c.fields(n, ["cards"]), cards: c.cards(n.cards) }));
   r.cost.register("REST_DON", "1", (n, c) => ({ type: "REST_DON", ...c.fields(n, ["count"]), count: count(n.count) }));
+  r.cost.register("REST_SOURCE", "1", (n, c) => ({ type: "REST_SOURCE", ...c.fields(n, []) }));
   r.cost.register("DISCARD_HAND", "1", (n, c) => ({ type: "DISCARD_HAND", ...c.fields(n, ["count"]), count: count(n.count) }));
   return r;
 }
@@ -144,7 +145,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.5", "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.6", "unsupported-v3-schema-version");
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
   ensureMove(typeof input.name === "string" && input.name.trim().length > 0 && input.name.length <= 300, "invalid-v3-card-name");
   ensureMove(input.cardType === "leader" || input.cardType === "character" || input.cardType === "stage", "unsupported-v3-card-type");
@@ -212,11 +213,12 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
     const timing = context.read("timing", effect.timing), activationConditions = context.read("predicate", effect.activationConditions),
       resolutionConditions = context.read("predicate", effect.resolutionConditions), costs = context.list("cost", effect.costs);
     ensureMove(costs.reduce((sum, cost) => sum + (cost.type === "DISCARD_HAND" ? cost.count : 0), 0) <= 50, "v3-discard-cost-limit");
+    ensureMove(costs.filter(cost => cost.type === "REST_SOURCE").length <= 1, "v3-duplicate-rest-source-cost");
     const actions = context.list("action", effect.actions); ensureMove(actions.length > 0, "v3-action-required");
     return { id, kind: "activated", optional: false, sourceZones: effect.sourceZones as ("leader" | "character" | "stage")[], timing,
       activationConditions, resolutionConditions, costs, actions };
   });
-  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.5", cardId, cardVersion, name: input.name, cardType: input.cardType,
+  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.6", cardId, cardVersion, name: input.name, cardType: input.cardType,
     baseStats: input.baseStats as CardDefinition["baseStats"], colors, traits, attributes, reviewStatus: input.reviewStatus as CardDefinition["reviewStatus"], source, effects };
   inspectData(definition);
   const plan = freezeMovement({ status: "compiled_not_executable" as const, compilerVersion: COMPILER_VERSION, registryHash, definitionHash: digest(canonical(definition)), sourceHash: digest(canonical(source)), definition, requiredHandlers: [...used].sort() });

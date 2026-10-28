@@ -99,11 +99,11 @@ export class V3ResolutionMachine {
           const effect = this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)!;
           if (!effect.costs.length) { state.pc++; continue; }
           const discardCount = effect.costs.reduce((sum, cost) => sum + (cost.type === "DISCARD_HAND" ? cost.count : 0), 0);
-          if (discardCount > 0) {
+          if (discardCount > 0 || effect.costs.some(cost => cost.type === "REST_SOURCE")) {
             const payable = this.#environment.canPayCosts?.(effect.costs, state.costCards) ?? "unknown";
             ensureMove(payable !== "unknown", "v3-cost-feasibility-unknown");
             if (!payable) { state.status = "blocked"; return; }
-            if (state.costCards === null) {
+            if (discardCount > 0 && state.costCards === null) {
               this.#select(state, { type: "CARDS", owner: "SELF", controller: "SELF", chooser: "SELF", zone: "hand", cardTypes: ["character", "stage", "event"],
                 filters: { type: "all", conditions: [] }, excludeSource: false, faceUpOnly: false, min: discardCount, max: discardCount, visibility: "OWNER_ONLY", selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" }, null);
               continue;

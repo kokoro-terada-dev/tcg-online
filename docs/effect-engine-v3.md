@@ -79,8 +79,8 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ### Phase 2：限定Compilerと承認ゲート
 
-入力版は3.0.0-subset.5、Compiler版はv3-subset-compiler.5です。
-旧subset.1/2/3/4、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
+入力版は3.0.0-subset.6、Compiler版はv3-subset-compiler.6です。
+旧subset.1/2/3/4/5、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
 schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
 Compilerは型・未知フィールド・参照先・比較の値型・ID重複・原文範囲・複雑度も検証します。
 sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲外終端です。
@@ -90,7 +90,7 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 - timing: MAIN。kindはactivatedのみ。leader/character/stageの自身のゾーンのみ。
 - predicate: all / any / not / compare（eq / ne / lt / lte / gt / gte）。
 - value ref: SELF/OPPONENTのlifeCount/handCount、SOURCE/CANDIDATEのcost/power/cardType/rotated、選択済みbindingsのcount。自由なJS式や任意プロパティ参照は不可。
-- cost: REST_DON / DISCARD_HAND（各1〜50、DISCARD_HANDは効果単位の合計も50以下）。
+- cost: REST_DON / DISCARD_HAND（各1〜50、DISCARD_HANDは効果単位の合計も50以下）、REST_SOURCE（引数なし、効果単位で1回のみ）。
 - action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD / KO / REST / SET_ACTIVE。
 - selector: CARDS（表向き公開カード、または本人が選ぶ自分の手札。SELECT、UNORDERED）。
 
@@ -182,6 +182,9 @@ UNORDERED回答はサーバー候補順に正規化し、クライアントがto
 期限切れで自動選択・自動キャンセル・コスト返却はしません。期限切れ後の再提示/中止方針はCoordinator側の未実装事項です。
 
 DRAW/MOVE_CARD/REST_DONは盤面操作要求として停止します。REST_DONとDISCARD_HANDの複合支払いは1つのPAY_COSTS要求にまとめます。
+REST_SOURCEも同じPAY_COSTSにまとめ、発動元のleader/character/stageが表向き・本人所有/コントロール・アクティブであることを確認します。
+発動元がすでにレストなら支払えず、ほかのDONや手札も変更しません。REST_SOURCE単独でも事前確認が必要で、カード選択は開きません。
+count・対象指定・重複したREST_SOURCEはコンパイル時に拒否します。通常のREST効果とは異なり、すでにレスト中のカードを支払い済み扱いにはしません。
 DISCARD_HANDは自分の手札のcharacter/stage/eventだけを、合計枚数ちょうど選びます。種類等の追加フィルター・bindAs・任意支払い・取消しには未対応です。
 全コストの実行可能性を選択前と支払い要求前に確認し、不足ならblocked、unknownならそのadvanceを確定せず停止します。
 選択確定は支払計画の保存だけで、DONも手札もまだ変更しません。支払い時にも全参照を再検証します。
@@ -228,6 +231,7 @@ fixtureEnvironment.tsは実際のMovementStateから候補を列挙し、双方�
 盤面操作は次の限定範囲です。
 
 - PAY_COSTS: REST_DONとDISCARD_HANDの合計を先に検証。ちょうど合計枚数のACTIVE DONをレストし、選択手札を表向きで自分のトラッシュへ、同じcostトランザクションで移動します。全イベントの原因はCOST_PAYMENTで、部分支払いはしません。
+- PAY_COSTSのREST_SOURCE: 発動元の世代・位置・可視性・所有者・コントローラー・アクティブ状態を再確認してレスト。同じトランザクションでDON/手札も支払い、発動元の世代は変えません。全操作の合計は64以下です。
 - DRAW: デッキ先頭から手札へEFFECT_MOVE。相手のviewには手札内容を送りません。
 - MOVE_CARD: 現在の世代を再検証し、表向きのcharacter/stage/trash/publicから持ち主の手札/トラッシュ/デッキへ移動。leader/DONの通常エリア移動や他人の所有物化は拒否。
 - MOVE_CARDの自分の手札からの移動: actorの所有/コントロールと本人だけへの可視性を確認し、選択したカードを移動。相手の手札からは移動不可。
@@ -300,6 +304,15 @@ npm run check:effect-v3 -- server/test/fixtures/v3-hand-discard-draw.json
 
 ```powershell
 npm run check:effect-v3 -- server/test/fixtures/v3-discard-cost-draw.json
+```
+
+「発動元レスト・DON・手札でドロー」は、上記にREST_SOURCEを加えた合成ケースです。
+同じ手順で支払い確定すると、操作者のリーダー・DON1枚が同時にレストし、手札1枚がトラッシュへ移動します。
+両画面のリーダーの向きと公開枚数は同期します。実カードの能力や発動可能性を自動承認するものではありません。
+JSON例は次で構文検証できます。needs_reviewのままで実行承認にはなりません。
+
+```powershell
+npm run check:effect-v3 -- server/test/fixtures/v3-source-cost-draw.json
 ```
 
 他方ではカード候補や増えた手札の内容を見られず、公開盤面と枚数だけ更新されます。

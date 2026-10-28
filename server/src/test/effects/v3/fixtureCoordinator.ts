@@ -95,14 +95,21 @@ export class V3FixtureCoordinator {
     ensureMove(work.worldRevision === board.revision, "v3-fixture-stale-work");
     const actor = this.#identity.actor, operations: MovementOperation[] = [];
     if (work.type === "PAY_COSTS") {
-      let amount = 0, discardCount = 0;
+      let amount = 0, discardCount = 0, restSource = 0;
       for (const cost of work.costs) {
         if (cost.type === "REST_DON") amount += cost.count;
         else if (cost.type === "DISCARD_HAND") discardCount += cost.count;
+        else if (cost.type === "REST_SOURCE") restSource++;
         else ensureMove(false, "v3-fixture-unsupported-cost");
       }
-      ensureMove(Number.isSafeInteger(amount + discardCount) && amount + discardCount > 0 && amount + discardCount <= 64 && board.players[actor].activeDon.length >= amount &&
+      ensureMove(Number.isSafeInteger(amount + discardCount) && amount + discardCount + restSource > 0 && amount + discardCount + restSource <= 64 && restSource <= 1 && board.players[actor].activeDon.length >= amount &&
         work.discarded.length === discardCount && new Set(work.discarded.map(ref => ref.instanceId)).size === discardCount, "v3-fixture-unpayable");
+      if (restSource) {
+        const card = getCard(board, this.#identity.source), at = location(board, card.instanceId);
+        ensureMove(!card.rotated && card.faceUp && card.owner === actor && card.controller === actor && at.player === actor &&
+          ["leader", "character", "stage"].includes(at.zone) && card.kind === at.zone && visibleTo(board, card, at, 0) && visibleTo(board, card, at, 1), "v3-fixture-source-cost-unavailable");
+        operations.push({ kind: "setRest", card: this.#identity.source, rotated: true });
+      }
       for (const id of board.players[actor].activeDon.slice(0, amount)) {
         const card = board.cards[id!]!; ensureMove(card.kind === "don" && card.owner === actor && card.controller === actor && !card.rotated, "v3-fixture-don-unavailable");
         operations.push({ kind: "setRest", card: { instanceId: card.instanceId, generation: card.generation }, rotated: true });

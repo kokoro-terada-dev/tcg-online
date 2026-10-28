@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "3.0.0-subset.6", "cardId": "EXAMPLE-SOURCE-COST-NOT-REAL", "cardVersion": "fixture.1",
+  "name": "合成テスト用・発動元レストと複合コスト（実在しません）", "cardType": "leader",
+  "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
+  "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",
+  "source": {
+    "text": "合成テスト：発動元をレストし、自分のアクティブDON1枚をレストし、手札1枚を捨てるコストを一括で支払い、1枚引く。公式カードや裁定の定義ではありません。",
+    "triggerText": "", "displayIds": ["EXAMPLE-SOURCE-COST-NOT-REAL"],
+    "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "effects": [{
+    "id": "main", "kind": "activated", "timing": { "type": "MAIN" }, "sourceZones": ["leader"], "optional": false,
+    "activationConditions": { "type": "all", "conditions": [] },
+    "resolutionConditions": { "type": "all", "conditions": [] },
+    "costs": [{ "type": "REST_SOURCE" }, { "type": "REST_DON", "count": 1 }, { "type": "DISCARD_HAND", "count": 1 }],
+    "actions": [{ "type": "DRAW", "player": "SELF", "count": 1 }]
+  }]
+}

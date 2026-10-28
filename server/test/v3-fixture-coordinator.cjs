@@ -11,9 +11,10 @@ const { ApprovedV3Catalog } = require('../dist/test/effects/v3/approval.js');
 const { V3FixtureCoordinator } = require('../dist/test/effects/v3/fixtureCoordinator.js');
 const { MovementStore } = require('../dist/test/movement/engine.js');
 const key = Buffer.alloc(32, 9); // Synthetic key, not a deployment secret.
-function setup({ actor = 0, don = 2, mutate = () => {}, attach = false, hidden = false, missingStats = false, deckCount, handCount, handFaceDown = false } = {}) {
+function setup({ actor = 0, don = 2, mutate = () => {}, attach = false, hidden = false, missingStats = false, deckCount, handCount, handFaceDown = false, sourceKind = 'character', sourceRotated = false } = {}) {
   const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v3-select-move.json'), 'utf8'));
   data.reviewStatus = 'approved'; data.baseStats.cost = 2; data.baseStats.power = 2000; mutate(data);
+  data.cardType = sourceKind; data.effects[0].sourceZones = [sourceKind];
   const plan = compileV3CardJson(JSON.stringify(data)), record = { status: 'approved', cardId: data.cardId, cardVersion: data.cardVersion, definitionHash: plan.definitionHash, sourceHash: plan.sourceHash, compilerVersion: plan.compilerVersion, registryHash: plan.registryHash,
     rulesetVersion: 'synthetic.1', reviewer: 'fixture', approvedAt: '2026-10-28T00:00:00.000Z', ruleEvidence: ['synthetic-test:not-official-rulings'] };
   const card = new ApprovedV3Catalog([plan], [record], 'synthetic.1').get(data.cardId);
@@ -27,6 +28,9 @@ function setup({ actor = 0, don = 2, mutate = () => {}, attach = false, hidden =
   if (deckCount !== undefined) zones.trash.push(...zones.deck.splice(deckCount).map(card => ({ ...card, faceUp: true })));
   if (handCount !== undefined) zones.trash.push(...zones.hand.splice(handCount).map(card => ({ ...card, faceUp: true })));
   if (handFaceDown) zones.hand = zones.hand.map(card => ({ ...card, faceUp: false }));
+  if (sourceKind === 'stage') { zones.stage[0] = { ...zones.character[0], kind: 'stage' }; zones.character[0] = null; }
+  if (sourceKind === 'leader') zones.leader[0].cardId = data.cardId;
+  const sourceCard = zones[sourceKind][0]; sourceCard.rotated = sourceRotated;
   let progression = createProgression(actor);
   while (true) {
     progression = applySystemEvent(progression, progression.revision, { kind: 'settlePhase', phaseToken: progression.phaseToken });
@@ -34,7 +38,7 @@ function setup({ actor = 0, don = 2, mutate = () => {}, attach = false, hidden =
     progression = applySystemEvent(progression, progression.revision, { kind: 'advancePhase', phaseToken: progression.phaseToken });
   }
   let movement = new MatchMovementCapture(match, 1).snapshot().movement;
-  const source = { instanceId: zones.character[0].id, generation: 0 }, target = { instanceId: (zones.character[1] ?? zones.public[0]).id, generation: 0 };
+  const source = { instanceId: sourceCard.id, generation: 0 }, target = { instanceId: (zones.character[1] ?? zones.public[0]).id, generation: 0 };
   if (attach) {
     const id = movement.players[actor].activeDon[0];
     movement = new MovementStore(movement).commit({ transactionId: 'seed-attach', matchId: movement.matchId, expectedRevision: movement.revision, turnNumber: 1, actor, effectController: actor, source, mode: 'rule', resolutionId: null,
@@ -63,6 +67,42 @@ function discardCosts(d) {
   d.effects[0].costs = [{ type: 'REST_DON', count: 1 }, { type: 'DISCARD_HAND', count: 1 }];
   d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }];
 }
+
+test('REST_SOURCE pays an active leader, character or stage once without changing its generation', () => {
+  for (const actor of [0, 1]) for (const sourceKind of ['leader', 'character', 'stage']) {
+    const s = setup({ actor, sourceKind, mutate: d => { d.effects[0].costs = [{ type: 'REST_SOURCE' }]; d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }]; } });
+    const c = s.coordinator, before = c.snapshotForCoordinator(); c.advance(actor, 'source-plan', c.context());
+    assert.equal(c.pendingWorkKind(), 'PAY_COSTS'); assert.equal(c.viewFor(actor).frame.choice, null);
+    assert.equal(c.snapshotForCoordinator().movement, before.movement);
+    const context = c.context(); c.applyPendingWork(actor, 'source-pay', context); assert.equal(c.applyPendingWork(actor, 'source-pay', context).replayed, true);
+    const after = c.snapshotForCoordinator(); assert.equal(after.movement.cards[s.source.instanceId].rotated, true);
+    assert.equal(after.movement.cards[s.source.instanceId].generation, s.source.generation);
+    assert.equal(after.movement.players[actor].activeDon.length, 2); assert.equal(after.movement.players[actor].hand.length, 5);
+    assert.equal(after.movementEvents.length, 1); assert.equal(after.movementEvents[0].cause.kind, 'COST_PAYMENT');
+    c.advance(actor, 'draw-plan', c.context()); c.applyPendingWork(actor, 'draw', c.context()); c.advance(actor, 'done', c.context());
+    assert.equal(c.viewFor(actor).frame.status, 'completed');
+  }
+});
+
+test('source, DON and hand costs commit together, while rested sources or shortages leave everything unchanged', () => {
+  const costs = d => { discardCosts(d); d.effects[0].costs.unshift({ type: 'REST_SOURCE' }); };
+  for (const actor of [0, 1]) {
+    const s = setup({ actor, mutate: costs }), c = s.coordinator, before = c.snapshotForCoordinator();
+    c.advance(actor, 'start', c.context()); const choice = choose(s);
+    c.answer(actor, 'choose', choice.context, choice.id, choice.tokens); c.advance(actor, 'plan', c.context());
+    assert.equal(c.snapshotForCoordinator().movement, before.movement); c.applyPendingWork(actor, 'pay', c.context());
+    const paid = c.snapshotForCoordinator(); assert.equal(paid.movement.revision, before.movement.revision + 1);
+    assert.equal(paid.movement.cards[s.source.instanceId].rotated, true); assert.equal(paid.movement.players[actor].restDon.length, 1);
+    assert.equal(paid.movement.players[actor].hand.length, 4); assert.equal(paid.movementEvents.length, 3);
+    assert.equal(paid.movementEvents.every(e => e.cause.kind === 'COST_PAYMENT'), true);
+    for (const options of [{ sourceRotated: true }, { don: 0 }, { handCount: 0 }]) {
+      const blocked = setup({ actor, ...options, mutate: costs }).coordinator, initial = blocked.snapshotForCoordinator();
+      blocked.advance(actor, 'unpayable', blocked.context()); assert.equal(blocked.viewFor(actor).frame.status, 'blocked');
+      assert.equal(blocked.snapshotForCoordinator().movement, initial.movement); assert.equal(blocked.snapshotForCoordinator().movementEvents.length, 0);
+      assert.equal(blocked.viewFor(actor).frame.choice, null);
+    }
+  }
+});
 
 test('composite DON and hand costs stay unchanged through choice, then commit both once in a single revision', () => {
   for (const actor of [0, 1]) {
