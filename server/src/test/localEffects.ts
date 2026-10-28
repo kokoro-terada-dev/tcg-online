@@ -17,16 +17,19 @@ export async function startLocalEffectServer(port = 3002) {
       if (progression.phase === "main") break;
       progression = applySystemEvent(progression, progression.revision, { kind: "advancePhase", phaseToken: progression.phaseToken });
     }
-    const source = match.players[0].zones.leader[0];
-    if (!source) throw new Error("Missing fixture leader");
-    const catalog = new EffectCatalog([{
-      dslVersion: 1, effectId: "LOCAL.discard-draw", cardId: source.cardId, trigger: { kind: "activate", window: "main" },
+    const leaderIds = [...new Set(match.players.map(player => {
+      const leader = player.zones.leader[0];
+      if (!leader) throw new Error("Missing fixture leader");
+      return leader.cardId;
+    }))];
+    const catalog = new EffectCatalog(leaderIds.map((cardId, index) => ({
+      dslVersion: 1, effectId: index === 0 ? "LOCAL.discard-draw" : `LOCAL.discard-draw-${index}`, cardId, trigger: { kind: "activate", window: "main" },
       costs: [{ kind: "moveCards", selector: { kind: "cards", chooser: "SELF", owner: "SELF", zones: ["hand"], min: 1, max: 1, mode: "SELECT" },
         destination: { owner: "SELF", zone: "trash", position: "append", visibility: "faceUp" } }],
       actions: [{ kind: "draw", player: "SELF", amount: 1 }],
-    }]);
+    })));
     const owner = new EffectMatchOwner(match, catalog, true); owner.adopt(progression);
-    owner.prepareRegisteredIdle({ status: "certifiedNone" });
+    owner.prepareRegisteredIdle({ status: "certifiedNone" }, undefined, true);
     return owner;
   } });
   try {

@@ -74,3 +74,36 @@ test('local fixture refuses production and invalid listen ports', async () => {
   finally { if (old === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = old; }
   await assert.rejects(startLocalEffectServer(-1), /Invalid local/); await assert.rejects(startLocalEffectServer(65536), /Invalid local/);
 });
+
+test('different leaders can switch both ways and the guest can resolve its own registered effect', async t => {
+  const service = await startLocalEffectServer(0), clients = [];
+  t.after(async () => { clients.forEach(s => s.disconnect()); await new Promise(resolve => service.io.close(resolve)); });
+  for (let i = 0; i < 2; i++) { const socket = io(service.url, { autoConnect: false, reconnection: false }); clients.push(socket); const connected = once(socket, 'connect'); socket.connect(); await connected; }
+  const [host, guest] = clients, created = once(host, 'test-room:state'); await request(host, 'test-room:create'); const room = await created;
+  await request(guest, 'test-room:join', room.roomId);
+  await request(host, 'test-room:deck', recipe); await request(guest, 'test-room:deck', { ...recipe, leaderCardId: 'OTHER-LEADER' });
+  for (const socket of clients) await request(socket, 'test-room:ready', true);
+  const initial = clients.map(socket => once(socket, 'test-effect:state')); await request(host, 'test-match:start'); let [view] = await Promise.all(initial);
+  const base = (requestId) => ({ requestId, matchId: view.matchId, resolutionId: view.effect.resolutionId, expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision });
+  const oldTurn = { kind: 'testNextTurn', ...base('host-turn') }, updates = clients.map(socket => once(socket, 'test-effect:state'));
+  const changed = await request(host, 'test-effect:command', oldTurn); assert.equal(changed.ok, true);
+  const [hostView, guestView] = await Promise.all(updates); assert.equal(hostView.testTurnSwitchAvailable, false); assert.equal(guestView.testTurnSwitchAvailable, true);
+  view = guestView; assert.equal(view.progression.turnNumber, 2); assert.equal(view.progression.activePlayer, 1); assert.equal(view.movement.players[1].hand.length, 5);
+  const catalog = await request(guest, 'test-effect:catalog', { matchId: view.matchId, expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, source: view.movement.players[1].leader[0].ref });
+  assert.equal(catalog.ok, true); assert.equal(catalog.catalog.effects.length, 1); assert.equal(catalog.catalog.effects[0].timingAvailable, true);
+  const activation = await request(guest, 'test-effect:command', { kind: 'activateRegistered', ...base('guest-effect'), effectId: catalog.catalog.effects[0].effectId, catalogVersion: catalog.catalog.catalogVersion, source: catalog.catalog.source });
+  assert.equal(activation.ok, true); view = activation.view;
+  assert.equal((await request(host, 'test-effect:command', oldTurn)).replayed, true);
+  assert.equal((await request(guest, 'test-effect:command', { kind: 'testNextTurn', ...base('pending-turn') })).ok, false);
+  for (const [index, kind] of ['answerCosts', 'commitCosts', 'advance'].entries()) {
+    const command = { kind, ...base(`guest-${index}`) };
+    if (kind === 'answerCosts') { command.selectionId = view.selection.selectionId; command.tokens = [view.selection.candidates[0].token]; }
+    const result = await request(guest, 'test-effect:command', command); assert.equal(result.ok, true); view = result.view;
+  }
+  assert.equal(view.effect.status, 'idle'); assert.equal(view.movement.players[1].hand.length, 5); assert.equal(view.movement.players[1].trash.length, 1);
+  assert.equal((await request(host, 'test-effect:sync')).view.movement.players[1].hand.every(card => card.cardId === null), true);
+  const back = { kind: 'testNextTurn', ...base('guest-turn') };
+  const result = await request(guest, 'test-effect:command', back); assert.equal(result.ok, true); assert.equal(result.view.progression.activePlayer, 0); assert.equal(result.view.progression.turnNumber, 3);
+  assert.equal((await request(guest, 'test-effect:command', back)).replayed, true);
+  assert.equal((await request(host, 'test-effect:sync')).view.testTurnSwitchAvailable, true);
+});

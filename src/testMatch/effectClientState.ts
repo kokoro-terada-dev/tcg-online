@@ -1,6 +1,6 @@
-import type { EffectTransportView, EffectCommand, EffectCommandKind, EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand } from "../../server/src/test/effectProtocol";
+import type { EffectTransportView, EffectCommand, EffectCommandKind, EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand, TestTurnCommand } from "../../server/src/test/effectProtocol";
 import type { MatchView, Zone } from "../../server/src/test/protocol";
-export type { EffectTransportView, EffectCommandKind, EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand };
+export type { EffectTransportView, EffectCommandKind, EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand, TestTurnCommand };
 const zones: readonly Zone[] = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon"];
 
 export function effectCatalogQuery(view: EffectTransportView, instanceId: string): EffectCatalogQuery {
@@ -25,6 +25,12 @@ export function registeredEffectCommand(view: EffectTransportView, catalog: Effe
     !catalog.effects.some(entry => entry.effectId === effectId && entry.timingAvailable)) throw new Error("No current registered activation");
   return { kind: "activateRegistered", ...query, resolutionId: view.effect.resolutionId, requestId,
     catalogVersion: catalog.catalogVersion, effectId, source: { ...query.source } };
+}
+export function testTurnCommand(view: EffectTransportView, requestId: string): TestTurnCommand {
+  if (!view.testTurnSwitchAvailable || view.effect.status !== "idle" || view.localPlayerIndex !== view.progression.activePlayer ||
+    view.progression.phase !== "main" || view.progression.gate !== "idle" || view.progression.finished) throw new Error("No local test turn switch");
+  return { kind: "testNextTurn", matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
+    expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision };
 }
 
 export function acceptEffectView(current: EffectTransportView | null, next: EffectTransportView): boolean {

@@ -9,7 +9,7 @@ import type { CardView } from "../../server/src/test/protocol";
 
 type Props = { view: EffectTransportView; roomId: string; busy: boolean; error: string; needsSync: boolean;
   onAction: (kind: EffectCommandKind, tokens?: readonly string[]) => void; onSync: () => void; onEnd: () => void;
-  onCatalog?: (instanceId: string) => Promise<EffectCatalogView>; onActivateCatalog?: (catalog: EffectCatalogView, effectId: string) => void };
+  onCatalog?: (instanceId: string) => Promise<EffectCatalogView>; onActivateCatalog?: (catalog: EffectCatalogView, effectId: string) => void; onTestTurn?: () => void };
 export default function TestEffectBoard(props: Props) {
   const { view, busy, needsSync, onAction } = props;
   const [inspected, setInspected] = useState<{ card: CardView; context: string } | null>(null);
@@ -28,7 +28,7 @@ export default function TestEffectBoard(props: Props) {
       <div hidden={collapsed}>
       {selection ? <Selection key={selection.selectionId} selection={selection} disabled={disabled}
         onConfirm={tokens => onAction(view.effect.status === "waitingForCostSelection" ? "answerCosts" : "answerEffect", tokens)} /> : <p role="status">{
-        view.effect.status === "idle" ? (view.progression.activePlayer === view.localPlayerIndex ? "自分のターン・待機中" : "相手のターン・待機中") :
+        view.effect.status === "idle" ? <><span>{view.progression.activePlayer === view.localPlayerIndex ? "自分のターン・待機中" : "相手のターン・待機中"}</span><small> / {view.progression.turnNumber}ターン目</small></> :
         view.effect.status === "completed" ? "処理完了" : view.effect.status === "blocked" ? "処理を続行できません" :
         !mine || view.effect.status === "waitingForSelection" ? "相手の操作を待っています" :
         view.effect.status === "costsReady" ? "支払いを確定してください" : "効果処理"
@@ -40,6 +40,7 @@ export default function TestEffectBoard(props: Props) {
         {mine && ["costsReady", "waitingForCostSelection"].includes(view.effect.status) && <button disabled={disabled} onClick={() => onAction("cancelCosts")}>キャンセル</button>}
         <button disabled={busy} onClick={props.onSync}>再同期</button>
         <button onClick={() => setCollapsed(true)}>盤面を見る</button>
+        {view.effect.status === "idle" && view.testTurnSwitchAvailable && props.onTestTurn && <button disabled={disabled} onClick={props.onTestTurn}>テスト手番交代</button>}
       </div>
       {needsSync && <p role="alert">応答を確認できません。再同期してください。</p>}
       </div>

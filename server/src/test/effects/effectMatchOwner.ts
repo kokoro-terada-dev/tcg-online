@@ -14,9 +14,12 @@ import type { CardObjectRef } from "./types";
 import type { EffectCatalog } from "./effectCatalog";
 import type { EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand } from "../effectProtocol";
 import { projectMovementState } from "../movement/projection";
+import { nextLocalTurnCheckpoint } from "../localTurnCheckpoint";
+import type { TestTurnCommand } from "../effectProtocol";
 
 type Mode = "legacy" | "automated" | "faulted" | "closed";
 type OwnerFailure = Readonly<{ ok: false; code: "owner_unavailable" | "legacy_conflict" }>;
+type SessionReceipt = Readonly<{ fingerprint: string; ok: boolean; code: EffectCommandResponse["code"] }>;
 
 // Server-only ownership boundary. Room integration must route *all* writes through one owner.
 export class EffectMatchOwner {
@@ -30,8 +33,8 @@ export class EffectMatchOwner {
   #busy = false;
   #catalog: EffectCatalog | null;
   #activationEnabled: boolean;
-  #idle: { resolutionId: string; rules: MovementRules; numericPolicy?: MasterFactOptions["numericPolicy"] } | null = null;
-  #activationReceipts: [Map<string, { fingerprint: string; ok: boolean; code: EffectCommandResponse["code"] }>, Map<string, { fingerprint: string; ok: boolean; code: EffectCommandResponse["code"] }>] = [new Map(), new Map()];
+  #idle: { resolutionId: string; rules: MovementRules; numericPolicy?: MasterFactOptions["numericPolicy"]; allowTestTurnSwitch: boolean } | null = null;
+  #sessionReceipts: [Map<string, SessionReceipt>, Map<string, SessionReceipt>] = [new Map(), new Map()];
   constructor(match: Match, catalog: EffectCatalog | null = null, allowRegisteredActivation = false) {
     ensureMove(typeof allowRegisteredActivation === "boolean", "invalid-activation-policy");
     this.#legacy = match; this.#catalog = catalog; this.#activationEnabled = allowRegisteredActivation;
@@ -64,13 +67,14 @@ export class EffectMatchOwner {
     capture.assertCurrent(this.#legacy);
     this.#capture = capture; this.#board = capture.snapshot().movement; this.#progression = pinned; this.#mode = "automated";
   }
-  prepareRegisteredIdle(rules: MovementRules, numericPolicy?: MasterFactOptions["numericPolicy"]): void {
+  prepareRegisteredIdle(rules: MovementRules, numericPolicy?: MasterFactOptions["numericPolicy"], allowTestTurnSwitch = false): void {
     ensureMove(!this.#busy && this.#mode === "automated" && this.#active === null && this.#idle === null &&
       this.#activationEnabled && this.#catalog !== null && this.#current(), "owner-cannot-prepare-idle");
     ensureMove(["certifiedNone", "unresolved", "evaluate"].includes(rules.status) &&
       (numericPolicy === undefined || numericPolicy === "unresolved" || numericPolicy === "certifiedUnmodified"), "invalid-idle-policy");
+    ensureMove(typeof allowTestTurnSwitch === "boolean" && (!allowTestTurnSwitch || (process.env.NODE_ENV !== "production" && rules.status === "certifiedNone")), "invalid-test-turn-policy");
     const pinnedRules: MovementRules = rules.status === "evaluate" ? Object.freeze({ status: "evaluate", check: rules.check.bind(rules) }) : Object.freeze({ status: rules.status });
-    this.#idle = { resolutionId: randomUUID(), rules: pinnedRules, numericPolicy };
+    this.#idle = { resolutionId: randomUUID(), rules: pinnedRules, numericPolicy, allowTestTurnSwitch };
   }
   openEffect(identity: ResolutionIdentity, definition: unknown, rules: MovementRules,
     numericPolicy?: MasterFactOptions["numericPolicy"]): void {
@@ -135,7 +139,7 @@ export class EffectMatchOwner {
     } catch { return respond(false, "invalid_command"); }
     if (this.#busy) return respond(false, "busy", command.requestId);
     if (command.matchId !== this.snapshot().movement?.matchId) return respond(false, "wrong_context", command.requestId);
-    const fingerprint = JSON.stringify(command), receipts = this.#activationReceipts[actor], receipt = receipts.get(command.requestId);
+    const fingerprint = JSON.stringify(command), receipts = this.#sessionReceipts[actor], receipt = receipts.get(command.requestId);
     if (receipt) return receipt.fingerprint === fingerprint ? respond(receipt.ok, receipt.code, command.requestId, true) : respond(false, "request_conflict", command.requestId);
     if (receipts.size >= 1024) return respond(false, "request_limit", command.requestId);
     let ok = false;
@@ -183,6 +187,44 @@ export class EffectMatchOwner {
       return result;
     } finally { this.#busy = false; }
   }
+  switchTestTurn(actor: Player, input: unknown): EffectCommandResponse {
+    player(actor);
+    const respond = (ok: boolean, code: EffectCommandResponse["code"], requestId?: string, replayed = false): EffectCommandResponse => {
+      const view = this.effectViewFor(actor); ensureMove(view !== null, "owner-unavailable");
+      return freezeMovement({ ok, code, ...(requestId === undefined ? {} : { requestId }), replayed, view });
+    };
+    let command: TestTurnCommand;
+    try {
+      dataObject(input, ["kind", "matchId", "resolutionId", "requestId", "expectedMovementRevision", "expectedProgressionRevision"]);
+      ensureMove(input.kind === "testNextTurn", "invalid-test-turn-command");
+      id(input.matchId); id(input.resolutionId, 64); id(input.requestId);
+      ensureMove(Number.isSafeInteger(input.expectedMovementRevision) && (input.expectedMovementRevision as number) >= 0 &&
+        Number.isSafeInteger(input.expectedProgressionRevision) && (input.expectedProgressionRevision as number) >= 0, "invalid-test-turn-revision");
+      command = { kind: "testNextTurn", matchId: input.matchId, resolutionId: input.resolutionId, requestId: input.requestId,
+        expectedMovementRevision: input.expectedMovementRevision as number, expectedProgressionRevision: input.expectedProgressionRevision as number };
+    } catch { return respond(false, "invalid_command"); }
+    if (this.#busy) return respond(false, "busy", command.requestId);
+    if (command.matchId !== this.snapshot().movement?.matchId) return respond(false, "wrong_context", command.requestId);
+    const fingerprint = JSON.stringify(command), receipts = this.#sessionReceipts[actor], receipt = receipts.get(command.requestId);
+    if (receipt) return receipt.fingerprint === fingerprint ? respond(receipt.ok, receipt.code, command.requestId, true) : respond(false, "request_conflict", command.requestId);
+    if (receipts.size >= 1024) return respond(false, "request_limit", command.requestId);
+    let ok = false;
+    try {
+      ensureMove(process.env.NODE_ENV !== "production" && this.#mode === "automated" && this.#current() && !this.#active && this.#idle?.allowTestTurnSwitch,
+        "local-turn-disabled-or-busy");
+      ensureMove(command.resolutionId === this.#idle.resolutionId && command.expectedMovementRevision === this.#board!.revision &&
+        command.expectedProgressionRevision === this.#progression!.revision, "stale-local-turn");
+      this.#busy = true;
+      try {
+        const next = nextLocalTurnCheckpoint(this.#board!, this.#progression!, actor, randomUUID()), resolutionId = randomUUID();
+        ensureMove(this.#current(), "owner-legacy-conflict");
+        this.#board = next.movement; this.#progression = next.progression; this.#idle = { ...this.#idle, resolutionId }; ok = true;
+      } finally { this.#busy = false; }
+    } catch { /* Return only the current public view, never internal diagnostics. */ }
+    const code = ok ? "applied" : "operation_rejected";
+    receipts.set(command.requestId, { fingerprint, ok, code });
+    return respond(ok, code, command.requestId);
+  }
   effectViewFor(viewer: Player): EffectTransportView | null {
     player(viewer);
     if (this.#busy || this.#mode !== "automated" || !this.#current()) return null;
@@ -190,6 +232,7 @@ export class EffectMatchOwner {
     if (!this.#idle || !this.#board || !this.#progression) return null;
     const progression = this.#progression;
     return freezeMovement({ matchId: this.#board.matchId, localPlayerIndex: viewer, movement: projectMovementState(this.#board, viewer),
+      testTurnSwitchAvailable: this.#idle.allowTestTurnSwitch && process.env.NODE_ENV !== "production" && checkTiming(progression, viewer, "endMain").allowed,
       effect: { resolutionId: this.#idle.resolutionId, actor: progression.activePlayer, status: "idle", completedSteps: 0, masterVersion: this.#legacy.master?.version ?? null },
       progression: { revision: progression.revision, turnNumber: progression.turnNumber, activePlayer: progression.activePlayer,
         phase: progression.phase, gate: progression.gate.kind, chooser: progression.gate.kind === "choice" ? progression.gate.chooser : null,

@@ -20,6 +20,7 @@ export class OwnedEffectEndpoint {
     return view;
   }
   handle(actor: Player, input: unknown): EffectCommandResponse {
+    if (input && typeof input === "object" && Object.getOwnPropertyDescriptor(input, "kind")?.value === "testNextTurn") return this.#owner.switchTestTurn(actor, input);
     if (input && typeof input === "object" && Object.getOwnPropertyDescriptor(input, "kind")?.value === "activateRegistered") return this.#owner.activateRegistered(actor, input);
     const result = this.#owner.handleEffect(actor, input);
     if (!("view" in result)) throw new OwnedEffectUnavailable();

@@ -7,7 +7,7 @@ const module = { exports: {} };
 const source = fs.readFileSync(new URL("../src/testMatch/effectClientState.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 vm.runInNewContext(compiled, { exports: module.exports, module });
-const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog, registeredEffectCommand } = module.exports;
+const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog, registeredEffectCommand, testTurnCommand } = module.exports;
 const plain = value => JSON.parse(JSON.stringify(value));
 function view() {
   const zones = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon", "attachedDon", "resolving"];
@@ -93,4 +93,12 @@ test("an idle context can activate a registered effect and reject a late previou
   const c = { matchId: 'm', movementRevision: 3, progressionRevision: 7, source: { instanceId: 'a', generation: 3 }, catalogVersion: 'version', activationEnabled: true, effects: [{ effectId: 'TEST.main', timingAvailable: true }] };
   assert.equal(registeredEffectCommand(v, c, 'TEST.main', 'request').resolutionId, 'next');
   assert.equal(acceptEffectView(v, { ...view(), progression: { revision: 6 } }), false);
+});
+test("test turn commands use only the current reserved context and both revisions", () => {
+  const v = view(); v.effect.status = 'idle'; v.testTurnSwitchAvailable = true; v.progression = { revision: 7, activePlayer: 0, phase: 'main', gate: 'idle', finished: false };
+  assert.deepEqual(plain(testTurnCommand(v, 'request')), { kind: 'testNextTurn', matchId: 'm', resolutionId: 'r', requestId: 'request', expectedMovementRevision: 3, expectedProgressionRevision: 7 });
+});
+test("hidden test control, other seat, pending phase and finished matches cannot send a turn switch", () => {
+  const v = view(); v.effect.status = 'idle'; v.testTurnSwitchAvailable = true; v.progression = { revision: 7, activePlayer: 0, phase: 'main', gate: 'idle', finished: false };
+  for (const patch of [{ testTurnSwitchAvailable: false }, { effect: { ...v.effect, status: 'resolving' } }, { localPlayerIndex: 1 }, ...[{ phase: 'draw' }, { gate: 'choice' }, { finished: true }].map(p => ({ progression: { ...v.progression, ...p } }))]) assert.throws(() => testTurnCommand({ ...v, ...patch }, 'request'));
 });
