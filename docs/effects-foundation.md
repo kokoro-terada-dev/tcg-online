@@ -1,5 +1,7 @@
 # 効果エンジン：基盤フェーズの設計と対応状況
 
+後続の独立したターン・フェーズ基盤は [進行管理の設計・対応状況](progression-foundation.md) を参照してください。DSLも進行基盤も、現行対戦への接続はまだ行っていません。
+
 ## 適用範囲
 
 基準は [利用者提供のv2.0原文](effects-v2-source.md) です。原文は保持し、ここに補足・実装状況を記録します。
@@ -18,7 +20,7 @@
 | --- | --- | --- |
 | カード基本情報 | `server/src/test/cardMaster.ts` が起動時読込、対戦ごとに版固定 | 参照元として再利用。DSLとは別に版・対応能力の整合を確認する |
 | カード実体 | UUID、種類、レスト、表裏を保持 | UUIDを再利用。移動ごとのgenerationは未実装 |
-| ゲーム進行 | 手動移動とアタックの同期 | 手番・ターン番号・フェーズ・優先権は未実装 |
+| ゲーム進行 | 現行対戦は手動移動とアタックの同期 | 独立した手番・ターン・フェーズ・判断者管理を追加。対戦へは未接続 |
 | 移動 | `game.ts` のmove分岐 | 将来、共通移動の計画・置換・確定へ分割。今回は変更しない |
 | 通信 | actor・revision・requestIdを検証 | 再利用。ただし長時間の選択待ち・解決の保存・要求内容の同一性確認は追加が必要 |
 | 非公開情報 | `projectMatch` でプレイヤー別投影 | 再利用。選択ごとの公開権限、不透明な選択ID、非公開ログの投影は未実装 |
@@ -140,7 +142,7 @@ Selectorを拡張する場合は、カード集合/選択肢等の結果型と�
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build
-node --test test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
+node --test test/progression.cjs test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
 cd ..
 node --test tools/test-card-master.test.js
 npm run build
