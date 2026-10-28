@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
-import type { CardDefinition, Category, CompiledCard, Node, NodeMeta, Value } from "./dsl";
+import type { CardDefinition, CardSetRef, Category, CompiledCard, Node, NodeMeta, Value } from "./dsl";
 
-export const COMPILER_VERSION = "v3-subset-compiler.1";
+export const COMPILER_VERSION = "v3-subset-compiler.2";
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 function inspectData(input: unknown): void {
@@ -42,6 +42,12 @@ export interface CompileContext {
   read<C extends Category>(category: C, input: unknown): Node<C>;
   list<C extends Category>(category: C, input: unknown): Node<C>[];
   fields(input: Record<string, unknown>, required: string[]): NodeMeta;
+  value(input: unknown): Value;
+  cards(input: unknown): CardSetRef;
+  bind(input: unknown, maxCards: number): string;
+  maxCards(input: CardSetRef): number;
+  branch(input: unknown): Node<"action">[];
+  candidate(input: unknown): Node<"predicate">;
 }
 type Parser<C extends Category> = (input: Record<string, unknown>, context: CompileContext) => Node<C>;
 export class V3Registry<C extends Category> {
@@ -61,25 +67,33 @@ export class V3Registry<C extends Category> {
   }
 }
 export type V3Registries = { [C in Category]: V3Registry<C> };
-function value(input: unknown): Value {
+function value(input: unknown, bindings: ReadonlyMap<string, number>, candidateAllowed: boolean): Value {
   if (input === null || typeof input === "boolean") return input;
   if (typeof input === "string") { ensureMove(input.length <= 1000, "v3-literal-too-long"); return input; }
   if (typeof input === "number") { ensureMove(Number.isSafeInteger(input), "v3-invalid-numeric-literal"); return input; }
   dataObject(input, ["ref"]);
-  ensureMove(["SELF.lifeCount", "SELF.handCount", "OPPONENT.lifeCount", "OPPONENT.handCount"].includes(input.ref as string), "unsupported-v3-reference");
+  ensureMove(typeof input.ref === "string", "unsupported-v3-reference");
+  const binding = /^bindings\.([A-Za-z][A-Za-z0-9_]{0,63})\.count$/.exec(input.ref);
+  const field = /^(SOURCE|CANDIDATE)\.(cost|power|cardType|rotated)$/.exec(input.ref);
+  ensureMove(["SELF.lifeCount", "SELF.handCount", "OPPONENT.lifeCount", "OPPONENT.handCount"].includes(input.ref) ||
+    binding && bindings.has(binding[1]!) || field && (field[1] === "SOURCE" || candidateAllowed), "unsupported-or-out-of-scope-v3-reference");
   return { ref: input.ref as Extract<Value, object>["ref"] };
+}
+function valueType(value: Value): string {
+  if (value !== null && typeof value === "object") return value.ref.endsWith(".cardType") ? "string" : value.ref.endsWith(".rotated") ? "boolean" : "number";
+  return value === null ? "null" : typeof value;
 }
 export function builtinV3Registries(): V3Registries {
   const r: V3Registries = { predicate: new V3Registry(), action: new V3Registry(), cost: new V3Registry(), replacement: new V3Registry(), selector: new V3Registry(), duration: new V3Registry(), timing: new V3Registry() };
   r.timing.register("MAIN", "1", (n, c) => ({ type: "MAIN", ...c.fields(n, []) }));
   for (const type of ["all", "any"] as const) r.predicate.register(type, "1", (n, c) => ({ type, ...c.fields(n, ["conditions"]), conditions: c.list("predicate", n.conditions) }));
   r.predicate.register("not", "1", (n, c) => ({ type: "not", ...c.fields(n, ["condition"]), condition: c.read("predicate", n.condition) }));
-  r.predicate.register("compare", "1", (n, c) => {
-    const meta = c.fields(n, ["left", "op", "right"]), left = value(n.left), right = value(n.right);
+  r.predicate.register("compare", "2", (n, c) => {
+    const meta = c.fields(n, ["left", "op", "right"]), left = c.value(n.left), right = c.value(n.right);
     ensureMove(["eq", "ne", "lt", "lte", "gt", "gte"].includes(n.op as string), "unsupported-v3-comparison");
-    const numeric = (v: Value) => typeof v === "number" || (v !== null && typeof v === "object");
+    const numeric = (v: Value) => valueType(v) === "number";
     ensureMove(n.op === "eq" || n.op === "ne" || (numeric(left) && numeric(right)), "v3-nonnumeric-order-comparison");
-    ensureMove(n.op !== "eq" && n.op !== "ne" || left === null || right === null || (numeric(left) && numeric(right)) || typeof left === typeof right, "v3-comparison-type-mismatch");
+    ensureMove(n.op !== "eq" && n.op !== "ne" || left === null || right === null || valueType(left) === valueType(right), "v3-comparison-type-mismatch");
     return { type: "compare", ...meta, left, op: n.op as Extract<Node<"predicate">, { type: "compare" }>["op"], right };
   });
   r.action.register("DRAW", "1", (n, c) => {
@@ -87,7 +101,32 @@ export function builtinV3Registries(): V3Registries {
     return { type: "DRAW", ...meta, player: n.player, count: count(n.count) };
   });
   r.action.register("SEQUENCE", "1", (n, c) => ({ type: "SEQUENCE", ...c.fields(n, ["actions"]), actions: c.list("action", n.actions) }));
-  r.action.register("IF", "1", (n, c) => ({ type: "IF", ...c.fields(n, ["condition", "then", "else"]), condition: c.read("predicate", n.condition), then: c.list("action", n.then), else: c.list("action", n.else) }));
+  r.action.register("IF", "2", (n, c) => ({ type: "IF", ...c.fields(n, ["condition", "then", "else"]), condition: c.read("predicate", n.condition), then: c.branch(n.then), else: c.branch(n.else) }));
+  r.selector.register("CARDS", "1", (n, c) => {
+    const meta = c.fields(n, ["owner", "controller", "zone", "cardTypes", "filters", "excludeSource", "faceUpOnly", "min", "max", "visibility", "selectionMode", "chooser", "order", "onInsufficient"]);
+    ensureMove([n.owner, n.controller, n.chooser].every(player => player === "SELF" || player === "OPPONENT"), "invalid-v3-selector-player");
+    ensureMove(["leader", "character", "stage", "trash", "public"].includes(n.zone as string) && n.visibility === "PUBLIC" && n.faceUpOnly === true, "unsupported-v3-hidden-selection");
+    ensureMove(n.selectionMode === "SELECT" && n.order === "UNORDERED" && n.onInsufficient === "fail" && typeof n.excludeSource === "boolean", "unsupported-v3-selection-policy");
+    dataArray(n.cardTypes, 5);
+    ensureMove(n.cardTypes.length > 0 && new Set(n.cardTypes).size === n.cardTypes.length && n.cardTypes.every(type => ["leader", "character", "event", "stage", "don"].includes(type as string)), "invalid-v3-selector-types");
+    const max = count(n.max);
+    ensureMove(typeof n.min === "number" && Number.isSafeInteger(n.min) && n.min >= 0 && n.min <= max, "invalid-v3-selection-bounds");
+    return { type: "CARDS", ...meta, owner: n.owner, controller: n.controller, chooser: n.chooser, zone: n.zone, cardTypes: [...n.cardTypes], filters: c.candidate(n.filters),
+      excludeSource: n.excludeSource, faceUpOnly: true, min: n.min, max, visibility: "PUBLIC", selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } as Node<"selector">;
+  });
+  r.action.register("SELECT", "1", (n, c) => {
+    const meta = c.fields(n, ["selector", "bindAs"]), selector = c.read("selector", n.selector);
+    return { type: "SELECT", ...meta, selector, bindAs: c.bind(n.bindAs, selector.max) };
+  });
+  r.action.register("MOVE_CARD", "1", (n, c) => {
+    const meta = c.fields(n, ["cards", "destination", "cause"]), cards = c.cards(n.cards);
+    dataObject(n.destination, ["owner", "zone", "position", "faceUp"]); const destination = n.destination;
+    ensureMove((destination.owner === "SELF" || destination.owner === "OPPONENT") && n.cause === "EFFECT", "unsupported-v3-move-cause-or-owner");
+    ensureMove((destination.zone === "hand" || destination.zone === "trash") && destination.position === "append" && destination.faceUp === true ||
+      destination.zone === "deck" && (destination.position === "top" || destination.position === "bottom") && destination.faceUp === false, "unsupported-v3-destination");
+    ensureMove(destination.zone !== "deck" || c.maxCards(cards) === 1, "v3-multi-card-deck-order-not-implemented");
+    return { type: "MOVE_CARD", ...meta, cards, destination: { ...destination } as Extract<Node<"action">, { type: "MOVE_CARD" }>["destination"], cause: "EFFECT" };
+  });
   r.cost.register("REST_DON", "1", (n, c) => ({ type: "REST_DON", ...c.fields(n, ["count"]), count: count(n.count) }));
   return r;
 }
@@ -98,7 +137,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.1", "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.2", "unsupported-v3-schema-version");
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
   ensureMove(typeof input.name === "string" && input.name.trim().length > 0 && input.name.length <= 300, "invalid-v3-card-name");
   ensureMove(input.cardType === "leader" || input.cardType === "character" || input.cardType === "stage", "unsupported-v3-card-type");
@@ -118,6 +157,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   Object.values(registries).forEach(registry => registry.seal());
   const registryHash = digest(canonical(Object.fromEntries(Object.entries(registries).map(([category, r]) => [category, r.manifest()]))));
   const used = new Set<string>(), ids = new Set<string>();
+  let bindings = new Map<string, number>(), candidateAllowed = false;
   const context: CompileContext = {
     read(category, node) {
       ensureMove(node && typeof node === "object" && !Array.isArray(node), "v3-node-object-required");
@@ -125,6 +165,25 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
       used.add(`${category}:${type}`); return registries[category].parse(type, input, context);
     },
     list(category, nodes) { dataArray(nodes, 128); return nodes.map(node => context.read(category, node)); },
+    value(input) { return value(input, bindings, candidateAllowed); },
+    cards(input) {
+      dataObject(input, ["ref"]); ensureMove(typeof input.ref === "string", "v3-card-binding-required");
+      const match = /^bindings\.([A-Za-z][A-Za-z0-9_]{0,63})$/.exec(input.ref);
+      ensureMove(match && bindings.has(match[1]!), "v3-undefined-card-binding"); return { ref: input.ref as CardSetRef["ref"] };
+    },
+    bind(input, maxCards) {
+      ensureMove(typeof input === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(input) && !["constructor", "prototype"].includes(input) && !bindings.has(input), "v3-invalid-or-duplicate-binding");
+      count(maxCards); bindings.set(input, maxCards); return input;
+    },
+    maxCards(input) { const max = bindings.get(input.ref.slice("bindings.".length)); ensureMove(max !== undefined, "v3-undefined-card-binding"); return max; },
+    branch(input) {
+      const parent = bindings; bindings = new Map(parent);
+      try { return context.list("action", input); } finally { bindings = parent; }
+    },
+    candidate(input) {
+      const parent = candidateAllowed; candidateAllowed = true;
+      try { return context.read("predicate", input); } finally { candidateAllowed = parent; }
+    },
     fields(node, required) {
       dataObject(node, ["type", ...required], ["id", "sourceSpan"]); const meta: NodeMeta = {};
       if (Object.hasOwn(node, "id")) { meta.id = label(node.id); ensureMove(!ids.has(meta.id), "duplicate-v3-node-id"); ids.add(meta.id); }
@@ -138,15 +197,18 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   };
   dataArray(input.effects, 32); ensureMove(input.effects.length > 0, "v3-effect-required");
   const effects: CardDefinition["effects"] = input.effects.map(effect => {
+    bindings = new Map(); candidateAllowed = false;
     dataObject(effect, ["id", "kind", "timing", "sourceZones", "optional", "activationConditions", "resolutionConditions", "costs", "actions"]);
     const id = label(effect.id); ensureMove(!ids.has(id), "duplicate-v3-effect-id"); ids.add(id);
     ensureMove(effect.kind === "activated" && effect.optional === false, "unsupported-v3-effect-kind-or-optionality");
     dataArray(effect.sourceZones, 3); ensureMove(effect.sourceZones.length === 1 && effect.sourceZones[0] === input.cardType, "unsupported-v3-source-zones");
+    const timing = context.read("timing", effect.timing), activationConditions = context.read("predicate", effect.activationConditions),
+      resolutionConditions = context.read("predicate", effect.resolutionConditions), costs = context.list("cost", effect.costs);
     const actions = context.list("action", effect.actions); ensureMove(actions.length > 0, "v3-action-required");
-    return { id, kind: "activated", optional: false, sourceZones: effect.sourceZones as ("leader" | "character" | "stage")[], timing: context.read("timing", effect.timing),
-      activationConditions: context.read("predicate", effect.activationConditions), resolutionConditions: context.read("predicate", effect.resolutionConditions), costs: context.list("cost", effect.costs), actions };
+    return { id, kind: "activated", optional: false, sourceZones: effect.sourceZones as ("leader" | "character" | "stage")[], timing,
+      activationConditions, resolutionConditions, costs, actions };
   });
-  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.1", cardId, cardVersion, name: input.name, cardType: input.cardType,
+  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.2", cardId, cardVersion, name: input.name, cardType: input.cardType,
     baseStats: input.baseStats as CardDefinition["baseStats"], colors, traits, attributes, reviewStatus: input.reviewStatus as CardDefinition["reviewStatus"], source, effects };
   inspectData(definition);
   const plan = freezeMovement({ status: "compiled_not_executable" as const, compilerVersion: COMPILER_VERSION, registryHash, definitionHash: digest(canonical(definition)), sourceHash: digest(canonical(source)), definition, requiredHandlers: [...used].sort() });

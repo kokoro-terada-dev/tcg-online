@@ -76,7 +76,8 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ### Phase 2：限定Compilerと承認ゲート
 
-入力版は3.0.0-subset.1です。添付3.0-draftや既存dslVersion:1を暗黙変換しません。
+入力版は3.0.0-subset.2、Compiler版はv3-subset-compiler.2です。
+旧subset.1、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
 schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
 Compilerは型・未知フィールド・参照先・比較の値型・ID重複・原文範囲・複雑度も検証します。
 sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲外終端です。
@@ -85,14 +86,15 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 
 - timing: MAIN。kindはactivatedのみ。leader/character/stageの自身のゾーンのみ。
 - predicate: all / any / not / compare（eq / ne / lt / lte / gt / gte）。
-- value ref: SELF/OPPONENTのlifeCount/handCountのみ。自由なJS式や任意プロパティ参照は不可。
+- value ref: SELF/OPPONENTのlifeCount/handCount、SOURCE/CANDIDATEのcost/power/cardType/rotated、選択済みbindingsのcount。自由なJS式や任意プロパティ参照は不可。
 - cost: REST_DON（1〜50）。
-- action: DRAW / SEQUENCE / IF。
+- action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD。
+- selector: CARDS（表向き公開カードのみ、SELECT、UNORDERED）。
 
-未対応：自動誘発、イベント、KO、対象選択、bindAs、usageLimit、optional、DON_RETURN、付与、期間、置換、継続、CUSTOM_HANDLER等。
+未対応：自動誘発、イベント、KO、非公開領域の選択、BLIND_SELECT/RANDOM/ALL/ORDER、usageLimit、optional、DON_RETURN、付与、期間、置換、継続、CUSTOM_HANDLER等。
 未知ノードは読込時に拒否します。schemaOnlyの既存ノードが存在してもv3対応済みとは扱いません。
 predicate/action/cost/replacement/selector/duration/timingのRegistryを用意しています。
-replacement/selector/durationは登録なしで、現在は到達する効果形式も未対応です。
+replacement/durationは登録なしで、現在は到達する効果形式も未対応です。
 拡張はTypeScriptのMapインターフェース拡張と、信頼されたサーバーコードによるparser登録で行います。
 新しい実行ハンドラーや意味論までJSONから注入することはできません。
 Registryはコンパイル時にsealし、重複/後付け登録を拒否します。ハンドラー実装変更時には登録versionを上げます。
@@ -118,16 +120,49 @@ npm run check:effect-v3 -- server/test/fixtures/v3-main-draw.json
 監査2,885カードから自動的にDSLへ変換・承認したカードは0件です。
 CLIはコンパイル結果の概要を表示するだけで、入力・マスター・承認記録を書き換えません。
 
+### 公開カード選択とbindings
+
+SELECTはselectorとbindAsを持ちます。selector内へのbindAs重複指定は受け付けません。
+CARDSはowner/controller/zone/cardTypes/filters/excludeSource/faceUpOnly/min/max/visibility/selectionMode/chooser/order/onInsufficientをすべて明示します。
+選択対象ゾーンはleader/character/stage/trash/publicのみで、faceUpOnly:true、visibility:PUBLICを必須にします。
+public等に裏向きカードがあっても選択可能という意味ではありません。Runtime接続時にも可視性を再検証する必要があります。
+手札・デッキ・ライフの内容を公開する選択はコンパイルできません。
+owner、controller、chooserは別々に定義します。これらは相対プレイヤーであり、クライアントが任意のsocketやplayerIndexを渡すものではありません。
+
+minは0〜max、maxは1〜50。min:0の空選択と、minを満たせない候補不足を区別します。
+onInsufficient:failを必須にし、勝手な枚数補正や部分的な支払いを定義しません。
+これはCompilerでの契約の明示であり、実候補の算出・選択待ち・応答処理はまだ実装していません。
+
+bindAsは英字始まりの英数字/アンダースコア、最大64文字です。
+選択済みカード集合は{"ref":"bindings.picked"}、枚数は{"ref":"bindings.picked.count"}で参照します。
+SOURCEや枚数をカード集合として扱うこと、未定義/先行参照、自己参照、同一スコープの再定義は拒否します。
+SEQUENCEの中では順番に束縛が伝播します。IFは親の束縛を読み取れますが、各枝で追加した束縛は兄弟枝・分岐後へ漏れません。
+両方の枝に同名束縛があっても外側へ合流させません。保守的な確定参照の制限です。
+効果ごとにスコープを分離し、activationConditions/resolutionConditionsでは後続actionsの選択結果を参照できません。
+CANDIDATE参照はselector.filters内のみ有効です。型に合わない比較（cardTypeと数値など）も拒否します。
+cost/powerが不明なときの評価を0/falseに置き換えることはせず、実行時のunknown処理はRuntime側で実装します。
+
+MOVE_CARDは束縛済みカード集合を参照し、cause:EFFECTだけを受け付けます。KOやコスト扱いへの偽装はできません。
+移動先はhand/trashへ表向きappend、deckへ裏向きtop/bottomだけです。デッキは順序未対応のため、最大1枚の束縛だけを許可します。
+参照の寿命/generation、所有権、移動禁止、カード枚数保存等の盤面上の合法性は将来のMovementEngine接続時に別途検証します。
+Compiler成功はそれらの合法性検証や公式裁定の承認を意味しません。
+
+```powershell
+npm run check:effect-v3 -- server/test/fixtures/v3-select-move.json
+```
+
+この合成fixtureも非実在・needs_reviewで、対戦にはロードしません。
+
 ### 続く段階
 
-Phase 2の残りでは、対象選択/参照/bindings等のCompiler対応を、実行可能な範囲と分けて拡充します。既存のkind形式は別版のまま維持します。
+Phase 2の残りでは、非公開選択や順序選択等のCompiler対応を、実行可能な範囲と分けて拡充します。既存のkind形式は別版のまま維持します。
 Phase 3で保存可能なResolutionFrameと選択待ち/復帰を接続します。Phase 4以降に置換・継続・バトル統合を進めます。
 同時誘発の順序、複数置換の選択、勝敗チェックの位置、トリガー機会、KO誘発時点、継続効果の循環等は
 RulesetPolicyとして根拠と確認状態を保持し、未確認の組合せでは停止する設計とします。今回は裁定を確定していません。
 
 ```powershell
 npm --prefix server run build
-node --test server/test/v3-compiler.cjs server/test/effects-schema.cjs
+node --test server/test/v3-compiler.cjs server/test/v3-selection-compiler.cjs server/test/effects-schema.cjs
 node --test tools/audit-effect-cards.test.js tools/test-card-master.test.js
 npm run build
 ```

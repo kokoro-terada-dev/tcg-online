@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "3.0.0-subset.2", "cardId": "EXAMPLE-SELECTION-NOT-REAL", "cardVersion": "fixture.1",
+  "name": "合成テスト用の選択（実在しません）", "cardType": "character",
+  "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
+  "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",
+  "source": {
+    "text": "合成テスト：公開された自分のキャラを0〜1枚選び、選択した場合は手札へ移す。公式カードや裁定ではありません。",
+    "triggerText": "", "displayIds": ["EXAMPLE-SELECTION-NOT-REAL"],
+    "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "effects": [{
+    "id": "main", "kind": "activated", "timing": { "type": "MAIN" }, "sourceZones": ["character"], "optional": false,
+    "activationConditions": { "type": "all", "conditions": [] }, "resolutionConditions": { "type": "all", "conditions": [] }, "costs": [],
+    "actions": [
+      { "type": "SELECT", "bindAs": "picked", "selector": {
+        "type": "CARDS", "owner": "SELF", "controller": "SELF", "zone": "character", "cardTypes": ["character"],
+        "filters": { "type": "compare", "left": { "ref": "CANDIDATE.cost" }, "op": "lte", "right": 3 },
+        "excludeSource": true, "faceUpOnly": true, "min": 0, "max": 1, "visibility": "PUBLIC", "selectionMode": "SELECT",
+        "chooser": "SELF", "order": "UNORDERED", "onInsufficient": "fail"
+      } },
+      { "type": "IF", "condition": { "type": "compare", "left": { "ref": "bindings.picked.count" }, "op": "gt", "right": 0 },
+        "then": [{ "type": "MOVE_CARD", "cards": { "ref": "bindings.picked" }, "destination": { "owner": "SELF", "zone": "hand", "position": "append", "faceUp": true }, "cause": "EFFECT" }], "else": [] }
+    ]
+  }]
+}
