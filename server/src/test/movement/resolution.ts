@@ -69,6 +69,11 @@ export class MovementResolution {
     ensureMove(this.#status === "prepared", "cannot-cancel-paid-resolution");
     this.#status = "cancelled";
   }
+  block(actor: Player, expectedRevision: number): void {
+    this.#authorize(actor, expectedRevision);
+    ensureMove(this.#status === "resolving", "resolution-not-resolving");
+    this.#status = "blocked";
+  }
   complete(actor: Player, expectedRevision: number): void {
     this.#authorize(actor, expectedRevision);
     ensureMove(this.#status === "resolving", "resolution-not-resolving");

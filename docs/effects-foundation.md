@@ -1,5 +1,7 @@
 # 効果エンジン：基盤フェーズの設計と対応状況
 
+DSLの一部を独立モデルで実行する基盤は [Action実行器](action-runtime.md) を参照してください。draw/move/sequence/repeatの限定対応で、既存対戦には未接続です。
+
 支払い確定と効果処理の境界を管理する独立基盤は [Resolution lifecycle](resolution-runtime.md) を参照してください。DSL実行・既存対戦への接続はまだありません。
 
 後続の独立したターン・フェーズ基盤は [進行管理の設計・対応状況](progression-foundation.md) を参照してください。DSLも進行基盤も、現行対戦への接続はまだ行っていません。
