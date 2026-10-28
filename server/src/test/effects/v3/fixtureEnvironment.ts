@@ -57,9 +57,12 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
   };
   return {
     revision: () => board().revision, now, evaluate,
-    canPayCosts: (costs, discarded) => {
+    canPayCosts: (costs, discarded, returned) => {
       const state = board(), actor = identity.actor; let rest = 0, discard = 0, restSource = 0;
-      for (const cost of costs) { if (cost.type === "REST_DON") rest += cost.count; else if (cost.type === "DISCARD_HAND") discard += cost.count; else if (cost.type === "REST_SOURCE") restSource++; else return "unknown"; }
+      const returns = costs.filter(cost => cost.type === "DON_RETURN");
+      if (returns.length > 1) return "unknown";
+      const returnCost = returns[0], returnCount = returnCost?.count ?? 0;
+      for (const cost of costs) { if (cost.type === "REST_DON") rest += cost.count; else if (cost.type === "DISCARD_HAND") discard += cost.count; else if (cost.type === "REST_SOURCE") restSource++; else if (cost.type !== "DON_RETURN") return "unknown"; }
       if (restSource) {
         try {
           const card = getCard(state, identity.source), at = location(state, card.instanceId);
@@ -72,7 +75,16 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
           return at.player === actor && at.zone === "hand" && card.owner === actor && card.controller === actor && ["character", "stage", "event"].includes(card.kind) && visibleTo(state, card, at, actor) && !visibleTo(state, card, at, (1 - actor) as 0 | 1);
         } catch { return false; }
       };
-      if (rest + discard + restSource > 64 || discard > 50 || state.players[actor].activeDon.filter(id => { const card = state.cards[id!]!; return card.kind === "don" && card.owner === actor && card.controller === actor && !card.rotated; }).length < rest) return false;
+      const eligibleDon = (ref: Readonly<CardObjectRef>) => {
+        try {
+          const card = getCard(state, ref), at = location(state, ref.instanceId);
+          return !!returnCost && at.zone === returnCost.from && at.player === actor && card.kind === "don" && card.owner === actor && card.controller === actor && card.faceUp &&
+            visibleTo(state, card, at, 0) && visibleTo(state, card, at, 1);
+        } catch { return false; }
+      };
+      if (rest + discard + restSource + returnCount > 64 || discard > 50 || state.players[actor].activeDon.filter(id => { const card = state.cards[id!]!; return card.kind === "don" && card.owner === actor && card.controller === actor && !card.rotated; }).length < rest + (returnCost?.from === "activeDon" ? returnCount : 0)) return false;
+      if (returnCost && state.players[actor][returnCost.from].filter(id => eligibleDon({ instanceId: id!, generation: state.cards[id!]!.generation })).length < returnCount) return false;
+      if (returned !== null && (returned.length !== returnCount || new Set(returned.map(ref => ref.instanceId)).size !== returnCount || !returned.every(eligibleDon))) return false;
       if (state.players[actor].hand.filter(id => eligible({ instanceId: id!, generation: state.cards[id!]!.generation })).length < discard) return false;
       return discarded === null || discarded.length === discard && new Set(discarded.map(ref => ref.instanceId)).size === discard && discarded.every(eligible);
     },

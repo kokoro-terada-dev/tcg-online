@@ -96,13 +96,19 @@ export class V3FixtureCoordinator {
     const actor = this.#identity.actor, operations: MovementOperation[] = [];
     if (work.type === "PAY_COSTS") {
       let amount = 0, discardCount = 0, restSource = 0;
+      const returnCosts = work.costs.filter(cost => cost.type === "DON_RETURN"), returnCost = returnCosts[0], returnCount = returnCost?.count ?? 0;
+      ensureMove(returnCosts.length <= 1, "v3-fixture-multiple-don-return-costs");
       for (const cost of work.costs) {
         if (cost.type === "REST_DON") amount += cost.count;
         else if (cost.type === "DISCARD_HAND") discardCount += cost.count;
         else if (cost.type === "REST_SOURCE") restSource++;
+        else if (cost.type === "DON_RETURN") continue;
         else ensureMove(false, "v3-fixture-unsupported-cost");
       }
-      ensureMove(Number.isSafeInteger(amount + discardCount) && amount + discardCount + restSource > 0 && amount + discardCount + restSource <= 64 && restSource <= 1 && board.players[actor].activeDon.length >= amount &&
+      const returned = new Set(work.returned.map(ref => ref.instanceId));
+      const activeDon = board.players[actor].activeDon.filter(id => !returned.has(id!));
+      ensureMove(Number.isSafeInteger(amount + discardCount) && amount + discardCount + restSource + returnCount > 0 && amount + discardCount + restSource + returnCount <= 64 && restSource <= 1 && activeDon.length >= amount &&
+        returned.size === returnCount && work.returned.length === returnCount &&
         work.discarded.length === discardCount && new Set(work.discarded.map(ref => ref.instanceId)).size === discardCount, "v3-fixture-unpayable");
       if (restSource) {
         const card = getCard(board, this.#identity.source), at = location(board, card.instanceId);
@@ -110,7 +116,7 @@ export class V3FixtureCoordinator {
           ["leader", "character", "stage"].includes(at.zone) && card.kind === at.zone && visibleTo(board, card, at, 0) && visibleTo(board, card, at, 1), "v3-fixture-source-cost-unavailable");
         operations.push({ kind: "setRest", card: this.#identity.source, rotated: true });
       }
-      for (const id of board.players[actor].activeDon.slice(0, amount)) {
+      for (const id of activeDon.slice(0, amount)) {
         const card = board.cards[id!]!; ensureMove(card.kind === "don" && card.owner === actor && card.controller === actor && !card.rotated, "v3-fixture-don-unavailable");
         operations.push({ kind: "setRest", card: { instanceId: card.instanceId, generation: card.generation }, rotated: true });
       }
@@ -118,6 +124,12 @@ export class V3FixtureCoordinator {
         const card = getCard(board, ref), from = location(board, card.instanceId);
         ensureMove(from.zone === "hand" && from.player === actor && card.owner === actor && card.controller === actor && ["character", "stage", "event"].includes(card.kind) && visibleTo(board, card, from, actor) && !visibleTo(board, card, from, (1 - actor) as 0 | 1), "v3-fixture-discard-cost-unavailable");
         operations.push({ kind: "move", card: ref, from, to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "COST_PAYMENT" });
+      }
+      for (const ref of work.returned) {
+        const card = getCard(board, ref), from = location(board, ref.instanceId);
+        ensureMove(returnCost && from.zone === returnCost.from && from.player === actor && card.kind === "don" && card.owner === actor && card.controller === actor && card.faceUp &&
+          visibleTo(board, card, from, 0) && visibleTo(board, card, from, 1), "v3-fixture-return-cost-unavailable");
+        operations.push({ kind: "move", card: ref, from, to: { player: actor, zone: "donDeck", position: "bottom", faceUp: false, rotated: false }, cause: "COST_PAYMENT" });
       }
     } else if (work.type === "DRAW") {
       // Deck-out timing is deliberately unimplemented in this isolated fixture.

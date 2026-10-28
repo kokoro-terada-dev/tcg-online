@@ -11,7 +11,7 @@ const { ApprovedV3Catalog } = require('../dist/test/effects/v3/approval.js');
 const { V3FixtureCoordinator } = require('../dist/test/effects/v3/fixtureCoordinator.js');
 const { MovementStore } = require('../dist/test/movement/engine.js');
 const key = Buffer.alloc(32, 9); // Synthetic key, not a deployment secret.
-function setup({ actor = 0, don = 2, mutate = () => {}, attach = false, hidden = false, missingStats = false, deckCount, handCount, handFaceDown = false, sourceKind = 'character', sourceRotated = false } = {}) {
+function setup({ actor = 0, don = 2, mutate = () => {}, attach = false, hidden = false, missingStats = false, deckCount, handCount, handFaceDown = false, sourceKind = 'character', sourceRotated = false, restDon = 0 } = {}) {
   const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v3-select-move.json'), 'utf8'));
   data.reviewStatus = 'approved'; data.baseStats.cost = 2; data.baseStats.power = 2000; mutate(data);
   data.cardType = sourceKind; data.effects[0].sourceZones = [sourceKind];
@@ -25,6 +25,7 @@ function setup({ actor = 0, don = 2, mutate = () => {}, attach = false, hidden =
   if (missingStats) zones.character[1].cardId = 'UNKNOWN-CARD';
   if (hidden) { zones.public.push(zones.character[1]); zones.character[1] = null; }
   for (let i = 0; i < don; i++) zones.activeDon.push({ ...zones.donDeck.shift(), faceUp: true, rotated: false });
+  for (let i = 0; i < restDon; i++) zones.restDon.push({ ...zones.activeDon.shift(), rotated: true });
   if (deckCount !== undefined) zones.trash.push(...zones.deck.splice(deckCount).map(card => ({ ...card, faceUp: true })));
   if (handCount !== undefined) zones.trash.push(...zones.hand.splice(handCount).map(card => ({ ...card, faceUp: true })));
   if (handFaceDown) zones.hand = zones.hand.map(card => ({ ...card, faceUp: false }));
@@ -67,6 +68,53 @@ function discardCosts(d) {
   d.effects[0].costs = [{ type: 'REST_DON', count: 1 }, { type: 'DISCARD_HAND', count: 1 }];
   d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }];
 }
+
+test('DON_RETURN selects exact owned active, rested or attached DON and resets it in the DON deck for both seats', () => {
+  for (const actor of [0, 1]) for (const from of ['activeDon', 'restDon', 'attachedDon']) {
+    const s = setup({ actor, restDon: from === 'restDon' ? 1 : 0, attach: from === 'attachedDon', mutate: d => {
+      d.effects[0].costs = [{ type: 'DON_RETURN', count: 1, from }]; d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }];
+    } }), c = s.coordinator, before = c.snapshotForCoordinator();
+    c.advance(actor, 'return-start', c.context()); const choice = choose(s), view = c.viewFor(actor);
+    assert.equal(view.frame.choice.purpose, 'returnCost'); assert.deepEqual(c.viewFor(1 - actor).frame.choice.options, []);
+    c.answer(actor, 'return-choice', choice.context, choice.id, choice.tokens); c.advance(actor, 'return-plan', c.context());
+    assert.equal(c.snapshotForCoordinator().movement, before.movement); const context = c.context();
+    c.applyPendingWork(actor, 'return-pay', context); assert.equal(c.applyPendingWork(actor, 'return-pay', context).replayed, true);
+    const paid = c.snapshotForCoordinator(), event = paid.movementEvents[0], card = paid.movement.cards[event.after.instanceId];
+    assert.equal(paid.movement.players[actor].donDeck.length, before.movement.players[actor].donDeck.length + 1);
+    assert.equal(paid.movement.players[actor][from].length, before.movement.players[actor][from].length - 1);
+    assert.equal(event.cause.kind, 'COST_PAYMENT'); assert.equal(event.isKO, false);
+    assert.equal(card.generation, event.before.generation + 1); assert.equal(card.faceUp, false); assert.equal(card.rotated, false); assert.equal(card.attachedTo, null);
+    assert.equal(paid.movement.cards[s.target.instanceId].generation, before.movement.cards[s.target.instanceId].generation);
+    c.advance(actor, 'draw-plan', c.context()); c.applyPendingWork(actor, 'draw', c.context()); c.advance(actor, 'done', c.context());
+    assert.equal(c.viewFor(actor).frame.status, 'completed');
+  }
+});
+
+test('sequential hand and DON cost choices leave the board intact, then pay four costs once without reusing returned active DON', () => {
+  for (const actor of [0, 1]) {
+    const s = setup({ actor, mutate: d => { discardCosts(d); d.effects[0].costs.unshift({ type: 'REST_SOURCE' }); d.effects[0].costs.push({ type: 'DON_RETURN', count: 1, from: 'activeDon' }); } });
+    const c = s.coordinator, before = c.snapshotForCoordinator(); c.advance(actor, 'hand-start', c.context()); const hand = choose(s);
+    c.answer(actor, 'hand', hand.context, hand.id, hand.tokens); c.advance(actor, 'don-start', c.context()); const don = choose(s);
+    assert.notEqual(hand.id, don.id); assert.equal(c.viewFor(actor).frame.choice.purpose, 'returnCost');
+    assert.throws(() => c.answer(actor, 'old-hand-token', don.context, don.id, hand.tokens));
+    c.answer(actor, 'don', don.context, don.id, don.tokens); c.advance(actor, 'all-planned', c.context());
+    assert.equal(c.snapshotForCoordinator().movement, before.movement); c.applyPendingWork(actor, 'pay-all', c.context());
+    const paid = c.snapshotForCoordinator(); assert.equal(paid.movement.revision, before.movement.revision + 1);
+    assert.equal(paid.movement.players[actor].activeDon.length, 0); assert.equal(paid.movement.players[actor].restDon.length, 1);
+    assert.equal(paid.movement.players[actor].hand.length, 4); assert.equal(paid.movement.players[actor].donDeck.length, 9);
+    assert.equal(paid.movementEvents.length, 4); assert.equal(paid.movementEvents.every(event => event.cause.kind === 'COST_PAYMENT'), true);
+    const rest = paid.movementEvents.find(event => event.kind === 'restChanged' && event.after.kind === 'don');
+    const returned = paid.movementEvents.find(event => event.to?.zone === 'donDeck'); assert.notEqual(rest.after.instanceId, returned.after.instanceId);
+  }
+});
+
+test('DON return shortage, including overlap with REST_DON, never partially pays another cost', () => {
+  for (const actor of [0, 1]) for (const [from, count, don] of [['activeDon', 1, 1], ['restDon', 1, 2], ['attachedDon', 1, 2], ['activeDon', 3, 2]]) {
+    const c = setup({ actor, don, mutate: d => { discardCosts(d); d.effects[0].costs.push({ type: 'DON_RETURN', count, from }); } }).coordinator;
+    const before = c.snapshotForCoordinator(); c.advance(actor, 'short', c.context()); assert.equal(c.viewFor(actor).frame.status, 'blocked');
+    assert.equal(c.viewFor(actor).frame.choice, null); assert.equal(c.snapshotForCoordinator().movement, before.movement); assert.equal(c.snapshotForCoordinator().movementEvents.length, 0);
+  }
+});
 
 test('REST_SOURCE pays an active leader, character or stage once without changing its generation', () => {
   for (const actor of [0, 1]) for (const sourceKind of ['leader', 'character', 'stage']) {

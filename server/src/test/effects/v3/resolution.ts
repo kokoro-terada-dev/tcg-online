@@ -17,23 +17,23 @@ export interface ResolutionEnvironment {
   now(): number;
   evaluate(predicate: DeepReadonly<Predicate>, bindings: Bindings, candidate?: Ref): boolean | "unknown";
   candidates(selector: Selector, bindings: Bindings): readonly ResolutionCandidate[];
-  canPayCosts?(costs: readonly DeepReadonly<Node<"cost">>[], discarded: readonly Ref[] | null): boolean | "unknown";
+  canPayCosts?(costs: readonly DeepReadonly<Node<"cost">>[], discarded: readonly Ref[] | null, returned: readonly Ref[] | null): boolean | "unknown";
 }
 export type ResolutionIdentity = Readonly<{ matchId: string; resolutionId: string; effectId: string; actor: Seat; source: Ref }>;
 type Instruction = { type: "CHECK"; predicate: DeepReadonly<Predicate> } | { type: "COSTS" } |
   { type: "SELECT"; action: Extract<A, { type: "SELECT" }> } | { type: "WORK"; action: Extract<A, { type: "DRAW" | "MOVE_CARD" | "KO" | "REST" | "SET_ACTIVE" }> } |
   { type: "BRANCH"; predicate: DeepReadonly<Predicate>; otherwise: number } | { type: "ENTER" } | { type: "EXIT" } | { type: "JUMP"; to: number } | { type: "END" };
-type Choice = { kind: "choice"; purpose: "action" | "cost"; selectionId: string; chooser: Seat; min: number; max: number; bindAs: string | null; expiresAt: number; candidates: { token: string; cardId: string; ref: CardObjectRef }[] };
+type Choice = { kind: "choice"; purpose: "action" | "cost" | "returnCost"; selectionId: string; chooser: Seat; min: number; max: number; bindAs: string | null; expiresAt: number; candidates: { token: string; cardId: string; ref: CardObjectRef }[] };
 export type WorkRequest = DeepReadonly<{ kind: "work"; workId: string; worldRevision: number } & (
-  { type: "PAY_COSTS"; costs: Node<"cost">[]; discarded: CardObjectRef[] } | { type: "DRAW"; player: Seat; count: number } |
+  { type: "PAY_COSTS"; costs: Node<"cost">[]; discarded: CardObjectRef[]; returned: CardObjectRef[] } | { type: "DRAW"; player: Seat; count: number } |
   { type: "MOVE_CARD"; cards: CardObjectRef[]; destination: Extract<Action, { type: "MOVE_CARD" }>["destination"]; cause: "EFFECT" } |
   { type: "KO" | "REST" | "SET_ACTIVE"; cards: CardObjectRef[] }
 )>;
 type State = {
-  version: "v3-frame.2"; identity: ResolutionIdentity; definitionHash: string; compilerVersion: string; registryHash: string; rulesetVersion: string;
+  version: "v3-frame.3"; identity: ResolutionIdentity; definitionHash: string; compilerVersion: string; registryHash: string; rulesetVersion: string;
   revision: number; worldRevision: number; pc: number; status: "ready" | "waitingForChoice" | "waitingForWork" | "completed" | "blocked";
   scopes: Record<string, CardObjectRef[]>[]; pending: Choice | WorkRequest | null;
-  costCards: CardObjectRef[] | null; paidCostWorkId: string | null;
+  costCards: CardObjectRef[] | null; costReturned: CardObjectRef[] | null; paidCostWorkId: string | null;
   receipts: { requestId: string; fingerprint: string }[];
 };
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -70,8 +70,8 @@ export class V3ResolutionMachine {
     ensureMove(v3RegistryHash(builtinV3Registries()) === card.registryHash, "v3-runtime-registry-mismatch");
     this.#key = Buffer.from(signingKey); this.#environment = environment; this.#card = card; this.#code = program(card, identity.effectId);
     const worldRevision = environment.revision(); ensureMove(Number.isSafeInteger(worldRevision) && worldRevision >= 0, "v3-invalid-world-revision");
-    this.#state = { version: "v3-frame.2", identity: structuredClone(identity), definitionHash: card.definitionHash, compilerVersion: card.compilerVersion, registryHash: card.registryHash, rulesetVersion: card.rulesetVersion,
-      revision: 0, worldRevision, pc: 0, status: "ready", scopes: [{}], pending: null, costCards: null, paidCostWorkId: null, receipts: [] };
+    this.#state = { version: "v3-frame.3", identity: structuredClone(identity), definitionHash: card.definitionHash, compilerVersion: card.compilerVersion, registryHash: card.registryHash, rulesetVersion: card.rulesetVersion,
+      revision: 0, worldRevision, pc: 0, status: "ready", scopes: [{}], pending: null, costCards: null, costReturned: null, paidCostWorkId: null, receipts: [] };
   }
   #bindings(state: State): Bindings { return freezeMovement(structuredClone(Object.assign({}, ...state.scopes))); }
   #evaluate(predicate: DeepReadonly<Predicate>, state: State, candidate?: Ref): boolean {
@@ -99,8 +99,9 @@ export class V3ResolutionMachine {
           const effect = this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)!;
           if (!effect.costs.length) { state.pc++; continue; }
           const discardCount = effect.costs.reduce((sum, cost) => sum + (cost.type === "DISCARD_HAND" ? cost.count : 0), 0);
-          if (discardCount > 0 || effect.costs.some(cost => cost.type === "REST_SOURCE")) {
-            const payable = this.#environment.canPayCosts?.(effect.costs, state.costCards) ?? "unknown";
+          const returnCost = effect.costs.find(cost => cost.type === "DON_RETURN");
+          if (discardCount > 0 || returnCost || effect.costs.some(cost => cost.type === "REST_SOURCE")) {
+            const payable = this.#environment.canPayCosts?.(effect.costs, state.costCards, state.costReturned) ?? "unknown";
             ensureMove(payable !== "unknown", "v3-cost-feasibility-unknown");
             if (!payable) { state.status = "blocked"; return; }
             if (discardCount > 0 && state.costCards === null) {
@@ -108,8 +109,13 @@ export class V3ResolutionMachine {
                 filters: { type: "all", conditions: [] }, excludeSource: false, faceUpOnly: false, min: discardCount, max: discardCount, visibility: "OWNER_ONLY", selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" }, null);
               continue;
             }
+            if (returnCost && state.costReturned === null) {
+              this.#select(state, { type: "CARDS", owner: "SELF", controller: "SELF", chooser: "SELF", zone: returnCost.from, cardTypes: ["don"],
+                filters: { type: "all", conditions: [] }, excludeSource: false, faceUpOnly: true, min: returnCost.count, max: returnCost.count, visibility: "PUBLIC", selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" }, null, "returnCost");
+              continue;
+            }
           }
-          state.pending = freezeMovement({ kind: "work", workId, worldRevision: state.worldRevision, type: "PAY_COSTS", costs: structuredClone(effect.costs), discarded: structuredClone(state.costCards ?? []) }); state.status = "waitingForWork";
+          state.pending = freezeMovement({ kind: "work", workId, worldRevision: state.worldRevision, type: "PAY_COSTS", costs: structuredClone(effect.costs), discarded: structuredClone(state.costCards ?? []), returned: structuredClone(state.costReturned ?? []) }); state.status = "waitingForWork";
         } else if (instruction.type === "BRANCH") state.pc = this.#evaluate(instruction.predicate, state) ? state.pc + 1 : instruction.otherwise;
         else if (instruction.type === "ENTER") { state.scopes.push({}); state.pc++; }
         else if (instruction.type === "EXIT") { ensureMove(state.scopes.length > 1, "v3-invalid-scope-pop"); state.scopes.pop(); state.pc++; }
@@ -129,7 +135,7 @@ export class V3ResolutionMachine {
       }
     });
   }
-  #select(state: State, selector: Selector, bindAs: string | null): void {
+  #select(state: State, selector: Selector, bindAs: string | null, purpose: "returnCost" | undefined = undefined): void {
     const rows = this.#environment.candidates(selector, this.#bindings(state)); dataArray(rows, 256);
     const seen = new Set<string>(), candidates: Choice["candidates"] = [];
     for (const row of rows) {
@@ -145,7 +151,7 @@ export class V3ResolutionMachine {
     ensureMove(candidates.length >= selector.min, "v3-insufficient-candidates");
     if (!candidates.length) { ensureMove(bindAs !== null, "v3-empty-required-cost-selection"); state.scopes.at(-1)![bindAs] = []; state.pc++; return; }
     const now = this.#environment.now(); ensureMove(Number.isSafeInteger(now) && now >= 0 && now <= Number.MAX_SAFE_INTEGER - 120000, "v3-invalid-clock");
-    state.pending = { kind: "choice", purpose: bindAs === null ? "cost" : "action", selectionId: randomUUID(), chooser: relative(state.identity.actor, selector.chooser), min: selector.min, max: selector.max, bindAs, expiresAt: now + 120000, candidates };
+    state.pending = { kind: "choice", purpose: purpose ?? (bindAs === null ? "cost" : "action"), selectionId: randomUUID(), chooser: relative(state.identity.actor, selector.chooser), min: selector.min, max: selector.max, bindAs, expiresAt: now + 120000, candidates };
     state.status = "waitingForChoice";
   }
   answer(actor: Seat, requestId: string, expectedRevision: number, selectionId: string, tokens: readonly string[]): { replayed: boolean } {
@@ -159,6 +165,7 @@ export class V3ResolutionMachine {
       // UNORDERED input is canonicalized to server candidate order, not client token order.
       const cards = choice.candidates.filter(candidate => selected.has(candidate.token)).map(candidate => ({ ...candidate.ref }));
       if (choice.purpose === "cost") state.costCards = cards;
+      else if (choice.purpose === "returnCost") state.costReturned = cards;
       else { ensureMove(choice.bindAs !== null, "v3-action-binding-required"); state.scopes.at(-1)![choice.bindAs] = cards; state.pc++; }
       state.pending = null; state.status = "ready";
     });
@@ -169,7 +176,7 @@ export class V3ResolutionMachine {
       ensureMove((outcome === "applied" || outcome === "rejected") && Number.isSafeInteger(worldRevision) && this.#environment.revision() === worldRevision &&
         worldRevision === state.worldRevision + (outcome === "applied" ? 1 : 0), "v3-work-version-or-outcome");
       state.worldRevision = worldRevision; state.pending = null; state.status = outcome === "applied" ? "ready" : "blocked";
-      if (outcome === "applied") { if (work.type === "PAY_COSTS") { state.paidCostWorkId = work.workId; state.costCards = null; } state.pc++; }
+      if (outcome === "applied") { if (work.type === "PAY_COSTS") { state.paidCostWorkId = work.workId; state.costCards = null; state.costReturned = null; } state.pc++; }
     });
   }
   workForCoordinator(): WorkRequest | null { return this.#state.pending?.kind === "work" ? freezeMovement(structuredClone(this.#state.pending)) : null; }
@@ -189,7 +196,7 @@ export class V3ResolutionMachine {
     const expected = createHmac("sha256", machine.#key).update(envelope.payload).digest();
     ensureMove(timingSafeEqual(expected, Buffer.from(envelope.signature, "hex")), "v3-saved-signature-mismatch");
     const state = JSON.parse(envelope.payload) as State;
-    ensureMove(Number.isSafeInteger(expectedFrameRevision) && expectedFrameRevision >= 0 && state.revision === expectedFrameRevision && state.version === "v3-frame.2" && state.definitionHash === card.definitionHash && state.compilerVersion === card.compilerVersion && state.registryHash === card.registryHash && state.rulesetVersion === card.rulesetVersion &&
+    ensureMove(Number.isSafeInteger(expectedFrameRevision) && expectedFrameRevision >= 0 && state.revision === expectedFrameRevision && state.version === "v3-frame.3" && state.definitionHash === card.definitionHash && state.compilerVersion === card.compilerVersion && state.registryHash === card.registryHash && state.rulesetVersion === card.rulesetVersion &&
       state.identity.matchId === identity.matchId && state.identity.resolutionId === identity.resolutionId && state.identity.effectId === identity.effectId && state.identity.actor === identity.actor && state.identity.source.instanceId === identity.source.instanceId && state.identity.source.generation === identity.source.generation && state.worldRevision === environment.revision(), "v3-saved-context-mismatch");
     machine.#state = state; return machine;
   }

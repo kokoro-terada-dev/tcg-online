@@ -8,7 +8,7 @@ import TestBoard from "./TestBoard";
 import "./testEffect.css";
 import "./v3Fixture.css";
 const url = import.meta.env.VITE_TEST_SERVER_URL?.trim();
-const scenarios: Record<V3Scenario, string> = { bounce: "公開キャラ → 手札", payDraw: "DONレスト → ドロー", ko: "相手キャラをKO", rest: "相手キャラをレスト", active: "自分のキャラをアクティブ", discardDraw: "手札を捨ててドロー", discardCostDraw: "DON・手札コストでドロー", sourceCostDraw: "発動元レスト・DON・手札でドロー" };
+const scenarios: Record<V3Scenario, string> = { bounce: "公開キャラ → 手札", payDraw: "DONレスト → ドロー", ko: "相手キャラをKO", rest: "相手キャラをレスト", active: "自分のキャラをアクティブ", discardDraw: "手札を捨ててドロー", discardCostDraw: "DON・手札コストでドロー", sourceCostDraw: "発動元レスト・DON・手札でドロー", returnCostDraw: "DON返却・複合コストでドロー" };
 const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする" };
 export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
   const socket = useRef<Socket | null>(null), roomRef = useRef<V3RoomView | null>(null), viewRef = useRef<V3FixtureView | null>(null), epoch = useRef(0), flight = useRef(false);
@@ -95,12 +95,12 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
 }
 function Choice({ view, disabled, onConfirm }: { view: V3FixtureView; disabled: boolean; onConfirm: (tokens: string[]) => void }) {
   const [tokens, setTokens] = useState<string[]>([]), [failed, setFailed] = useState<string[]>([]), choice = view.frame.choice!;
-  return <div><p>{choice.purpose === "cost" ? "コストで捨てる手札" : "カード選択"} {tokens.length} / {choice.max}</p><div className="test-effect-candidates">{choice.options.map(option => {
+  return <div><p>{choice.purpose === "cost" ? "コストで捨てる手札" : choice.purpose === "returnCost" ? "DONデッキへ戻すDON" : "カード選択"} {tokens.length} / {choice.max}</p><div className="test-effect-candidates">{choice.options.map(option => {
     const image = getLocalCardImage(option.cardId)?.imageUrl;
     return <button key={option.token} role="checkbox" aria-checked={tokens.includes(option.token)} aria-label={option.cardId} disabled={disabled || !tokens.includes(option.token) && tokens.length >= choice.max}
       onClick={() => setTokens(current => current.includes(option.token) ? current.filter(token => token !== option.token) : [...current, option.token])}>
       {image && !failed.includes(option.token) ? <img src={image} alt={option.cardId} draggable={false} onError={() => setFailed(current => [...current, option.token])} /> : <span>{option.cardId}</span>}
       {tokens.includes(option.token) && <b>{tokens.indexOf(option.token) + 1}</b>}
     </button>;
-  })}</div><button className="test-effect-confirm" disabled={disabled || tokens.length < choice.min || tokens.length > choice.max} onClick={() => onConfirm(tokens)}>{choice.purpose === "cost" ? "支払いカードを確定" : "選択を確定"}</button></div>;
+  })}</div><button className="test-effect-confirm" disabled={disabled || tokens.length < choice.min || tokens.length > choice.max} onClick={() => onConfirm(tokens)}>{choice.purpose !== "action" ? "支払いカードを確定" : "選択を確定"}</button></div>;
 }

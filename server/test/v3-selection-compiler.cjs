@@ -9,7 +9,7 @@ const compile = value => compileV3CardJson(JSON.stringify(value));
 const predicate = (ref, op = 'gt', right = 0) => ({ type: 'compare', left: { ref }, op, right });
 test('public selection compiles typed card sets, count references, filters and effect-only movement', () => {
   const plan = compileV3CardJson(raw), actions = plan.definition.effects[0].actions;
-  assert.equal(plan.compilerVersion, 'v3-subset-compiler.6'); assert.equal(plan.status, 'compiled_not_executable');
+  assert.equal(plan.compilerVersion, 'v3-subset-compiler.7'); assert.equal(plan.status, 'compiled_not_executable');
   assert.equal(actions[0].selector.min, 0); assert.equal(actions[0].selector.onInsufficient, 'fail');
   assert.equal(actions[1].then[0].cards.ref, 'bindings.picked');
   assert.ok(plan.requiredHandlers.includes('selector:CARDS')); assert.ok(plan.requiredHandlers.includes('action:MOVE_CARD'));
@@ -64,7 +64,7 @@ test('sequences share ordered bindings; moves cannot disguise a cost, KO or reve
   deck.effects[0].actions[0].selector.max = 2; assert.throws(() => compile(deck));
 });
 test('old subset versions are refused rather than silently changing approval semantics', () => {
-  for (const version of ['3.0.0-subset.1', '3.0.0-subset.2', '3.0.0-subset.3', '3.0.0-subset.4', '3.0.0-subset.5']) { const data = fixture(); data.schemaVersion = version; assert.throws(() => compile(data)); }
+  for (const version of ['3.0.0-subset.1', '3.0.0-subset.2', '3.0.0-subset.3', '3.0.0-subset.4', '3.0.0-subset.5', '3.0.0-subset.6']) { const data = fixture(); data.schemaVersion = version; assert.throws(() => compile(data)); }
 });
 
 test('KO and absolute rest actions require a defined card set and cannot masquerade as costs or battle damage', () => {
@@ -102,4 +102,21 @@ test('REST_SOURCE has no count or target override and cannot charge the same sou
     const invalid = structuredClone(data); Object.assign(invalid.effects[0].costs[0], patch); assert.throws(() => compile(invalid));
   }
   data.effects[0].costs.push({ type: 'REST_SOURCE' }); assert.throws(() => compile(data));
+});
+
+test('DON_RETURN requires one explicit owned source zone and rejects implicit mixed or deck selection', () => {
+  for (const from of ['activeDon', 'restDon', 'attachedDon']) {
+    const data = fixture(); data.effects[0].costs = [{ type: 'DON_RETURN', count: 1, from }];
+    assert.ok(compile(data).requiredHandlers.includes('cost:DON_RETURN'));
+    for (const patch of [{ count: 0 }, { from: 'donDeck' }, { from: ['activeDon', 'restDon'] }, { player: 'OPPONENT' }, { count: 1.5 }]) {
+      const invalid = structuredClone(data); Object.assign(invalid.effects[0].costs[0], patch); assert.throws(() => compile(invalid));
+    }
+    data.effects[0].costs.push({ type: 'DON_RETURN', count: 1, from }); assert.throws(() => compile(data));
+    data.effects[0].costs = [];
+    Object.assign(data.effects[0].actions[0].selector, { zone: from, owner: 'SELF', controller: 'SELF', chooser: 'SELF', cardTypes: ['don'] });
+    assert.doesNotThrow(() => compile(data));
+    for (const patch of [{ owner: 'OPPONENT' }, { controller: 'OPPONENT' }, { chooser: 'OPPONENT' }, { faceUpOnly: false }, { cardTypes: ['character'] }]) {
+      const invalid = structuredClone(data); Object.assign(invalid.effects[0].actions[0].selector, patch); assert.throws(() => compile(invalid));
+    }
+  }
 });

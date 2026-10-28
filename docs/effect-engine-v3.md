@@ -79,8 +79,8 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ### Phase 2：限定Compilerと承認ゲート
 
-入力版は3.0.0-subset.6、Compiler版はv3-subset-compiler.6です。
-旧subset.1/2/3/4/5、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
+入力版は3.0.0-subset.7、Compiler版はv3-subset-compiler.7です。
+旧subset.1/2/3/4/5/6、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
 schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
 Compilerは型・未知フィールド・参照先・比較の値型・ID重複・原文範囲・複雑度も検証します。
 sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲外終端です。
@@ -91,10 +91,11 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 - predicate: all / any / not / compare（eq / ne / lt / lte / gt / gte）。
 - value ref: SELF/OPPONENTのlifeCount/handCount、SOURCE/CANDIDATEのcost/power/cardType/rotated、選択済みbindingsのcount。自由なJS式や任意プロパティ参照は不可。
 - cost: REST_DON / DISCARD_HAND（各1〜50、DISCARD_HANDは効果単位の合計も50以下）、REST_SOURCE（引数なし、効果単位で1回のみ）。
+- cost: DON_RETURN（count:1〜50、from:activeDon/restDon/attachedDonのいずれか1つ、効果単位で1命令）。
 - action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD / KO / REST / SET_ACTIVE。
 - selector: CARDS（表向き公開カード、または本人が選ぶ自分の手札。SELECT、UNORDERED）。
 
-未対応：自動誘発、イベント、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL/ORDER、DISCARD_HAND以外の選択付きコスト、usageLimit、optional、DON_RETURN、付与、期間、置換、継続、CUSTOM_HANDLER等。
+未対応：自動誘発、イベント、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL/ORDER、DISCARD_HAND/DON_RETURN以外の選択付きコスト、usageLimit、optional、複数DONゾーンをまたぐ返却選択、付与、期間、置換、継続、CUSTOM_HANDLER等。
 未知ノードは読込時に拒否します。schemaOnlyの既存ノードが存在してもv3対応済みとは扱いません。
 predicate/action/cost/replacement/selector/duration/timingのRegistryを用意しています。
 replacement/durationは登録なしで、現在は到達する効果形式も未対応です。
@@ -189,7 +190,11 @@ DISCARD_HANDは自分の手札のcharacter/stage/eventだけを、合計枚数�
 全コストの実行可能性を選択前と支払い要求前に確認し、不足ならblocked、unknownならそのadvanceを確定せず停止します。
 選択確定は支払計画の保存だけで、DONも手札もまだ変更しません。支払い時にも全参照を再検証します。
 同種のDISCARD_HANDは合算します。この限定fixtureの合算処理を、実カードのコスト選択順の公式裁定とは解釈しません。
-保存フレーム版はv3-frame.2で、選択済みcostCardsと支払い済みpaidCostWorkIdを含みます。旧フレームは暗黙復元しません。
+保存フレーム版はv3-frame.3で、選択済みcostCards/costReturnedと支払い済みpaidCostWorkIdを含みます。旧フレームは暗黙復元しません。
+DON_RETURNはfromで指定した自分の公開DONから、指定枚数ちょうど選びます。CARDSも自分のactiveDon/restDon/attachedDonをdon型限定で選択可能です。
+複合コストはこのfixtureでは手札→DONの順に選択し、最後にPAY_COSTSで一括確定します。JSONの配列順を公式のコスト選択順とはみなしません。
+DON返却候補とtokenは操作者だけに送ります。返却枚数とREST_DONを合わせてアクティブDONが足りるかも事前確認します。
+複数ゾーンをまたぐ任意選択、複数DON_RETURN、返却順指定、同じDONのレスト後返却を1コスト内で行う定義は未対応です。曖昧な定義を自動変換しません。
 KO/REST/SET_ACTIVEも同じく盤面操作要求として停止します。これらはcardsに束縛済みカード集合だけを受け付け、クライアントが原因や移動先を上書きすることはできません。
 workIdは解決IDとpcから決まり、再送や復元でも変わりません。
 workForCoordinatorはサーバー専用APIで、要求の参照情報をSocketへそのまま公開してはいけません。
@@ -232,6 +237,7 @@ fixtureEnvironment.tsは実際のMovementStateから候補を列挙し、双方�
 
 - PAY_COSTS: REST_DONとDISCARD_HANDの合計を先に検証。ちょうど合計枚数のACTIVE DONをレストし、選択手札を表向きで自分のトラッシュへ、同じcostトランザクションで移動します。全イベントの原因はCOST_PAYMENTで、部分支払いはしません。
 - PAY_COSTSのREST_SOURCE: 発動元の世代・位置・可視性・所有者・コントローラー・アクティブ状態を再確認してレスト。同じトランザクションでDON/手札も支払い、発動元の世代は変えません。全操作の合計は64以下です。
+- PAY_COSTSのDON_RETURN: 選択DONの世代・元ゾーン・所有者・コントローラー・双方への可視性を再確認してDONデッキ下へ裏向きで戻します。付与は解除、レスト状態も解除し世代は増やします。返却対象をREST_DONの自動選択から除外し、二重使用しません。
 - DRAW: デッキ先頭から手札へEFFECT_MOVE。相手のviewには手札内容を送りません。
 - MOVE_CARD: 現在の世代を再検証し、表向きのcharacter/stage/trash/publicから持ち主の手札/トラッシュ/デッキへ移動。leader/DONの通常エリア移動や他人の所有物化は拒否。
 - MOVE_CARDの自分の手札からの移動: actorの所有/コントロールと本人だけへの可視性を確認し、選択したカードを移動。相手の手札からは移動不可。
@@ -313,6 +319,17 @@ JSON例は次で構文検証できます。needs_reviewのままで実行承認�
 
 ```powershell
 npm run check:effect-v3 -- server/test/fixtures/v3-source-cost-draw.json
+```
+
+「DON返却・複合コストでドロー」は、発動元レスト・DONレスト1枚・手札1枚破棄・別のアクティブDON1枚返却を一括で支払う合成ケースです。
+手札選択を確定→処理を進める→戻すDONを選択・確定→処理を進める→支払いを確定、の順です。
+選択だけでは盤面は変化せず、支払い確定でリーダーレスト、ACTIVE DON 2→0、REST DON 0→1、DONデッキ8→9、手札5→4となります。
+その後に処理を進め、ドローを実行して完了します。通常のルール上の発動・コスト順の裁定ではありません。
+restDon/attachedDonからの返却はサーバーの合成fixtureテストで確認し、この画面のケースはactiveDon返却だけを使用します。
+構文確認用の未承認JSON例も用意しています。
+
+```powershell
+npm run check:effect-v3 -- server/test/fixtures/v3-return-cost-draw.json
 ```
 
 他方ではカード候補や増えた手札の内容を見られず、公開盤面と枚数だけ更新されます。

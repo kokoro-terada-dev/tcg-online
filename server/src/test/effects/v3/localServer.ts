@@ -37,7 +37,7 @@ function fixture(room: Room, scenario: V3Scenario, actor: 0 | 1, signingKey: Uin
   const side = scenario === "ko" || scenario === "rest" ? "OPPONENT" : "SELF";
   const privateHand = scenario === "discardDraw";
   const fieldAction = { ko: "KO", rest: "REST", active: "SET_ACTIVE" } as const;
-  const actions = scenario === "payDraw" || scenario === "discardCostDraw" || scenario === "sourceCostDraw" ? [{ type: "DRAW", player: "SELF", count: 1 }] : [
+  const actions = scenario === "payDraw" || scenario === "discardCostDraw" || scenario === "sourceCostDraw" || scenario === "returnCostDraw" ? [{ type: "DRAW", player: "SELF", count: 1 }] : [
     { type: "SELECT", bindAs: "picked", selector: { type: "CARDS", owner: side, controller: side, zone: privateHand ? "hand" : "character", cardTypes: privateHand ? ["character", "stage", "event"] : ["character"],
       filters: scenario === "rest" || scenario === "active" ? { type: "compare", left: { ref: "CANDIDATE.rotated" }, op: "eq", right: scenario === "active" } : always(),
       excludeSource: !privateHand, faceUpOnly: !privateHand, min: privateHand ? 1 : 0, max: 1, visibility: privateHand ? "OWNER_ONLY" : "PUBLIC", selectionMode: "SELECT", chooser: "SELF", order: "UNORDERED", onInsufficient: "fail" } },
@@ -45,11 +45,11 @@ function fixture(room: Room, scenario: V3Scenario, actor: 0 | 1, signingKey: Uin
       { type: fieldAction[scenario], cards: { ref: "bindings.picked" } },
     ...(privateHand ? [{ type: "DRAW", player: "SELF", count: 1 }] : []),
   ];
-  const plan = compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.6", cardId, cardVersion: `synthetic.${scenario}.1`, name: "V3 synthetic fixture leader", cardType: "leader",
+  const plan = compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.7", cardId, cardVersion: `synthetic.${scenario}.1`, name: "V3 synthetic fixture leader", cardType: "leader",
     baseStats: { cost: null, power: null, counter: null, life: null }, colors: [], traits: [], attributes: [], reviewStatus: "approved",
     source: { text: `Synthetic test only: ${scenario}. Not an official card ability or ruling.`, triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-synthetic-ui.1").digest("hex") },
     effects: [{ id: "main", kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: false, activationConditions: always(), resolutionConditions: always(),
-      costs: scenario === "sourceCostDraw" ? [{ type: "REST_SOURCE" }, { type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }] : scenario === "discardCostDraw" ? [{ type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }] : scenario === "payDraw" ? [{ type: "REST_DON", count: 1 }] : [], actions }] }));
+      costs: scenario === "returnCostDraw" ? [{ type: "REST_SOURCE" }, { type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }, { type: "DON_RETURN", count: 1, from: "activeDon" }] : scenario === "sourceCostDraw" ? [{ type: "REST_SOURCE" }, { type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }] : scenario === "discardCostDraw" ? [{ type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }] : scenario === "payDraw" ? [{ type: "REST_DON", count: 1 }] : [], actions }] }));
   const rulesetVersion = "synthetic-ui.1", card = new ApprovedV3Catalog([plan], [{ status: "approved", cardId, cardVersion: plan.definition.cardVersion, definitionHash: plan.definitionHash, sourceHash: plan.sourceHash,
     compilerVersion: plan.compilerVersion, registryHash: plan.registryHash, rulesetVersion, reviewer: "synthetic-fixture-code", approvedAt: "2026-10-28T00:00:00.000Z", ruleEvidence: ["synthetic-ui-fixture:not-official-card-rulings"] }], rulesetVersion).get(cardId)!;
   let progression = createProgression(actor);
@@ -122,7 +122,7 @@ export async function startLocalV3Server(port = 0) {
       const seat = actor === 0 ? room.host : room.guest!; ensureMove(seat.deck, "v3-deck-required"); seat.ready = input; publish(room); });
     handle("v3:start", input => {
       const room = roomFor(socket.id); ensureMove(room && room.host.socketId === socket.id && !room.session && room.guest && room.host.ready && room.guest.ready && io.sockets.sockets.get(room.guest.socketId)?.connected, "v3-cannot-start");
-      dataObject(input, ["scenario", "actor"]); ensureMove((input.scenario === "bounce" || input.scenario === "payDraw" || input.scenario === "ko" || input.scenario === "rest" || input.scenario === "active" || input.scenario === "discardDraw" || input.scenario === "discardCostDraw" || input.scenario === "sourceCostDraw") && (input.actor === 0 || input.actor === 1), "v3-fixture-options");
+      dataObject(input, ["scenario", "actor"]); ensureMove((input.scenario === "bounce" || input.scenario === "payDraw" || input.scenario === "ko" || input.scenario === "rest" || input.scenario === "active" || input.scenario === "discardDraw" || input.scenario === "discardCostDraw" || input.scenario === "sourceCostDraw" || input.scenario === "returnCostDraw") && (input.actor === 0 || input.actor === 1), "v3-fixture-options");
       room.session = fixture(room, input.scenario, input.actor, key); publish(room); publishGame(room);
     });
     const active = () => { const room = roomFor(socket.id), actor = room ? actorFor(room, socket.id) : null;

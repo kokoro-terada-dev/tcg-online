@@ -163,3 +163,24 @@ test('REST_SOURCE requires feasibility without a card choice and preserves payme
   assert.deepEqual(restored.workForCoordinator(), work); s.setWorld(1); restored.settleWork('source-paid', 1, work.workId, 'applied', 1);
   restored.advance('after-payment', 2); assert.equal(restored.workForCoordinator().type, 'DRAW');
 });
+
+test('hand then DON choices restore independently without sharing tokens or applying payment early', () => {
+  for (const actor of [0, 1]) {
+    const s = setup(d => { d.effects[0].costs = [{ type: 'DISCARD_HAND', count: 1 }, { type: 'DON_RETURN', count: 1, from: 'restDon' }]; d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }]; }, actor);
+    s.env.canPayCosts = () => true;
+    s.setRows([{ ...s.row, zone: 'hand', visibleTo: [actor] }]); s.machine.advance('start', 0); const hand = s.machine.viewFor(actor).choice;
+    s.machine.answer(actor, 'hand', 1, hand.selectionId, [hand.options[0].token]);
+    let m = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, s.machine.exportForStorage(), 2);
+    s.setRows([{ ...s.row, ref: { instanceId: 'don', generation: 2 }, cardId: 'DON', zone: 'restDon', kind: 'don' }]); m.advance('don-start', 2);
+    const don = m.viewFor(actor).choice; assert.equal(don.purpose, 'returnCost'); assert.deepEqual(m.viewFor(1 - actor).choice.options, []);
+    m = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, m.exportForStorage(), 3);
+    assert.deepEqual(m.viewFor(actor).choice, don); assert.throws(() => m.answer(actor, 'wrong-token', 3, don.selectionId, [hand.options[0].token]));
+    m.answer(actor, 'don', 3, don.selectionId, [don.options[0].token]); m.advance('all-planned', 4);
+    const work = m.workForCoordinator(); assert.equal(work.type, 'PAY_COSTS'); assert.equal(s.env.revision(), 0);
+    assert.deepEqual(work.discarded, [{ instanceId: 'candidate', generation: 0 }]); assert.deepEqual(work.returned, [{ instanceId: 'don', generation: 2 }]);
+    m = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, m.exportForStorage(), 5); assert.deepEqual(m.workForCoordinator(), work);
+    s.setWorld(1); m.settleWork('paid', 5, work.workId, 'applied', 1);
+    const state = JSON.parse(JSON.parse(m.exportForStorage()).payload); assert.equal(state.costReturned, null); assert.equal(state.costCards, null);
+    m.advance('draw', 6); assert.equal(m.workForCoordinator().type, 'DRAW');
+  }
+});

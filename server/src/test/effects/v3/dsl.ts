@@ -23,6 +23,7 @@ export interface ActionMap {
   SET_ACTIVE: NodeMeta & { type: "SET_ACTIVE"; cards: CardSetRef };
 }
 export interface CostMap {
+  DON_RETURN: NodeMeta & { type: "DON_RETURN"; count: number; from: "activeDon" | "restDon" | "attachedDon" };
   REST_SOURCE: NodeMeta & { type: "REST_SOURCE" };
   REST_DON: NodeMeta & { type: "REST_DON"; count: number };
   DISCARD_HAND: NodeMeta & { type: "DISCARD_HAND"; count: number };
@@ -36,6 +37,7 @@ export interface SelectorMap {
     min: number; max: number; selectionMode: "SELECT";
     chooser: Player; order: "UNORDERED"; onInsufficient: "fail";
   } & ({ zone: "leader" | "character" | "stage" | "trash" | "public"; visibility: "PUBLIC"; faceUpOnly: true } |
+    { zone: "activeDon" | "restDon" | "attachedDon"; visibility: "PUBLIC"; faceUpOnly: true; owner: "SELF"; controller: "SELF"; chooser: "SELF" } |
     { zone: "hand"; visibility: "OWNER_ONLY"; faceUpOnly: false; owner: "SELF"; controller: "SELF"; chooser: "SELF" });
 }
 export interface DurationMap {}
@@ -51,7 +53,7 @@ export type Effect = {
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };
 export type CardDefinition = {
-  schemaVersion: "3.0.0-subset.6"; cardId: string; cardVersion: string;
+  schemaVersion: "3.0.0-subset.7"; cardId: string; cardVersion: string;
   name: string; cardType: "leader" | "character" | "stage";
   baseStats: { cost: number | null; power: number | null; counter: number | null; life: number | null };
   colors: string[]; traits: string[]; attributes: string[];

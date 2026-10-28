@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:tcg:effect-v3-subset:6",
-  "title": "V3 compiler subset 6; compilation is not execution approval",
+  "$id": "urn:tcg:effect-v3-subset:7",
+  "title": "V3 compiler subset 7; compilation is not execution approval",
   "type": "object", "additionalProperties": false,
   "required": ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"],
   "properties": {
-    "schemaVersion": { "const": "3.0.0-subset.6" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
+    "schemaVersion": { "const": "3.0.0-subset.7" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
     "name": { "$ref": "#/$defs/label" }, "cardType": { "enum": ["leader", "character", "stage"] },
     "baseStats": {
       "type": "object", "additionalProperties": false, "required": ["cost", "power", "counter", "life"],
@@ -67,12 +67,13 @@
     "selector": {
       "allOf": [{ "$ref": "#/$defs/meta" }, { "oneOf": [
         { "properties": { "zone": { "enum": ["leader", "character", "stage", "trash", "public"] }, "visibility": { "const": "PUBLIC" }, "faceUpOnly": { "const": true } } },
+        { "properties": { "zone": { "enum": ["activeDon", "restDon", "attachedDon"] }, "visibility": { "const": "PUBLIC" }, "faceUpOnly": { "const": true }, "owner": { "const": "SELF" }, "controller": { "const": "SELF" }, "chooser": { "const": "SELF" }, "cardTypes": { "const": ["don"] } } },
         { "properties": { "zone": { "const": "hand" }, "visibility": { "const": "OWNER_ONLY" }, "faceUpOnly": { "const": false }, "owner": { "const": "SELF" }, "controller": { "const": "SELF" }, "chooser": { "const": "SELF" } } }
       ] }], "unevaluatedProperties": false,
       "required": ["owner", "controller", "zone", "cardTypes", "filters", "excludeSource", "faceUpOnly", "min", "max", "visibility", "selectionMode", "chooser", "order", "onInsufficient"],
       "properties": {
         "type": { "const": "CARDS" }, "owner": { "$ref": "#/$defs/player" }, "controller": { "$ref": "#/$defs/player" }, "chooser": { "$ref": "#/$defs/player" },
-        "zone": { "enum": ["leader", "character", "stage", "trash", "public", "hand"] },
+        "zone": { "enum": ["leader", "character", "stage", "trash", "public", "hand", "activeDon", "restDon", "attachedDon"] },
         "cardTypes": { "type": "array", "minItems": 1, "maxItems": 5, "uniqueItems": true, "items": { "enum": ["leader", "character", "event", "stage", "don"] } },
         "filters": { "$ref": "#/$defs/predicate" }, "excludeSource": { "type": "boolean" }, "faceUpOnly": { "type": "boolean" },
         "min": { "type": "integer", "minimum": 0, "maximum": 50 }, "max": { "$ref": "#/$defs/count" },
@@ -100,6 +101,7 @@
     },
     "cost": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "oneOf": [
       { "required": ["count"], "properties": { "type": { "enum": ["REST_DON", "DISCARD_HAND"] }, "count": { "$ref": "#/$defs/count" } } },
+      { "required": ["count", "from"], "properties": { "type": { "const": "DON_RETURN" }, "count": { "$ref": "#/$defs/count" }, "from": { "enum": ["activeDon", "restDon", "attachedDon"] } } },
       { "properties": { "type": { "const": "REST_SOURCE" } } }
     ] },
     "timing": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "properties": { "type": { "const": "MAIN" } } },
