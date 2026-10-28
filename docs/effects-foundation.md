@@ -2,6 +2,8 @@
 
 後続の独立したターン・フェーズ基盤は [進行管理の設計・対応状況](progression-foundation.md) を参照してください。DSLも進行基盤も、現行対戦への接続はまだ行っていません。
 
+条件だけを評価する独立基盤は [条件評価器の設計・対応状況](predicate-runtime.md) を参照してください。条件評価が追加されても、定義全体のschemaOnly状態や対戦への未接続状態は変わりません。
+
 ## 適用範囲
 
 基準は [利用者提供のv2.0原文](effects-v2-source.md) です。原文は保持し、ここに補足・実装状況を記録します。
@@ -142,7 +144,7 @@ Selectorを拡張する場合は、カード集合/選択肢等の結果型と�
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build
-node --test test/progression.cjs test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
+node --test test/predicates.cjs test/progression.cjs test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
 cd ..
 node --test tools/test-card-master.test.js
 npm run build

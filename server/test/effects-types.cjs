@@ -8,6 +8,7 @@ test("declaration merging extends typed registries and rejects mismatched comman
   const source = `
 import { Registry } from "./registry";
 import { createBuiltinRegistries } from "./builtins";
+import { PredicateRuntimeRegistry } from "./predicates";
 import type { ActionMap, PredicateMap, ReplacementMap } from "./types";
 declare module "./types" {
   interface ActionMap { probeAction: { kind: "probeAction"; amount: number } }
@@ -18,6 +19,10 @@ const actions = new Registry<ActionMap>();
 actions.register("probeAction", () => ({ kind: "probeAction", amount: 1 }));
 const predicates = new Registry<PredicateMap>();
 predicates.register("probePredicate", () => ({ kind: "probePredicate", enabled: true }));
+const runtime = new PredicateRuntimeRegistry();
+runtime.register("probePredicate", node => ({ state: "known", value: node.enabled }));
+// @ts-expect-error predicate runtime results must be boolean, not numeric
+runtime.register("probePredicate", () => ({ state: "known", value: 1 }));
 const replacements = new Registry<ReplacementMap>();
 replacements.register("probeReplacement", () => ({ kind: "probeReplacement", token: "a" }));
 const builtins = createBuiltinRegistries();
