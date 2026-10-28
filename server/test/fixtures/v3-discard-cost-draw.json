@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "3.0.0-subset.8", "cardId": "EXAMPLE-COST-NOT-REAL", "cardVersion": "fixture.1",
+  "schemaVersion": "3.0.0-subset.9", "cardId": "EXAMPLE-COST-NOT-REAL", "cardVersion": "fixture.1",
   "name": "合成テスト用・DONと手札の複合コスト（実在しません）", "cardType": "leader",
   "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
   "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",

@@ -173,6 +173,41 @@ for (const actor of [0, 1]) test(`mixed DON return for seat ${actor} rejects res
   v = (await request(controller, 'v3:command', command(v, 'advance', 'finish'))).view; assert.equal(v.frame.status, 'completed');
 });
 
+for (const actor of [0, 1]) for (const accepted of [false, true]) test(`optional cost effect for seat ${actor} ${accepted ? 'continues after confirmation' : 'declines without payment'} and syncs the result`, async t => {
+  const { host, clients } = await setup(t), controller = clients[actor], peer = clients[1 - actor];
+  assert.equal((await request(host, 'v3:start', { actor, scenario: 'optionalCostDraw' })).ok, true);
+  let v = (await request(controller, 'v3:sync')).view; const initial = v.movement;
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'confirm-start'))).view;
+  const choice = v.frame.choice; assert.equal(choice.purpose, 'activation'); assert.deepEqual(v.movement, initial);
+  const opposite = (await request(peer, 'v3:sync')).view; assert.deepEqual(opposite.frame.choice.options, []);
+  for (const option of choice.options) assert.equal(JSON.stringify(opposite).includes(option.token), false);
+  const answer = command(v, 'answer', 'confirm-answer', { selectionId: choice.selectionId, tokens: [choice.options[accepted ? 0 : 1].token] });
+  assert.equal((await request(peer, 'v3:command', answer)).ok, false);
+  const earlyPay = await request(controller, 'v3:command', command(v, 'work', 'too-early')); assert.equal(earlyPay.ok, false);
+  v = (await request(controller, 'v3:command', answer)).view;
+  assert.equal((await request(controller, 'v3:command', answer)).view.frame.revision, v.frame.revision);
+  assert.deepEqual(v.movement, initial); const confirmedPeer = (await request(peer, 'v3:sync')).view;
+  assert.equal(confirmedPeer.frame.activationDecision, accepted ? 'accepted' : 'declined');
+  if (!accepted) {
+    assert.equal(v.frame.status, 'completed'); assert.equal(confirmedPeer.frame.status, 'completed');
+    assert.equal(v.progression.gate, 'idle'); assert.equal(v.workType, null);
+    assert.equal((await request(controller, 'v3:command', command(v, 'work', 'after-decline'))).ok, false); return;
+  }
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'hand-start'))).view;
+  assert.equal(v.frame.choice.purpose, 'cost');
+  const staleAnswer = command(v, 'answer', 'stale-confirm', { selectionId: choice.selectionId, tokens: [choice.options[0].token] });
+  assert.equal((await request(controller, 'v3:command', staleAnswer)).ok, false);
+  v = (await request(controller, 'v3:command', command(v, 'answer', 'hand', { selectionId: v.frame.choice.selectionId, tokens: [v.frame.choice.options[0].token] }))).view;
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'plan'))).view; assert.deepEqual(v.movement, initial);
+  v = (await request(controller, 'v3:command', command(v, 'work', 'pay'))).view;
+  assert.equal(v.movement.players[actor].hand.length, 4); assert.equal(v.movement.players[actor].restDon.length, 1);
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'draw-plan'))).view;
+  v = (await request(controller, 'v3:command', command(v, 'work', 'draw'))).view;
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'finish'))).view;
+  assert.equal(v.frame.status, 'completed'); assert.equal(v.movement.players[actor].hand.length, 5);
+  assert.equal((await request(peer, 'v3:sync')).view.frame.status, 'completed');
+});
+
 test('invalid decks do not replace a ready deck, remote browser Origins are denied, and production startup is disabled', async t => {
   const { service, host } = await setup(t);
   assert.equal((await request(host, 'v3-room:deck', { invalid: true })).ok, false);

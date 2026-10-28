@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "3.0.0-subset.9", "cardId": "EXAMPLE-OPTIONAL-NOT-REAL", "cardVersion": "fixture.1",
+  "name": "合成テスト用・任意発動とコスト支払い（実在しません）", "cardType": "leader",
+  "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
+  "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",
+  "source": {
+    "text": "合成テスト：発動するかを選ぶ。発動しない場合は何も変更しない。発動する場合はアクティブDON1枚をレストし、手札1枚を捨てるコストを一括で支払い、1枚引く。公式カードや裁定の定義ではありません。",
+    "triggerText": "", "displayIds": ["EXAMPLE-OPTIONAL-NOT-REAL"],
+    "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "effects": [{
+    "id": "main", "kind": "activated", "timing": { "type": "MAIN" }, "sourceZones": ["leader"], "optional": true,
+    "activationConditions": { "type": "all", "conditions": [] }, "resolutionConditions": { "type": "all", "conditions": [] },
+    "costs": [{ "type": "REST_DON", "count": 1 }, { "type": "DISCARD_HAND", "count": 1 }],
+    "actions": [{ "type": "DRAW", "player": "SELF", "count": 1 }]
+  }]
+}

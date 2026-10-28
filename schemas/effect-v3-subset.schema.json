@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:tcg:effect-v3-subset:8",
-  "title": "V3 compiler subset 8; compilation is not execution approval",
+  "$id": "urn:tcg:effect-v3-subset:9",
+  "title": "V3 compiler subset 9; compilation is not execution approval",
   "type": "object", "additionalProperties": false,
   "required": ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"],
   "properties": {
-    "schemaVersion": { "const": "3.0.0-subset.8" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
+    "schemaVersion": { "const": "3.0.0-subset.9" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
     "name": { "$ref": "#/$defs/label" }, "cardType": { "enum": ["leader", "character", "stage"] },
     "baseStats": {
       "type": "object", "additionalProperties": false, "required": ["cost", "power", "counter", "life"],
@@ -113,7 +113,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["id", "kind", "timing", "sourceZones", "optional", "activationConditions", "resolutionConditions", "costs", "actions"],
       "properties": {
-        "id": { "$ref": "#/$defs/id" }, "kind": { "const": "activated" }, "timing": { "$ref": "#/$defs/timing" }, "optional": { "const": false },
+        "id": { "$ref": "#/$defs/id" }, "kind": { "const": "activated" }, "timing": { "$ref": "#/$defs/timing" }, "optional": { "type": "boolean" },
         "sourceZones": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "enum": ["leader", "character", "stage"] } },
         "activationConditions": { "$ref": "#/$defs/predicate" }, "resolutionConditions": { "$ref": "#/$defs/predicate" },
         "costs": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/cost" } }, "actions": { "allOf": [{ "$ref": "#/$defs/actions" }], "minItems": 1 }

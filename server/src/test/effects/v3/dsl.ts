@@ -50,11 +50,11 @@ export type Predicate = Node<"predicate">;
 export type Action = Node<"action">;
 export type Effect = {
   id: string; kind: "activated"; timing: Node<"timing">;
-  sourceZones: ("leader" | "character" | "stage")[]; optional: false;
+  sourceZones: ("leader" | "character" | "stage")[]; optional: boolean;
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };
 export type CardDefinition = {
-  schemaVersion: "3.0.0-subset.8"; cardId: string; cardVersion: string;
+  schemaVersion: "3.0.0-subset.9"; cardId: string; cardVersion: string;
   name: string; cardType: "leader" | "character" | "stage";
   baseStats: { cost: number | null; power: number | null; counter: number | null; life: number | null };
   colors: string[]; traits: string[]; attributes: string[];

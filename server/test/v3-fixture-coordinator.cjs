@@ -69,6 +69,37 @@ function discardCosts(d) {
   d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }];
 }
 
+test('optional activation releases the gate without payment when declined, or continues through normal hand and DON costs', () => {
+  for (const actor of [0, 1]) for (const accepted of [false, true]) {
+    const c = setup({ actor, mutate: d => { discardCosts(d); d.effects[0].optional = true; } }).coordinator;
+    const before = c.snapshotForCoordinator(); c.advance(actor, 'confirm', c.context()); const choice = c.viewFor(actor).frame.choice;
+    assert.equal(choice.purpose, 'activation'); assert.deepEqual(c.viewFor(1 - actor).frame.choice.options, []);
+    const confirmationContext = c.context(); assert.throws(() => c.applyPendingWork(actor, 'pay-too-early', confirmationContext));
+    assert.deepEqual(c.context(), confirmationContext); assert.equal(c.snapshotForCoordinator().movement, before.movement);
+    const tokens = [choice.options[accepted ? 0 : 1].token]; c.answer(actor, 'confirm-answer', confirmationContext, choice.selectionId, tokens);
+    assert.equal(c.answer(actor, 'confirm-answer', confirmationContext, choice.selectionId, tokens).replayed, true);
+    assert.equal(c.snapshotForCoordinator().movement, before.movement); assert.equal(c.snapshotForCoordinator().movementEvents.length, 0);
+    assert.equal(c.viewFor(1 - actor).frame.activationDecision, accepted ? 'accepted' : 'declined');
+    if (!accepted) {
+      assert.equal(c.viewFor(actor).frame.status, 'completed'); assert.equal(c.viewFor(actor).progression.gate, 'idle');
+      assert.equal(checkTiming(c.snapshotForCoordinator().progression, actor, 'mainEffect').allowed, true); continue;
+    }
+    c.advance(actor, 'choose-hand', c.context()); const hand = c.viewFor(actor).frame.choice;
+    assert.equal(hand.purpose, 'cost'); c.answer(actor, 'hand', c.context(), hand.selectionId, [hand.options[0].token]);
+    c.advance(actor, 'plan', c.context()); c.applyPendingWork(actor, 'pay', c.context());
+    assert.equal(c.viewFor(actor).movement.players[actor].hand.length, 4); assert.equal(c.viewFor(actor).movement.players[actor].restDon.length, 1);
+    c.advance(actor, 'draw-plan', c.context()); c.applyPendingWork(actor, 'draw', c.context()); c.advance(actor, 'done', c.context());
+    assert.equal(c.viewFor(actor).frame.status, 'completed'); assert.equal(c.viewFor(actor).progression.gate, 'idle');
+  }
+});
+
+test('declining optional activation needs no funds and cannot be turned into an automatic payment', () => {
+  const c = setup({ don: 0, handCount: 0, mutate: d => { discardCosts(d); d.effects[0].optional = true; } }).coordinator;
+  const before = c.snapshotForCoordinator(); c.advance(0, 'start', c.context()); const choice = c.viewFor(0).frame.choice;
+  c.answer(0, 'decline', c.context(), choice.selectionId, [choice.options[1].token]);
+  assert.equal(c.snapshotForCoordinator().movement, before.movement); assert.equal(c.pendingWorkKind(), null); assert.equal(c.viewFor(0).progression.gate, 'idle');
+});
+
 test('DON_RETURN selects exact owned active, rested or attached DON and resets it in the DON deck for both seats', () => {
   for (const actor of [0, 1]) for (const from of ['activeDon', 'restDon', 'attachedDon']) {
     const s = setup({ actor, restDon: from === 'restDon' ? 1 : 0, attach: from === 'attachedDon', mutate: d => {

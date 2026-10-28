@@ -8,7 +8,7 @@ import TestBoard from "./TestBoard";
 import "./testEffect.css";
 import "./v3Fixture.css";
 const url = import.meta.env.VITE_TEST_SERVER_URL?.trim();
-const scenarios: Record<V3Scenario, string> = { bounce: "公開キャラ → 手札", payDraw: "DONレスト → ドロー", ko: "相手キャラをKO", rest: "相手キャラをレスト", active: "自分のキャラをアクティブ", discardDraw: "手札を捨ててドロー", discardCostDraw: "DON・手札コストでドロー", sourceCostDraw: "発動元レスト・DON・手札でドロー", returnCostDraw: "DON返却・複合コストでドロー", mixedReturnCostDraw: "複数エリアからDON返却" };
+const scenarios: Record<V3Scenario, string> = { bounce: "公開キャラ → 手札", payDraw: "DONレスト → ドロー", ko: "相手キャラをKO", rest: "相手キャラをレスト", active: "自分のキャラをアクティブ", discardDraw: "手札を捨ててドロー", discardCostDraw: "DON・手札コストでドロー", sourceCostDraw: "発動元レスト・DON・手札でドロー", returnCostDraw: "DON返却・複合コストでドロー", mixedReturnCostDraw: "複数エリアからDON返却", optionalCostDraw: "任意発動・コストでドロー" };
 const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする" };
 export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
   const socket = useRef<Socket | null>(null), roomRef = useRef<V3RoomView | null>(null), viewRef = useRef<V3FixtureView | null>(null), epoch = useRef(0), flight = useRef(false);
@@ -58,7 +58,7 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
       <div hidden={collapsed}>
       <strong>v3検証・合成効果</strong><p>{scenarios[view.scenario]}</p>
-      <p role="status">{view.frame.status === "completed" ? "処理完了" : view.frame.status === "blocked" ? "未対応または処理不可・停止中" : view.actor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち"}</p>
+      <p role="status">{view.frame.status === "completed" ? view.frame.activationDecision === "declined" ? "発動せず終了" : "処理完了" : view.frame.status === "blocked" ? "未対応または処理不可・停止中" : view.actor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち"}</p>
       {view.frame.choice?.chooser === view.localPlayerIndex && <Choice key={view.frame.choice.selectionId} view={view} disabled={busy || needsSync} onConfirm={tokens => action("answer", tokens)} />}
       <div className="test-effect-actions">
         {view.actor === view.localPlayerIndex && view.frame.status === "ready" && <button disabled={busy || needsSync} onClick={() => action("advance")}>処理を進める</button>}
@@ -95,6 +95,9 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
 }
 function Choice({ view, disabled, onConfirm }: { view: V3FixtureView; disabled: boolean; onConfirm: (tokens: string[]) => void }) {
   const [tokens, setTokens] = useState<string[]>([]), [failed, setFailed] = useState<string[]>([]), choice = view.frame.choice!;
+  if (choice.purpose === "activation") return <div><p>効果を発動しますか？</p><div className="test-effect-actions v3-activation-actions">{choice.options.map(option =>
+    <button key={option.token} disabled={disabled} onClick={() => onConfirm([option.token])}>{option.label}</button>
+  )}</div></div>;
   const activeSelected = choice.options.filter(option => option.zone === "activeDon" && tokens.includes(option.token)).length;
   return <div><p>{choice.purpose === "cost" ? "コストで捨てる手札" : choice.purpose === "returnCost" ? "DONデッキへ戻すDON" : "カード選択"} {tokens.length} / {choice.max}</p><div className="test-effect-candidates">{choice.options.map(option => {
     const image = getLocalCardImage(option.cardId)?.imageUrl;

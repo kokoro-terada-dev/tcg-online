@@ -200,3 +200,47 @@ test('mixed DON choices restore labels and active limits; invalid plans can be c
   s.env.canPayCosts = () => true; m.answer(0, 'corrected', 1, choice.selectionId, tokens); m.advance('plan', 2);
   assert.deepEqual(m.workForCoordinator().returned.map(ref => ref.instanceId), ['don-0', 'don-2']);
 });
+
+test('optional activation survives restore, exposes only chooser tokens, and can be declined without any work', () => {
+  for (const actor of [0, 1]) for (const accepted of [false, true]) {
+    const s = setup(d => { d.effects[0].optional = true; d.effects[0].costs = [{ type: 'REST_DON', count: 1 }]; d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }]; }, actor);
+    s.env.candidates = () => { throw Error('Activation is not a card selection'); };
+    s.machine.advance('confirm', 0); const choice = s.machine.viewFor(actor).choice, before = s.machine.exportForStorage();
+    assert.equal(choice.purpose, 'activation'); assert.deepEqual(choice.options.map(option => option.label), ['発動する', '発動しない']);
+    assert.deepEqual(s.machine.viewFor(1 - actor).choice.options, []); assert.equal(s.machine.workForCoordinator(), null);
+    assert.equal(choice.options.some(option => 'cardId' in option || 'ref' in option || 'decision' in option), false);
+    for (const tokens of [[], choice.options.map(option => option.token), ['forged-token']]) {
+      assert.throws(() => s.machine.answer(actor, 'invalid', 1, choice.selectionId, tokens)); assert.equal(s.machine.exportForStorage(), before);
+    }
+    assert.throws(() => s.machine.answer(1 - actor, 'foreign', 1, choice.selectionId, [choice.options[0].token]));
+    let m = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, before, 1); assert.deepEqual(m.viewFor(actor).choice, choice);
+    const tokens = [choice.options[accepted ? 0 : 1].token]; m.answer(actor, 'decision', 1, choice.selectionId, tokens);
+    assert.equal(m.answer(actor, 'decision', 1, choice.selectionId, tokens).replayed, true); assert.equal(s.env.revision(), 0);
+    assert.equal(m.workForCoordinator(), null); assert.equal(m.viewFor(actor).activationDecision, accepted ? 'accepted' : 'declined');
+    m = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, m.exportForStorage(), 2);
+    if (!accepted) { assert.equal(m.viewFor(actor).status, 'completed'); assert.throws(() => m.advance('after-decline', 2)); continue; }
+    s.env.canPayCosts = () => true; m.advance('cost', 2); const work = m.workForCoordinator(); assert.equal(work.type, 'PAY_COSTS');
+    s.setWorld(1); m.settleWork('pay', 3, work.workId, 'applied', 1); m.advance('draw', 4); assert.equal(m.workForCoordinator().type, 'DRAW');
+  }
+});
+
+test('optional activation has normal expiry and does not guess missing costs, conditions or a default decision', () => {
+  const mutate = d => { d.effects[0].optional = true; d.effects[0].costs = [{ type: 'REST_DON', count: 1 }]; };
+  const expired = setup(mutate); expired.machine.advance('start', 0); const choice = expired.machine.viewFor(0).choice;
+  expired.setNow(choice.expiresAt); const initial = expired.machine.exportForStorage();
+  assert.throws(() => expired.machine.answer(0, 'expired', 1, choice.selectionId, [choice.options[1].token])); assert.equal(expired.machine.exportForStorage(), initial);
+  const unknown = setup(mutate); unknown.machine.advance('start', 0); const confirm = unknown.machine.viewFor(0).choice;
+  unknown.machine.answer(0, 'yes', 1, confirm.selectionId, [confirm.options[0].token]); const confirmed = unknown.machine.exportForStorage();
+  assert.throws(() => unknown.machine.advance('unknown-costs', 2)); assert.equal(unknown.machine.exportForStorage(), confirmed);
+  unknown.env.canPayCosts = () => false; unknown.machine.advance('unpayable', 2); assert.equal(unknown.machine.viewFor(0).status, 'blocked'); assert.equal(unknown.env.revision(), 0);
+  const inactive = setup(mutate); inactive.env.evaluate = () => false; inactive.machine.advance('not-eligible', 0);
+  assert.equal(inactive.machine.viewFor(0).status, 'completed'); assert.equal(inactive.machine.viewFor(0).choice, null); assert.equal(inactive.machine.viewFor(0).activationDecision, null);
+});
+
+test('a cost-free optional effect continues straight to its actions after confirmation', () => {
+  const s = setup(d => { d.effects[0].optional = true; d.effects[0].costs = []; d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }]; });
+  s.env.canPayCosts = () => { throw Error('No cost feasibility check is needed'); };
+  s.machine.advance('start', 0); const choice = s.machine.viewFor(0).choice;
+  s.machine.answer(0, 'yes', 1, choice.selectionId, [choice.options[0].token]); s.machine.advance('action', 2);
+  assert.equal(s.machine.workForCoordinator().type, 'DRAW'); assert.equal(s.env.revision(), 0);
+});

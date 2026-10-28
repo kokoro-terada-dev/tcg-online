@@ -79,8 +79,8 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ### Phase 2：限定Compilerと承認ゲート
 
-入力版は3.0.0-subset.8、Compiler版はv3-subset-compiler.8です。
-旧subset.1/2/3/4/5/6/7、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
+入力版は3.0.0-subset.9、Compiler版はv3-subset-compiler.9です。
+旧subset.1/2/3/4/5/6/7/8、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
 schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
 Compilerは型・未知フィールド・参照先・比較の値型・ID重複・原文範囲・複雑度も検証します。
 sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲外終端です。
@@ -88,6 +88,7 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 対応するコンパイル命令：
 
 - timing: MAIN。kindはactivatedのみ。leader/character/stageの自身のゾーンのみ。
+- optional: true/falseを明示。trueは発動条件確認後、コスト選択前に操作者へ確認を出し、辞退なら何も支払わず終了します。
 - predicate: all / any / not / compare（eq / ne / lt / lte / gt / gte）。
 - value ref: SELF/OPPONENTのlifeCount/handCount、SOURCE/CANDIDATEのcost/power/cardType/rotated、選択済みbindingsのcount。自由なJS式や任意プロパティ参照は不可。
 - cost: REST_DON / DISCARD_HAND（各1〜50、DISCARD_HANDは効果単位の合計も50以下）、REST_SOURCE（引数なし、効果単位で1回のみ）。
@@ -95,7 +96,7 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 - action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD / KO / REST / SET_ACTIVE。
 - selector: CARDS（表向き公開カード、または本人が選ぶ自分の手札。SELECT、UNORDERED）。
 
-未対応：自動誘発、イベント、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL/ORDER、DISCARD_HAND/DON_RETURN以外の選択付きコスト、usageLimit、optional、付与、期間、置換、継続、CUSTOM_HANDLER等。
+未対応：自動誘発、イベント、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL/ORDER、DISCARD_HAND/DON_RETURN以外の選択付きコスト、usageLimit、効果途中の任意分岐、付与、期間、置換、継続、CUSTOM_HANDLER等。
 未知ノードは読込時に拒否します。schemaOnlyの既存ノードが存在してもv3対応済みとは扱いません。
 predicate/action/cost/replacement/selector/duration/timingのRegistryを用意しています。
 replacement/durationは登録なしで、現在は到達する効果形式も未対応です。
@@ -190,7 +191,7 @@ DISCARD_HANDは自分の手札のcharacter/stage/eventだけを、合計枚数�
 全コストの実行可能性を選択前と支払い要求前に確認し、不足ならblocked、unknownならそのadvanceを確定せず停止します。
 選択確定は支払計画の保存だけで、DONも手札もまだ変更しません。支払い時にも全参照を再検証します。
 同種のDISCARD_HANDは合算します。この限定fixtureの合算処理を、実カードのコスト選択順の公式裁定とは解釈しません。
-保存フレーム版はv3-frame.4で、選択済みcostCards/costReturnedと支払い済みpaidCostWorkId、候補のゾーン/表示ラベル/返却可能なアクティブDON上限を含みます。旧フレームは暗黙復元しません。
+保存フレーム版はv3-frame.5で、選択済みcostCards/costReturnedと支払い済みpaidCostWorkId、候補のゾーン/表示ラベル/返却可能なアクティブDON上限、任意発動の確認結果activationDecisionを含みます。旧フレームは暗黙復元しません。
 DON_RETURNはfromで指定した自分の公開DONから、指定枚数ちょうど選びます。複数ゾーンを配列指定して混在選択できます。
 CARDSも自分のactiveDon/restDon/attachedDonをdon型限定で選択可能で、zoneは単一指定または同じDONゾーン配列を受け付けます。
 複合コストはこのfixtureでは手札→DONの順に選択し、最後にPAY_COSTSで一括確定します。JSONの配列順を公式のコスト選択順とはみなしません。
@@ -206,6 +207,14 @@ workForCoordinatorはサーバー専用APIで、要求の参照情報をSocket�
 信頼済みCoordinatorが全件を原子的に処理し、盤面revisionを1つ増やした場合だけsettleWork(applied)で進めます。
 失敗時は盤面revisionを変えずsettleWork(rejected)でblockedにします。部分支払いや勝手な次命令へのスキップはしません。
 このモジュール自体はカード移動、DONレスト、ドロー、イベント発火、勝敗判定を一切実施しません。
+
+optional:trueでは、発動条件を確認してからpurpose:activationの専用選択待ちを保存します。これはカード対象選択ではなく、発動前の確認です。
+操作者だけに「発動する」「発動しない」の不透明tokenを送ります。相手にはoptionsを送らず、どちらかが確定した後のactivationDecisionだけ両者に公開します。
+辞退するとcompletedになり、Coordinatorは進行ゲートを解放します。盤面・イベント・DON・手札は変更しません。
+承認しただけでは支払い・移動・正式な発動イベントは発生しません。次のadvanceでコストの実行可能性を確認し、必要な選択と一括支払いへ進みます。
+コスト不足ではblocked、unknownではそのadvanceを確定せず停止します。発動可能性の事前保証や、支払い後の取消しを実装したものではありません。
+確認待ちも通常選択と同じ2分期限・actor/token/revision検証・冪等性・署名付き復元を使い、期限切れで承認/辞退を自動決定しません。
+optional:falseには確認画面を追加しません。必須効果をクライアント指定で任意化することもできません。
 
 全制御要求はrequestIdとフレームrevisionで冪等性を確認します。内容を変えた再送は拒否し、512件で安全に停止します。
 exportForStorageはフレームをHMAC-SHA256署名付きで返します。署名鍵はサーバー側の32〜128byteの秘密値で、フレームとは別管理します。
@@ -348,6 +357,15 @@ DONレスト1枚・手札1枚破棄・3エリアからDON2枚返却を一括で�
 npm run check:effect-v3 -- server/test/fixtures/v3-mixed-return-cost-draw.json
 ```
 
+「任意発動・コストでドロー」は、「処理を進める」→「発動する/発動しない」の確認から始まります。
+辞退すると双方に「発動せず終了」と表示し、盤面はそのままです。承認後は処理を進め、手札1枚選択→支払いを確定→ドロー、という既存の流れを使います。
+承認直後ではDON・手札は変更しません。相手からの回答や期限切れ・古い確認tokenでの回答は拒否します。
+needs_reviewの構文確認例を用意しており、実カードの任意発動タイミングや誘発処理を承認するものではありません。
+
+```powershell
+npm run check:effect-v3 -- server/test/fixtures/v3-optional-cost-draw.json
+```
+
 他方ではカード候補や増えた手札の内容を見られず、公開盤面と枚数だけ更新されます。
 「盤面を見る」でパネルを小さくできます。カードの詳細表示は従来のTestBoardを使用します。
 
@@ -362,7 +380,26 @@ Socketのactorはサーバーの所属情報から決め、両者接続・要求
 最新の試合IDとrevisionを照合して、退出後の応答や古い盤面で新しい盤面を上書きしないようにします。
 ViteのDEVかつ専用フラグが有効な場合だけ新しい画面を表示し、従来のdev:effectsと公開ビルドは従来画面のままです。
 
-### 続く開発
+### 開発予定表（2026-10-29更新）
+
+日付固定ではなく依存関係順の予定です。各段階を小さな変更へ分け、ビルドと関連テストを通してからpushします。
+ユーザーが実機操作を確認し、見つかった不具合を次の拡張より優先します。通常対戦・一人回しへ自動的には反映しません。
+
+| 順序 | 実装内容 | 完了条件 |
+| --- | --- | --- |
+| 現在 | 型付きJSON、承認ゲート、保存可能な選択/制御、複合コスト、任意発動確認 | 合成効果を両端末で選択・支払い・辞退できる。実カードの意味的承認はまだ0件 |
+| 1（次） | 単発fixtureから連続操作できるv3試合進行基盤へ。ターン/プレイヤー/発動回数の管理 | 同じ盤面で複数効果を処理し、1ターン1回等をサーバーで検証。辞退や再送で回数を誤消費しない |
+| 2 | 通常の手札からの使用・登場、対象条件、サーチ/一時公開/並べ替え | 空き枠・支払い・隠し情報・移動先を検証し、選択待ちから正しく再開。相手へ不要な情報を送らない |
+| 3 | パワー/コスト修正、能力付与、期間管理 | 元の値を壊さず増減を合算し、指定したターン/イベント境界で失効。Registryの実行ハンドラー契約も拡張 |
+| 4 | 登場時/アタック時/KO時等の誘発キューと裁定ポリシー | 発生原因を保持し、同時誘発を順序選択可能。未確認の順序は止まり、無限ループを防ぐ |
+| 5 | バトル全体のv3接続 | アタック→効果→ブロック→カウンター→ダメージ/トリガー→終了をサーバー主導で進める |
+| 6 | 少数のレビュー済み実カードをJSON登録し、制限付きテスト対戦へ | 必要な能力/条件/裁定が確認済みのカードだけを許可。両端末で開始から勝敗まで対戦できる |
+| 7 | 置換・耐性・継続効果と対応カードの拡充 | 対象不可/効果を受けない/KO不可等を区別し、未対応を無視して進めない。必要なカードは段階6へ先行実装 |
+| 8 | DB永続化・再接続復旧・負荷確認・公開環境への段階導入 | 盤面/制御/支払い記録を同時保存し、再起動後も二重処理せず復旧。既存モードと分離して導入 |
+
+当面のv3画面は合成効果の検証用であり、従来のテスト対戦とは別です。「実カードで対戦できる」報告は段階6の完了条件を満たした時点で行います。
+全カードの自動対応を段階6の前提にはしません。ただし未対応カードを効果なし扱いで参加させず、承認済みの狭い範囲から始めます。
+カードテキストの曖昧な自動変換はせず、公式裁定の根拠と確認状態を保持します。必要な例外はRegistryとRulesetPolicyで追加します。
 
 Phase 2の残りでは、非公開選択や順序選択等のCompiler対応を、実行可能な範囲と分けて拡充します。既存のkind形式は別版のまま維持します。
 今後は検証結果を見て、承認済み定義の読込や対象範囲・イベント/置換処理を段階的に拡張します。正式対戦への自動切替や、未承認の実カードへの適用はしません。

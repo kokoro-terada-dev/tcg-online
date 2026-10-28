@@ -9,7 +9,7 @@ const compile = value => compileV3CardJson(JSON.stringify(value));
 const predicate = (ref, op = 'gt', right = 0) => ({ type: 'compare', left: { ref }, op, right });
 test('public selection compiles typed card sets, count references, filters and effect-only movement', () => {
   const plan = compileV3CardJson(raw), actions = plan.definition.effects[0].actions;
-  assert.equal(plan.compilerVersion, 'v3-subset-compiler.8'); assert.equal(plan.status, 'compiled_not_executable');
+  assert.equal(plan.compilerVersion, 'v3-subset-compiler.9'); assert.equal(plan.status, 'compiled_not_executable');
   assert.equal(actions[0].selector.min, 0); assert.equal(actions[0].selector.onInsufficient, 'fail');
   assert.equal(actions[1].then[0].cards.ref, 'bindings.picked');
   assert.ok(plan.requiredHandlers.includes('selector:CARDS')); assert.ok(plan.requiredHandlers.includes('action:MOVE_CARD'));
@@ -64,7 +64,7 @@ test('sequences share ordered bindings; moves cannot disguise a cost, KO or reve
   deck.effects[0].actions[0].selector.max = 2; assert.throws(() => compile(deck));
 });
 test('old subset versions are refused rather than silently changing approval semantics', () => {
-  for (const version of ['3.0.0-subset.1', '3.0.0-subset.2', '3.0.0-subset.3', '3.0.0-subset.4', '3.0.0-subset.5', '3.0.0-subset.6', '3.0.0-subset.7']) { const data = fixture(); data.schemaVersion = version; assert.throws(() => compile(data)); }
+  for (const version of ['3.0.0-subset.1', '3.0.0-subset.2', '3.0.0-subset.3', '3.0.0-subset.4', '3.0.0-subset.5', '3.0.0-subset.6', '3.0.0-subset.7', '3.0.0-subset.8']) { const data = fixture(); data.schemaVersion = version; assert.throws(() => compile(data)); }
 });
 
 test('KO and absolute rest actions require a defined card set and cannot masquerade as costs or battle damage', () => {
@@ -133,4 +133,11 @@ test('DON_RETURN and DON selectors accept explicit mixed zones but never empty, 
   for (const zone of [[], ['activeDon', 'activeDon'], ['hand', 'restDon'], ['donDeck']]) {
     const copy = structuredClone(data); copy.effects[0].actions[0].selector.zone = zone; assert.throws(() => compile(copy));
   }
+});
+
+test('effect optionality is an explicit boolean and changes the reviewed definition hash', () => {
+  const data = fixture(), required = compile(data); data.effects[0].optional = true;
+  const optional = compile(data); assert.equal(optional.definition.effects[0].optional, true); assert.notEqual(optional.definitionHash, required.definitionHash);
+  for (const value of [null, 'true', 1, {}, []]) { data.effects[0].optional = value; assert.throws(() => compile(data)); }
+  delete data.effects[0].optional; assert.throws(() => compile(data));
 });
