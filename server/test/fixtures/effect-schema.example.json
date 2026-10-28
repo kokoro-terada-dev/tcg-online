@@ -1,0 +1,40 @@
+{
+  "dslVersion": 1,
+  "effectId": "EXAMPLE-001.onPlay",
+  "cardId": "EXAMPLE-001",
+  "trigger": { "kind": "event", "event": "onPlay" },
+  "condition": {
+    "kind": "compare",
+    "operator": "GTE",
+    "left": { "kind": "ref", "from": "SELF", "field": "lifeCount" },
+    "right": { "kind": "literal", "value": 1 }
+  },
+  "costs": [{ "kind": "payDon", "amount": 1 }],
+  "actions": [
+    {
+      "kind": "select",
+      "selector": {
+        "kind": "cards",
+        "chooser": "SELF",
+        "owner": "OPPONENT",
+        "zones": ["character"],
+        "min": 0,
+        "max": 1,
+        "mode": "SELECT",
+        "condition": {
+          "kind": "compare",
+          "operator": "LTE",
+          "left": { "kind": "ref", "from": "TARGET", "field": "cost" },
+          "right": { "kind": "literal", "value": 4 }
+        }
+      },
+      "saveAs": "selectedCharacters"
+    },
+    {
+      "kind": "move",
+      "cards": { "kind": "ref", "from": "VARIABLE", "name": "selectedCharacters" },
+      "destination": { "owner": "OPPONENT", "zone": "hand", "position": "append", "visibility": "faceUp" },
+      "cause": "EFFECT_MOVE"
+    }
+  ]
+}
