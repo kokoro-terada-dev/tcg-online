@@ -8,6 +8,7 @@ import { PreparedMovementEffect, type SelectionPending } from "./movementActions
 import type { MasterFactOptions } from "./masterFacts";
 import { validateEffectDefinition } from "./validation";
 import type { SelectionView } from "./selectionTypes";
+import type { CompositeCostSession } from "./movementCosts";
 
 export type EffectRevisions = Readonly<{ movement: number; progression: number }>;
 
@@ -61,7 +62,14 @@ export class TimedMovementEffect {
       { kind: "finishResolution", resolutionId: this.#identity.resolutionId });
     return next;
   }
-  start(actor: Player, expected: EffectRevisions, rules: MovementRules): TransactionResult {
+  createCostSession(actor: Player, expected: EffectRevisions): CompositeCostSession {
+    this.#check(expected); ensureMove(actor === this.#identity.actor, "wrong-timed-effect-actor");
+    ensureMove(checkTiming(this.#progression, actor, this.#intent).allowed, "timed-effect-window-unavailable");
+    this.#busy = true;
+    try { return this.#effect.createCostSession(expected.movement); }
+    finally { this.#busy = false; }
+  }
+  start(actor: Player, expected: EffectRevisions, rules: MovementRules, payment?: CompositeCostSession): TransactionResult {
     this.#check(expected); ensureMove(actor === this.#identity.actor, "wrong-timed-effect-actor");
     // At most 128 selection instructions, each with wait/accept, plus begin/finish.
     ensureMove(this.#progression.revision <= Number.MAX_SAFE_INTEGER - 258, "timed-effect-revision-limit");
@@ -72,7 +80,7 @@ export class TimedMovementEffect {
       { kind: "beginResolution", resolutionId: this.#identity.resolutionId, controller: actor });
     this.#busy = true;
     try {
-      const result = this.#effect.start(expected.movement, rules);
+      const result = this.#effect.start(expected.movement, rules, payment);
       this.#progression = this.#sync(next);
       return result;
     } finally { this.#busy = false; }

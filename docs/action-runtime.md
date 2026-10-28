@@ -112,17 +112,44 @@ costsがpayDonだけで構成される定義を、既存CostPlanSessionへ接続
 - 支払い後の選択待ち・任意の子処理を断る操作・効果失敗では、支払いを自動返却しません。
 - コストは最大16個、支払うDONの合計はMovementの操作上限64枚以下です。
 
-DONの選択UI、別の支払い候補への自動再試行、順序依存の支払い、
-restCards/moveCards/revealCardsを含む複合コストの確定は未対応です。
-これらを含む定義は、一部だけ実行せず生成時に拒否します。
+DONの選択UI、別の支払い候補への自動再試行、順序依存の支払いは未対応です。
+
+## 複合コストの選択と確定
+
+payDon/restCards/moveCardsを組み合わせたindependent支払いを追加しました。
+createCostSession(revision)でサーバー専用CompositeCostSessionを作成します。
+選択が必要ならsession.viewFor(actor)のViewだけを選択者へ送り、
+session.answer(actor, reply)で選びます。全選択がそろったreadyのセッションを
+start(revision, rules, session)へ渡すと、1回のcost取引でまとめて支払います。
+
+- 計画中はMovementの状態・revisionを変更しません。Session本体や生の参照は送信しません。
+- 非DONコストから選び、残りのDON支払いを自動割当します。ALLも自動計画します。
+- 同じ実体を複数コストに使う選択は禁止し、残りを支払えなくなる選択はfalseを返して選び直します。
+- 選び直しは新しいselectionId/トークンです。古い回答は再利用できません。
+- session.cancel(actor)は未払い計画だけを破棄します。盤面は変わりません。
+- 確定直前に対戦・revision・盤面全体・actor・resolutionId・コスト定義と支払い計画を再検証します。
+- 支払いが防止・失敗した場合は全体を元の状態に戻し、計画はreadyのまま維持します。
+- 成功時だけ計画をconsumedにします。コストsaveAsには移動後の世代のカード集合を保存します。
+- 支払い中のコールバックから計画を取り消したり再利用したりする再入を拒否します。
+
+複合コストを持つ定義をセッションなしでstartしても、DONだけを先払いせず拒否します。
+コストによるキャラクター移動でも付与DONの自動返却を同じ取引内で行い、KOとは扱いません。
+moveCardsの対象は既存Cost Registryの自分の手札・盤面・DON領域に限定されます。
+最大16コスト、各selector.maxの合計による潜在操作数は64以下です。
+複数カードのtop挿入順は推測せず事前に拒否します。
+
+これは通信UIや、コスト選択中のProgression choice gateとの接続ではありません。
+TimedMovementEffectも計画作成と最終startをサポートしますが、計画中は元のidleを保持します。
+独立モデルでは所有者が盤面を保持するため変更競合は発生しません。既存Matchへ接続する際は、
+計画中の操作ロック・切断・選択UIを別途実装し、同じ盤面を並行して書き換えてはいけません。
 
 ## 明示的な未対応
 
-- payDon以外のコスト（支払い前に拒否）
+- revealCards、順序依存のコスト（支払い前に拒否）
 - modify、耐性、置換の設置と誘発待機
 - 複数カードの山札上への移動順序（推測せず停止）
 - 山札不足時の部分ドローや敗北判定（推測せず停止）
-- 複合コストの確定、完全な現在値計算、Socket通信、保存・再接続
+- コスト計画中の通信・進行gate、完全な現在値計算、Socket通信、保存・再接続
 
 ドローは1命令最大64枚、展開後の末端命令は最大128個です。
 構造検証の既存上限とMovementの操作・イベント上限も有効です。
@@ -132,5 +159,5 @@ restCards/moveCards/revealCardsを含む複合コストの確定は未対応で�
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build
-node --test test/action-cost.cjs test/master-facts.cjs test/action-control.cjs test/action-selection.cjs test/movement-actions.cjs test/resolution.cjs
+node --test test/composite-cost.cjs test/action-cost.cjs test/master-facts.cjs test/action-control.cjs test/action-selection.cjs test/movement-actions.cjs test/resolution.cjs
 ```

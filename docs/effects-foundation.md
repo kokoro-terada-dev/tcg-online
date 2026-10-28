@@ -4,7 +4,7 @@ DSLの一部を独立モデルで実行する基盤は [Action実行器](action-
 
 Action実行器はサーバーのMasterSnapshotを版固定で参照できます。カード名・特徴などのFactsと、未補正と保証できる場合に限定した数値Factsを追加しました。実際の発動権限や全ての効果適用後の現在値計算を実装したものではありません。
 
-payDonだけの効果定義は、既存CostPlanSessionによる計画・再検証から独立Movement上の一括支払いへ接続しました。手札の破棄などを含む複合コスト、実際の対戦・UI・通信への接続はまだありません。
+CompositeCostSessionで、既存CostPlanSessionによる計画・再検証からindependentなpayDon/restCards/moveCardsの選択と独立Movement上の一括確定を接続しました。手札公開・順序依存コスト・計画中の進行gate・既存対戦/通信への接続は未対応です。
 
 [起動効果の接続](activation-runtime.md) では盤面起動効果のmain/counterタイミング、支払い前condition、選択gate、完了解除を連動させました。誘発・手札イベント・完全な発動合法性・既存対戦は未接続です。
 

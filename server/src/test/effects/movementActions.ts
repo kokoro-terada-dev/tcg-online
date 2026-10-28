@@ -1,4 +1,4 @@
-import type { Action, CardObjectRef, DeepReadonly, EffectDefinition, Predicate } from "./types";
+import type { Action, CardObjectRef, Cost, DeepReadonly, EffectDefinition, Predicate } from "./types";
 import { validateEffectDefinition } from "./validation";
 import { MovementResolution, type ResolutionIdentity } from "../movement/resolution";
 import { ensureMove, getCard, location } from "../movement/state";
@@ -11,7 +11,8 @@ import { createEvaluationBudget, evaluateCondition } from "./predicates";
 import { movementSelectionSnapshot, movementSourceFacts } from "./movementSelection";
 import { visibleTo } from "../movement/engine";
 import { pinMasterFacts, type MasterFactOptions, type PinnedMasterFacts } from "./masterFacts";
-import { prepareDonPayment, validateDonPayments, type DonPayment } from "./movementCosts";
+import { prepareDonPayment, movementCostSnapshot, validateMovementPayments, CompositeCostSession, costMovementOperations } from "./movementCosts";
+import type { ResourceCostPlan } from "./costTypes";
 import type { Phase, Player } from "../progression/types";
 
 type Leaf = DeepReadonly<Extract<Action, { kind: "draw" | "move" | "select" | "if" | "optional" }>>;
@@ -35,7 +36,8 @@ export class PreparedMovementEffect {
   #nextBranchId = 0;
   #conditionBudget = createEvaluationBudget();
   #catalog: PinnedMasterFacts;
-  #costs: readonly DonPayment[];
+  #costs: readonly DeepReadonly<Cost>[];
+  #rootScope: Scope = { parent: null, bindings: new Map() };
   #condition: DeepReadonly<Predicate> | undefined;
   #turnContext: EffectTurnContext | undefined;
   constructor(state: MovementState, identity: ResolutionIdentity, input: unknown, masterOptions?: MasterFactOptions, turnContext?: EffectTurnContext) {
@@ -46,11 +48,7 @@ export class PreparedMovementEffect {
         ["refresh", "draw", "don", "main", "end"].includes(turnContext.phase), "action-runtime-invalid-turn-context");
       this.#turnContext = Object.freeze({ turnNumber: turnContext.turnNumber, activePlayer: turnContext.activePlayer, phase: turnContext.phase });
     }
-    this.#costs = definition.costs.map(cost => {
-      ensureMove(cost.kind === "payDon", "action-runtime-cost-kind-not-supported");
-      return cost;
-    });
-    validateDonPayments(this.#costs);
+    this.#costs = definition.costs;
     ensureMove(identity.source !== null, "action-runtime-source-required");
     const source = getCard(state, identity.source!);
     ensureMove(source.cardId === definition.cardId && source.controller === identity.actor, "action-runtime-source-mismatch");
@@ -58,7 +56,8 @@ export class PreparedMovementEffect {
     this.#resolutionId = identity.resolutionId;
     this.#catalog = pinMasterFacts(state, masterOptions);
     this.#sourceFacts = movementSourceFacts(state, identity.source!, this.#catalog);
-    this.#compile(definition.actions, { parent: null, bindings: new Map() });
+    validateMovementPayments(this.#costs, movementCostSnapshot(state, this.#actor, this.#sourceFacts, this.#catalog), this.#actor);
+    this.#compile(definition.actions, this.#rootScope);
     this.#resolution = new MovementResolution(state, identity);
   }
   #compile(actions: DeepReadonly<EffectDefinition["actions"]>, scope: Scope, guards: readonly Guard[] = []): void {
@@ -145,17 +144,43 @@ export class PreparedMovementEffect {
     } finally { this.#busy = false; }
   }
   toJSON(): never { throw new Error("server-only-action-runtime"); }
-  start(expectedRevision: number, rules: MovementRules): TransactionResult {
+  #checkActivation(): void {
+    const condition = evaluateCondition(this.#condition, this.#selectionSnapshot().facts, undefined, this.#conditionBudget);
+    ensureMove(condition.state === "known", "action-runtime-activation-data-unavailable");
+    ensureMove(condition.value, "action-runtime-activation-condition-false");
+  }
+  createCostSession(expectedRevision: number): CompositeCostSession {
+    ensureMove(!this.#busy && this.#resolution.view().status === "prepared" && expectedRevision === this.snapshot().revision, "action-runtime-not-prepared-or-current");
+    this.#busy = true;
+    try {
+      this.#checkActivation();
+      return new CompositeCostSession(this.snapshot(), this.#actor, this.#resolutionId, this.#costs, this.#sourceFacts, this.#catalog);
+    } finally { this.#busy = false; }
+  }
+  start(expectedRevision: number, rules: MovementRules, payment?: CompositeCostSession): TransactionResult {
     ensureMove(!this.#busy, "reentrant-action-runtime");
     ensureMove(this.#resolution.view().status === "prepared" && expectedRevision === this.snapshot().revision, "action-runtime-not-prepared-or-current");
     this.#busy = true;
     try {
-      const condition = evaluateCondition(this.#condition, this.#selectionSnapshot().facts, undefined, this.#conditionBudget);
-      ensureMove(condition.state === "known", "action-runtime-activation-data-unavailable");
-      ensureMove(condition.value, "action-runtime-activation-condition-false");
-      const operations = this.#costs.length === 0 ? [] : prepareDonPayment(this.snapshot(), this.#actor,
-        this.#resolutionId, this.#costs, this.#sourceFacts, this.#catalog);
-      const result = this.#resolution.pay(this.#actor, expectedRevision, operations, rules);
+      this.#checkActivation();
+      let result: TransactionResult;
+      let paidPlan: ResourceCostPlan | undefined;
+      if (payment) {
+        ensureMove(payment instanceof CompositeCostSession, "action-runtime-invalid-payment-session");
+        result = payment.commit(this.snapshot(), this.#actor, this.#resolutionId, this.#costs, plan => {
+          const committed = this.#resolution.pay(this.#actor, expectedRevision, costMovementOperations(plan, this.snapshot()), rules);
+          paidPlan = plan; return committed;
+        });
+      } else {
+        const donCosts = this.#costs.map(cost => {
+          ensureMove(cost.kind === "payDon", "action-runtime-cost-selection-required"); return cost;
+        });
+        const operations = donCosts.length === 0 ? [] : prepareDonPayment(this.snapshot(), this.#actor,
+          this.#resolutionId, donCosts, this.#sourceFacts, this.#catalog);
+        result = this.#resolution.pay(this.#actor, expectedRevision, operations, rules);
+      }
+      for (const [name, refs] of Object.entries(paidPlan?.bindings ?? {})) this.#rootScope.bindings.set(name,
+        { kind: "cards", cards: refs.map(ref => ({ instanceId: ref.instanceId, generation: result.state.cards[ref.instanceId]!.generation })) });
       if (this.#instructions.length === 0) this.#resolution.complete(this.#actor, result.state.revision);
       return result;
     } finally { this.#busy = false; }

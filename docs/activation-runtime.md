@@ -26,6 +26,16 @@ actorは認証済みsocketの席から決め、定義やsourceもサーバーの
 通常のstart/advanceは効果controllerだけ、回答はgateに記録したchooserだけが可能です。
 SOURCE/TARGETや候補の内容は既存SelectionSessionで再検証します。
 
+## 支払い前の複合コスト計画
+
+createCostSession(actor, revisions)で、タイミングと発動条件を確認したうえで
+別のCompositeCostSessionを作れます。計画の選択はそのsession.answer/viewForで行い、
+readyになったものをstart(actor, revisions, rules, session)へ渡します。
+全コストが成立した場合だけ、支払いとbeginResolutionを確定します。
+計画中はまだ未払いで、Progressionは元のidleです。TimedMovementEffect自体は
+外部から盤面を変更するAPIを持ちませんが、既存Matchへの接続では計画中のロックと
+choice gate、切断対応を追加する必要があります。効果処理中のanswerSelectionとは別APIです。
+
 ## 支払いとゲートの一貫性
 
 start時はタイミングを確認し、beginResolution後の進行状態を一旦仮作成します。
