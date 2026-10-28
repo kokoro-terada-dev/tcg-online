@@ -6,13 +6,14 @@ const cwd = fileURLToPath(new URL("../", import.meta.url));
 const build = spawnSync(process.execPath, ["server/node_modules/typescript/bin/tsc", "-p", "server/tsconfig.json"], { cwd, stdio: "inherit", windowsHide: true });
 if (build.status !== 0) process.exit(build.status ?? 1);
 const require = createRequire(import.meta.url);
-const { startLocalEffectServer } = require("../server/dist/test/localEffects.js");
-const service = await startLocalEffectServer(0);
-console.log("LOCAL FIXTURE ONLY: discard one hand card, then draw one. Not real card rules.");
+const v3 = process.argv.includes("--v3");
+const start = v3 ? require("../server/dist/test/effects/v3/localServer.js").startLocalV3Server : require("../server/dist/test/localEffects.js").startLocalEffectServer;
+const service = await start(0);
+console.log(v3 ? "V3 LOCAL SYNTHETIC FIXTURE ONLY: not real card abilities or official rulings." : "LOCAL FIXTURE ONLY: discard one hand card, then draw one. Not real card rules.");
 console.log(`Effect backend: ${service.url}`);
 console.log("Open the Vite Local URL below in two browser windows. Choose Test Battle in both.");
-const vite = spawn(process.execPath, ["node_modules/vite/bin/vite.js", "--host", "127.0.0.1", "--port", "5189"], {
-  cwd, stdio: "inherit", windowsHide: true, env: { ...process.env, VITE_TEST_SERVER_URL: service.url },
+const vite = spawn(process.execPath, ["node_modules/vite/bin/vite.js", "--host", "127.0.0.1", "--port", v3 ? "5190" : "5189"], {
+  cwd, stdio: "inherit", windowsHide: true, env: { ...process.env, VITE_TEST_SERVER_URL: service.url, VITE_V3_FIXTURE: v3 ? "1" : "0" },
 });
 let stopping = false;
 function stop(code = 0) {

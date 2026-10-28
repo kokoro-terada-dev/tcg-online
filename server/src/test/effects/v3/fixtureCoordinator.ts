@@ -40,6 +40,7 @@ export class V3FixtureCoordinator {
     this.#progression = applySystemEvent(this.#progression, this.#progression.revision, { kind: "beginResolution", resolutionId: identity.resolutionId, controller: identity.actor });
   }
   context(): FixtureContext { return { frameRevision: this.#machine.viewFor(this.#identity.actor).revision, movementRevision: this.#board.revision, progressionRevision: this.#progression.revision }; }
+  pendingWorkKind(): WorkRequest["type"] | null { return this.#machine.workForCoordinator()?.type ?? null; }
   #gate(progression: Progression, machine: V3ResolutionMachine): Progression {
     const view = machine.viewFor(this.#identity.actor); let next = progression;
     if (next.gate.kind === "choice") {

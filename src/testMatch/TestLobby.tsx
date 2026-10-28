@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import type { Socket } from "socket.io-client";
 import type { CSSProperties } from "react";
@@ -16,7 +16,11 @@ const button: CSSProperties = { minHeight: "44px", borderRadius: "6px", border: 
 const serverUrl = import.meta.env.VITE_TEST_SERVER_URL?.trim() ||
   (import.meta.env.DEV ? `${window.location.protocol}//${window.location.hostname}:3001` : "");
 
-export default function TestLobby({ onBack }: { onBack: () => void }) {
+const V3Lobby = import.meta.env.DEV && import.meta.env.VITE_V3_FIXTURE === "1" ? lazy(() => import("./V3FixtureLobby")) : null;
+export default function TestLobby(props: { onBack: () => void }) {
+  return V3Lobby ? <Suspense fallback={<p role="status">読込中...</p>}><V3Lobby {...props} /></Suspense> : <LegacyTestLobby {...props} />;
+}
+function LegacyTestLobby({ onBack }: { onBack: () => void }) {
   const socketRef = useRef<Socket | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [code, setCode] = useState("");

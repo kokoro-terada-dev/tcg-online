@@ -1,0 +1,80 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { io } = require('socket.io-client');
+const { startLocalV3Server } = require('../dist/test/effects/v3/localServer.js');
+const deck = { name: 'Synthetic UI fixture', leaderCardId: 'LEADER', mainDeck: Array(50).fill('CARD'), donDeck: Array(10).fill('DON'), cardTypes: { CARD: 'character' }, leaderLifeCount: 5 };
+const request = (socket, event, input = null) => new Promise((resolve, reject) => socket.timeout(3000).emit(event, input, (error, reply) => error ? reject(error) : resolve(reply)));
+const once = (socket, event) => new Promise((resolve, reject) => { const callback = value => { clearTimeout(timer); resolve(value); }; const timer = setTimeout(() => { socket.off(event, callback); reject(Error(event)); }, 3000); socket.once(event, callback); });
+const command = (v, kind, requestId, extra = {}) => ({ kind, requestId, matchId: v.matchId, resolutionId: v.frame.resolutionId, frameRevision: v.frame.revision, movementRevision: v.movement.revision, progressionRevision: v.progression.revision, ...extra });
+async function setup(t) {
+  const service = await startLocalV3Server(), clients = [];
+  t.after(async () => { clients.forEach(socket => socket.disconnect()); await new Promise(resolve => service.io.close(resolve)); });
+  assert.equal(service.http.address().address, '127.0.0.1');
+  for (let i = 0; i < 3; i++) { const socket = io(service.url, { autoConnect: false, reconnection: false }); clients.push(socket); const ready = once(socket, 'connect'); socket.connect(); await ready; }
+  const [host, guest] = clients, created = once(host, 'v3-room:state'); assert.equal((await request(host, 'v3-room:create')).ok, true); const room = await created;
+  assert.equal((await request(guest, 'v3-room:join', room.roomId)).ok, true);
+  for (const socket of [host, guest]) { assert.equal((await request(socket, 'v3-room:deck', deck)).ok, true); assert.equal((await request(socket, 'v3-room:ready', true)).ok, true); }
+  return { service, clients, host, guest, code: room.roomId };
+}
+test('v3 local sockets isolate seats, keep hands private, and execute both synthetic cases for host and guest', async t => {
+  const { clients, host, guest } = await setup(t), outsider = clients[2];
+  assert.equal((await request(outsider, 'v3:sync')).ok, false);
+  for (const actor of [0, 1]) {
+    for (const scenario of ['bounce', 'payDraw']) {
+      if (actor !== 0 || scenario !== 'bounce') for (const socket of [host, guest]) assert.equal((await request(socket, 'v3-room:ready', true)).ok, true);
+      assert.equal((await request(guest, 'v3:start', { actor, scenario })).ok, false);
+      assert.equal((await request(host, 'v3:start', { actor, scenario })).ok, true);
+      const controller = clients[actor], other = clients[1 - actor];
+      let v = (await request(controller, 'v3:sync')).view;
+      assert.equal(v.localPlayerIndex, actor); assert.equal(v.actor, actor); assert.equal(v.imageAliases[`V3-FIXTURE-LEADER-${actor}`], 'LEADER');
+      assert.equal(v.movement.players[actor].character.filter(Boolean).length, 2); assert.equal(v.movement.players[actor].activeDon.length, 2);
+      assert.equal((await request(other, 'v3:command', command(v, 'advance', 'foreign'))).ok, false);
+      const start = command(v, 'advance', `advance-${actor}-${scenario}`); const result = await request(controller, 'v3:command', start); assert.equal(result.ok, true); v = result.view;
+      assert.equal((await request(controller, 'v3:command', start)).ok, true);
+      assert.equal((await request(controller, 'v3:command', { ...start, actor: 1 - actor })).ok, false);
+      if (scenario === 'bounce') {
+        assert.equal(v.frame.status, 'waitingForChoice'); assert.equal(v.frame.choice.options.length, 2);
+        const opposite = (await request(other, 'v3:sync')).view; assert.deepEqual(opposite.frame.choice.options, []);
+        assert.equal(JSON.stringify(opposite).includes('definitionHash'), false);
+        const answer = command(v, 'answer', `answer-${actor}`, { selectionId: v.frame.choice.selectionId, tokens: [v.frame.choice.options[0].token] });
+        v = (await request(controller, 'v3:command', answer)).view;
+        v = (await request(controller, 'v3:command', command(v, 'advance', `move-request-${actor}`))).view;
+      } else {
+        assert.equal(v.workType, 'PAY_COSTS'); v = (await request(controller, 'v3:command', command(v, 'work', `pay-${actor}`))).view;
+        assert.equal(v.movement.players[actor].restDon.length, 1);
+        v = (await request(controller, 'v3:command', command(v, 'advance', `draw-request-${actor}`))).view;
+      }
+      const work = command(v, 'work', `work-${actor}-${scenario}`); v = (await request(controller, 'v3:command', work)).view;
+      assert.equal((await request(controller, 'v3:command', work)).view.movement.revision, v.movement.revision);
+      v = (await request(controller, 'v3:command', command(v, 'advance', `finish-${actor}-${scenario}`))).view;
+      assert.equal(v.frame.status, 'completed'); assert.equal(v.progression.gate, 'idle'); assert.equal(v.movement.players[actor].hand.length, 6);
+      const peer = (await request(other, 'v3:sync')).view; assert.equal(peer.movement.revision, v.movement.revision); assert.equal(peer.movement.players[actor].hand.every(card => card.cardId === null && card.ref === null), true);
+      assert.equal((await request(guest, 'v3:end')).ok, false); assert.equal((await request(host, 'v3:end')).ok, true);
+      assert.equal((await request(controller, 'v3:command', work)).ok, false);
+    }
+  }
+});
+test('v3 room exit removes stale membership and guest loss invalidates the session', async t => {
+  const { host, guest, code } = await setup(t);
+  assert.equal((await request(host, 'v3:start', { actor: 0, scenario: 'bounce' })).ok, true);
+  const updated = once(host, 'v3-room:state'); assert.equal((await request(guest, 'v3-room:leave')).ok, true); const room = await updated;
+  assert.equal(room.matchId, null); assert.equal(room.guest, null); assert.equal((await request(host, 'v3:sync')).ok, false);
+  assert.equal((await request(guest, 'v3-room:join', code)).ok, true);
+  const closed = once(guest, 'v3-room:closed'); assert.equal((await request(host, 'v3-room:leave')).ok, true); await closed;
+  assert.equal((await request(guest, 'v3-room:join', code)).ok, false);
+});
+
+test('invalid decks do not replace a ready deck, remote browser Origins are denied, and production startup is disabled', async t => {
+  const { service, host } = await setup(t);
+  assert.equal((await request(host, 'v3-room:deck', { invalid: true })).ok, false);
+  assert.equal((await request(host, 'v3:start', { actor: 0, scenario: 'payDraw' })).ok, true);
+  const forbidden = io(service.url, { autoConnect: false, transports: ['websocket'], reconnection: false, extraHeaders: { Origin: 'https://outside.example' } });
+  t.after(() => forbidden.disconnect());
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(Error('Origin rejection timeout')), 3000);
+    forbidden.once('connect_error', () => { clearTimeout(timer); resolve(); });
+    forbidden.once('connect', () => { clearTimeout(timer); reject(Error('Unexpected remote Origin connection')); }); forbidden.connect();
+  });
+  const previous = process.env.NODE_ENV; process.env.NODE_ENV = 'production';
+  try { await assert.rejects(startLocalV3Server(0)); } finally { if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous; }
+});

@@ -1,0 +1,11 @@
+.v3-fixture-lobby { height: 100dvh; overflow-y: auto; touch-action: pan-y; padding: 16px; box-sizing: border-box; background: var(--app-background, #17202a); color: #fff; }
+.v3-fixture-lobby > div { max-width: 480px; margin: auto; display: flex; flex-direction: column; gap: 16px; padding-bottom: env(safe-area-inset-bottom); }
+.v3-fixture-lobby header, .v3-fixture-lobby form { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.v3-fixture-lobby h1 { font-size: 22px; margin: 0; }
+.v3-fixture-lobby p { margin: 0; overflow-wrap: anywhere; }
+.v3-fixture-lobby button, .v3-fixture-lobby input, .v3-fixture-lobby select { min-height: 44px; font-size: 16px; border: 1px solid #82929f; border-radius: 6px; padding: 8px 12px; box-sizing: border-box; letter-spacing: 0; }
+.v3-fixture-lobby button { color: #fff; background: #235e49; cursor: pointer; }
+.v3-fixture-lobby button:disabled { opacity: .5; cursor: default; }
+.v3-fixture-lobby input { min-width: 0; flex: 1; }
+.v3-fixture-lobby select { display: block; margin-top: 6px; width: 100%; }
+.v3-fixture-lobby [role="alert"] { color: #ffb5b5; }
