@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "3.0.0-subset.7", "cardId": "EXAMPLE-SELECTION-NOT-REAL", "cardVersion": "fixture.1",
+  "schemaVersion": "3.0.0-subset.8", "cardId": "EXAMPLE-SELECTION-NOT-REAL", "cardVersion": "fixture.1",
   "name": "合成テスト用の選択（実在しません）", "cardType": "character",
   "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
   "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",

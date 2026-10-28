@@ -184,3 +184,19 @@ test('hand then DON choices restore independently without sharing tokens or appl
     m.advance('draw', 6); assert.equal(m.workForCoordinator().type, 'DRAW');
   }
 });
+
+test('mixed DON choices restore labels and active limits; invalid plans can be corrected without changing the frame', () => {
+  const s = setup(d => { d.effects[0].costs = [{ type: 'REST_DON', count: 1 }, { type: 'DON_RETURN', count: 2, from: ['activeDon', 'restDon'] }]; });
+  s.env.canPayCosts = () => true;
+  s.setRows(['activeDon', 'activeDon', 'restDon'].map((zone, index) => ({ ...s.row, ref: { instanceId: `don-${index}`, generation: 0 }, cardId: 'DON', zone, kind: 'don', label: `DON-${index}` })));
+  s.machine.advance('start', 0); const choice = s.machine.viewFor(0).choice;
+  assert.equal(choice.maxActiveReturn, 1); assert.equal(choice.options[2].label, 'DON-2');
+  const m = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, s.machine.exportForStorage(), 1), before = m.exportForStorage();
+  assert.deepEqual(m.viewFor(0).choice, choice); assert.deepEqual(m.viewFor(1).choice.options, []);
+  assert.throws(() => m.answer(0, 'invalid', 1, choice.selectionId, choice.options.slice(0, 2).map(option => option.token)));
+  assert.equal(m.exportForStorage(), before);
+  const tokens = [choice.options[0].token, choice.options[2].token]; s.env.canPayCosts = () => false;
+  assert.throws(() => m.answer(0, 'not-payable', 1, choice.selectionId, tokens)); assert.equal(m.exportForStorage(), before);
+  s.env.canPayCosts = () => true; m.answer(0, 'corrected', 1, choice.selectionId, tokens); m.advance('plan', 2);
+  assert.deepEqual(m.workForCoordinator().returned.map(ref => ref.instanceId), ['don-0', 'don-2']);
+});

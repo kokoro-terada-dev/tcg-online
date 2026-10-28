@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
-import type { CardDefinition, CardSetRef, Category, CompiledCard, Node, NodeMeta, Value } from "./dsl";
+import type { CardDefinition, CardSetRef, Category, CompiledCard, DonZone, Node, NodeMeta, Value } from "./dsl";
 
-export const COMPILER_VERSION = "v3-subset-compiler.7";
+export const COMPILER_VERSION = "v3-subset-compiler.8";
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 function inspectData(input: unknown): void {
@@ -37,6 +37,12 @@ export function label(value: unknown, max = 100): string {
 }
 export function count(value: unknown): number {
   ensureMove(typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= 50, "invalid-v3-count"); return value;
+}
+function donZones(input: unknown): DonZone[] {
+  const zones = typeof input === "string" ? [input] : input;
+  dataArray(zones, 3);
+  ensureMove(zones.length > 0 && new Set(zones).size === zones.length && zones.every(zone => ["activeDon", "restDon", "attachedDon"].includes(zone as string)), "v3-invalid-don-return-source");
+  return [...zones] as DonZone[];
 }
 export interface CompileContext {
   read<C extends Category>(category: C, input: unknown): Node<C>;
@@ -105,12 +111,13 @@ export function builtinV3Registries(): V3Registries {
   });
   r.action.register("SEQUENCE", "1", (n, c) => ({ type: "SEQUENCE", ...c.fields(n, ["actions"]), actions: c.list("action", n.actions) }));
   r.action.register("IF", "2", (n, c) => ({ type: "IF", ...c.fields(n, ["condition", "then", "else"]), condition: c.read("predicate", n.condition), then: c.branch(n.then), else: c.branch(n.else) }));
-  r.selector.register("CARDS", "3", (n, c) => {
+  r.selector.register("CARDS", "4", (n, c) => {
     const meta = c.fields(n, ["owner", "controller", "zone", "cardTypes", "filters", "excludeSource", "faceUpOnly", "min", "max", "visibility", "selectionMode", "chooser", "order", "onInsufficient"]);
     ensureMove([n.owner, n.controller, n.chooser].every(player => player === "SELF" || player === "OPPONENT"), "invalid-v3-selector-player");
     const publicSelection = ["leader", "character", "stage", "trash", "public"].includes(n.zone as string) && n.visibility === "PUBLIC" && n.faceUpOnly === true;
     const ownHand = n.zone === "hand" && n.visibility === "OWNER_ONLY" && n.faceUpOnly === false && n.owner === "SELF" && n.controller === "SELF" && n.chooser === "SELF";
-    const ownDon = ["activeDon", "restDon", "attachedDon"].includes(n.zone as string) && n.visibility === "PUBLIC" && n.faceUpOnly === true && n.owner === "SELF" && n.controller === "SELF" && n.chooser === "SELF";
+    const donZone = Array.isArray(n.zone) || ["activeDon", "restDon", "attachedDon"].includes(n.zone as string);
+    const ownDon = donZone && n.visibility === "PUBLIC" && n.faceUpOnly === true && n.owner === "SELF" && n.controller === "SELF" && n.chooser === "SELF";
     ensureMove(publicSelection || ownHand || ownDon, "unsupported-v3-hidden-selection");
     ensureMove(n.selectionMode === "SELECT" && n.order === "UNORDERED" && n.onInsufficient === "fail" && typeof n.excludeSource === "boolean", "unsupported-v3-selection-policy");
     dataArray(n.cardTypes, 5);
@@ -118,7 +125,7 @@ export function builtinV3Registries(): V3Registries {
     ensureMove(!ownDon || n.cardTypes.length === 1 && n.cardTypes[0] === "don", "v3-don-selector-type");
     const max = count(n.max);
     ensureMove(typeof n.min === "number" && Number.isSafeInteger(n.min) && n.min >= 0 && n.min <= max, "invalid-v3-selection-bounds");
-    return { type: "CARDS", ...meta, owner: n.owner, controller: n.controller, chooser: n.chooser, zone: n.zone, cardTypes: [...n.cardTypes], filters: c.candidate(n.filters),
+    return { type: "CARDS", ...meta, owner: n.owner, controller: n.controller, chooser: n.chooser, zone: ownDon ? donZones(n.zone) : n.zone, cardTypes: [...n.cardTypes], filters: c.candidate(n.filters),
       excludeSource: n.excludeSource, faceUpOnly: n.faceUpOnly, min: n.min, max, visibility: n.visibility, selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } as Node<"selector">;
   });
   r.action.register("SELECT", "1", (n, c) => {
@@ -137,10 +144,9 @@ export function builtinV3Registries(): V3Registries {
   for (const type of ["KO", "REST", "SET_ACTIVE"] as const) r.action.register(type, "1", (n, c) => ({ type, ...c.fields(n, ["cards"]), cards: c.cards(n.cards) }));
   r.cost.register("REST_DON", "1", (n, c) => ({ type: "REST_DON", ...c.fields(n, ["count"]), count: count(n.count) }));
   r.cost.register("REST_SOURCE", "1", (n, c) => ({ type: "REST_SOURCE", ...c.fields(n, []) }));
-  r.cost.register("DON_RETURN", "1", (n, c) => {
+  r.cost.register("DON_RETURN", "2", (n, c) => {
     const meta = c.fields(n, ["count", "from"]);
-    ensureMove(["activeDon", "restDon", "attachedDon"].includes(n.from as string), "v3-invalid-don-return-source");
-    return { type: "DON_RETURN", ...meta, count: count(n.count), from: n.from as "activeDon" | "restDon" | "attachedDon" };
+    return { type: "DON_RETURN", ...meta, count: count(n.count), from: donZones(n.from) };
   });
   r.cost.register("DISCARD_HAND", "1", (n, c) => ({ type: "DISCARD_HAND", ...c.fields(n, ["count"]), count: count(n.count) }));
   return r;
@@ -152,7 +158,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.7", "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.8", "unsupported-v3-schema-version");
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
   ensureMove(typeof input.name === "string" && input.name.trim().length > 0 && input.name.length <= 300, "invalid-v3-card-name");
   ensureMove(input.cardType === "leader" || input.cardType === "character" || input.cardType === "stage", "unsupported-v3-card-type");
@@ -226,7 +232,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
     return { id, kind: "activated", optional: false, sourceZones: effect.sourceZones as ("leader" | "character" | "stage")[], timing,
       activationConditions, resolutionConditions, costs, actions };
   });
-  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.7", cardId, cardVersion, name: input.name, cardType: input.cardType,
+  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.8", cardId, cardVersion, name: input.name, cardType: input.cardType,
     baseStats: input.baseStats as CardDefinition["baseStats"], colors, traits, attributes, reviewStatus: input.reviewStatus as CardDefinition["reviewStatus"], source, effects };
   inspectData(definition);
   const plan = freezeMovement({ status: "compiled_not_executable" as const, compilerVersion: COMPILER_VERSION, registryHash, definitionHash: digest(canonical(definition)), sourceHash: digest(canonical(source)), definition, requiredHandlers: [...used].sort() });

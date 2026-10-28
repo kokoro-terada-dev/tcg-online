@@ -78,26 +78,39 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       const eligibleDon = (ref: Readonly<CardObjectRef>) => {
         try {
           const card = getCard(state, ref), at = location(state, ref.instanceId);
-          return !!returnCost && at.zone === returnCost.from && at.player === actor && card.kind === "don" && card.owner === actor && card.controller === actor && card.faceUp &&
+          return !!returnCost && returnCost.from.some(zone => zone === at.zone) && at.player === actor && card.kind === "don" && card.owner === actor && card.controller === actor && card.faceUp &&
             visibleTo(state, card, at, 0) && visibleTo(state, card, at, 1);
         } catch { return false; }
       };
-      if (rest + discard + restSource + returnCount > 64 || discard > 50 || state.players[actor].activeDon.filter(id => { const card = state.cards[id!]!; return card.kind === "don" && card.owner === actor && card.controller === actor && !card.rotated; }).length < rest + (returnCost?.from === "activeDon" ? returnCount : 0)) return false;
-      if (returnCost && state.players[actor][returnCost.from].filter(id => eligibleDon({ instanceId: id!, generation: state.cards[id!]!.generation })).length < returnCount) return false;
+      const active = state.players[actor].activeDon.filter(id => { const card = state.cards[id!]!; return card.kind === "don" && card.owner === actor && card.controller === actor && !card.rotated; }).length;
+      const candidates = returnCost?.from.flatMap(zone => state.players[actor][zone]).filter(id => eligibleDon({ instanceId: id!, generation: state.cards[id!]!.generation })) ?? [];
+      const nonActive = candidates.filter(id => location(state, id!).zone !== "activeDon").length;
+      const activeReturned = returned === null ? Math.max(0, returnCount - nonActive) : returned.filter(ref => {
+        try { return location(state, getCard(state, ref).instanceId).zone === "activeDon"; } catch { return false; }
+      }).length;
+      if (rest + discard + restSource + returnCount > 64 || discard > 50 || active < rest + activeReturned || candidates.length < returnCount) return false;
       if (returned !== null && (returned.length !== returnCount || new Set(returned.map(ref => ref.instanceId)).size !== returnCount || !returned.every(eligibleDon))) return false;
       if (state.players[actor].hand.filter(id => eligible({ instanceId: id!, generation: state.cards[id!]!.generation })).length < discard) return false;
       return discarded === null || discarded.length === discard && new Set(discarded.map(ref => ref.instanceId)).size === discard && discarded.every(eligible);
     },
     candidates: selector => {
       const state = board();
-      return state.players[seat(selector.owner)][selector.zone].flatMap(id => {
+      const zones = typeof selector.zone === "string" ? [selector.zone] : selector.zone;
+      return zones.flatMap(zone => state.players[seat(selector.owner)][zone]).flatMap(id => {
         if (id === null) return [];
         const card = state.cards[id]!, at = location(state, id);
         const viewers = ([0, 1] as const).filter(viewer => visibleTo(state, card, at, viewer));
         const visible = selector.visibility === "PUBLIC" ? card.faceUp && viewers.length === 2 :
           at.zone === "hand" && card.owner === identity.actor && card.controller === identity.actor && viewers.length === 1 && viewers[0] === identity.actor;
         if (card.owner !== seat(selector.owner) || card.controller !== seat(selector.controller) || !visible || !selector.cardTypes.some(type => type === card.kind)) return [];
-        return [{ ref: { instanceId: id, generation: card.generation }, cardId: card.cardId, owner: card.owner, controller: card.controller, zone: at.zone, kind: card.kind, faceUp: card.faceUp, visibleTo: viewers }];
+        let label: string | undefined;
+        if (at.zone === "activeDon") label = "アクティブDON";
+        if (at.zone === "restDon") label = "レストDON";
+        if (at.zone === "attachedDon" && card.attachedTo) {
+          const parentAt = location(state, card.attachedTo.instanceId);
+          label = parentAt.zone === "leader" ? "リーダー付与DON" : `キャラ${state.players[at.player].character.indexOf(card.attachedTo.instanceId) + 1}付与DON`;
+        }
+        return [{ ref: { instanceId: id, generation: card.generation }, cardId: card.cardId, owner: card.owner, controller: card.controller, zone: at.zone, kind: card.kind, faceUp: card.faceUp, visibleTo: viewers, ...(label ? { label } : {}) }];
       });
     },
   };

@@ -10,7 +10,7 @@ type Seat = 0 | 1;
 type Bindings = Readonly<Record<string, readonly Ref[]>>;
 type A = DeepReadonly<Action>;
 type Selector = DeepReadonly<Node<"selector">>;
-export type ResolutionCandidate = Readonly<{ ref: Ref; cardId: string; owner: Seat; controller: Seat; zone: string; kind: string; faceUp: boolean; visibleTo: readonly Seat[] }>;
+export type ResolutionCandidate = Readonly<{ ref: Ref; cardId: string; owner: Seat; controller: Seat; zone: string; kind: string; faceUp: boolean; visibleTo: readonly Seat[]; label?: string }>;
 // Server-owned, pure reads. This interface is not a socket payload or a game-rule implementation.
 export interface ResolutionEnvironment {
   revision(): number;
@@ -23,14 +23,14 @@ export type ResolutionIdentity = Readonly<{ matchId: string; resolutionId: strin
 type Instruction = { type: "CHECK"; predicate: DeepReadonly<Predicate> } | { type: "COSTS" } |
   { type: "SELECT"; action: Extract<A, { type: "SELECT" }> } | { type: "WORK"; action: Extract<A, { type: "DRAW" | "MOVE_CARD" | "KO" | "REST" | "SET_ACTIVE" }> } |
   { type: "BRANCH"; predicate: DeepReadonly<Predicate>; otherwise: number } | { type: "ENTER" } | { type: "EXIT" } | { type: "JUMP"; to: number } | { type: "END" };
-type Choice = { kind: "choice"; purpose: "action" | "cost" | "returnCost"; selectionId: string; chooser: Seat; min: number; max: number; bindAs: string | null; expiresAt: number; candidates: { token: string; cardId: string; ref: CardObjectRef }[] };
+type Choice = { kind: "choice"; purpose: "action" | "cost" | "returnCost"; selectionId: string; chooser: Seat; min: number; max: number; maxActiveReturn: number | null; bindAs: string | null; expiresAt: number; candidates: { token: string; cardId: string; zone: string; label: string | null; ref: CardObjectRef }[] };
 export type WorkRequest = DeepReadonly<{ kind: "work"; workId: string; worldRevision: number } & (
   { type: "PAY_COSTS"; costs: Node<"cost">[]; discarded: CardObjectRef[]; returned: CardObjectRef[] } | { type: "DRAW"; player: Seat; count: number } |
   { type: "MOVE_CARD"; cards: CardObjectRef[]; destination: Extract<Action, { type: "MOVE_CARD" }>["destination"]; cause: "EFFECT" } |
   { type: "KO" | "REST" | "SET_ACTIVE"; cards: CardObjectRef[] }
 )>;
 type State = {
-  version: "v3-frame.3"; identity: ResolutionIdentity; definitionHash: string; compilerVersion: string; registryHash: string; rulesetVersion: string;
+  version: "v3-frame.4"; identity: ResolutionIdentity; definitionHash: string; compilerVersion: string; registryHash: string; rulesetVersion: string;
   revision: number; worldRevision: number; pc: number; status: "ready" | "waitingForChoice" | "waitingForWork" | "completed" | "blocked";
   scopes: Record<string, CardObjectRef[]>[]; pending: Choice | WorkRequest | null;
   costCards: CardObjectRef[] | null; costReturned: CardObjectRef[] | null; paidCostWorkId: string | null;
@@ -70,7 +70,7 @@ export class V3ResolutionMachine {
     ensureMove(v3RegistryHash(builtinV3Registries()) === card.registryHash, "v3-runtime-registry-mismatch");
     this.#key = Buffer.from(signingKey); this.#environment = environment; this.#card = card; this.#code = program(card, identity.effectId);
     const worldRevision = environment.revision(); ensureMove(Number.isSafeInteger(worldRevision) && worldRevision >= 0, "v3-invalid-world-revision");
-    this.#state = { version: "v3-frame.3", identity: structuredClone(identity), definitionHash: card.definitionHash, compilerVersion: card.compilerVersion, registryHash: card.registryHash, rulesetVersion: card.rulesetVersion,
+    this.#state = { version: "v3-frame.4", identity: structuredClone(identity), definitionHash: card.definitionHash, compilerVersion: card.compilerVersion, registryHash: card.registryHash, rulesetVersion: card.rulesetVersion,
       revision: 0, worldRevision, pc: 0, status: "ready", scopes: [{}], pending: null, costCards: null, costReturned: null, paidCostWorkId: null, receipts: [] };
   }
   #bindings(state: State): Bindings { return freezeMovement(structuredClone(Object.assign({}, ...state.scopes))); }
@@ -143,15 +143,19 @@ export class V3ResolutionMachine {
       const visible = selector.visibility === "PUBLIC" ? row.faceUp === true && row.visibleTo.includes(0) && row.visibleTo.includes(1) :
         row.zone === "hand" && row.owner === state.identity.actor && row.controller === state.identity.actor && row.visibleTo.includes(state.identity.actor) && !row.visibleTo.includes((1 - state.identity.actor) as Seat);
       ensureMove(visible && row.owner === relative(state.identity.actor, selector.owner) &&
-        row.controller === relative(state.identity.actor, selector.controller) && row.zone === selector.zone && selector.cardTypes.some(type => type === row.kind), "v3-nonpublic-or-ineligible-candidate");
+        row.controller === relative(state.identity.actor, selector.controller) && (typeof selector.zone === "string" ? row.zone === selector.zone : selector.zone.some(zone => zone === row.zone)) && selector.cardTypes.some(type => type === row.kind), "v3-nonpublic-or-ineligible-candidate");
       if (selector.excludeSource && row.ref.instanceId === state.identity.source.instanceId && row.ref.generation === state.identity.source.generation) continue;
       if (!this.#evaluate(selector.filters, state, row.ref)) continue;
-      candidates.push({ token: randomUUID(), cardId: row.cardId, ref: { ...row.ref } });
+      const displayLabel = purpose === "returnCost" ? row.label ?? row.zone : null;
+      ensureMove(displayLabel === null || typeof displayLabel === "string" && displayLabel.length > 0 && displayLabel.length <= 80, "v3-candidate-label");
+      candidates.push({ token: randomUUID(), cardId: row.cardId, zone: row.zone, label: displayLabel, ref: { ...row.ref } });
     }
     ensureMove(candidates.length >= selector.min, "v3-insufficient-candidates");
     if (!candidates.length) { ensureMove(bindAs !== null, "v3-empty-required-cost-selection"); state.scopes.at(-1)![bindAs] = []; state.pc++; return; }
     const now = this.#environment.now(); ensureMove(Number.isSafeInteger(now) && now >= 0 && now <= Number.MAX_SAFE_INTEGER - 120000, "v3-invalid-clock");
-    state.pending = { kind: "choice", purpose: purpose ?? (bindAs === null ? "cost" : "action"), selectionId: randomUUID(), chooser: relative(state.identity.actor, selector.chooser), min: selector.min, max: selector.max, bindAs, expiresAt: now + 120000, candidates };
+    const rest = this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)!.costs.reduce((sum, cost) => sum + (cost.type === "REST_DON" ? cost.count : 0), 0);
+    const maxActiveReturn = purpose === "returnCost" ? Math.min(selector.max, Math.max(0, candidates.filter(candidate => candidate.zone === "activeDon").length - rest)) : null;
+    state.pending = { kind: "choice", purpose: purpose ?? (bindAs === null ? "cost" : "action"), selectionId: randomUUID(), chooser: relative(state.identity.actor, selector.chooser), min: selector.min, max: selector.max, maxActiveReturn, bindAs, expiresAt: now + 120000, candidates };
     state.status = "waitingForChoice";
   }
   answer(actor: Seat, requestId: string, expectedRevision: number, selectionId: string, tokens: readonly string[]): { replayed: boolean } {
@@ -165,7 +169,12 @@ export class V3ResolutionMachine {
       // UNORDERED input is canonicalized to server candidate order, not client token order.
       const cards = choice.candidates.filter(candidate => selected.has(candidate.token)).map(candidate => ({ ...candidate.ref }));
       if (choice.purpose === "cost") state.costCards = cards;
-      else if (choice.purpose === "returnCost") state.costReturned = cards;
+      else if (choice.purpose === "returnCost") {
+        ensureMove(choice.maxActiveReturn !== null && choice.candidates.filter(candidate => selected.has(candidate.token) && candidate.zone === "activeDon").length <= choice.maxActiveReturn, "v3-return-cost-active-reserved");
+        const costs = this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)!.costs;
+        ensureMove(this.#environment.canPayCosts?.(costs, state.costCards, cards) === true, "v3-return-cost-unpayable-selection");
+        state.costReturned = cards;
+      }
       else { ensureMove(choice.bindAs !== null, "v3-action-binding-required"); state.scopes.at(-1)![choice.bindAs] = cards; state.pc++; }
       state.pending = null; state.status = "ready";
     });
@@ -183,8 +192,8 @@ export class V3ResolutionMachine {
   viewFor(viewer: Seat) {
     ensureMove(viewer === 0 || viewer === 1, "v3-invalid-viewer"); const choice = this.#state.pending?.kind === "choice" ? this.#state.pending : null;
     return freezeMovement({ mode: "work_requests_only" as const, resolutionId: this.#state.identity.resolutionId, revision: this.#state.revision, worldRevision: this.#state.worldRevision, status: this.#state.status,
-      choice: choice ? { purpose: choice.purpose, selectionId: choice.selectionId, chooser: choice.chooser, min: choice.min, max: choice.max, expiresAt: choice.expiresAt,
-        options: viewer === choice.chooser ? choice.candidates.map(candidate => ({ token: candidate.token, cardId: candidate.cardId })) : [] } : null });
+      choice: choice ? { purpose: choice.purpose, selectionId: choice.selectionId, chooser: choice.chooser, min: choice.min, max: choice.max, maxActiveReturn: choice.maxActiveReturn, expiresAt: choice.expiresAt,
+        options: viewer === choice.chooser ? choice.candidates.map(candidate => ({ token: candidate.token, cardId: candidate.cardId, zone: candidate.zone, label: candidate.label })) : [] } : null });
   }
   exportForStorage(): string {
     const payload = JSON.stringify(this.#state); return JSON.stringify({ payload, signature: createHmac("sha256", this.#key).update(payload).digest("hex") });
@@ -196,7 +205,7 @@ export class V3ResolutionMachine {
     const expected = createHmac("sha256", machine.#key).update(envelope.payload).digest();
     ensureMove(timingSafeEqual(expected, Buffer.from(envelope.signature, "hex")), "v3-saved-signature-mismatch");
     const state = JSON.parse(envelope.payload) as State;
-    ensureMove(Number.isSafeInteger(expectedFrameRevision) && expectedFrameRevision >= 0 && state.revision === expectedFrameRevision && state.version === "v3-frame.3" && state.definitionHash === card.definitionHash && state.compilerVersion === card.compilerVersion && state.registryHash === card.registryHash && state.rulesetVersion === card.rulesetVersion &&
+    ensureMove(Number.isSafeInteger(expectedFrameRevision) && expectedFrameRevision >= 0 && state.revision === expectedFrameRevision && state.version === "v3-frame.4" && state.definitionHash === card.definitionHash && state.compilerVersion === card.compilerVersion && state.registryHash === card.registryHash && state.rulesetVersion === card.rulesetVersion &&
       state.identity.matchId === identity.matchId && state.identity.resolutionId === identity.resolutionId && state.identity.effectId === identity.effectId && state.identity.actor === identity.actor && state.identity.source.instanceId === identity.source.instanceId && state.identity.source.generation === identity.source.generation && state.worldRevision === environment.revision(), "v3-saved-context-mismatch");
     machine.#state = state; return machine;
   }

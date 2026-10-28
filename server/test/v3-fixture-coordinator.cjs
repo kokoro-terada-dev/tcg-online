@@ -116,6 +116,44 @@ test('DON return shortage, including overlap with REST_DON, never partially pays
   }
 });
 
+test('mixed DON return reserves active payment, rejects over-selection without leaving the choice, and allows all payable zone pairs', () => {
+  for (const actor of [0, 1]) for (const pair of [['activeDon', 'restDon'], ['activeDon', 'attachedDon'], ['restDon', 'attachedDon']]) {
+    const s = setup({ actor, don: 4, restDon: 1, attach: true, mutate: d => {
+      d.effects[0].costs = [{ type: 'REST_DON', count: 1 }, { type: 'DON_RETURN', count: 2, from: ['activeDon', 'restDon', 'attachedDon'] }];
+      d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }];
+    } }), c = s.coordinator, before = c.snapshotForCoordinator(); c.advance(actor, 'start', c.context());
+    const choice = c.viewFor(actor).frame.choice; assert.equal(choice.maxActiveReturn, 1); assert.equal(choice.options.length, 4);
+    assert.equal(choice.options.find(option => option.zone === 'attachedDon').label, 'キャラ2付与DON');
+    assert.deepEqual(c.viewFor(1 - actor).frame.choice.options, []);
+    const context = c.context(), active = choice.options.filter(option => option.zone === 'activeDon').map(option => option.token);
+    const frame = c.snapshotForCoordinator().frame; assert.throws(() => c.answer(actor, 'two-active', context, choice.selectionId, active));
+    assert.deepEqual(c.context(), context); assert.equal(c.snapshotForCoordinator().frame, frame);
+    assert.equal(c.viewFor(actor).frame.status, 'waitingForChoice'); assert.equal(c.snapshotForCoordinator().movement, before.movement);
+    c.answer(actor, 'valid-pair', context, choice.selectionId, pair.map(zone => choice.options.find(option => option.zone === zone).token));
+    c.advance(actor, 'plan', c.context()); const payContext = c.context(); c.applyPendingWork(actor, 'pay', payContext);
+    assert.equal(c.applyPendingWork(actor, 'pay', payContext).replayed, true);
+    const paid = c.snapshotForCoordinator(); assert.equal(paid.movement.revision, before.movement.revision + 1);
+    assert.equal(paid.movement.players[actor].donDeck.length, 8);
+    assert.equal(paid.movement.players[actor].activeDon.length, pair.includes('activeDon') ? 0 : 1);
+    assert.equal(paid.movement.players[actor].restDon.length, pair.includes('restDon') ? 1 : 2);
+    assert.equal(paid.movement.players[actor].attachedDon.length, pair.includes('attachedDon') ? 0 : 1);
+    assert.equal(paid.movementEvents.length, 3); assert.equal(paid.movementEvents.every(event => event.cause.kind === 'COST_PAYMENT'), true);
+  }
+});
+
+test('mixed zones use only declared candidates and stop before selection if no complete payment exists', () => {
+  for (const [from, count] of [[['activeDon', 'restDon'], 3], [['restDon', 'attachedDon'], 2]]) {
+    const c = setup({ don: 2, restDon: 1, mutate: d => {
+      d.effects[0].costs = [{ type: 'REST_DON', count: 1 }, { type: 'DON_RETURN', count, from }];
+    } }).coordinator, before = c.snapshotForCoordinator(); c.advance(0, 'short', c.context());
+    assert.equal(c.viewFor(0).frame.status, 'blocked'); assert.equal(c.viewFor(0).frame.choice, null);
+    assert.equal(c.snapshotForCoordinator().movement, before.movement);
+  }
+  const c = setup({ don: 3, restDon: 1, mutate: d => { d.effects[0].costs = [{ type: 'DON_RETURN', count: 1, from: ['restDon', 'attachedDon'] }]; } }).coordinator;
+  c.advance(0, 'declared-only', c.context()); assert.deepEqual(c.viewFor(0).frame.choice.options.map(option => option.zone), ['restDon']);
+  assert.equal(c.viewFor(0).frame.choice.maxActiveReturn, 0);
+});
+
 test('REST_SOURCE pays an active leader, character or stage once without changing its generation', () => {
   for (const actor of [0, 1]) for (const sourceKind of ['leader', 'character', 'stage']) {
     const s = setup({ actor, sourceKind, mutate: d => { d.effects[0].costs = [{ type: 'REST_SOURCE' }]; d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }]; } });

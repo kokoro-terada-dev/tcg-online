@@ -140,6 +140,39 @@ for (const actor of [0, 1]) for (const scenario of ['discardCostDraw', 'sourceCo
   v = (await request(controller, 'v3:command', command(v, 'advance', 'finish'))).view; assert.equal(v.frame.status, 'completed'); assert.equal(v.movement.players[actor].hand.length, 5);
 });
 
+for (const actor of [0, 1]) test(`mixed DON return for seat ${actor} rejects reserved active DON and permits a corrected choice on both clients`, async t => {
+  const { host, clients } = await setup(t), controller = clients[actor], peer = clients[1 - actor];
+  assert.equal((await request(host, 'v3:start', { actor, scenario: 'mixedReturnCostDraw' })).ok, true);
+  let v = (await request(controller, 'v3:sync')).view; const revision = v.movement.revision;
+  assert.equal(v.movement.players[actor].activeDon.length, 2); assert.equal(v.movement.players[actor].restDon.length, 1);
+  assert.equal(v.movement.players[actor].attachedDon.length, 1); assert.equal(v.movement.players[actor].donDeck.length, 6);
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'hand-start'))).view;
+  v = (await request(controller, 'v3:command', command(v, 'answer', 'hand', { selectionId: v.frame.choice.selectionId, tokens: [v.frame.choice.options[0].token] }))).view;
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'don-start'))).view;
+  const choice = v.frame.choice, active = choice.options.filter(option => option.zone === 'activeDon');
+  assert.equal(choice.options.length, 4); assert.equal(choice.maxActiveReturn, 1);
+  assert.equal(choice.options.find(option => option.zone === 'attachedDon').label, 'キャラ1付与DON');
+  const other = (await request(peer, 'v3:sync')).view; assert.deepEqual(other.frame.choice.options, []);
+  for (const option of choice.options) assert.equal(JSON.stringify(other).includes(option.token), false);
+  const denied = await request(controller, 'v3:command', command(v, 'answer', 'invalid-active', { selectionId: choice.selectionId, tokens: active.map(option => option.token) }));
+  assert.equal(denied.ok, false); assert.equal(denied.view.frame.revision, v.frame.revision);
+  assert.equal(denied.view.movement.revision, revision); assert.equal(denied.view.frame.choice.selectionId, choice.selectionId);
+  const tokens = [active[0].token, choice.options.find(option => option.zone === 'attachedDon').token];
+  const corrected = command(v, 'answer', 'corrected', { selectionId: choice.selectionId, tokens });
+  assert.equal((await request(peer, 'v3:command', corrected)).ok, false); v = (await request(controller, 'v3:command', corrected)).view;
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'plan'))).view; assert.equal(v.movement.revision, revision);
+  const pay = command(v, 'work', 'pay'); v = (await request(controller, 'v3:command', pay)).view;
+  assert.equal((await request(controller, 'v3:command', pay)).view.movement.revision, revision + 1);
+  const paidPeer = (await request(peer, 'v3:sync')).view;
+  for (const result of [v, paidPeer]) {
+    const zones = result.movement.players[actor]; assert.equal(zones.activeDon.length, 0); assert.equal(zones.restDon.length, 2);
+    assert.equal(zones.attachedDon.length, 0); assert.equal(zones.donDeck.length, 8); assert.equal(zones.hand.length, 4);
+  }
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'draw-plan'))).view;
+  v = (await request(controller, 'v3:command', command(v, 'work', 'draw'))).view;
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'finish'))).view; assert.equal(v.frame.status, 'completed');
+});
+
 test('invalid decks do not replace a ready deck, remote browser Origins are denied, and production startup is disabled', async t => {
   const { service, host } = await setup(t);
   assert.equal((await request(host, 'v3-room:deck', { invalid: true })).ok, false);

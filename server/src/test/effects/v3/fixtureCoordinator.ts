@@ -127,7 +127,7 @@ export class V3FixtureCoordinator {
       }
       for (const ref of work.returned) {
         const card = getCard(board, ref), from = location(board, ref.instanceId);
-        ensureMove(returnCost && from.zone === returnCost.from && from.player === actor && card.kind === "don" && card.owner === actor && card.controller === actor && card.faceUp &&
+        ensureMove(returnCost && returnCost.from.some(zone => zone === from.zone) && from.player === actor && card.kind === "don" && card.owner === actor && card.controller === actor && card.faceUp &&
           visibleTo(board, card, from, 0) && visibleTo(board, card, from, 1), "v3-fixture-return-cost-unavailable");
         operations.push({ kind: "move", card: ref, from, to: { player: actor, zone: "donDeck", position: "bottom", faceUp: false, rotated: false }, cause: "COST_PAYMENT" });
       }
