@@ -2,18 +2,11 @@ import type { TimedMovementEffect } from "./timedMovement";
 import { parseEffectCommand, type EffectCommand } from "./effectCommands";
 import { freezeMovement, player } from "../movement/state";
 import { projectMovementState } from "../movement/projection";
-import type { MovementRules, MovementView, Player } from "../movement/types";
-import type { SelectionView } from "./selectionTypes";
+import type { MovementRules, Player } from "../movement/types";
+import type { EffectTransportView } from "../effectProtocol";
+export type { EffectTransportView } from "../effectProtocol";
 
 export const EFFECT_RECEIPT_LIMIT = 1024;
-export type EffectTransportView = Readonly<{
-  matchId: string; localPlayerIndex: Player; movement: MovementView;
-  effect: Readonly<{ resolutionId: string; actor: Player; status: ReturnType<TimedMovementEffect["view"]>["status"];
-    completedSteps: number; masterVersion: string | null }>;
-  progression: Readonly<{ revision: number; turnNumber: number; activePlayer: Player; phase: string;
-    gate: "idle" | "resolving" | "choice"; chooser: Player | null; finished: boolean; winner: Player | null }>;
-  selection: SelectionView | null;
-}>;
 type Code = "applied" | "selection_retry" | "operation_rejected" | "invalid_command" | "wrong_context" | "request_conflict" | "request_limit" | "busy";
 export type EffectCommandResponse = Readonly<{ ok: boolean; code: Code; requestId?: string; replayed: boolean; view: EffectTransportView }>;
 type Receipt = Readonly<{ fingerprint: string; ok: boolean; code: Code }>;

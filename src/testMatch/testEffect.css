@@ -1,0 +1,13 @@
+.test-effect-panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 90000; width: min(420px, calc(100% - 24px)); max-height: min(55dvh, 440px); overflow-y: auto; box-sizing: border-box; background: #17202a; color: #fff; border: 1px solid #8998a6; border-radius: 8px; padding: 12px; font-size: 13px; touch-action: pan-y; box-shadow: 0 4px 24px #000a; }
+.test-effect-panel p { margin: 0 0 8px; }
+.test-effect-panel button { min-height: 44px; border: 1px solid #82929f; border-radius: 6px; padding: 8px 12px; background: #235e49; color: #fff; font-size: 14px; letter-spacing: 0; cursor: pointer; }
+.test-effect-panel button:disabled { opacity: .5; cursor: default; }
+.test-effect-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.test-effect-candidates { display: flex; flex-wrap: wrap; gap: 8px; max-height: 30dvh; overflow-y: auto; padding: 2px; }
+.test-effect-candidates button { position: relative; width: 64px; height: 90px; padding: 0; overflow: hidden; flex: 0 0 64px; background: #303c46; }
+.test-effect-candidates button[aria-checked="true"] { outline: 2px solid #8fe1b0; }
+.test-effect-candidates img { width: 100%; height: 100%; object-fit: contain; }
+.test-effect-candidates span { display: block; font-size: 11px; overflow-wrap: anywhere; }
+.test-effect-candidates b { position: absolute; top: 0; right: 0; background: #fff; color: #111; padding: 2px 5px; }
+.test-effect-candidates label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.test-effect-confirm { margin-top: 10px; }

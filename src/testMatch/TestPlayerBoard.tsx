@@ -51,7 +51,7 @@ export default function TestPlayerBoard({ player, playerIndex, reversed, renderC
   }
   function slot(zone: "character" | "stage" | "leader", index: number) {
     const card = player.zones[zone][index];
-    return <div key={index} className={`test-standard-slot test-standard-${zone}`} data-test-area={zone} data-slot={index}>
+    return <div key={`${zone}:${index}`} className={`test-standard-slot test-standard-${zone}`} data-test-area={zone} data-slot={index}>
       {card ? renderCard(card, zone, index) : <button className="test-slot-target" aria-label={`${zone === "character" ? "キャラクター" : "ステージ"}の空き枠${index + 1}`} disabled={!canPlace(zone)} onClick={() => onPlace(zone, index)}>{zone === "stage" ? "STAGE" : ""}</button>}
     </div>;
   }

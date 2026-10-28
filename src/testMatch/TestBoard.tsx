@@ -5,11 +5,11 @@ import type { CardView, MatchCommand, MatchView, Zone } from "../../server/src/t
 import { getCardBackImageUrl, getDonImageUrl, getLocalCardImage } from "../utils/localCardImages";
 import "./testMatch.css";
 
-type Props = { match: MatchView; roomId: string; busy: boolean; error: string; onCommand: (command: MatchCommand) => void; onEnd: () => void };
+type Props = { match: MatchView; roomId: string; busy: boolean; error: string; onCommand: (command: MatchCommand) => void; onEnd: () => void; readOnly?: boolean };
 const labels: Record<Zone, string> = { hand: "手札", deck: "デッキ", life: "ライフ", trash: "トラッシュ", public: "公開", character: "キャラクター", stage: "ステージ", leader: "リーダー", donDeck: "DONデッキ", activeDon: "ACTIVE DON", restDon: "REST DON" };
 const imageUrl = (card: CardView) => !card.cardId ? getCardBackImageUrl() : getLocalCardImage(card.cardId)?.imageUrl ?? (card.kind === "don" ? getDonImageUrl() : null);
 
-export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd }: Props) {
+export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd, readOnly = false }: Props) {
   const [selection, setSelection] = useState<{ id: string; from: Zone } | null>(null);
   const [preview, setPreview] = useState<CardView | null>(null);
   const [list, setList] = useState<{ zone: Zone; owner: 0 | 1 } | null>(null);
@@ -20,7 +20,7 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
   function cancelAttack() { setAttackSource(null); setAttackTarget(null); }
   const selected = selection ? own.zones[selection.from].find((card) => card?.id === selection.id) : null;
   function command(action: { kind: "draw" } | { kind: "attack"; cardInstanceId: string; from: "leader" | "character"; targetId: string } | { kind: "rotate"; cardInstanceId: string; from: Zone } | { kind: "move"; cardInstanceId: string; from: Zone; to: Zone; slotIndex?: number }) {
-    if (busy) return;
+    if (busy || readOnly) return;
     onCommand({ ...action, matchId: match.matchId, expectedRevision: match.revision, requestId: crypto.randomUUID() });
     setSelection(null);
   }
@@ -39,7 +39,7 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
           if (!mine && (zone === "leader" || zone === "character")) setAttackTarget(card);
           return;
         }
-        if (!mine) setPreview(card);
+        if (!mine || readOnly) setPreview(card);
         else { setSelection((current) => current?.id === card.id ? null : { id: card.id, from: zone }); setList(null); }
       }}>
       {url ? <img src={url} alt={label} draggable={false} /> : <span>{label}</span>}
@@ -51,14 +51,14 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
       <TestPlayerBoard player={match.players[(1 - match.localPlayerIndex) as 0 | 1]} playerIndex={(1 - match.localPlayerIndex) as 0 | 1} reversed renderCard={(card, zone, index) => cardButton(card, zone, 1 - match.localPlayerIndex, index)} onOpen={(zone) => { if (!choosingAttack) setList({ zone, owner: (1 - match.localPlayerIndex) as 0 | 1 }); }} canPlace={() => false} onPlace={() => {}} />
       <nav className="test-board-controls" aria-label="盤面操作">
         <small>{roomId}</small>
-        <button disabled={busy || choosingAttack || own.zones.deck.length === 0} onClick={() => command({ kind: "draw" })}>1枚ドロー</button>
+        {!readOnly && <><button disabled={busy || choosingAttack || own.zones.deck.length === 0} onClick={() => command({ kind: "draw" })}>1枚ドロー</button>
         <button disabled={busy || choosingAttack || !own.zones.donDeck[0]} onClick={() => {
           const don = own.zones.donDeck[0];
           if (don) command({ kind: "move", cardInstanceId: don.id, from: "donDeck", to: "activeDon" });
-        }}>DON追加</button>
+        }}>DON追加</button></>}
         <button onClick={() => { if (window.confirm("両プレイヤーをルームへ戻しますか？")) onEnd(); }} disabled={busy}>ルームへ戻る</button>
       </nav>
-      <TestPlayerBoard player={own} playerIndex={match.localPlayerIndex} reversed={false} renderCard={(card, zone, index) => cardButton(card, zone, match.localPlayerIndex, index)} onOpen={(zone) => { if (!choosingAttack) setList({ zone, owner: match.localPlayerIndex }); }} canPlace={(zone) => !busy && Boolean(selected && selection?.from !== "leader" && selected.kind === zone)} onPlace={move} />
+      <TestPlayerBoard player={own} playerIndex={match.localPlayerIndex} reversed={false} renderCard={(card, zone, index) => cardButton(card, zone, match.localPlayerIndex, index)} onOpen={(zone) => { if (!choosingAttack) setList({ zone, owner: match.localPlayerIndex }); }} canPlace={(zone) => !readOnly && !busy && Boolean(selected && selection?.from !== "leader" && selected.kind === zone)} onPlace={move} />
     </div>
     <TestAttackArrow attack={match.attack} revision={match.revision} />
     {choosingAttack && <div className="test-attack-prompt" role="status">相手のリーダー・キャラクターを選択<button onClick={cancelAttack}>キャンセル</button></div>}

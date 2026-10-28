@@ -1,12 +1,10 @@
 import { dataArray, dataObject, ensureMove, freezeMovement, id } from "../movement/state";
+import type { EffectCommand, EffectCommandKind } from "../effectProtocol";
+export type { EffectCommand, EffectCommandKind } from "../effectProtocol";
 
 const KINDS = ["beginCosts", "answerCosts", "commitCosts", "cancelCosts", "start", "advance", "answerEffect"] as const;
-export type EffectCommandKind = typeof KINDS[number];
 type CommandBase = Readonly<{ matchId: string; resolutionId: string; requestId: string;
   expectedMovementRevision: number; expectedProgressionRevision: number }>;
-export type EffectCommand = CommandBase & (
-  Readonly<{ kind: "answerCosts" | "answerEffect"; selectionId: string; tokens: readonly string[] }> |
-  Readonly<{ kind: Exclude<EffectCommandKind, "answerCosts" | "answerEffect"> }>);
 
 // Only plain bounded data enters this boundary. actor, definitions and rule evaluators are never payload fields.
 export function parseEffectCommand(input: unknown): EffectCommand {

@@ -1,0 +1,58 @@
+import { useState } from "react";
+import TestBoard from "./TestBoard";
+import { effectBoardView, type EffectTransportView, type EffectCommandKind } from "./effectClientState";
+import { getCardBackImageUrl, getLocalCardImage } from "../utils/localCardImages";
+import "./testEffect.css";
+
+type Props = { view: EffectTransportView; roomId: string; busy: boolean; error: string; needsSync: boolean;
+  onAction: (kind: EffectCommandKind, tokens?: readonly string[]) => void; onSync: () => void; onEnd: () => void };
+export default function TestEffectBoard(props: Props) {
+  const { view, busy, needsSync, onAction } = props;
+  const selection = view.selection, mine = view.effect.actor === view.localPlayerIndex, disabled = busy || needsSync;
+  let board;
+  try { board = effectBoardView(view); } catch { return <main><p role="alert">この盤面形式はまだ表示できません。</p><button onClick={props.onEnd}>ルームへ戻る</button></main>; }
+  return <>
+    <TestBoard match={board} roomId={props.roomId} busy={busy} error={props.error} readOnly onCommand={() => {}} onEnd={props.onEnd} />
+    <section className="test-effect-panel" aria-label="効果処理">
+      {selection ? <Selection key={selection.selectionId} selection={selection} disabled={disabled}
+        onConfirm={tokens => onAction(view.effect.status === "waitingForCostSelection" ? "answerCosts" : "answerEffect", tokens)} /> : <p role="status">{
+        view.effect.status === "completed" ? "処理完了" : view.effect.status === "blocked" ? "処理を続行できません" :
+        !mine || view.effect.status === "waitingForSelection" ? "相手の操作を待っています" :
+        view.effect.status === "costsReady" ? "支払いを確定してください" : "効果処理"
+      }</p>}
+      <div className="test-effect-actions">
+        {mine && view.effect.status === "prepared" && <button disabled={disabled} onClick={() => onAction("beginCosts")}>効果を使う</button>}
+        {mine && view.effect.status === "costsReady" && <button disabled={disabled} onClick={() => onAction("commitCosts")}>実行</button>}
+        {mine && view.effect.status === "resolving" && <button disabled={disabled} onClick={() => onAction("advance")}>処理を進める</button>}
+        {mine && ["costsReady", "waitingForCostSelection"].includes(view.effect.status) && <button disabled={disabled} onClick={() => onAction("cancelCosts")}>キャンセル</button>}
+        <button disabled={busy} onClick={props.onSync}>再同期</button>
+      </div>
+      {needsSync && <p role="alert">応答を確認できません。再同期してください。</p>}
+    </section>
+  </>;
+}
+function Selection({ selection, disabled, onConfirm }: { selection: NonNullable<EffectTransportView["selection"]>; disabled: boolean; onConfirm: (tokens: readonly string[]) => void }) {
+  const [tokens, setTokens] = useState<string[]>([]);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const min = selection.kind === "choice" ? 1 : selection.min, max = selection.kind === "choice" ? 1 : selection.max;
+  const valid = tokens.length >= min && tokens.length <= max;
+  function toggle(token: string) {
+    setTokens(current => current.includes(token) ? current.filter(t => t !== token) : current.length < max ? [...current, token] : current);
+  }
+  return <div>
+    <p>{selection.kind === "choice" ? "選択してください" : `カード選択 ${tokens.length} / ${max}`}</p>
+    <div className="test-effect-candidates">
+      {selection.kind === "choice" ? selection.options.map(option => <label key={option.token}>
+        <input type="radio" name={selection.selectionId} disabled={disabled} checked={tokens[0] === option.token} onChange={() => setTokens([option.token])} />{option.label}
+      </label>) : selection.candidates.map(card => {
+        const image = card.cardId ? getLocalCardImage(card.cardId)?.imageUrl : getCardBackImageUrl();
+        return <button key={card.token} role="checkbox" aria-checked={tokens.includes(card.token)} aria-label={card.cardId ?? "裏向きカード"}
+          disabled={disabled || (!tokens.includes(card.token) && tokens.length >= max)} onClick={() => toggle(card.token)}>
+          {image && !failedImages.has(card.token) ? <img src={image} alt={card.cardId ?? "裏向きカード"} draggable={false} onError={() => setFailedImages(current => new Set([...current, card.token]))} /> : <span>{card.cardId ?? "裏向きカード"}</span>}
+          {tokens.includes(card.token) && <b>{tokens.indexOf(card.token) + 1}</b>}
+        </button>;
+      })}
+    </div>
+    <button className="test-effect-confirm" disabled={disabled || !valid} onClick={() => onConfirm(tokens)}>選択を確定</button>
+  </div>;
+}

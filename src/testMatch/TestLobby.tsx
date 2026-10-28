@@ -6,6 +6,8 @@ import type { MatchCommand, MatchView, RoomView, DeckInput } from "../../server/
 import { getAllLocalDeckRecipes } from "../utils/localDeckStorage";
 import { getLocalCardImage, hasLocalCardImages } from "../utils/localCardImages";
 import TestBoard from "./TestBoard";
+import TestEffectBoard from "./TestEffectBoard";
+import { acceptEffectView, effectCommand, type EffectTransportView, type EffectCommandKind } from "./effectClientState";
 
 type Room = RoomView;
 type Reply = { ok: boolean; error?: string };
@@ -21,18 +23,40 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [match, setMatch] = useState<MatchView | null>(null);
+  const [effect, setEffect] = useState<EffectTransportView | null>(null);
+  const [needsSync, setNeedsSync] = useState(false);
+  const effectRef = useRef<EffectTransportView | null>(null), roomRef = useRef<Room | null>(null);
+  const activeMatchId = useRef<string | null>(null), retiredMatches = useRef(new Set<string>()), retiredEffects = useRef(new Set<string>());
+  const epoch = useRef(0), effectFlight = useRef(false);
   const [deckId, setDeckId] = useState("");
   const [decks] = useState(getAllLocalDeckRecipes);
+  function resetMatch() {
+    if (activeMatchId.current) retiredMatches.current.add(activeMatchId.current);
+    activeMatchId.current = null; effectRef.current = null; epoch.current++; effectFlight.current = false;
+    setEffect(null); setMatch(null); setNeedsSync(false); setBusy(false);
+  }
+  function receiveEffect(next: EffectTransportView) {
+    if (!roomRef.current?.inMatch || retiredMatches.current.has(next.matchId) || retiredEffects.current.has(`${next.matchId}:${next.effect.resolutionId}`) ||
+      (activeMatchId.current !== null && activeMatchId.current !== next.matchId) || !acceptEffectView(effectRef.current, next)) return;
+    const previous = effectRef.current;
+    if (previous && previous.effect.resolutionId !== next.effect.resolutionId) retiredEffects.current.add(`${previous.matchId}:${previous.effect.resolutionId}`);
+    activeMatchId.current = next.matchId; effectRef.current = next; setEffect(next); setMatch(null); setNeedsSync(false);
+  }
   useEffect(() => {
     if (!serverUrl) return;
     const socket = io(serverUrl, { autoConnect: false, timeout: 60000, reconnection: false });
     socketRef.current = socket;
-    socket.on("test-room:state", (next: Room) => { setRoom(next); setMessage(""); setError(""); });
-    socket.on("test-room:closed", (text: string) => { setRoom(null); setMatch(null); setDeckId(""); setMessage(text); });
-    socket.on("test-match:state", (next: MatchView) => setMatch((current) => current?.matchId === next.matchId && current.revision > next.revision ? current : next));
-    socket.on("test-match:ended", (text: string) => { setMatch(null); setMessage(text); });
+    socket.on("test-room:state", (next: Room) => { roomRef.current = next; setRoom(next); setMessage(""); setError(""); });
+    socket.on("test-room:closed", (text: string) => { roomRef.current = null; setRoom(null); resetMatch(); setDeckId(""); setMessage(text); });
+    socket.on("test-match:state", (next: MatchView) => {
+      if (!roomRef.current?.inMatch || effectRef.current || retiredMatches.current.has(next.matchId) || (activeMatchId.current && activeMatchId.current !== next.matchId)) return;
+      activeMatchId.current = next.matchId;
+      setMatch(current => current?.matchId === next.matchId && current.revision > next.revision ? current : next);
+    });
+    socket.on("test-effect:state", receiveEffect);
+    socket.on("test-match:ended", (text: string) => { resetMatch(); setMessage(text); });
     socket.on("connect_error", () => { setBusy(false); setError("テストサーバーに接続できません。起動状態と接続先を確認してください。"); });
-    socket.on("disconnect", () => { setRoom(null); setMatch(null); setDeckId(""); setBusy(false); setError("接続が切れました。ルームを作成または入室し直してください。"); });
+    socket.on("disconnect", () => { roomRef.current = null; setRoom(null); resetMatch(); setDeckId(""); setError("接続が切れました。ルームを作成または入室し直してください。"); });
     return () => { socket.removeAllListeners(); socket.disconnect(); socketRef.current = null; };
   }, []);
 
@@ -46,12 +70,30 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
       if (err || !reply?.ok) {
         setError(reply?.error ?? "応答を受信できませんでした。再度お試しください。");
         if (err) { socket.disconnect(); setRoom(null); }
-      } else if (event === "test-room:leave") { setRoom(null); setMatch(null); setDeckId(""); }
+      } else if (event === "test-room:leave") { roomRef.current = null; setRoom(null); resetMatch(); setDeckId(""); }
     };
     socket.connect();
     if (value === undefined) socket.timeout(75000).emit(event, complete);
     else socket.timeout(75000).emit(event, value, complete);
   }
+  function effectRequest(kind?: EffectCommandKind, tokens?: readonly string[]) {
+    const socket = socketRef.current, current = effectRef.current;
+    if (!socket?.connected || !current || busy || effectFlight.current || (kind !== undefined && needsSync)) return;
+    const sentEpoch = epoch.current, resolutionId = current.effect.resolutionId;
+    const value = kind === undefined ? undefined : effectCommand(current, kind, crypto.randomUUID(), tokens);
+    effectFlight.current = true; setBusy(true); setError("");
+    const complete = (err: Error | null, reply?: { ok: boolean; code?: string; view?: EffectTransportView }) => {
+      if (socketRef.current !== socket || epoch.current !== sentEpoch) return;
+      effectFlight.current = false; setBusy(false);
+      if (effectRef.current?.effect.resolutionId !== resolutionId) return;
+      if (err || !reply?.view) { setNeedsSync(true); setError("応答を確認できません。再同期してください。"); return; }
+      receiveEffect(reply.view);
+      if (!reply.ok) setError(reply.code === "selection_retry" ? "この組み合わせでは支払えません。選び直してください。" : "操作できませんでした。最新の状態を確認してください。");
+    };
+    if (value === undefined) socket.timeout(10000).emit("test-effect:sync", complete);
+    else socket.timeout(10000).emit("test-effect:command", value, complete);
+  }
+  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} />;
   const mine = room?.host.socketId === socketRef.current?.id ? room?.host : room?.guest;
   function selectDeck(id: string) {
     const deck = decks.find((item) => item.id === id);
