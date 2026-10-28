@@ -24,7 +24,7 @@
 コンストラクターでも定義を再検証・コピーし、発動元のカードID・generation・controllerを確認します。
 
 1. コンストラクターで全命令を事前検査。未対応命令は0回反復内でも拒否します。
-2. `start(revision, rules)` でコストなしの解決を開始します。
+2. `start(revision, rules)` でDONコストを一括支払いし、解決を開始します（コストなしも可能）。
 3. `advance(revision, rules)` で末端命令を1個ずつ実行します。
 4. 全命令の完了時にcompletedへ遷移します。
 
@@ -93,13 +93,32 @@ certifiedUnmodifiedを指定した場合だけ、印刷値を数値Factsとし�
 後続命令で失敗した場合はblockedとなり、それ以前に確定した命令を巻き戻しません。
 snapshotと実行結果は非公開サーバーデータです。送信には既存Movement投影が必須です。
 
+## DONコスト支払い
+
+costsがpayDonだけで構成される定義を、既存CostPlanSessionへ接続しました。
+手札からカードを出す際の自動コスト処理とは別の、DSL効果発動用の処理です。
+既存対戦・一人回しのDON処理は変更していません。
+
+- 自分所有・自分管理のACTIVE DONだけを、盤面の並び順に自動割当します。
+- REST DON、付与DON、相手のDONは支払いに使いません。
+- 全payDonをindependentとしてまとめ、同じDONを二度使わない計画を作ります。
+- 確定直前にCostPlanSessionで再検証し、MovementResolutionのcost取引で一括確定します。
+- 全体の枚数不足・判定未解決・支払い防止時は、盤面もrevisionも変えずpreparedのままです。
+- 支払いが成功してからのみ後続命令へ進めます。古いstartや二重startは拒否します。
+- 支払い後の選択待ち・任意の子処理を断る操作・効果失敗では、支払いを自動返却しません。
+- コストは最大16個、支払うDONの合計はMovementの操作上限64枚以下です。
+
+DONの選択UI、別の支払い候補への自動再試行、順序依存の支払い、
+restCards/moveCards/revealCardsを含む複合コストの確定は未対応です。
+これらを含む定義は、一部だけ実行せず生成時に拒否します。
+
 ## 明示的な未対応
 
-- コストあり、conditionありの定義（支払い前に拒否）
+- payDon以外のコスト、トップレベルconditionありの定義（支払い前に拒否）
 - modify、耐性、置換の設置と誘発待機
 - 複数カードの山札上への移動順序（推測せず停止）
 - 山札不足時の部分ドローや敗北判定（推測せず停止）
-- CostPlan/Progressionとの接続、完全な現在値計算、Socket通信、保存・再接続
+- 複合コストの確定、Progressionとの接続、完全な現在値計算、Socket通信、保存・再接続
 
 ドローは1命令最大64枚、展開後の末端命令は最大128個です。
 構造検証の既存上限とMovementの操作・イベント上限も有効です。
@@ -109,5 +128,5 @@ snapshotと実行結果は非公開サーバーデータです。送信には既
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build
-node --test test/master-facts.cjs test/action-control.cjs test/action-selection.cjs test/movement-actions.cjs test/resolution.cjs
+node --test test/action-cost.cjs test/master-facts.cjs test/action-control.cjs test/action-selection.cjs test/movement-actions.cjs test/resolution.cjs
 ```

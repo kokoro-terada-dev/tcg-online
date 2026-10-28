@@ -11,6 +11,7 @@ import { createEvaluationBudget, evaluateCondition } from "./predicates";
 import { movementSelectionSnapshot, movementSourceFacts } from "./movementSelection";
 import { visibleTo } from "../movement/engine";
 import { pinMasterFacts, type MasterFactOptions, type PinnedMasterFacts } from "./masterFacts";
+import { prepareDonPayment, validateDonPayments, type DonPayment } from "./movementCosts";
 
 type Leaf = DeepReadonly<Extract<Action, { kind: "draw" | "move" | "select" | "if" | "optional" }>>;
 type Scope = { parent: Scope | null; bindings: Map<string, SelectionResult> };
@@ -32,9 +33,15 @@ export class PreparedMovementEffect {
   #nextBranchId = 0;
   #conditionBudget = createEvaluationBudget();
   #catalog: PinnedMasterFacts;
+  #costs: readonly DonPayment[];
   constructor(state: MovementState, identity: ResolutionIdentity, input: unknown, masterOptions?: MasterFactOptions) {
     const definition = validateEffectDefinition(input).definition;
-    ensureMove(definition.costs.length === 0 && definition.condition === undefined, "action-runtime-cost-or-condition-not-supported");
+    ensureMove(definition.condition === undefined, "action-runtime-condition-not-supported");
+    this.#costs = definition.costs.map(cost => {
+      ensureMove(cost.kind === "payDon", "action-runtime-cost-kind-not-supported");
+      return cost;
+    });
+    validateDonPayments(this.#costs);
     ensureMove(identity.source !== null, "action-runtime-source-required");
     const source = getCard(state, identity.source!);
     ensureMove(source.cardId === definition.cardId && source.controller === identity.actor, "action-runtime-source-mismatch");
@@ -129,9 +136,13 @@ export class PreparedMovementEffect {
   }
   toJSON(): never { throw new Error("server-only-action-runtime"); }
   start(expectedRevision: number, rules: MovementRules): TransactionResult {
-    ensureMove(!this.#busy, "reentrant-action-runtime"); this.#busy = true;
+    ensureMove(!this.#busy, "reentrant-action-runtime");
+    ensureMove(this.#resolution.view().status === "prepared" && expectedRevision === this.snapshot().revision, "action-runtime-not-prepared-or-current");
+    this.#busy = true;
     try {
-      const result = this.#resolution.pay(this.#actor, expectedRevision, [], rules);
+      const operations = this.#costs.length === 0 ? [] : prepareDonPayment(this.snapshot(), this.#actor,
+        this.#resolutionId, this.#costs, this.#sourceFacts, this.#catalog);
+      const result = this.#resolution.pay(this.#actor, expectedRevision, operations, rules);
       if (this.#instructions.length === 0) this.#resolution.complete(this.#actor, result.state.revision);
       return result;
     } finally { this.#busy = false; }

@@ -45,7 +45,7 @@ test('sequence shares bindings, repeat creates separate iteration scopes', () =>
 test('unsupported actions, costs, and conditions fail before any execution', () => {
   const unsupported = { kind: 'modify', modifier: { kind: 'power', target: { kind: 'ref', from: 'SOURCE', field: 'id' }, amount: 1000 }, duration: { kind: 'thisTurn' } };
   assert.throws(() => runtime([unsupported]), /unsupported/);
-  assert.throws(() => runtime([], 0, 3, { costs: [{ kind: 'payDon', amount: 1 }] }), /not-supported/);
+  assert.throws(() => runtime([], 0, 3, { costs: [{ kind: 'revealCards', selector: { kind: 'cards', chooser: 'SELF', owner: 'SELF', zones: ['hand'], min: 1, max: 1, mode: 'SELECT' } }] }), /not-supported/);
   assert.throws(() => runtime([], 0, 3, { condition: { kind: 'exists', value: { kind: 'literal', value: 1 } } }), /not-supported/);
   assert.throws(() => runtime([{ kind: 'repeat', count: 0, actions: [unsupported] }]), /unsupported/);
 });

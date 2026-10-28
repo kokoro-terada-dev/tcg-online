@@ -1,5 +1,7 @@
 # Cost：複数コストのリソース計画と再検証
 
+後続の [Action実行器](action-runtime.md) では、payDonだけの定義に限りCostPlanSessionの計画をMovementResolutionへ接続し、DONの一括レストまで実行します。本書のCostPlanSession自体は引き続き計画と再検証だけを行い、複合コストや既存対戦の支払いには未接続です。
+
 ## 今回の範囲
 
 支払い前のスナップショットから、複数コストをまとめて満たすカード/DONの組み合わせを検証します。
