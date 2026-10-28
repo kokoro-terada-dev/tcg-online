@@ -6,12 +6,19 @@ import { applyCommand, createMatch, parseDeck, projectMatch } from "./game";
 import type { Match } from "./game";
 import type { DeckInput, RoomView } from "./protocol";
 import { loadMaster } from "./cardMaster";
+import { EffectMatchOwner } from "./effects/effectMatchOwner";
+import { OwnedEffectEndpoint } from "./effects/ownedEffectEndpoint";
+import { bindEffectSocket } from "./effects/effectSocket";
 
 type Seat = { socketId: string; ready: boolean; recipe: DeckInput | null };
-type Room = { roomId: string; host: Seat; guest: Seat | null; game: Match | null };
+type Room = { roomId: string; host: Seat; guest: Seat | null; game: Match | null;
+  effects: { owner: EffectMatchOwner; endpoint: OwnedEffectEndpoint } | null };
 type Reply = (result: { ok: boolean; error?: string }) => void;
 
-export function createTestServer() {
+export type TestServerOptions = Readonly<{ effectFactory?: (match: Match) => EffectMatchOwner }>;
+export function createTestServer(options: TestServerOptions = {}) {
+  const effectFactory = options.effectFactory;
+  if (effectFactory !== undefined && typeof effectFactory !== "function") throw new Error("Invalid server effect factory");
   const master = loadMaster();
   const app = express();
   const http = createServer(app);
@@ -38,14 +45,22 @@ export function createTestServer() {
   }
   function publishGame(room: Room) {
     if (!room.game || !room.guest) return;
+    if (room.effects) {
+      const views = [room.effects.endpoint.viewFor(0), room.effects.endpoint.viewFor(1)];
+      io.sockets.sockets.get(room.host.socketId)?.emit("test-effect:state", views[0]);
+      io.sockets.sockets.get(room.guest.socketId)?.emit("test-effect:state", views[1]);
+      return;
+    }
     io.to(room.host.socketId).emit("test-match:state", projectMatch(room.game, 0));
     io.to(room.guest.socketId).emit("test-match:state", projectMatch(room.game, 1));
   }
+  function closeEffects(room: Room) { room.effects?.owner.close(); room.effects = null; }
   function leave(socketId: string) {
     const roomId = memberships.get(socketId);
     const room = roomId ? rooms.get(roomId) : undefined;
     memberships.delete(socketId);
     if (!room) return;
+    closeEffects(room);
     if (room.host.socketId === socketId) {
       io.to(room.roomId).emit("test-room:closed", "ホストがルームを解散しました");
       if (room.guest) memberships.delete(room.guest.socketId);
@@ -62,6 +77,12 @@ export function createTestServer() {
   }
 
   io.on("connection", (socket) => {
+    if (effectFactory) bindEffectSocket(io, socket, socketId => {
+      const room = rooms.get(memberships.get(socketId) ?? "");
+      if (!room?.game || !room.effects || !room.guest) return null;
+      const actor = room.host.socketId === socketId ? 0 : room.guest.socketId === socketId ? 1 : null;
+      return actor === null ? null : { host: room.effects.endpoint, actor, socketIds: [room.host.socketId, room.guest.socketId] };
+    });
     socket.on("test-room:create", (reply?: Reply) => {
       if (typeof reply !== "function") return;
       const existing = rooms.get(memberships.get(socket.id) ?? "");
@@ -69,7 +90,7 @@ export function createTestServer() {
       if (rooms.size >= 10000) { reply({ ok: false, error: "ルームが満員です" }); return; }
       let roomId: string;
       do { roomId = String(randomInt(10000)).padStart(4, "0"); } while (rooms.has(roomId));
-      const room: Room = { roomId, host: { socketId: socket.id, ready: false, recipe: null }, guest: null, game: null };
+      const room: Room = { roomId, host: { socketId: socket.id, ready: false, recipe: null }, guest: null, game: null, effects: null };
       rooms.set(roomId, room);
       memberships.set(socket.id, roomId);
       socket.join(roomId);
@@ -121,7 +142,18 @@ export function createTestServer() {
       if (!room || room.host.socketId !== socket.id || room.game || !room.host.ready || !room.guest?.ready || !room.host.recipe || !room.guest.recipe) {
         reply({ ok: false, error: "ホストのみ、両者のデッキ選択・READY後に開始できます" }); return;
       }
-      room.game = createMatch(room.host.recipe, room.guest.recipe, master);
+      const game = createMatch(room.host.recipe, room.guest.recipe, master);
+      let effects: Room["effects"] = null;
+      if (effectFactory) {
+        try {
+          const owner = effectFactory(game);
+          if (!(owner instanceof EffectMatchOwner) || owner.snapshot().mode !== "automated" || owner.snapshot().movement?.matchId !== game.id) throw new Error("Invalid effect owner");
+          const endpoint = new OwnedEffectEndpoint(owner);
+          if (!endpoint.available()) throw new Error("Effect is not prepared");
+          effects = { owner, endpoint };
+        } catch { reply({ ok: false, error: "効果対戦を初期化できませんでした" }); return; }
+      }
+      room.game = game; room.effects = effects;
       publish(room); publishGame(room); reply({ ok: true });
     });
     socket.on("test-match:command", (value: unknown, reply?: Reply) => {
@@ -130,6 +162,7 @@ export function createTestServer() {
       if (!room?.game) { reply({ ok: false, error: "対戦が開始されていません" }); return; }
       const actor = room.host.socketId === socket.id ? 0 : room.guest?.socketId === socket.id ? 1 : null;
       if (actor === null) { reply({ ok: false, error: "操作できません" }); return; }
+      if (room.effects) { reply({ ok: false, error: "この対戦では効果用の操作を使用してください" }); return; }
       const error = applyCommand(room.game, actor, value);
       publishGame(room);
       reply(error ? { ok: false, error } : { ok: true });
@@ -138,7 +171,7 @@ export function createTestServer() {
       if (typeof reply !== "function") return;
       const room = rooms.get(memberships.get(socket.id) ?? "");
       if (!room?.game) { reply({ ok: false, error: "対戦が開始されていません" }); return; }
-      room.game = null; room.host.ready = false;
+      closeEffects(room); room.game = null; room.host.ready = false;
       if (room.guest) room.guest.ready = false;
       io.to(room.roomId).emit("test-match:ended", "対戦を終了してルームへ戻りました");
       publish(room); reply({ ok: true });
