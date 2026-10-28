@@ -160,10 +160,11 @@ export async function startLocalV3Server(port = 0) {
     handle("v3-session:sync", () => { const { room, actor, session } = continuousActive(); return { sessionView: sessionView(session, room.code, actor) }; });
     handle("v3-session:command", input => {
       const { room, actor, session } = continuousActive(); ensureMove(input && typeof input === "object", "v3-session-command-object");
-      const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value; ensureMove(["activate", "advance", "work", "answer", "endTurn"].includes(kind), "v3-session-command-kind");
-      dataObject(input, ["kind", "requestId", "matchId", "context", ...(kind === "activate" ? ["effectId"] : kind === "answer" ? ["selectionId", "tokens"] : [])]);
+      const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value; ensureMove(["activate", "play", "advance", "work", "answer", "endTurn"].includes(kind), "v3-session-command-kind");
+      dataObject(input, ["kind", "requestId", "matchId", "context", ...(kind === "activate" ? ["effectId"] : kind === "answer" ? ["selectionId", "tokens"] : kind === "play" ? ["card", ...(Object.hasOwn(input, "slotIndex") ? ["slotIndex"] : [])] : [])]);
       ensureMove(input.matchId === session.matchId, "v3-session-match-context"); const requestId = label(input.requestId), expected = input.context as V3SessionContext, c = session.coordinator;
       if (kind === "activate") c.activate(actor, requestId, expected, session.sources[actor]!, label(input.effectId));
+      else if (kind === "play") { ensureMove(input.slotIndex === undefined || Number.isSafeInteger(input.slotIndex), "v3-session-play-slot"); c.playCard(actor, requestId, expected, input.card as { instanceId: string; generation: number }, input.slotIndex as number | undefined); }
       else if (kind === "answer") { const selectionId = label(input.selectionId); dataArray(input.tokens, 50); input.tokens.forEach(token => label(token)); c.answer(actor, requestId, expected, selectionId, input.tokens as string[]); }
       else if (kind === "advance") c.advance(actor, requestId, expected);
       else if (kind === "work") c.applyPendingWork(actor, requestId, expected);

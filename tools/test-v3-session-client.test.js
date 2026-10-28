@@ -7,7 +7,7 @@ const module = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL("../src/testMatch/v3SessionClient.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module, exports: module.exports });
 const { acceptV3SessionView, v3SessionCommand } = module.exports;
 function view() { return { mode: 'v3-synthetic-session', matchId: 'm', localPlayerIndex: 0, activePlayer: 0, turnNumber: 1, gate: 'idle', frame: null, resolutionActor: null,
-  context: { revision: 0, movementRevision: 0, progressionRevision: 0, resolutionId: null, frameRevision: null }, movement: { revision: 0 }, effects: [{ effectId: 'draw', enabled: true }] }; }
+  context: { revision: 0, movementRevision: 0, progressionRevision: 0, resolutionId: null, frameRevision: null }, movement: { revision: 0 }, effects: [{ effectId: 'draw', enabled: true }], playableCards: [] }; }
 test('session views allow new resolution IDs only with increasing session revisions, without seat or board rollback', () => {
   const v = view(); assert.equal(acceptV3SessionView(null, v, 'm'), true);
   const next = { ...v, frame: { resolutionId: 'r', revision: 0 }, context: { ...v.context, revision: 1, resolutionId: 'r', frameRevision: 0 } };
@@ -23,4 +23,12 @@ test('session commands use current context and chooser tokens without sending ac
   v.frame = { status: 'waitingForChoice', choice: { selectionId: 's', chooser: 0, min: 1, max: 1, options: [{ token: 'opaque' }] } }; v.gate = 'choice';
   assert.equal(v3SessionCommand(v, 'answer', 'answer', { tokens: ['opaque'] }).selectionId, 's');
   assert.throws(() => v3SessionCommand(v, 'answer', 'forged', { tokens: ['other'] })); assert.throws(() => v3SessionCommand(v, 'endTurn', 'pending'));
+});
+
+test('normal play uses only the current approved playable reference and rejects disabled or stale cards', () => {
+  const v = view(), card = { instanceId: 'hand-card', generation: 1 }; v.playableCards = [{ card, enabled: true }];
+  const play = v3SessionCommand(v, 'play', 'play', { card }); assert.equal(play.card.instanceId, 'hand-card'); assert.equal(play.card.generation, 1);
+  assert.equal(Object.hasOwn(play, 'actor'), false); assert.equal(Object.hasOwn(play, 'cost'), false);
+  assert.throws(() => v3SessionCommand(v, 'play', 'stale', { card: { ...card, generation: 0 } }));
+  v.playableCards[0].enabled = false; assert.throws(() => v3SessionCommand(v, 'play', 'disabled', { card }));
 });

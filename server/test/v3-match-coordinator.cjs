@@ -11,21 +11,22 @@ const { compileV3CardJson } = require('../dist/test/effects/v3/compiler.js');
 const { ApprovedV3Catalog } = require('../dist/test/effects/v3/approval.js');
 const { V3SyntheticMatchCoordinator } = require('../dist/test/effects/v3/matchCoordinator.js');
 const key = Buffer.alloc(32, 11); // Synthetic test key only.
-function setup({ actor = 0, optional = false, costs = [], max = null, nextDeckCount, refreshSeed = false, mutate = () => {} } = {}) {
+function setup({ actor = 0, optional = false, costs = [], max = null, nextDeckCount, refreshSeed = false, cardType = 'character', don = 2, mutate = () => {} } = {}) {
   const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v3-select-move.json'), 'utf8'));
   data.reviewStatus = 'approved'; data.effects[0].optional = optional; data.effects[0].costs = costs;
   data.effects[0].usageLimit = max === null ? null : { type: 'PER_TURN', scope: 'SOURCE_OBJECT', count: max };
+  data.cardType = cardType; data.effects[0].sourceZones = [cardType];
   data.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }]; mutate(data);
   const plan = compileV3CardJson(JSON.stringify(data));
   const record = { status: 'approved', cardId: data.cardId, cardVersion: data.cardVersion, definitionHash: plan.definitionHash, sourceHash: plan.sourceHash,
     compilerVersion: plan.compilerVersion, registryHash: plan.registryHash, rulesetVersion: 'synthetic-session.1', reviewer: 'fixture', approvedAt: '2026-10-29T00:00:00.000Z', ruleEvidence: ['synthetic:not-official-rulings'] };
   const card = new ApprovedV3Catalog([plan], [record], record.rulesetVersion).get(data.cardId);
-  const recipe = { name: 'Synthetic session', leaderCardId: 'LEADER', mainDeck: Array(50).fill(data.cardId), donDeck: Array(10).fill('DON'), cardTypes: { [data.cardId]: 'character' }, leaderLifeCount: 5 };
+  const recipe = { name: 'Synthetic session', leaderCardId: 'LEADER', mainDeck: Array(50).fill(data.cardId), donDeck: Array(10).fill('DON'), cardTypes: { [data.cardId]: cardType }, leaderLifeCount: 5 };
   const match = createMatch(recipe, recipe);
   for (const player of [0, 1]) {
     const z = match.players[player].zones;
-    for (let i = 0; i < 2; i++) z.character[i] = { ...z.deck.shift(), faceUp: true, rotated: false };
-    for (let i = 0; i < 2; i++) z.activeDon.push({ ...z.donDeck.shift(), faceUp: true, rotated: false });
+    for (let i = 0; i < 2; i++) z.character[i] = { ...z.deck.shift(), cardId: cardType === 'character' ? data.cardId : 'SEED-CHARACTER', kind: 'character', faceUp: true, rotated: false };
+    for (let i = 0; i < don; i++) z.activeDon.push({ ...z.donDeck.shift(), faceUp: true, rotated: false });
   }
   const next = 1 - actor;
   if (nextDeckCount !== undefined) match.players[next].zones.trash.push(...match.players[next].zones.deck.splice(nextDeckCount).map(card => ({ ...card, faceUp: true })));
@@ -164,4 +165,48 @@ test('a JSON two-use limit is enforced per source rather than replaced by a hard
   assert.equal(c.effectsFor(0, sources[0])[0].enabled, false);
   const before = c.snapshotForCoordinator(); assert.throws(() => c.activate(0, 'third', c.context(), sources[0], 'main'));
   assert.deepEqual(c.snapshotForCoordinator(), before);
+});
+
+test('normal play pays exact known cost and enters the leftmost free field slot, publishing cost and entry causes separately', () => {
+  for (const actor of [0, 1]) for (const cardType of ['character', 'stage']) {
+    const { c } = setup({ actor, cardType, mutate: d => d.baseStats.cost = 2 }), before = c.snapshotForCoordinator();
+    const id = before.movement.players[actor].hand[0], ref = { instanceId: id, generation: before.movement.cards[id].generation };
+    assert.equal(c.effectsFor(actor, ref)[0].enabled, false);
+    const offered = c.playableCardsFor(actor); assert.equal(offered.length, 5); assert.equal(offered[0].enabled, true); assert.equal(offered[0].cost, 2);
+    const context = c.context(); c.playCard(actor, 'play', context, ref); assert.equal(c.playCard(actor, 'play', context, ref).replayed, true);
+    const after = c.snapshotForCoordinator(), played = after.movement.cards[id], expectedSlot = cardType === 'character' ? 2 : 0;
+    assert.equal(after.movement.players[actor][cardType][expectedSlot], id); assert.equal(played.faceUp, true); assert.equal(played.rotated, false);
+    assert.equal(played.generation, ref.generation + 1); assert.equal(played.enteredTurn, cardType === 'character' ? 1 : null);
+    assert.equal(after.movement.players[actor].hand.length, 4); assert.equal(after.movement.players[actor].activeDon.length, 0); assert.equal(after.movement.players[actor].restDon.length, 2);
+    assert.equal(after.ruleEvents.filter(event => event.cause.kind === 'COST_PAYMENT').length, 2);
+    assert.equal(after.ruleEvents.at(-1).cause.kind, 'RULE_PROCESSING'); assert.equal(after.ruleEvents.at(-1).to.zone, cardType);
+    assert.equal(c.viewFor(1 - actor).movement.players[actor][cardType][expectedSlot].cardId, played.cardId);
+    assert.equal(c.viewFor(1 - actor).movement.players[actor].hand.every(card => card.cardId === null), true);
+    assert.equal(c.effectsFor(actor, { instanceId: id, generation: played.generation })[0].enabled, true);
+  }
+});
+
+test('zero-cost play works without DON, full fields or unknown/insufficient cost do not partially pay', () => {
+  const free = setup({ don: 0, mutate: d => d.baseStats.cost = 0 }).c;
+  for (let i = 0; i < 3; i++) { const play = free.playableCardsFor(0)[0]; free.playCard(0, `free-${i}`, free.context(), play.card); }
+  const full = free.snapshotForCoordinator(); assert.equal(full.movement.players[0].activeDon.length, 0); assert.equal(full.movement.players[0].character.filter(Boolean).length, 5);
+  assert.equal(free.playableCardsFor(0)[0].enabled, false);
+  assert.throws(() => free.playCard(0, 'full', free.context(), free.playableCardsFor(0)[0].card)); assert.deepEqual(free.snapshotForCoordinator(), full);
+  for (const cost of [null, 3]) {
+    const c = setup({ mutate: d => d.baseStats.cost = cost }).c, before = c.snapshotForCoordinator(), candidate = c.playableCardsFor(0)[0];
+    assert.equal(candidate.enabled, false); assert.throws(() => c.playCard(0, 'not-payable', c.context(), candidate.card)); assert.deepEqual(c.snapshotForCoordinator(), before);
+  }
+  const stage = setup({ cardType: 'stage', mutate: d => d.baseStats.cost = 0 }).c;
+  stage.playCard(0, 'first-stage', stage.context(), stage.playableCardsFor(0)[0].card); const occupied = stage.snapshotForCoordinator();
+  assert.throws(() => stage.playCard(0, 'occupied-stage', stage.context(), stage.playableCardsFor(0)[0].card)); assert.deepEqual(stage.snapshotForCoordinator(), occupied);
+});
+
+test('normal play cannot use another hand, stale generations, occupied slots, the wrong turn or an active resolution', () => {
+  const { c, sources } = setup({ optional: true, mutate: d => d.baseStats.cost = 1 });
+  const own = c.playableCardsFor(0)[0].card, other = c.playableCardsFor(1)[0].card, before = c.snapshotForCoordinator();
+  for (const [actor, ref, slot] of [[0, other, 2], [1, other, 2], [0, { ...own, generation: 1 }, 2], [0, own, 0], [0, own, -1], [0, own, 6]]) {
+    assert.throws(() => c.playCard(actor, 'invalid', c.context(), ref, slot)); assert.deepEqual(c.snapshotForCoordinator(), before);
+  }
+  c.activate(0, 'pending', c.context(), sources[0], 'main'); c.advance(0, 'confirm', c.context()); const pending = c.snapshotForCoordinator();
+  assert.throws(() => c.playCard(0, 'during-choice', c.context(), own)); assert.deepEqual(c.snapshotForCoordinator(), pending);
 });

@@ -10,13 +10,13 @@ const command = (v, kind, extra = {}) => ({ matchId: v.matchId, requestId: `sess
 async function send(socket, v, kind, extra = {}) {
   const result = await request(socket, 'v3-session:command', command(v, kind, extra)); assert.equal(result.ok, true, JSON.stringify(result)); return result.sessionView;
 }
-async function setup(t, firstPlayer = 0) {
+async function setup(t, firstPlayer = 0, decks = [deck, deck]) {
   const service = await startLocalV3Server(), clients = [];
   t.after(async () => { clients.forEach(socket => socket.disconnect()); await new Promise(resolve => service.io.close(resolve)); });
   for (let i = 0; i < 3; i++) { const socket = io(service.url, { autoConnect: false, reconnection: false }); clients.push(socket); const ready = once(socket, 'connect'); socket.connect(); await ready; }
   const [host, guest] = clients, created = once(host, 'v3-room:state'); await request(host, 'v3-room:create'); const room = await created;
   assert.equal((await request(guest, 'v3-room:join', room.roomId)).ok, true);
-  for (const socket of [host, guest]) { assert.equal((await request(socket, 'v3-room:deck', deck)).ok, true); assert.equal((await request(socket, 'v3-room:ready', true)).ok, true); }
+  for (const [i, socket] of [host, guest].entries()) { assert.equal((await request(socket, 'v3-room:deck', decks[i])).ok, true); assert.equal((await request(socket, 'v3-room:ready', true)).ok, true); }
   assert.equal((await request(host, 'v3-session:start', { firstPlayer })).ok, true);
   return { clients, host, guest, roomId: room.roomId, firstPlayer };
 }
@@ -84,4 +84,38 @@ test('continuous and single fixtures are isolated, extra authority is refused, a
   assert.equal((await request(host, 'v3-session:command', command(old, 'endTurn'))).ok, false);
   await request(guest, 'v3-room:leave'); assert.equal((await request(host, 'v3-session:sync')).ok, false);
   assert.equal((await request(clients[2], 'v3-room:join', roomId)).ok, true);
+});
+
+for (const actor of [0, 1]) test(`seat ${actor} can play an approved synthetic hand card with exact cost, once, while the opponent sees only its public entry`, async t => {
+  const { clients } = await setup(t, actor), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView, other = (await request(peer, 'v3-session:sync')).sessionView;
+  const play = v.playableCards[0]; assert.equal(play.cost, 2); assert.equal(play.enabled, true); assert.equal(play.zone, 'character');
+  assert.equal(other.playableCards.some(card => card.card.instanceId === play.card.instanceId), false);
+  const commandInput = command(v, 'play', { card: play.card });
+  assert.equal((await request(peer, 'v3-session:command', { ...command(other, 'play', { card: play.card }) })).ok, false);
+  const stale = { ...commandInput, requestId: 'stale-play', card: { ...play.card, generation: play.card.generation + 1 } };
+  assert.equal((await request(own, 'v3-session:command', stale)).ok, false);
+  v = (await request(own, 'v3-session:command', commandInput)).sessionView;
+  assert.equal((await request(own, 'v3-session:command', commandInput)).sessionView.context.revision, v.context.revision);
+  const placed = v.movement.players[actor].character[0]; assert.equal(placed.ref.instanceId, play.card.instanceId); assert.equal(placed.ref.generation, play.card.generation + 1);
+  assert.equal(v.movement.players[actor].hand.length, 4); assert.equal(v.movement.players[actor].activeDon.length, 0); assert.equal(v.movement.players[actor].restDon.length, 2);
+  assert.equal(v.playableCards.every(card => !card.enabled), true);
+  other = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.equal(other.movement.players[actor].character[0].cardId, placed.cardId); assert.equal(other.imageAliases[placed.cardId], 'CARD');
+  assert.equal(other.movement.players[actor].hand.every(card => card.cardId === null && card.ref === null), true);
+  const denied = await request(own, 'v3-session:command', command(v, 'play', { card: v.playableCards[0].card }));
+  assert.equal(denied.ok, false); assert.deepEqual(denied.sessionView.context, v.context);
+});
+
+test('synthetic image aliases do not disclose the opponent deck or hand before a card is made public', async t => {
+  const guestDeck = { ...deck, mainDeck: Array(50).fill('GUEST-CARD'), cardTypes: { 'GUEST-CARD': 'character' } };
+  const { host, guest } = await setup(t, 1, [deck, guestDeck]);
+  const initial = (await request(host, 'v3-session:sync')).sessionView;
+  assert.equal(Object.values(initial.imageAliases).includes('GUEST-CARD'), false);
+  let own = (await request(guest, 'v3-session:sync')).sessionView;
+  assert.equal(Object.values(own.imageAliases).includes('CARD'), false); assert.equal(Object.values(own.imageAliases).includes('GUEST-CARD'), true);
+  own = await send(guest, own, 'play', { card: own.playableCards[0].card });
+  const publicView = (await request(host, 'v3-session:sync')).sessionView;
+  assert.equal(Object.values(publicView.imageAliases).includes('GUEST-CARD'), true);
+  assert.equal(publicView.movement.players[1].hand.every(card => card.cardId === null), true);
 });

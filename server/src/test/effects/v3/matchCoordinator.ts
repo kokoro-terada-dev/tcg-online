@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { MasterSnapshot } from "../../cardMaster";
 import type { CardObjectRef } from "../types";
-import type { MovementOperation, MovementState } from "../../movement/types";
+import type { MovementEvent, MovementOperation, MovementState } from "../../movement/types";
 import { MovementStore } from "../../movement/engine";
 import { projectMovementState } from "../../movement/projection";
 import { dataArray, dataObject, ensureMove, freezeMovement, getCard, location, reference, validateMovementState } from "../../movement/state";
@@ -24,6 +24,7 @@ export class V3SyntheticMatchCoordinator {
   #board: MovementState; #progression: Progression; #cards = new Map<string, ApprovedV3Card>();
   #usage = new Map<string, number>();
   #active: Active | null = null; #history: History[] = []; #receipts: Receipt[] = [];
+  #ruleEvents: readonly MovementEvent[] = [];
   #revision = 0; #busy = false; #key: Uint8Array; #master: MasterSnapshot | null; #now: () => number;
   constructor(options: Readonly<{ mode: "syntheticNoAbilities"; movement: MovementState; progression: Progression; cards: readonly ApprovedV3Card[];
     signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number }>) {
@@ -104,10 +105,48 @@ export class V3SyntheticMatchCoordinator {
   applyPendingWork(actor: Seat, requestId: string, expected: V3MatchContext) {
     return this.#control(actor, requestId, expected, { kind: "work" }, coordinator => { coordinator.applyPendingWork(actor, requestId, coordinator.context()); });
   }
+  playCard(actor: Seat, requestId: string, expected: V3MatchContext, cardRef: Readonly<CardObjectRef>, slotIndex?: number) {
+    reference(cardRef);
+    return this.#run(actor, requestId, expected, { kind: "play", card: { instanceId: cardRef.instanceId, generation: cardRef.generation }, slotIndex: slotIndex ?? null }, () => {
+      this.#settled(); ensureMove(this.#history.length < 256 && checkTiming(this.#progression, actor, "playCard").allowed, "v3-match-cannot-play");
+      const object = getCard(this.#board, cardRef), at = location(this.#board, object.instanceId), card = this.#cards.get(object.cardId);
+      ensureMove(at.player === actor && at.zone === "hand" && object.owner === actor && object.controller === actor && card &&
+        (card.definition.cardType === "character" || card.definition.cardType === "stage") && object.kind === card.definition.cardType, "v3-match-unregistered-play");
+      const zone = card.definition.cardType, cost = card.definition.baseStats.cost;
+      ensureMove(cost !== null && Number.isSafeInteger(cost) && cost >= 0 && this.#board.players[actor].activeDon.length >= cost, "v3-match-play-cost-unavailable");
+      const slot = slotIndex === undefined ? this.#board.players[actor][zone].indexOf(null) : slotIndex;
+      ensureMove(Number.isSafeInteger(slot) && slot >= 0 && slot < this.#board.players[actor][zone].length && this.#board.players[actor][zone][slot] === null, "v3-match-no-play-slot");
+      let candidate = this.#board; const events: MovementEvent[] = [];
+      const transactionId = hash(`${this.#board.matchId}:${requestId}:play`), resolutionId = `play:${transactionId.slice(0, 40)}`;
+      if (cost > 0) {
+        const operations: MovementOperation[] = candidate.players[actor].activeDon.slice(0, cost).map(id => ({ kind: "setRest", card: { instanceId: id!, generation: candidate.cards[id!]!.generation }, rotated: true }));
+        const payment = new MovementStore(candidate).commit({ transactionId: hash(`${transactionId}:cost`), matchId: candidate.matchId, expectedRevision: candidate.revision,
+          turnNumber: candidate.turnNumber, actor, effectController: null, source: cardRef, mode: "cost", resolutionId, operations }, { status: "certifiedNone" });
+        candidate = payment.state; events.push(...payment.events);
+      }
+      const played = new MovementStore(candidate).commit({ transactionId, matchId: candidate.matchId, expectedRevision: candidate.revision, turnNumber: candidate.turnNumber,
+        actor, effectController: null, source: cardRef, mode: "rule", resolutionId: null, operations: [{ kind: "move", card: cardRef, from: at,
+          to: { player: actor, zone, position: "slot", slotIndex: slot, faceUp: true, rotated: false }, cause: "RULE_PROCESSING" }] }, { status: "certifiedNone" });
+      events.push(...played.events); ensureMove(this.#ruleEvents.length + events.length <= 512, "v3-match-rule-event-limit");
+      this.#archive(); this.#board = played.state; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...events]);
+    });
+  }
+  playableCardsFor(actor: Seat) {
+    ensureMove(actor === 0 || actor === 1, "v3-match-actor");
+    const ready = (!this.#active || this.#active.coordinator.viewFor(actor).frame.status === "completed") && checkTiming(this.#progression, actor, "playCard").allowed;
+    return this.#board.players[actor].hand.flatMap(id => {
+      const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId);
+      if (!card || !["character", "stage"].includes(card.definition.cardType) || object.kind !== card.definition.cardType) return [];
+      const zone = card.definition.cardType as "character" | "stage", cost = card.definition.baseStats.cost, slot = this.#board.players[actor][zone].indexOf(null);
+      return [{ card: { instanceId: object.instanceId, generation: object.generation }, cardId: object.cardId, cost, zone, slotIndex: slot,
+        enabled: ready && object.owner === actor && object.controller === actor && slot >= 0 && cost !== null && this.#board.players[actor].activeDon.length >= cost }];
+    });
+  }
   endTurn(actor: Seat, requestId: string, expected: V3MatchContext) {
     return this.#run(actor, requestId, expected, { kind: "endTurn" }, () => {
       this.#settled(); ensureMove(this.#history.length < 256, "v3-match-history-limit");
       let progression = applyPlayerIntent(this.#progression, this.#progression.revision, actor, "endMain"), board = this.#board;
+      const ruleEvents = [...this.#ruleEvents];
       // Every checkpoint is prepared locally. A later failure retains neither phase nor movement changes.
       for (let steps = 0; steps < 12; steps++) {
         const work = phaseWork(progression); ensureMove(work, "v3-match-phase-work-required");
@@ -122,10 +161,13 @@ export class V3SyntheticMatchCoordinator {
         } else if (work.kind === "donCheckpoint") {
           for (const id of board.players[player].donDeck.slice(0, work.normalMaximum)) if (id) operations.push({ kind: "move", card: ref(id), from: { player, zone: "donDeck" }, to: { player, zone: "activeDon", position: "append", faceUp: true, rotated: false }, cause: "RULE_PROCESSING" });
         }
-        if (operations.length || board.turnNumber !== progression.turnNumber) board = new MovementStore(board).commit({ transactionId: hash(`${board.matchId}:${requestId}:${work.token}`), matchId: board.matchId,
-          expectedRevision: board.revision, turnNumber: progression.turnNumber, actor: player, effectController: null, source: null, mode: "rule", resolutionId: null, operations }, { status: "certifiedNone" }).state;
+        if (operations.length || board.turnNumber !== progression.turnNumber) {
+          const result = new MovementStore(board).commit({ transactionId: hash(`${board.matchId}:${requestId}:${work.token}`), matchId: board.matchId,
+            expectedRevision: board.revision, turnNumber: progression.turnNumber, actor: player, effectController: null, source: null, mode: "rule", resolutionId: null, operations }, { status: "certifiedNone" });
+          board = result.state; ruleEvents.push(...result.events); ensureMove(ruleEvents.length <= 512, "v3-match-rule-event-limit");
+        }
         progression = applySystemEvent(progression, progression.revision, { kind: "settlePhase", phaseToken: work.token });
-        if (work.kind === "mainEntryCheckpoint") { this.#archive(); this.#board = board; this.#progression = progression; this.#usage.clear(); return; }
+        if (work.kind === "mainEntryCheckpoint") { this.#archive(); this.#board = board; this.#progression = progression; this.#ruleEvents = freezeMovement(ruleEvents); this.#usage.clear(); return; }
         progression = applySystemEvent(progression, progression.revision, { kind: "advancePhase", phaseToken: work.token });
       }
       throw new Error("V3_MATCH_PHASE_LIMIT");
@@ -151,7 +193,7 @@ export class V3SyntheticMatchCoordinator {
   }
   snapshotForCoordinator() {
     return freezeMovement({ context: this.context(), movement: this.#board, progression: this.#progression, active: this.#active?.coordinator.snapshotForCoordinator() ?? null,
-      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history] });
+      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents });
   }
   toJSON(): never { throw new Error("v3-match-server-only"); }
 }

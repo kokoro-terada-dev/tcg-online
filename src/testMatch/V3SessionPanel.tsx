@@ -12,8 +12,12 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
   const [collapsed, setCollapsed] = useState(false), frame = view.frame, ownTurn = view.activePlayer === view.localPlayerIndex;
   useEffect(() => setCollapsed(false), [view.context.resolutionId, frame?.choice?.selectionId, frame?.status, view.turnNumber]);
   const idle = view.gate === "idle" && (!frame || frame.status === "completed"), disabled = busy || needsSync;
+  const playable = (id: string) => view.playableCards.find(play => play.card.instanceId === id);
   return <>
-    <TestBoard key={`${view.matchId}:${view.movement.revision}`} match={v3BoardView(view)} roomId={view.roomId} readOnly busy={busy} error={error} onCommand={() => {}} onEnd={onEnd} />
+    <TestBoard key={`${view.matchId}:${view.movement.revision}`} match={v3BoardView(view)} roomId={view.roomId} readOnly busy={busy} error={error} onCommand={() => {}} onEnd={onEnd}
+      testPlayLabel={card => `登場（DON${playable(card.id)?.cost ?? "?"}）`} canTestPlay={card => !disabled && !!playable(card.id)?.enabled}
+      testPlayUnavailableReason={card => { const play = playable(card.id); return disabled ? needsSync ? "再同期が必要" : "処理中" : !play ? "未対応カード" : play.cost === null ? "コスト未確認" : play.slotIndex < 0 ? "空き枠なし" : !ownTurn || !idle ? "操作待ち" : "DON不足"; }}
+      onTestPlay={card => { const play = playable(card.id); if (play?.enabled) onAction("play", { card: play.card }); }} />
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="v3連続操作検証">
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
       <div hidden={collapsed}><strong>v3検証・連続操作</strong><p>{view.turnNumber}ターン目・{ownTurn ? "自分" : "相手"}のターン</p>

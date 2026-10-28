@@ -7,11 +7,12 @@ import "./testMatch.css";
 
 type Props = { match: MatchView; roomId: string; busy: boolean; error: string; onCommand: (command: MatchCommand) => void; onEnd: () => void; readOnly?: boolean; onInspectEffects?: (card: CardView) => void;
   onTestPlay?: (card: CardView) => void; canTestPlay?: (card: CardView) => boolean;
+  testPlayUnavailableReason?: (card: CardView) => string; testPlayLabel?: string | ((card: CardView) => string);
   onTestAttack?: (sourceId: string, targetId: string) => void; canTestAttackSource?: (card: CardView) => boolean; canTestAttackTarget?: (card: CardView) => boolean };
 const labels: Record<Zone, string> = { hand: "手札", deck: "デッキ", life: "ライフ", trash: "トラッシュ", public: "公開", character: "キャラクター", stage: "ステージ", leader: "リーダー", donDeck: "DONデッキ", activeDon: "ACTIVE DON", restDon: "REST DON" };
 const imageUrl = (card: CardView) => !card.cardId ? getCardBackImageUrl() : getLocalCardImage(card.cardId)?.imageUrl ?? (card.kind === "don" ? getDonImageUrl() : null);
 
-export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd, readOnly = false, onInspectEffects, onTestPlay, canTestPlay, onTestAttack, canTestAttackSource, canTestAttackTarget }: Props) {
+export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd, readOnly = false, onInspectEffects, onTestPlay, canTestPlay, testPlayUnavailableReason, testPlayLabel, onTestAttack, canTestAttackSource, canTestAttackTarget }: Props) {
   const [selection, setSelection] = useState<{ id: string; from: Zone } | null>(null);
   const [preview, setPreview] = useState<CardView | null>(null);
   const [list, setList] = useState<{ zone: Zone; owner: 0 | 1 } | null>(null);
@@ -78,8 +79,8 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
           <button onClick={() => setPreview(selected)}>詳細</button>
           {readOnly ? <>
             {selection.from === "hand" ? <>
-              <button disabled={busy || !onTestPlay || !canTestPlay?.(selected)} onClick={() => { onTestPlay?.(selected); setSelection(null); }}>テスト登場</button>
-              {!canTestPlay?.(selected) && <small>空き枠なし</small>}
+              <button disabled={busy || !onTestPlay || !canTestPlay?.(selected)} onClick={() => { onTestPlay?.(selected); setSelection(null); }}>{typeof testPlayLabel === "function" ? testPlayLabel(selected) : testPlayLabel ?? "テスト登場"}</button>
+              {!canTestPlay?.(selected) && <small>{testPlayUnavailableReason?.(selected) ?? "空き枠なし"}</small>}
             </> : <>
               <button disabled={busy || !onTestAttack || !canTestAttackSource?.(selected)} onClick={() => {
                 if (selection.from !== "leader" && selection.from !== "character") return;
