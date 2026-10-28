@@ -43,10 +43,11 @@ test('sequence shares bindings, repeat creates separate iteration scopes', () =>
   assert.equal(r.view().status, 'completed');
 });
 test('unsupported actions, costs, and conditions fail before any execution', () => {
-  assert.throws(() => runtime([{ kind: 'optional', player: 'SELF', actions: [draw()] }]), /unsupported/);
+  const unsupported = { kind: 'modify', modifier: { kind: 'power', target: { kind: 'ref', from: 'SOURCE', field: 'id' }, amount: 1000 }, duration: { kind: 'thisTurn' } };
+  assert.throws(() => runtime([unsupported]), /unsupported/);
   assert.throws(() => runtime([], 0, 3, { costs: [{ kind: 'payDon', amount: 1 }] }), /not-supported/);
   assert.throws(() => runtime([], 0, 3, { condition: { kind: 'exists', value: { kind: 'literal', value: 1 } } }), /not-supported/);
-  assert.throws(() => runtime([{ kind: 'repeat', count: 0, actions: [{ kind: 'optional', player: 'SELF', actions: [] }] }]), /unsupported/);
+  assert.throws(() => runtime([{ kind: 'repeat', count: 0, actions: [unsupported] }]), /unsupported/);
 });
 test('empty deck blocks without partial draw and never invents a game result', () => {
   const r = runtime([{ ...draw(), amount: 2 }], 0, 1); r.start(0, rules);

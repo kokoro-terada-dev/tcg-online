@@ -11,6 +11,8 @@
 - `sequence`: 順次実行。同じ変数スコープを引き継ぎます。
 - `repeat`: 固定回数の繰り返し。反復ごとに独立した子スコープを作ります。
 - `select`: 既存SelectionSessionでカード・選択肢を選び、結果を変数へ保存します。
+- `if`: 実行時点のFactsで条件を評価し、then/elseの一方だけを実行します。
+- `optional`: 指定側が「使う／使わない」を選択し、使う場合だけ子命令を実行します。
 
 移動後のsaveAsには、実際に移動したカードの新しいgenerationを保存します。
 移動を防止されたカードや、付与DONの自動返却は、その命令の結果集合へ混入しません。
@@ -39,7 +41,23 @@ waitingForSelectionになります。この段階では盤面revisionは増え�
 誤った回答は修正できますが、正常回答の確定に失敗した場合はblockedになります。
 
 ALL/RANDOMは回答待ちせずサーバー内で確定します。ORDERは回答順を保持します。
-choiceも回答できますが、結果を使うif等の分岐命令はまだ未対応です。
+choiceの結果はoptionIdの文字列として条件式から参照できます。
+
+## 条件分岐・任意効果
+
+if自身の確定も1ステップとしてrevisionが増えます。条件は、その時点の盤面と
+スコープ内のchoice変数から既存Predicate評価器で評価します。unknownの場合は
+elseに進めずblockedにします。カード集合を文字列や枚数へ暗黙変換しません。
+
+optionalは既存SelectionSessionの不透明な選択肢トークンで回答します。
+指定側だけが回答でき、使わない場合は子命令全体を飛ばします。
+任意効果を断る操作は解決全体のキャンセルや支払いの返却ではありません。
+then/else/optional内の変数は外へ漏れず、親の変数は子から参照できます。
+repeatごとの分岐判断と回答IDは独立です。
+
+実行しない分岐も構造・対応命令・上限を事前検査します。
+両分岐を含む展開後命令数は最大128個とし、条件評価にも累積予算を設けます。
+分岐選択後は選ばなかった命令を実行せず、カード移動イベントも作成しません。
 
 候補Snapshotは実行器自身の盤面から作成し、外部から別の盤面を注入しません。
 Movementが保持する種別・レスト・領域・枚数・ターン番号だけをFactsにします。
@@ -54,7 +72,7 @@ snapshotと実行結果は非公開サーバーデータです。送信には既
 ## 明示的な未対応
 
 - コストあり、conditionありの定義（支払い前に拒否）
-- if、optional、modify、耐性、置換の設置と誘発待機
+- modify、耐性、置換の設置と誘発待機
 - 複数カードの山札上への移動順序（推測せず停止）
 - 山札不足時の部分ドローや敗北判定（推測せず停止）
 - CostPlan/Progression/カードマスターとの接続、Socket通信、保存・再接続
@@ -67,5 +85,5 @@ snapshotと実行結果は非公開サーバーデータです。送信には既
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build
-node --test test/action-selection.cjs test/movement-actions.cjs test/resolution.cjs
+node --test test/action-control.cjs test/action-selection.cjs test/movement-actions.cjs test/resolution.cjs
 ```

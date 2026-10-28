@@ -1,6 +1,6 @@
 # 効果エンジン：基盤フェーズの設計と対応状況
 
-DSLの一部を独立モデルで実行する基盤は [Action実行器](action-runtime.md) を参照してください。draw/move/sequence/repeat/selectの限定対応で、選択待ち・回答後再開まで追加しました。既存対戦には未接続です。
+DSLの一部を独立モデルで実行する基盤は [Action実行器](action-runtime.md) を参照してください。draw/move/sequence/repeat/select/if/optionalの限定対応で、選択待ち・回答後再開・条件分岐・任意効果を追加しました。既存対戦には未接続です。
 
 支払い確定と効果処理の境界を管理する独立基盤は [Resolution lifecycle](resolution-runtime.md) を参照してください。DSL実行・既存対戦への接続はまだありません。
 
