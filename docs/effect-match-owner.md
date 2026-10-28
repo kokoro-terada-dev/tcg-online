@@ -1,5 +1,7 @@
 # テストMatchの盤面所有者
 
+登録済み定義を使う場合は [効果カタログ](effect-catalog.md) をコンストラクターへ渡し、openRegisteredEffectを使用します。カード照合とサーバー発行のresolutionIdを通せます。openEffectは引き続き信頼するサーバー内部の低レベルAPIです。
+
 EffectMatchOwnerは、既存Matchと自動効果用Movementの同時書込みを避けるための
 サーバー内部の所有者です。現行ルーム/server.ts/Socket/UIにはまだ登録していません。
 

@@ -8,6 +8,10 @@ import { MatchMovementCapture } from "./matchMovement";
 import { TimedMovementEffect } from "./timedMovement";
 import { EffectCommandHost, type EffectCommandResponse, type EffectTransportView } from "./effectCommandHost";
 import type { MasterFactOptions } from "./masterFacts";
+import { randomUUID } from "node:crypto";
+import { getCard } from "../movement/state";
+import type { CardObjectRef } from "./types";
+import type { EffectCatalog } from "./effectCatalog";
 
 type Mode = "legacy" | "automated" | "faulted" | "closed";
 type OwnerFailure = Readonly<{ ok: false; code: "owner_unavailable" | "legacy_conflict" }>;
@@ -22,7 +26,8 @@ export class EffectMatchOwner {
   #active: { effect: TimedMovementEffect; host: EffectCommandHost; resolutionId: string } | null = null;
   #used = new Set<string>();
   #busy = false;
-  constructor(match: Match) { this.#legacy = match; }
+  #catalog: EffectCatalog | null;
+  constructor(match: Match, catalog: EffectCatalog | null = null) { this.#legacy = match; this.#catalog = catalog; }
   #remember(): void {
     if (this.#active) { const state = this.#active.effect.snapshot(); this.#board = state.movement; this.#progression = state.progression; }
   }
@@ -33,7 +38,7 @@ export class EffectMatchOwner {
   snapshot() {
     const active = this.#active?.effect.snapshot();
     return Object.freeze({ mode: this.#mode, movement: active?.movement ?? this.#board,
-      progression: active?.progression ?? this.#progression, activeResolutionId: this.#active?.resolutionId ?? null });
+      progression: active?.progression ?? this.#progression, activeResolutionId: this.#active?.resolutionId ?? null, catalogVersion: this.#catalog?.version ?? null });
   }
   toJSON(): never { throw new Error("server-only-effect-match-owner"); }
   applyLegacyCommand(actor: Player, input: unknown): string | null {
@@ -64,6 +69,17 @@ export class EffectMatchOwner {
       this.#active = { effect, host: new EffectCommandHost(effect, rules), resolutionId: identity.resolutionId };
       this.#used.add(identity.resolutionId);
     } finally { this.#busy = false; }
+  }
+  openRegisteredEffect(effectId: string, actor: Player, source: Readonly<CardObjectRef>, rules: MovementRules,
+    numericPolicy?: MasterFactOptions["numericPolicy"]): string {
+    player(actor);
+    ensureMove(!this.#busy && this.#mode === "automated" && this.#active === null, "owner-cannot-open-effect");
+    ensureMove(this.#current() && this.#catalog !== null, "owner-catalog-unavailable");
+    const card = getCard(this.#board!, source), definition = this.#catalog!.resolve(effectId, card.cardId);
+    ensureMove(definition !== null, "owner-effect-not-registered-for-card");
+    const resolutionId = randomUUID();
+    this.openEffect({ resolutionId, actor, source }, definition, rules, numericPolicy);
+    return resolutionId;
   }
   handleEffect(actor: Player, input: unknown): EffectCommandResponse | OwnerFailure {
     player(actor);
