@@ -67,6 +67,9 @@ export class V3Registry<C extends Category> {
   }
 }
 export type V3Registries = { [C in Category]: V3Registry<C> };
+export function v3RegistryHash(registries: V3Registries): string {
+  return digest(canonical(Object.fromEntries(Object.entries(registries).map(([category, registry]) => [category, registry.manifest()]))));
+}
 function value(input: unknown, bindings: ReadonlyMap<string, number>, candidateAllowed: boolean): Value {
   if (input === null || typeof input === "boolean") return input;
   if (typeof input === "string") { ensureMove(input.length <= 1000, "v3-literal-too-long"); return input; }
@@ -155,7 +158,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   ensureMove(typeof input.source.datasetSha256 === "string" && /^[a-f0-9]{64}$/.test(input.source.datasetSha256), "invalid-v3-dataset-hash");
   const source = { text: input.source.text, triggerText: input.source.triggerText, displayIds, datasetSha256: input.source.datasetSha256 };
   Object.values(registries).forEach(registry => registry.seal());
-  const registryHash = digest(canonical(Object.fromEntries(Object.entries(registries).map(([category, r]) => [category, r.manifest()]))));
+  const registryHash = v3RegistryHash(registries);
   const used = new Set<string>(), ids = new Set<string>();
   let bindings = new Map<string, number>(), candidateAllowed = false;
   const context: CompileContext = {

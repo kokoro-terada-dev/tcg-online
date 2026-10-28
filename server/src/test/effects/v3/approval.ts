@@ -10,6 +10,10 @@ export type TrustedV3Approval = Readonly<{
 export type ApprovedV3Card = Omit<CompiledCard, "status"> & Readonly<{
   status: "approved_not_executable"; rulesetVersion: string; approval: TrustedV3Approval;
 }>;
+const approvedCards = new WeakSet<object>();
+export function isApprovedV3Card(value: unknown): value is ApprovedV3Card {
+  return value !== null && typeof value === "object" && approvedCards.has(value);
+}
 
 // Approvals are supplied by trusted server configuration, never by a card JSON or socket.
 export class ApprovedV3Catalog {
@@ -34,7 +38,8 @@ export class ApprovedV3Catalog {
       ensureMove(definition.reviewStatus === "approved" && approval && approval.cardId === definition.cardId && approval.cardVersion === definition.cardVersion &&
         approval.sourceHash === plan.sourceHash && approval.compilerVersion === plan.compilerVersion && approval.registryHash === plan.registryHash, "v3-unapproved-or-stale-definition");
       ensureMove(!this.#cards.has(definition.cardId), "duplicate-v3-approved-card");
-      this.#cards.set(definition.cardId, freezeMovement({ ...plan, status: "approved_not_executable" as const, rulesetVersion, approval }));
+      const accepted = freezeMovement({ ...plan, status: "approved_not_executable" as const, rulesetVersion, approval });
+      approvedCards.add(accepted); this.#cards.set(definition.cardId, accepted);
     }
   }
   get(cardId: string): ApprovedV3Card | null { return this.#cards.get(cardId) ?? null; }

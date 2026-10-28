@@ -7,7 +7,8 @@
 代表18件もNEEDS_MANUAL_RULE_REVIEWであり、正解の状態遷移として自動採用しません。
 Phase 1の既存調査・CSV監査・監査用型/Schemaは完了しています。
 Phase 2は、以下に記載した限定DSLのCompiler、Registry、承認ゲートまで実装しています。
-v3全命令、レビュー操作画面、Runtime、実カード効果の実行は未実装です。
+Phase 3は署名付き解決フレーム、選択待ち・復元、盤面操作要求を出す制御機械まで実装しています。
+v3全命令、レビュー操作画面、実盤面を変更するCoordinator、実カード効果の実行は未実装です。
 
 ## 既存ソースとの対応
 
@@ -109,7 +110,7 @@ ApprovedV3Catalogの承認記録はサーバーの信頼済み構成として渡
 カードJSONのapprovedフラグだけでは許可しません。未承認・改変・古い承認・重複・偽造planは拒否します。
 これは承認証跡の整合性確認です。記録に書かれた根拠が正しい公式裁定かを自動判定したり、電子署名を検証したりはしません。
 承認者/根拠の真正性は信頼済みサーバー設定の管理責任で、未確認の裁定をapprovedとして登録してはいけません。
-受理後もapproved_not_executableです。requireExecutionはRuntime未実装として必ず停止します。
+受理後もapproved_not_executableです。requireExecutionは盤面へ接続したRuntime未実装として必ず停止します。
 
 ```powershell
 cd C:\Users\kensh\workspace_server
@@ -131,7 +132,7 @@ owner、controller、chooserは別々に定義します。これらは相対プ�
 
 minは0〜max、maxは1〜50。min:0の空選択と、minを満たせない候補不足を区別します。
 onInsufficient:failを必須にし、勝手な枚数補正や部分的な支払いを定義しません。
-これはCompilerでの契約の明示であり、実候補の算出・選択待ち・応答処理はまだ実装していません。
+実候補の盤面からの算出は未接続です。選択待ち・応答処理は下記の制御機械に実装しています。
 
 bindAsは英字始まりの英数字/アンダースコア、最大64文字です。
 選択済みカード集合は{"ref":"bindings.picked"}、枚数は{"ref":"bindings.picked.count"}で参照します。
@@ -153,16 +154,55 @@ npm run check:effect-v3 -- server/test/fixtures/v3-select-move.json
 
 この合成fixtureも非実在・needs_reviewで、対戦にはロードしません。
 
+### Phase 3：保存可能な制御フレーム
+
+V3ResolutionMachineは承認カタログが同一プロセス内で生成したplanだけを受け付けます。
+Compilerと同じ標準Registryハッシュを検証し、独自Registryでコンパイルしたplanを実行ハンドラー対応済みとして扱いません。
+現在のmodeはwork_requests_onlyです。これは実盤面へ直接書き込まない、単一効果の制御機械です。
+sourceの実在/位置、発動タイミング、手番、盤面ルールの合法性はまだ検証・適用しません。
+
+保存フレームには定義/Compiler/Registry/ruleset版、試合/解決ID、actor/source、pc、スコープ別bindings、
+待機中の選択または盤面操作要求、世界revision、フレームrevision、要求レシートを含めます。
+SEQUENCE/IF/スコープを固定プログラムへ展開し、Promise・コールバック内の一時変数だけには依存しません。
+述語評価・候補算出は信頼済みサーバーの純粋なEnvironmentとして注入します。
+現時点では実盤面由来のEnvironmentは未接続で、テスト用の評価器だけで検証しています。
+Environmentのunknownはfalse/0にせず停止し、そのadvance呼出しで変更したフレームを確定しません。
+
+SELECT待ちは2分で期限切れになります。chooserだけへ不透明token/cardIdを送り、他方には候補を送らず、bindingsやrefはどちらのviewにも出しません。
+公開候補でもowner/controller/zone/種類/表向き/双方の可視性/重複を再確認します。
+actor、selectionId、revision、期限、枚数、token、世界revisionを検証してから回答を適用します。
+UNORDERED回答はサーバー候補順に正規化し、クライアントがtokenの並びで移動順を指定することを防ぎます。
+期限切れで自動選択・自動キャンセル・コスト返却はしません。期限切れ後の再提示/中止方針はCoordinator側の未実装事項です。
+
+DRAW/MOVE_CARD/REST_DONは盤面操作要求として停止します。REST_DONの複合支払いは1つのPAY_COSTS要求にまとめます。
+workIdは解決IDとpcから決まり、再送や復元でも変わりません。
+workForCoordinatorはサーバー専用APIで、要求の参照情報をSocketへそのまま公開してはいけません。
+信頼済みCoordinatorが全件を原子的に処理し、盤面revisionを1つ増やした場合だけsettleWork(applied)で進めます。
+失敗時は盤面revisionを変えずsettleWork(rejected)でblockedにします。部分支払いや勝手な次命令へのスキップはしません。
+このモジュール自体はカード移動、DONレスト、ドロー、イベント発火、勝敗判定を一切実施しません。
+
+全制御要求はrequestIdとフレームrevisionで冪等性を確認します。内容を変えた再送は拒否し、512件で安全に停止します。
+exportForStorageはフレームをHMAC-SHA256署名付きで返します。署名鍵はサーバー側の32〜128byteの秘密値で、フレームとは別管理します。
+restoreは同じ承認定義・identity・世界revision・保存先の最新frame revision・署名を検証します。
+署名だけでは過去の正しい保存物の再利用を防げないため、最新revisionは別途信頼できる保存先から渡します。
+保存物には内部参照とtokenを含みます。API応答に使わず、DB等のサーバー専用保存先だけに置きます。
+
+実DBへの書込み、現行Socketへの接続、起動時の復元処理は今回実装していません。
+実装時は盤面・フレーム・workId別適用記録・最新revisionを同一トランザクションで永続化する必要があります。
+署名鍵を含む運用構成も未追加です。現行の対戦がサーバー再起動後に復旧できるようになった、という意味ではありません。
+盤面操作だけ適用した直後のクラッシュや派生イベント/勝敗の裁定は、この制御機械だけでは解決しません。
+
 ### 続く段階
 
 Phase 2の残りでは、非公開選択や順序選択等のCompiler対応を、実行可能な範囲と分けて拡充します。既存のkind形式は別版のまま維持します。
-Phase 3で保存可能なResolutionFrameと選択待ち/復帰を接続します。Phase 4以降に置換・継続・バトル統合を進めます。
+次は盤面由来のEnvironment、MovementEngineに接続するCoordinator、進行ゲートとの原子的確定を限定fixtureで整備します。
+Phase 4以降に置換・継続・バトル統合を進めます。
 同時誘発の順序、複数置換の選択、勝敗チェックの位置、トリガー機会、KO誘発時点、継続効果の循環等は
 RulesetPolicyとして根拠と確認状態を保持し、未確認の組合せでは停止する設計とします。今回は裁定を確定していません。
 
 ```powershell
 npm --prefix server run build
-node --test server/test/v3-compiler.cjs server/test/v3-selection-compiler.cjs server/test/effects-schema.cjs
+node --test server/test/v3-compiler.cjs server/test/v3-selection-compiler.cjs server/test/v3-resolution.cjs server/test/effects-schema.cjs
 node --test tools/audit-effect-cards.test.js tools/test-card-master.test.js
 npm run build
 ```
