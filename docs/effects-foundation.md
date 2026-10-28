@@ -1,5 +1,7 @@
 # 効果エンジン：基盤フェーズの設計と対応状況
 
+[盤面所有者](effect-match-owner.md) を追加しました。旧手動処理との書込み境界、競合時の停止、連続効果でのカード世代・状態の引き継ぎを管理します。現行ルーム/Socket/UIへの登録はまだありません。
+
 [既存Matchの読み取り変換](match-movement-capture.md) を追加しました。ID・配置を保ったMovementへの取り込みと、元Matchの競合検出まで対応します。排他ロックや既存Matchへの書き戻し、現行ルームへの登録は未実装です。
 
 [Socket接続部品](effect-socket-boundary.md) を追加し、実Socketによる2クライアント通信・個別投影・再同期・切断時停止をテストしました。既存server.ts/Match/UIにはまだ組み込んでいません。
