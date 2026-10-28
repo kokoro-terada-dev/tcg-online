@@ -104,6 +104,8 @@ SELECT/ORDERには本人の明示的な選択が必要です。ALLだけは全�
 前段のsaveAsを条件式から再利用する場合も、現在は独立支払いとして扱えることを保証しません。未提供値はunknownで止めます。
 次は共通のカード移動計画と、実体世代・付与DONの取り扱いを整え、計画全体を一度に確定できる形へ進めます。
 
+共通移動の独立モデルは [Movement基盤](movement-runtime.md) として追加しました。CostPlanSessionから直接確定する接続はまだありません。移動だけ先に確定し、後からgate更新が失敗するような二段階の接続は行いません。
+
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build

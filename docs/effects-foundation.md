@@ -8,6 +8,8 @@
 
 複数コストの独立したリソース計画は [Costの設計・対応状況](cost-runtime.md) を参照してください。独立支払いの割当と確定前再検証までを追加し、実際の支払い確定はまだ行いません。
 
+共通移動の独立した状態確定は [Movementの設計・対応状況](movement-runtime.md) を参照してください。独立モデル内の一括確定までを追加しましたが、既存MatchやCost/Resolutionとの接続はまだありません。
+
 ## 適用範囲
 
 基準は [利用者提供のv2.0原文](effects-v2-source.md) です。原文は保持し、ここに補足・実装状況を記録します。
@@ -148,7 +150,7 @@ Selectorを拡張する場合は、カード集合/選択肢等の結果型と�
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build
-node --test test/costs.cjs test/selectors.cjs test/predicates.cjs test/progression.cjs test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
+node --test test/movement.cjs test/costs.cjs test/selectors.cjs test/predicates.cjs test/progression.cjs test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
 cd ..
 node --test tools/test-card-master.test.js
 npm run build
