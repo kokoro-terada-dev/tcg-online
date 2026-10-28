@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tcg:effect-v3-review:1",
+  "title": "V3 audit-only card data; not executable DSL",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceSha256", "normalizationVersion", "cards", "variants"],
+  "properties": {
+    "schemaVersion": { "const": "3.0-review.1" },
+    "sourceSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "normalizationVersion": { "const": "comparison-only.1" },
+    "cards": { "type": "array", "minItems": 1, "maxItems": 20000, "items": { "$ref": "#/$defs/card" } },
+    "variants": { "type": "array", "minItems": 1, "maxItems": 50000, "items": { "$ref": "#/$defs/variant" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "maxLength": 100, "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$", "not": { "enum": ["constructor", "prototype"] } },
+    "text": { "type": "string", "maxLength": 32768 },
+    "issues": { "type": "array", "maxItems": 100, "items": { "type": "string", "maxLength": 300 } },
+    "comparison": {
+      "type": "object", "additionalProperties": { "$ref": "#/$defs/text" },
+      "propertyNames": { "enum": ["カード名", "種類", "コスト", "ライフ", "属性", "パワー", "カウンター", "色", "特徴", "テキスト", "トリガー"] }
+    },
+    "raw": {
+      "type": "object", "additionalProperties": { "$ref": "#/$defs/text" },
+      "required": ["表示ID", "カード番号", "カード名", "レアリティ", "種類", "コスト", "ライフ", "属性", "パワー", "カウンター", "色", "ブロックアイコン", "特徴", "テキスト", "トリガー", "入手情報", "収録弾ID", "画像URL", "出典URL", "取得日"],
+      "propertyNames": { "enum": ["表示ID", "カード番号", "カード名", "レアリティ", "種類", "コスト", "ライフ", "属性", "パワー", "カウンター", "色", "ブロックアイコン", "特徴", "テキスト", "トリガー", "入手情報", "収録弾ID", "画像URL", "出典URL", "取得日"] }
+    },
+    "card": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cardId", "recordNumbers", "reviewStatus", "parseStatus", "reasons", "consensus", "effects"],
+      "properties": {
+        "cardId": { "$ref": "#/$defs/id" },
+        "recordNumbers": { "type": "array", "minItems": 1, "maxItems": 50000, "uniqueItems": true, "items": { "type": "integer", "minimum": 2, "maximum": 9007199254740991 } },
+        "reviewStatus": { "enum": ["needs_review", "unsupported"] },
+        "parseStatus": { "enum": ["needs_review", "unsupported"] },
+        "reasons": { "$ref": "#/$defs/issues" },
+        "consensus": { "$ref": "#/$defs/comparison" },
+        "effects": { "type": "array", "maxItems": 0 }
+      },
+      "allOf": [
+        { "if": { "properties": { "reviewStatus": { "const": "needs_review" } } }, "then": { "properties": { "parseStatus": { "const": "needs_review" } } } },
+        { "if": { "properties": { "reviewStatus": { "const": "unsupported" } } }, "then": { "properties": { "parseStatus": { "const": "unsupported" } } } }
+      ]
+    },
+    "variant": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cardId", "displayId", "recordNumber", "raw", "normalized", "issues"],
+      "properties": {
+        "cardId": { "$ref": "#/$defs/id" }, "displayId": { "type": "string", "maxLength": 100 },
+        "recordNumber": { "type": "integer", "minimum": 2, "maximum": 9007199254740991 },
+        "raw": { "$ref": "#/$defs/raw" },
+        "normalized": { "allOf": [{ "$ref": "#/$defs/comparison" }, { "required": ["カード名", "種類", "コスト", "ライフ", "属性", "パワー", "カウンター", "色", "特徴", "テキスト", "トリガー"] }] },
+        "issues": { "$ref": "#/$defs/issues" }
+      }
+    }
+  }
+}

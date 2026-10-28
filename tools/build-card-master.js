@@ -11,9 +11,9 @@ const list = (value = "") => value.trim().toLowerCase() === "null" ? [] : [...ne
 const text = (value = "") => !value.trim() || value.trim().toLowerCase() === "null" ? null : value.trim();
 
 // Complete CSV records may contain quoted commas, newlines and escaped quotes.
-export function parseCsv(raw) {
+export function parseCsv(raw, { trim = true } = {}) {
   const rows = []; let row = [], field = "", quoted = false, closed = false;
-  const pushField = () => { row.push(field.trim()); field = ""; closed = false; };
+  const pushField = () => { row.push(trim ? field.trim() : field); field = ""; closed = false; };
   const pushRow = () => { pushField(); if (row.some(Boolean)) rows.push(row); row = []; };
   raw = raw.replace(/^\uFEFF/, "");
   for (let i = 0; i < raw.length; i++) {
