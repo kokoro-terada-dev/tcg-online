@@ -79,8 +79,8 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ### Phase 2：限定Compilerと承認ゲート
 
-入力版は3.0.0-subset.11、Compiler版はv3-subset-compiler.11です。
-旧subset.1/2/3/4/5/6/7/8/9/10、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
+入力版は3.0.0-subset.12、Compiler版はv3-subset-compiler.12です。
+旧subset.1/2/3/4/5/6/7/8/9/10/11、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
 schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
 Compilerは型・未知フィールド・参照先・比較の値型・ID重複・原文範囲・複雑度も検証します。
 sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲外終端です。
@@ -94,13 +94,14 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 - value ref: SELF/OPPONENTのlifeCount/handCount、SOURCE/CANDIDATEのcost/power/cardType/rotated、選択済みbindingsのcount。自由なJS式や任意プロパティ参照は不可。
 - cost: REST_DON / DISCARD_HAND（各1〜50、DISCARD_HANDは効果単位の合計も50以下）、REST_SOURCE（引数なし、効果単位で1回のみ）。
 - cost: DON_RETURN（count:1〜50、from:activeDon/restDon/attachedDonの単一指定または重複しない配列、効果単位で1命令）。fromはCompiler内で配列へ正規化します。
-- action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD / KO / REST / SET_ACTIVE / LOOK_TOP / REVEAL / ORDER_CARDS / RETURN_TO_DECK。
+- action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD / KO / REST / SET_ACTIVE / LOOK_TOP / REVEAL / ORDER_CARDS / RETURN_TO_DECK / MODIFY_STAT。
+- duration: TURN_END（player:SELF/OPPONENT、occurrence:1/2）。指定した側のターン終了境界の何回目で失効するかを明示します。
 - selector: CARDS（表向き公開カード、本人が選ぶ自分の手札/公開DON）、BOUND_CARDS（閲覧権限のある束縛済みの自分の山札集合）。SELECT、UNORDERED。
 
-未対応：自動誘発、イベント使用、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL、一般ゾーンのORDER（現在は専用ORDER_CARDSのみ）、シャッフル、DISCARD_HAND/DON_RETURN以外の選択付きコスト、名称/試合単位の使用制限、効果途中の任意分岐、付与、期間、置換、継続、CUSTOM_HANDLER等。
+未対応：自動誘発、イベント使用、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL、一般ゾーンのORDER（現在は専用ORDER_CARDSのみ）、シャッフル、DISCARD_HAND/DON_RETURN以外の選択付きコスト、名称/試合単位の使用制限、効果途中の任意分岐、能力付与、TURN_END以外の期間、置換、継続、CUSTOM_HANDLER等。
 未知ノードは読込時に拒否します。schemaOnlyの既存ノードが存在してもv3対応済みとは扱いません。
 predicate/action/cost/replacement/selector/duration/timingのRegistryを用意しています。
-replacement/durationは登録なしで、現在は到達する効果形式も未対応です。
+replacementは登録なしです。durationはTURN_ENDだけを登録しています。
 拡張はTypeScriptのMapインターフェース拡張と、信頼されたサーバーコードによるparser登録で行います。
 新しい実行ハンドラーや意味論までJSONから注入することはできません。
 Registryはコンパイル時にsealし、重複/後付け登録を拒否します。ハンドラー実装変更時には登録versionを上げます。
@@ -391,7 +392,7 @@ ViteのDEVかつ専用フラグが有効な場合だけ新しい画面を表示�
 | 現在 | 型付きJSON、承認ゲート、保存可能な選択/制御、複合コスト、任意発動確認 | 合成効果を両端末で選択・支払い・辞退できる。実カードの意味的承認はまだ0件 |
 | 1（合成検証まで実装済み） | 単発fixtureから連続操作できるv3試合進行基盤へ。ターン/プレイヤー/発動回数の管理 | 同じ盤面で複数効果を処理し、JSONの個体・ターン単位制限をサーバーで検証。辞退や再送で回数を誤消費しない |
 | 2（着手中） | 通常の手札からの使用・登場、対象条件、サーチ/一時公開/並べ替え | 空き枠・支払い・隠し情報・移動先を検証し、選択待ちから正しく再開。相手へ不要な情報を送らない |
-| 3 | パワー/コスト修正、能力付与、期間管理 | 元の値を壊さず増減を合算し、指定したターン/イベント境界で失効。Registryの実行ハンドラー契約も拡張 |
+| 3（数値修正・ターン終了期間を接続） | パワー/コスト修正、能力付与、期間管理 | 元の値を壊さず増減を合算し、指定したターン/イベント境界で失効。能力付与・バトル終了期間は後続 |
 | 4 | 登場時/アタック時/KO時等の誘発キューと裁定ポリシー | 発生原因を保持し、同時誘発を順序選択可能。未確認の順序は止まり、無限ループを防ぐ |
 | 5 | バトル全体のv3接続 | アタック→効果→ブロック→カウンター→ダメージ/トリガー→終了をサーバー主導で進める |
 | 6 | 少数のレビュー済み実カードをJSON登録し、制限付きテスト対戦へ | 必要な能力/条件/裁定が確認済みのカードだけを許可。両端末で開始から勝敗まで対戦できる |
@@ -505,6 +506,37 @@ node --test server/test/v3-session-server.cjs
 Phase 4以降に置換・継続・バトル統合を進めます。
 同時誘発の順序、複数置換の選択、勝敗チェックの位置、トリガー機会、KO誘発時点、継続効果の循環等は
 RulesetPolicyとして根拠と確認状態を保持し、未確認の組合せでは停止する設計とします。今回は裁定を確定していません。
+
+### 段階3の進捗：数値修正と終了境界
+
+MODIFY_STATは既存のSELECTで束縛した表向きの場のカードに、power/costの加算修正を登録します。
+statEffects.tsのv3専用台帳に、対象instanceId/generation、発生元、操作者、増減量、終了するプレイヤー、残り境界回数を保存します。
+マスター/承認済みJSONの基本値を書き換えず、数値条件では基本値と現在の修正合計を参照します。unknown/nullは0へ補完しません。
+修正適用は空のMovementトランザクションによるrevision更新と台帳候補をまとめて保持し、失敗時はどちらも保持しません。同じwork要求の再送で二重加算しません。
+移動により対象世代が変わると、その個体への修正を解除します。発生元が移動しただけでは、残存している対象への期間付き修正を勝手に解除しません。
+
+```json
+{
+  "type": "MODIFY_STAT",
+  "cards": { "ref": "bindings.target" },
+  "stat": "power",
+  "amount": 1000,
+  "duration": { "type": "TURN_END", "player": "SELF", "occurrence": 1 }
+}
+```
+
+TURN_END/SELF/1は発動者の次のターン終了境界、OPPONENT/1は相手の次の終了境界です。
+現状は自分のmainでの発動だけなので、前者が「このターン中」、後者が「次の相手のターン終了まで」に相当する合成例です。
+occurrence:2は指定側の終了境界を2回数えます。全体のリフレッシュ回数で代用しません。
+endTurnが次のmainまでの候補処理に失敗した場合、期間だけ先に消費しません。失効も盤面・進行と同時に保持します。
+
+連続検証に「自分+1000・このターン」「相手-1000・相手ターン終了まで」「自分コスト-1・このターン」を追加しました。
+前2つはリーダー、コスト修正は登場済みの自分のキャラを選びます。合成リーダーの基本パワーは5000です。本来の画像のカード性能を使用する意味ではありません。
+パネルの適用中の数値修正は両者へ同期します。公開投影には現在の場のカードの合計だけを含め、台帳の内部情報や非公開カードは送りません。
+今回は加算修正だけで、固定値変更、元々のパワー変更、数値の下限裁定、付与DONのパワー、能力付与、継続効果の依存評価、バトル終了失効はまだ含めません。
+実カードの裁定や負数を使う判定は未承認のままです。既存の通常対戦/一人回しには反映しません。
+
+確認はフロント/サーバービルド中心とし、今回の同期・失効部分だけ両操作者の最小2ケースを実行しています。
 
 ```powershell
 npm --prefix server run build

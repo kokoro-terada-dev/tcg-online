@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:tcg:effect-v3-subset:11",
-  "title": "V3 compiler subset 11; compilation is not execution approval",
+  "$id": "urn:tcg:effect-v3-subset:12",
+  "title": "V3 compiler subset 12; compilation is not execution approval",
   "type": "object", "additionalProperties": false,
   "required": ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"],
   "properties": {
-    "schemaVersion": { "const": "3.0.0-subset.11" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
+    "schemaVersion": { "const": "3.0.0-subset.12" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
     "name": { "$ref": "#/$defs/label" }, "cardType": { "enum": ["leader", "character", "stage"] },
     "baseStats": {
       "type": "object", "additionalProperties": false, "required": ["cost", "power", "counter", "life"],
@@ -103,10 +103,15 @@
         { "properties": { "zone": { "const": "deck" }, "position": { "enum": ["top", "bottom"] }, "faceUp": { "const": false } } }
       ]
     },
+    "duration": {
+      "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "required": ["player", "occurrence"],
+      "properties": { "type": { "const": "TURN_END" }, "player": { "$ref": "#/$defs/player" }, "occurrence": { "enum": [1, 2] } }
+    },
     "action": {
       "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false,
       "oneOf": [
         { "required": ["player", "count"], "properties": { "type": { "const": "DRAW" }, "player": { "enum": ["SELF", "OPPONENT"] }, "count": { "$ref": "#/$defs/count" } } },
+        { "required": ["cards", "stat", "amount", "duration"], "properties": { "type": { "const": "MODIFY_STAT" }, "cards": { "$ref": "#/$defs/cardSetRef" }, "stat": { "enum": ["power", "cost"] }, "amount": { "type": "integer", "minimum": -100000, "maximum": 100000, "not": { "const": 0 } }, "duration": { "$ref": "#/$defs/duration" } } },
         { "required": ["player", "count", "bindAs", "onInsufficient"], "properties": { "type": { "const": "LOOK_TOP" }, "player": { "const": "SELF" }, "count": { "$ref": "#/$defs/count" }, "bindAs": { "$ref": "#/$defs/bindingName" }, "onInsufficient": { "enum": ["fail", "takeAvailable"] } } },
         { "required": ["cards", "viewers"], "properties": { "type": { "const": "REVEAL" }, "cards": { "$ref": "#/$defs/cardSetRef" }, "viewers": { "const": "BOTH" } } },
         { "required": ["cards", "excludeCards", "bindAs", "chooser"], "properties": { "type": { "const": "ORDER_CARDS" }, "cards": { "$ref": "#/$defs/cardSetRef" }, "excludeCards": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/cardSetRef" }] }, "bindAs": { "$ref": "#/$defs/bindingName" }, "chooser": { "const": "SELF" } } },

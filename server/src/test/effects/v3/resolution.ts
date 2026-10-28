@@ -34,6 +34,7 @@ export type WorkRequest = DeepReadonly<{ kind: "work"; workId: string; worldRevi
   { type: "LOOK_TOP"; cards: CardObjectRef[]; bindAs: string } | { type: "REVEAL"; cards: CardObjectRef[] } |
   { type: "RETURN_TO_DECK"; cards: CardObjectRef[]; position: "top" | "bottom" } | { type: "CLOSE_REVEALS" } |
   { type: "MOVE_CARD"; cards: CardObjectRef[]; destination: Extract<Action, { type: "MOVE_CARD" }>["destination"]; cause: "EFFECT" } |
+  { type: "MODIFY_STAT"; cards: CardObjectRef[]; stat: "power" | "cost"; amount: number; duration: Node<"duration"> } |
   { type: "KO" | "REST" | "SET_ACTIVE"; cards: CardObjectRef[] }
 )>;
 type State = {
@@ -61,7 +62,7 @@ function program(card: ApprovedV3Card, effectId: string): Instruction[] {
       code.push({ type: "ENTER" }); append(action.else); code.push({ type: "EXIT" }); jump.to = code.length;
     } else if (action.type === "SELECT") code.push({ type: "SELECT", action });
     else if (action.type === "ORDER_CARDS") code.push({ type: "ORDER", action });
-    else if (["DRAW", "MOVE_CARD", "KO", "REST", "SET_ACTIVE", "LOOK_TOP", "REVEAL", "RETURN_TO_DECK"].includes(action.type)) code.push({ type: "WORK", action: action as WorkAction });
+    else if (["DRAW", "MOVE_CARD", "KO", "REST", "SET_ACTIVE", "LOOK_TOP", "REVEAL", "RETURN_TO_DECK", "MODIFY_STAT"].includes(action.type)) code.push({ type: "WORK", action: action as WorkAction });
     else throw new Error("V3_RUNTIME_HANDLER_UNSUPPORTED");
   } };
   append(effect.actions); code.push({ type: "END" }); ensureMove(code.length <= 4096, "v3-program-limit"); return code;
@@ -158,6 +159,7 @@ export class V3ResolutionMachine {
             const cards = this.#bindings(state)[action.cards.ref.slice("bindings.".length)]; ensureMove(cards, "v3-missing-runtime-binding");
             if (!cards.length) { state.pc++; continue; }
             state.pending = action.type === "MOVE_CARD" ? { kind: "work", type: "MOVE_CARD", workId, worldRevision: state.worldRevision, cards: structuredClone(cards), destination: { ...action.destination }, cause: "EFFECT" } :
+              action.type === "MODIFY_STAT" ? { kind: "work", type: "MODIFY_STAT", workId, worldRevision: state.worldRevision, cards: structuredClone(cards), stat: action.stat, amount: action.amount, duration: { ...action.duration } } :
               action.type === "RETURN_TO_DECK" ? { kind: "work", type: "RETURN_TO_DECK", workId, worldRevision: state.worldRevision, cards: structuredClone(cards), position: action.position } :
               { kind: "work", type: action.type, workId, worldRevision: state.worldRevision, cards: structuredClone(cards) };
           }

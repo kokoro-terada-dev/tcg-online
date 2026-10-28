@@ -11,6 +11,7 @@ import { applyPlayerIntent, applySystemEvent } from "../../progression/transitio
 import { isApprovedV3Card, type ApprovedV3Card } from "./approval";
 import { label } from "./compiler";
 import { V3FixtureCoordinator } from "./fixtureCoordinator";
+import { endTurnStatEffects, pruneStatEffects, statDelta, type StatEffects } from "./statEffects";
 
 type Seat = 0 | 1;
 export type V3MatchContext = Readonly<{ revision: number; movementRevision: number; progressionRevision: number; resolutionId: string | null; frameRevision: number | null }>;
@@ -25,6 +26,7 @@ export class V3SyntheticMatchCoordinator {
   #usage = new Map<string, number>();
   #active: Active | null = null; #history: History[] = []; #receipts: Receipt[] = [];
   #ruleEvents: readonly MovementEvent[] = [];
+  #statEffects: StatEffects = [];
   #revision = 0; #busy = false; #key: Uint8Array; #master: MasterSnapshot | null; #now: () => number;
   constructor(options: Readonly<{ mode: "syntheticNoAbilities"; movement: MovementState; progression: Progression; cards: readonly ApprovedV3Card[];
     signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number }>) {
@@ -81,7 +83,7 @@ export class V3SyntheticMatchCoordinator {
       ensureMove(limit === null || (this.#usage.get(usageKey) ?? 0) < limit, "v3-match-usage-exhausted");
       const resolutionId = randomUUID(), coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: this.#board, progression: this.#progression,
-        signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()] });
+        signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects });
       this.#archive(); this.#active = { coordinator, actor, cardId: object.cardId, effectId, source: { ...source }, resolutionId, usageKey, counted: false };
       this.#progression = coordinator.snapshotForCoordinator().progression;
     });
@@ -90,7 +92,7 @@ export class V3SyntheticMatchCoordinator {
     return this.#run(actor, requestId, expected, body, () => {
       ensureMove(this.#active, "v3-match-no-resolution"); const active = this.#active;
       action(active.coordinator); const snapshot = active.coordinator.snapshotForCoordinator(), frame = active.coordinator.viewFor(active.actor).frame;
-      this.#board = snapshot.movement; this.#progression = snapshot.progression;
+      this.#board = snapshot.movement; this.#progression = snapshot.progression; this.#statEffects = snapshot.statEffects;
       if (frame.activationCommitted && !active.counted) {
         this.#usage.set(active.usageKey, (this.#usage.get(active.usageKey) ?? 0) + 1); active.counted = true;
       }
@@ -128,7 +130,7 @@ export class V3SyntheticMatchCoordinator {
         actor, effectController: null, source: cardRef, mode: "rule", resolutionId: null, operations: [{ kind: "move", card: cardRef, from: at,
           to: { player: actor, zone, position: "slot", slotIndex: slot, faceUp: true, rotated: false }, cause: "RULE_PROCESSING" }] }, { status: "certifiedNone" });
       events.push(...played.events); ensureMove(this.#ruleEvents.length + events.length <= 512, "v3-match-rule-event-limit");
-      this.#archive(); this.#board = played.state; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...events]);
+      this.#archive(); this.#board = played.state; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...events]); this.#statEffects = pruneStatEffects(this.#board, this.#statEffects);
     });
   }
   playableCardsFor(actor: Seat) {
@@ -146,6 +148,7 @@ export class V3SyntheticMatchCoordinator {
     return this.#run(actor, requestId, expected, { kind: "endTurn" }, () => {
       this.#settled(); ensureMove(this.#history.length < 256, "v3-match-history-limit");
       let progression = applyPlayerIntent(this.#progression, this.#progression.revision, actor, "endMain"), board = this.#board;
+      const statEffects = endTurnStatEffects(this.#statEffects, this.#progression.activePlayer);
       const ruleEvents = [...this.#ruleEvents];
       // Every checkpoint is prepared locally. A later failure retains neither phase nor movement changes.
       for (let steps = 0; steps < 12; steps++) {
@@ -167,7 +170,7 @@ export class V3SyntheticMatchCoordinator {
           board = result.state; ruleEvents.push(...result.events); ensureMove(ruleEvents.length <= 512, "v3-match-rule-event-limit");
         }
         progression = applySystemEvent(progression, progression.revision, { kind: "settlePhase", phaseToken: work.token });
-        if (work.kind === "mainEntryCheckpoint") { this.#archive(); this.#board = board; this.#progression = progression; this.#ruleEvents = freezeMovement(ruleEvents); this.#usage.clear(); return; }
+        if (work.kind === "mainEntryCheckpoint") { this.#archive(); this.#board = board; this.#progression = progression; this.#ruleEvents = freezeMovement(ruleEvents); this.#statEffects = pruneStatEffects(board, statEffects); this.#usage.clear(); return; }
         progression = applySystemEvent(progression, progression.revision, { kind: "advancePhase", phaseToken: work.token });
       }
       throw new Error("V3_MATCH_PHASE_LIMIT");
@@ -180,7 +183,14 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement({ mode: "v3-synthetic-session" as const, context: this.context(), movement: active?.movement ?? projectMovementState(this.#board, viewer),
       frame: active?.frame ?? null, turnNumber: this.#progression.turnNumber, activePlayer: this.#progression.activePlayer, phase: this.#progression.phase,
       gate: this.#progression.gate.kind, resolutionActor: this.#active?.actor ?? null, history: [...this.#history],
-      publicReveals: revealIds.map(id => ({ cardId: this.#board.cards[id]!.cardId, owner: this.#board.cards[id]!.owner })) });
+      publicReveals: revealIds.map(id => ({ cardId: this.#board.cards[id]!.cardId, owner: this.#board.cards[id]!.owner })),
+      publicStats: this.#board.players.flatMap((zones, player) => (["leader", "character", "stage"] as const).flatMap(zone => zones[zone].flatMap((id, slot) => {
+        if (!id) return []; const object = this.#board.cards[id]!, definition = this.#cards.get(object.cardId)?.definition;
+        if (!object.faceUp || !definition || definition.cardType !== object.kind) return [];
+        const ref = { instanceId: id, generation: object.generation }, powerDelta = statDelta(this.#statEffects, ref, "power"), costDelta = statDelta(this.#statEffects, ref, "cost");
+        return [{ card: ref, cardId: object.cardId, player: player as Seat, zone, slot, power: definition.baseStats.power === null ? null : definition.baseStats.power + powerDelta,
+          cost: definition.baseStats.cost === null ? null : definition.baseStats.cost + costDelta, powerDelta, costDelta }];
+      }))) });
   }
   effectsFor(actor: Seat, source: Readonly<CardObjectRef>) {
     ensureMove(actor === 0 || actor === 1, "v3-match-actor"); const object = getCard(this.#board, source), card = this.#cards.get(object.cardId);
@@ -195,7 +205,7 @@ export class V3SyntheticMatchCoordinator {
   }
   snapshotForCoordinator() {
     return freezeMovement({ context: this.context(), movement: this.#board, progression: this.#progression, active: this.#active?.coordinator.snapshotForCoordinator() ?? null,
-      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents });
+      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects });
   }
   toJSON(): never { throw new Error("v3-match-server-only"); }
 }

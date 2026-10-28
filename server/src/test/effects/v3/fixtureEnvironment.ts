@@ -7,10 +7,11 @@ import { masterCardFacts } from "../masterFacts";
 import type { Value } from "./dsl";
 import type { ApprovedV3Card } from "./approval";
 import type { ResolutionEnvironment, ResolutionIdentity } from "./resolution";
+import { statDelta, type StatEffects } from "./statEffects";
 
 const UNKNOWN = Symbol("unknown");
 type Scalar = string | number | boolean | null | typeof UNKNOWN;
-export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition]): ResolutionEnvironment {
+export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => []): ResolutionEnvironment {
   const knownDefinitions = new Map(definitions.map(card => [card.definition.cardId, card]));
   const seat = (side: string): 0 | 1 => side === "SELF" ? identity.actor : (1 - identity.actor) as 0 | 1;
   const read = (value: DeepReadonly<Value>, bindings: Readonly<Record<string, readonly Readonly<CardObjectRef>[]>>, candidate?: Readonly<CardObjectRef>): Scalar => {
@@ -33,7 +34,9 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
         if (field === "power" && state.players.some(zones => zones.attachedDon.some(id => state.cards[id!]!.attachedTo?.instanceId === card.instanceId))) return UNKNOWN;
         number = known.definition.baseStats[field];
       } else number = masterCardFacts(state, card, facts)[field];
-      return typeof number === "number" && Number.isSafeInteger(number) ? number : UNKNOWN;
+      if (typeof number !== "number" || !Number.isSafeInteger(number)) return UNKNOWN;
+      const result = number + statDelta(statEffects(), ref, field);
+      return Number.isSafeInteger(result) ? result : UNKNOWN;
     } catch { return UNKNOWN; }
   };
   const evaluate: ResolutionEnvironment["evaluate"] = (predicate, bindings, candidate) => {

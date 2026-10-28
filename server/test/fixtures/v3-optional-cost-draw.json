@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "3.0.0-subset.11", "cardId": "EXAMPLE-OPTIONAL-NOT-REAL", "cardVersion": "fixture.1",
+  "schemaVersion": "3.0.0-subset.12", "cardId": "EXAMPLE-OPTIONAL-NOT-REAL", "cardVersion": "fixture.1",
   "name": "合成テスト用・任意発動とコスト支払い（実在しません）", "cardType": "leader",
   "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
   "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",

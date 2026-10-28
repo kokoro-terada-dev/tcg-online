@@ -5,7 +5,7 @@ import { v3BoardView } from "./v3FixtureClient";
 import V3ChoicePanel from "./V3ChoicePanel";
 import TestBoard from "./TestBoard";
 import { getLocalCardImage } from "../utils/localCardImages";
-const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了" };
+const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用" };
 export default function V3SessionPanel({ view, busy, needsSync, error, isHost, onAction, onSync, onEnd }: {
   view: V3SessionView; busy: boolean; needsSync: boolean; error: string; isHost: boolean;
   onAction: (kind: V3SessionCommand["kind"], details?: SessionDetails) => void; onSync: () => void; onEnd: () => void;
@@ -29,6 +29,11 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
           return <button key={`${card.cardId}:${index}`} onClick={() => setRevealPreview(id)}>{image ? <img src={image} alt={id} draggable={false} /> : id}</button>;
         })}</div>}
         {frame && <p role="status">{frame.status === "completed" ? frame.activationDecision === "declined" ? "発動せず終了" : "処理完了" : frame.status === "blocked" ? "未対応または処理不可・停止中" : view.resolutionActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち"}</p>}
+        {view.publicStats.some(card => card.powerDelta || card.costDelta) && <div className="v3-stat-summary" aria-label="適用中の数値修正">{view.publicStats.filter(card => card.powerDelta || card.costDelta).map(card =>
+          <p key={card.card.instanceId}>{card.player === view.localPlayerIndex ? "自分" : "相手"}・{card.zone === "leader" ? "リーダー" : card.zone === "stage" ? "ステージ" : `キャラ${card.slot + 1}`}
+            {card.powerDelta !== 0 && <b> パワー {card.power ?? "?"}（{card.powerDelta > 0 ? "+" : ""}{card.powerDelta}）</b>}
+            {card.costDelta !== 0 && <b> コスト {card.cost ?? "?"}（{card.costDelta > 0 ? "+" : ""}{card.costDelta}）</b>}
+          </p>)}</div>}
         {frame?.choice?.chooser === view.localPlayerIndex && <V3ChoicePanel key={frame.choice.selectionId} choice={frame.choice} imageAliases={view.imageAliases} disabled={disabled} onConfirm={tokens => onAction("answer", { tokens })} />}
         <div className="test-effect-actions">
           {view.effects.map(effect => <button key={effect.effectId} disabled={disabled || !effect.enabled} onClick={() => onAction("activate", { effectId: effect.effectId })}>{effect.label} {effect.limit === null ? "" : `${effect.used}/${effect.limit}`}</button>)}

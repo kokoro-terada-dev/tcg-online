@@ -12,7 +12,7 @@ import "./testEffect.css";
 import "./v3Fixture.css";
 const url = import.meta.env.VITE_TEST_SERVER_URL?.trim();
 const scenarios: Record<V3Scenario, string> = { bounce: "公開キャラ → 手札", payDraw: "DONレスト → ドロー", ko: "相手キャラをKO", rest: "相手キャラをレスト", active: "自分のキャラをアクティブ", discardDraw: "手札を捨ててドロー", discardCostDraw: "DON・手札コストでドロー", sourceCostDraw: "発動元レスト・DON・手札でドロー", returnCostDraw: "DON返却・複合コストでドロー", mixedReturnCostDraw: "複数エリアからDON返却", optionalCostDraw: "任意発動・コストでドロー" };
-const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了" };
+const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用" };
 export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
   const socket = useRef<Socket | null>(null), roomRef = useRef<V3RoomView | null>(null), viewRef = useRef<V3FixtureView | null>(null), epoch = useRef(0), flight = useRef(false);
   const [room, setRoom] = useState<V3RoomView | null>(null), [view, setView] = useState<V3FixtureView | null>(null), [busy, setBusy] = useState(false), [needsSync, setNeedsSync] = useState(false);

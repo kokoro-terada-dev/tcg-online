@@ -30,6 +30,28 @@ async function complete(socket, v) {
   throw Error('Session resolution did not complete');
 }
 
+for (const actor of [0, 1]) test(`stat changes sync and expire at their declared player boundary for seat ${actor}`, async t => {
+  const { clients } = await setup(t, actor), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView;
+  v = await send(own, v, 'play', { card: v.playableCards[0].card });
+  for (const effectId of ['buff', 'debuff', 'costDown']) {
+    v = await send(own, v, 'activate', { effectId }); v = await send(own, v, 'advance'); const choice = v.frame.choice;
+    v = await send(own, v, 'answer', { selectionId: choice.selectionId, tokens: [choice.options[0].token] });
+    v = await send(own, v, 'advance'); assert.equal(v.workType, 'MODIFY_STAT');
+    const work = command(v, 'work'); v = (await request(own, 'v3-session:command', work)).sessionView;
+    assert.equal((await request(own, 'v3-session:command', work)).sessionView.context.revision, v.context.revision);
+    v = await complete(own, v);
+  }
+  const leader = (view, player) => view.publicStats.find(card => card.player === player && card.zone === 'leader');
+  const character = view => view.publicStats.find(card => card.player === actor && card.zone === 'character');
+  assert.equal(leader(v, actor).power, 6000); assert.equal(leader(v, 1 - actor).power, 4000); assert.equal(character(v).cost, 1);
+  assert.deepEqual((await request(peer, 'v3-session:sync')).sessionView.publicStats, v.publicStats);
+  v = await send(own, v, 'endTurn');
+  assert.equal(leader(v, actor).power, 5000); assert.equal(character(v).cost, 2); assert.equal(leader(v, 1 - actor).power, 4000);
+  const other = (await request(peer, 'v3-session:sync')).sessionView; v = await send(peer, other, 'endTurn');
+  assert.equal(leader(v, 1 - actor).power, 5000); assert.equal(v.publicStats.every(card => !card.powerDelta && !card.costDelta), true);
+});
+
 for (const actor of [0, 1]) test(`continuous session starts with seat ${actor}, enforces use limits, and continues across both turns`, async t => {
   const { clients, host } = await setup(t, actor), own = clients[actor], peer = clients[1 - actor];
   let v = (await request(own, 'v3-session:sync')).sessionView; const matchId = v.matchId;
