@@ -7,7 +7,7 @@ import { getAllLocalDeckRecipes } from "../utils/localDeckStorage";
 import { getLocalCardImage, hasLocalCardImages } from "../utils/localCardImages";
 import TestBoard from "./TestBoard";
 import TestEffectBoard from "./TestEffectBoard";
-import { acceptEffectView, acceptEffectCatalog, effectCatalogQuery, effectCommand, registeredEffectCommand, testTurnCommand, testPlayCardCommand, type EffectTransportView, type EffectCommandKind, type EffectCatalogView, type RegisteredEffectCommand, type TestTurnCommand, type TestPlayCardCommand } from "./effectClientState";
+import { acceptEffectView, acceptEffectCatalog, effectCatalogQuery, effectCommand, registeredEffectCommand, testTurnCommand, testPlayCardCommand, testAttackCommand, testBattleDecisionCommand, type EffectTransportView, type EffectCommandKind, type EffectCatalogView, type RegisteredEffectCommand, type TestTurnCommand, type TestPlayCardCommand, type TestBattleCommand } from "./effectClientState";
 
 type Room = RoomView;
 type Reply = { ok: boolean; error?: string };
@@ -76,7 +76,7 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
     if (value === undefined) socket.timeout(75000).emit(event, complete);
     else socket.timeout(75000).emit(event, value, complete);
   }
-  function effectRequest(kind?: EffectCommandKind, tokens?: readonly string[], sessionCommand?: RegisteredEffectCommand | TestTurnCommand | TestPlayCardCommand) {
+  function effectRequest(kind?: EffectCommandKind, tokens?: readonly string[], sessionCommand?: RegisteredEffectCommand | TestTurnCommand | TestPlayCardCommand | TestBattleCommand) {
     const socket = socketRef.current, current = effectRef.current;
     if (!socket?.connected || !current || busy || effectFlight.current || (kind !== undefined && current.effect.status === "idle") || ((kind !== undefined || sessionCommand) && needsSync)) return;
     const sentEpoch = epoch.current, resolutionId = current.effect.resolutionId;
@@ -125,7 +125,17 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
     try { effectRequest(undefined, undefined, testPlayCardCommand(current, instanceId, crypto.randomUUID())); }
     catch { setError("今は登場できません。手番と空き枠を確認してください。"); }
   }
-  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} onCatalog={queryCatalog} onActivateCatalog={activateCatalog} onTestTurn={switchTestTurn} onTestPlay={playTestCard} />;
+  function attackTestCard(sourceId: string, targetId: string) {
+    const current = effectRef.current; if (!current) return;
+    try { effectRequest(undefined, undefined, testAttackCommand(current, sourceId, targetId, crypto.randomUUID())); }
+    catch { setError("今はアタックできません。攻撃元と対象を選び直してください。"); }
+  }
+  function decideTestBattle(decision: "passBlock" | "endCounter") {
+    const current = effectRef.current; if (!current) return;
+    try { effectRequest(undefined, undefined, testBattleDecisionCommand(current, decision, crypto.randomUUID())); }
+    catch { setError("判断する手番が変わりました。最新の状態を確認してください。"); }
+  }
+  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} onCatalog={queryCatalog} onActivateCatalog={activateCatalog} onTestTurn={switchTestTurn} onTestPlay={playTestCard} onTestAttack={attackTestCard} onTestBattleDecision={decideTestBattle} />;
   const mine = room?.host.socketId === socketRef.current?.id ? room?.host : room?.guest;
   function selectDeck(id: string) {
     const deck = decks.find((item) => item.id === id);

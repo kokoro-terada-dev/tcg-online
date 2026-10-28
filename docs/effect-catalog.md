@@ -177,6 +177,31 @@ localCardPlayはカード種類から移動先を決め、キャラクターは�
 実カードのcost/色条件や登場時の誘発処理は未接続で、DONを減らしたりレストにしたりしません。
 productionや明示許可のない所有者では拒否します。通常オンライン対戦・一人回しのプレイ処理は変更しません。
 
+## ローカル専用の攻撃宣言と防御側の判断
+
+ローカル機能を許可した所有者にのみ、testAttackAvailableと、公開盤面上の
+testAttackSourceIds/testAttackTargetIdsを返します。候補は表示用で、実行時の検証を省略しません。
+待機中のメイン・未終了・手番・各自の初回ターン・カードの所属/種類/状態/enteredTurnを確認します。
+攻撃元は自分のアクティブのリーダー/キャラ（登場したターンを除く）、攻撃先は相手リーダー/レスト中の相手キャラです。
+修正値や付与効果など未対応の状態がある場合は、通常の攻撃可能性を勝手に推測せず拒否します。
+
+test-effect:commandのtestAttackは、通常のmatchId・予約resolutionId・requestId・両revisionと、
+source/target参照だけを受け付けます。サーバーがbattleIdを生成し、攻撃元のsetRest(true)と
+ProgressionのstartBattleを一括保持します。固定テストではアタック時効果を実行せず、block判断待ちへ進みます。
+公開viewのbattleは公開済みの盤面カード参照と判断状態のみで、手札・マスター定義は含みません。
+通常viewだけでなく、カウンター効果処理中のviewにもbattleを保持し、表示用の矢印を維持します。
+
+testBattleDecisionは通常のコンテキストとbattleId、decision（passBlock/endCounter）を受け取ります。
+testBattleDecisionフラグを渡すのは現在判断する防御側だけです。サーバーで役割・段階・待機・未回答を再検証します。
+ブロックを行わない判断→counter、カウンター終了→damageの順に進みます。判断操作ではカードを移動しません。
+効果の解決中・選択待ちには判断終了できません。過去の判断の再送で次の段階を飛ばすこともできません。
+要求記録は他のローカル操作と共用し、各自1024件を上限にします。
+
+パワー/ダメージの裁定は未接続なのでdamageで停止し、勝敗・ライフ・KOを独自に決めません。
+途中で参加カードの位置やgenerationが変わった場合も、別カードへ勝手に矢印を付け替えず拒否します。
+実際のブロック・速攻等の個別能力・誘発処理は次段階です。正式なカード効果全般の合法性は保証しません。
+通常オンライン・一人回し・手動テスト対戦のアタック処理は変更していません。
+
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build

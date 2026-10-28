@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import TestBoard from "./TestBoard";
-import { effectBoardView, testPlayDestination, type EffectTransportView, type EffectCommandKind } from "./effectClientState";
+import { canTestAttackSource, canTestAttackTarget, effectBoardView, testPlayDestination, type EffectTransportView, type EffectCommandKind } from "./effectClientState";
 import { getCardBackImageUrl, getLocalCardImage } from "../utils/localCardImages";
 import "./testEffect.css";
 import EffectCatalogDialog from "./EffectCatalogDialog";
@@ -9,7 +9,8 @@ import type { CardView } from "../../server/src/test/protocol";
 
 type Props = { view: EffectTransportView; roomId: string; busy: boolean; error: string; needsSync: boolean;
   onAction: (kind: EffectCommandKind, tokens?: readonly string[]) => void; onSync: () => void; onEnd: () => void;
-  onCatalog?: (instanceId: string) => Promise<EffectCatalogView>; onActivateCatalog?: (catalog: EffectCatalogView, effectId: string) => void; onTestTurn?: () => void; onTestPlay?: (instanceId: string) => void };
+  onCatalog?: (instanceId: string) => Promise<EffectCatalogView>; onActivateCatalog?: (catalog: EffectCatalogView, effectId: string) => void; onTestTurn?: () => void; onTestPlay?: (instanceId: string) => void;
+  onTestAttack?: (sourceId: string, targetId: string) => void; onTestBattleDecision?: (decision: "passBlock" | "endCounter") => void };
 export default function TestEffectBoard(props: Props) {
   const { view, busy, needsSync, onAction } = props;
   const [inspected, setInspected] = useState<{ card: CardView; context: string } | null>(null);
@@ -34,6 +35,8 @@ export default function TestEffectBoard(props: Props) {
     <TestBoard key={`${view.effect.resolutionId}:${view.movement.revision}:${view.progression.revision}`} match={board} roomId={props.roomId} busy={busy} error={props.error} readOnly onCommand={() => {}} onEnd={props.onEnd}
       onTestPlay={view.testPlayAvailable && props.onTestPlay && !disabled ? card => props.onTestPlay!(card.id) : undefined}
       canTestPlay={card => testPlayDestination(view, card.id) !== null}
+      onTestAttack={view.testAttackAvailable && !disabled ? props.onTestAttack : undefined}
+      canTestAttackSource={card => canTestAttackSource(view, card.id)} canTestAttackTarget={card => canTestAttackTarget(view, card.id)}
       onInspectEffects={props.onCatalog && !disabled ? card => setInspected({ card, context }) : undefined} />
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="効果処理">
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
@@ -41,6 +44,7 @@ export default function TestEffectBoard(props: Props) {
       {selection ? <Selection key={selection.selectionId} selection={selection} disabled={disabled}
         onConfirm={tokens => onAction(view.effect.status === "waitingForCostSelection" ? "answerCosts" : "answerEffect", tokens)} /> : <p role="status">{
         finished ? (view.progression.defeatedPlayers?.length === 2 ? "対戦終了・両者敗北" : `対戦終了・${resultLabel}`) :
+        view.battle && view.effect.status === "idle" ? (view.battle.step === "block" ? "ブロック判断待ち" : view.battle.step === "counter" ? "カウンター判断待ち" : "ダメージ判定待ち") :
         view.effect.status === "idle" ? <><span>{view.progression.activePlayer === view.localPlayerIndex ? "自分のターン・待機中" : "相手のターン・待機中"}</span><small> / {view.progression.turnNumber}ターン目</small></> :
         view.effect.status === "completed" ? "処理完了" : view.effect.status === "blocked" ? "処理を続行できません" :
         !mine || view.effect.status === "waitingForSelection" ? "相手の操作を待っています" :
@@ -54,6 +58,7 @@ export default function TestEffectBoard(props: Props) {
         <button disabled={busy} onClick={props.onSync}>再同期</button>
         <button onClick={() => setCollapsed(true)}>盤面を見る</button>
         {view.effect.status === "idle" && view.testTurnSwitchAvailable && props.onTestTurn && <button disabled={disabled} onClick={props.onTestTurn}>テスト手番交代</button>}
+        {view.effect.status === "idle" && view.testBattleDecision && props.onTestBattleDecision && <button disabled={disabled} onClick={() => props.onTestBattleDecision!(view.testBattleDecision!)}>{view.testBattleDecision === "passBlock" ? "ブロックしない" : "カウンター終了"}</button>}
       </div>
       {needsSync && <p role="alert">応答を確認できません。再同期してください。</p>}
       </div>

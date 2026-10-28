@@ -7,7 +7,7 @@ const module = { exports: {} };
 const source = fs.readFileSync(new URL("../src/testMatch/effectClientState.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 vm.runInNewContext(compiled, { exports: module.exports, module });
-const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog, registeredEffectCommand, testTurnCommand, testPlayDestination, testPlayCardCommand } = module.exports;
+const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog, registeredEffectCommand, testTurnCommand, testPlayDestination, testPlayCardCommand, canTestAttackSource, canTestAttackTarget, testAttackCommand, testBattleDecisionCommand } = module.exports;
 const plain = value => JSON.parse(JSON.stringify(value));
 function view() {
   const zones = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon", "attachedDon", "resolving"];
@@ -112,4 +112,22 @@ test("full slots, wrong seat, hidden controls and non-idle states cannot build a
   const v = view(); v.effect.status = 'idle'; v.testPlayAvailable = true; v.progression = { revision: 7, activePlayer: 0, phase: 'main', gate: 'idle', finished: false };
   for (const patch of [{ testPlayAvailable: false }, { localPlayerIndex: 1 }, { effect: { ...v.effect, status: 'resolving' } }, { progression: { ...v.progression, finished: true } }]) assert.throws(() => testPlayCardCommand({ ...v, ...patch }, 'a', 'request'));
   v.movement.players[0].character.fill(v.movement.players[0].hand[0]); assert.equal(testPlayDestination(v, 'a'), null); assert.throws(() => testPlayCardCommand(v, 'a', 'request'));
+});
+test("local attack commands use server candidates and the current public field references", () => {
+  const v = view(); v.effect.status = 'idle'; v.testAttackAvailable = true; v.testAttackSourceIds = ['source']; v.testAttackTargetIds = ['target']; v.progression.activePlayer = 0;
+  v.movement.players[0].leader[0] = { ...v.movement.players[0].hand[0], kind: 'leader', ref: { instanceId: 'source', generation: 2 } };
+  v.movement.players[1].leader[0] = { ...v.movement.players[0].leader[0], ref: { instanceId: 'target', generation: 4 } };
+  const c = testAttackCommand(v, 'source', 'target', 'request'); assert.equal(c.kind, 'testAttack'); assert.equal(c.source.generation, 2); assert.equal(c.target.generation, 4);
+  assert.equal(canTestAttackSource(v, 'target'), false); assert.equal(canTestAttackTarget(v, 'source'), false);
+  v.testAttackSourceIds = []; assert.throws(() => testAttackCommand(v, 'source', 'target', 'request'));
+});
+test("battle decision commands are limited to the server-designated defender and step", () => {
+  const v = view(); v.effect.status = 'idle'; v.localPlayerIndex = 1; v.progression.gate = 'idle'; v.testBattleDecision = 'passBlock';
+  v.battle = { battleId: 'battle', attacker: 0, defender: 1, source: { instanceId: 'a', generation: 0 }, target: { instanceId: 'b', generation: 0 }, step: 'block', decisionComplete: false, settled: false };
+  assert.equal(testBattleDecisionCommand(v, 'passBlock', 'request').battleId, 'battle');
+  assert.throws(() => testBattleDecisionCommand(v, 'endCounter', 'request')); v.localPlayerIndex = 0; assert.throws(() => testBattleDecisionCommand(v, 'passBlock', 'request'));
+});
+test("battle arrows keep the original attacker and current target in the board adapter", () => {
+  const v = view(); v.battle = { attacker: 1, source: { instanceId: 'attacker', generation: 2 }, target: { instanceId: 'defender', generation: 1 } };
+  assert.deepEqual(plain(effectBoardView(v).attack), { actor: 1, sourceId: 'attacker', targetId: 'defender' });
 });

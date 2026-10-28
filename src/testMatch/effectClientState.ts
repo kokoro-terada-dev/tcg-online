@@ -1,6 +1,6 @@
-import type { EffectTransportView, EffectCommand, EffectCommandKind, EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand, TestTurnCommand, TestPlayCardCommand } from "../../server/src/test/effectProtocol";
+import type { EffectTransportView, EffectCommand, EffectCommandKind, EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand, TestTurnCommand, TestPlayCardCommand, TestBattleCommand } from "../../server/src/test/effectProtocol";
 import type { MatchView, Zone } from "../../server/src/test/protocol";
-export type { EffectTransportView, EffectCommandKind, EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand, TestTurnCommand, TestPlayCardCommand };
+export type { EffectTransportView, EffectCommandKind, EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand, TestTurnCommand, TestPlayCardCommand, TestBattleCommand };
 const zones: readonly Zone[] = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon"];
 
 export function effectCatalogQuery(view: EffectTransportView, instanceId: string): EffectCatalogQuery {
@@ -45,6 +45,31 @@ export function testPlayCardCommand(view: EffectTransportView, instanceId: strin
   return { kind: "testPlayCard", matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
     expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, source: { ...card.ref! } };
 }
+function battleCard(view: EffectTransportView, owner: 0 | 1, instanceId: string) {
+  const zones = view.movement.players[owner];
+  return [...zones.leader, ...zones.character].find(card => card?.ref?.instanceId === instanceId && card.faceUp && card.cardId);
+}
+export function canTestAttackSource(view: EffectTransportView, instanceId: string): boolean {
+  return !!(view.testAttackAvailable && view.effect.status === "idle" && !view.progression.finished && view.localPlayerIndex === view.progression.activePlayer &&
+    view.testAttackSourceIds?.includes(instanceId) && battleCard(view, view.localPlayerIndex, instanceId));
+}
+export function canTestAttackTarget(view: EffectTransportView, instanceId: string): boolean {
+  return !!(view.testAttackAvailable && view.effect.status === "idle" && !view.progression.finished && view.testAttackTargetIds?.includes(instanceId) &&
+    battleCard(view, (1 - view.localPlayerIndex) as 0 | 1, instanceId));
+}
+export function testAttackCommand(view: EffectTransportView, sourceId: string, targetId: string, requestId: string): TestBattleCommand {
+  if (!canTestAttackSource(view, sourceId) || !canTestAttackTarget(view, targetId)) throw new Error("No local attack candidates");
+  return { kind: "testAttack", matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
+    expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision,
+    source: { ...battleCard(view, view.localPlayerIndex, sourceId)!.ref! }, target: { ...battleCard(view, (1 - view.localPlayerIndex) as 0 | 1, targetId)!.ref! } };
+}
+export function testBattleDecisionCommand(view: EffectTransportView, decision: "passBlock" | "endCounter", requestId: string): TestBattleCommand {
+  if (view.effect.status !== "idle" || view.progression.finished || view.progression.gate !== "idle" || view.testBattleDecision !== decision ||
+    !view.battle || view.battle.defender !== view.localPlayerIndex || view.battle.decisionComplete || view.battle.settled ||
+    view.battle.step !== (decision === "passBlock" ? "block" : "counter")) throw new Error("No local battle decision");
+  return { kind: "testBattleDecision", matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
+    expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, battleId: view.battle.battleId, decision };
+}
 
 export function acceptEffectView(current: EffectTransportView | null, next: EffectTransportView): boolean {
   return !current || (current.matchId === next.matchId && current.localPlayerIndex === next.localPlayerIndex &&
@@ -66,5 +91,6 @@ export function effectBoardView(view: EffectTransportView): MatchView {
     id: card.ref?.instanceId ?? `hidden:${owner}:${zone}:${index}`, cardId: card.cardId, kind: card.kind === "unknown" ? null : card.kind,
     rotated: card.rotated, faceUp: card.faceUp,
   })])) })) as MatchView["players"];
-  return { matchId: view.matchId, revision: view.movement.revision, localPlayerIndex: view.localPlayerIndex, players, attack: null, masterVersion: view.effect.masterVersion };
+  return { matchId: view.matchId, revision: view.movement.revision, localPlayerIndex: view.localPlayerIndex, players,
+    attack: view.battle ? { actor: view.battle.attacker, sourceId: view.battle.source.instanceId, targetId: view.battle.target.instanceId } : null, masterVersion: view.effect.masterVersion };
 }

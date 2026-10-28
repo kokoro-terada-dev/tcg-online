@@ -18,6 +18,8 @@ import { localDeckOutProgression, nextLocalTurnCheckpoint, openingLocalTurnCheck
 import type { TestTurnCommand } from "../effectProtocol";
 import type { TestPlayCardCommand } from "../effectProtocol";
 import { playLocalHandCard } from "../localCardPlay";
+import type { TestBattleCommand } from "../effectProtocol";
+import { decideLocalBattle, localAttackCandidates, startLocalBattle } from "../localBattle";
 
 type Mode = "legacy" | "automated" | "faulted" | "closed";
 type OwnerFailure = Readonly<{ ok: false; code: "owner_unavailable" | "legacy_conflict" }>;
@@ -275,15 +277,68 @@ export class EffectMatchOwner {
     receipts.set(command.requestId, { fingerprint, ok, code });
     return respond(ok, code, command.requestId);
   }
+  handleTestBattle(actor: Player, input: unknown): EffectCommandResponse {
+    player(actor);
+    const respond = (ok: boolean, code: EffectCommandResponse["code"], requestId?: string, replayed = false): EffectCommandResponse => {
+      const view = this.effectViewFor(actor); ensureMove(view !== null, "owner-unavailable");
+      return freezeMovement({ ok, code, ...(requestId === undefined ? {} : { requestId }), replayed, view });
+    };
+    let command: TestBattleCommand;
+    try {
+      ensureMove(input && typeof input === "object", "invalid-test-battle-command");
+      const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value;
+      ensureMove(kind === "testAttack" || kind === "testBattleDecision", "invalid-test-battle-kind");
+      dataObject(input, ["kind", "matchId", "resolutionId", "requestId", "expectedMovementRevision", "expectedProgressionRevision", ...(kind === "testAttack" ? ["source", "target"] : ["battleId", "decision"])]);
+      id(input.matchId); id(input.resolutionId, 64); id(input.requestId);
+      ensureMove(Number.isSafeInteger(input.expectedMovementRevision) && (input.expectedMovementRevision as number) >= 0 &&
+        Number.isSafeInteger(input.expectedProgressionRevision) && (input.expectedProgressionRevision as number) >= 0, "invalid-test-battle-revision");
+      const base = { matchId: input.matchId, resolutionId: input.resolutionId, requestId: input.requestId,
+        expectedMovementRevision: input.expectedMovementRevision as number, expectedProgressionRevision: input.expectedProgressionRevision as number };
+      if (kind === "testAttack") {
+        reference(input.source as CardObjectRef); reference(input.target as CardObjectRef);
+        const source = input.source as CardObjectRef, target = input.target as CardObjectRef;
+        command = { kind, ...base, source: { instanceId: source.instanceId, generation: source.generation }, target: { instanceId: target.instanceId, generation: target.generation } };
+      } else {
+        id(input.battleId); ensureMove(input.decision === "passBlock" || input.decision === "endCounter", "invalid-test-battle-decision");
+        command = { kind, ...base, battleId: input.battleId, decision: input.decision };
+      }
+    } catch { return respond(false, "invalid_command"); }
+    if (this.#busy) return respond(false, "busy", command.requestId);
+    if (command.matchId !== this.snapshot().movement?.matchId) return respond(false, "wrong_context", command.requestId);
+    const fingerprint = JSON.stringify(command), receipts = this.#sessionReceipts[actor], receipt = receipts.get(command.requestId);
+    if (receipt) return receipt.fingerprint === fingerprint ? respond(receipt.ok, receipt.code, command.requestId, true) : respond(false, "request_conflict", command.requestId);
+    if (receipts.size >= 1024) return respond(false, "request_limit", command.requestId);
+    let ok = false;
+    try {
+      ensureMove(process.env.NODE_ENV !== "production" && this.#mode === "automated" && this.#current() && !this.#active && this.#idle?.allowTestTurnSwitch, "local-battle-disabled-or-busy");
+      ensureMove(command.resolutionId === this.#idle.resolutionId && command.expectedMovementRevision === this.#board!.revision &&
+        command.expectedProgressionRevision === this.#progression!.revision, "stale-local-battle");
+      this.#busy = true;
+      try {
+        const next = command.kind === "testAttack" ? startLocalBattle(this.#board!, this.#progression!, actor, command.source, command.target, randomUUID(), randomUUID()) :
+          decideLocalBattle(this.#board!, this.#progression!, actor, command.battleId, command.decision);
+        const resolutionId = randomUUID(); ensureMove(this.#current(), "owner-legacy-conflict");
+        this.#board = next.movement; this.#progression = next.progression; this.#idle = { ...this.#idle, resolutionId }; ok = true;
+      } finally { this.#busy = false; }
+    } catch { /* Internal references are not public diagnostics. */ }
+    const code = ok ? "applied" : "operation_rejected"; receipts.set(command.requestId, { fingerprint, ok, code });
+    return respond(ok, code, command.requestId);
+  }
   effectViewFor(viewer: Player): EffectTransportView | null {
     player(viewer);
     if (this.#busy || this.#mode !== "automated" || !this.#current()) return null;
-    if (this.#active) return this.#active.host.viewFor(viewer);
+    if (this.#active) return freezeMovement({ ...this.#active.host.viewFor(viewer), battle: this.#active.effect.snapshot().progression.battle });
     if (!this.#idle || !this.#board || !this.#progression) return null;
     const progression = this.#progression;
+    const attacks = this.#idle.allowTestTurnSwitch ? localAttackCandidates(this.#board, progression, viewer) : { sources: [], targets: [] };
     return freezeMovement({ matchId: this.#board.matchId, localPlayerIndex: viewer, movement: projectMovementState(this.#board, viewer),
       testTurnSwitchAvailable: this.#idle.allowTestTurnSwitch && process.env.NODE_ENV !== "production" && checkTiming(progression, viewer, "endMain").allowed,
       testPlayAvailable: this.#idle.allowTestTurnSwitch && process.env.NODE_ENV !== "production" && checkTiming(progression, viewer, "playCard").allowed,
+      testAttackAvailable: attacks.sources.length > 0 && attacks.targets.length > 0,
+      testAttackSourceIds: attacks.sources, testAttackTargetIds: attacks.targets,
+      battle: progression.battle,
+      ...(this.#idle.allowTestTurnSwitch && process.env.NODE_ENV !== "production" && checkTiming(progression, viewer, "passBlock").allowed ? { testBattleDecision: "passBlock" as const } :
+        this.#idle.allowTestTurnSwitch && process.env.NODE_ENV !== "production" && checkTiming(progression, viewer, "endCounter").allowed ? { testBattleDecision: "endCounter" as const } : {}),
       effect: { resolutionId: this.#idle.resolutionId, actor: progression.activePlayer, status: "idle", completedSteps: 0, masterVersion: this.#legacy.master?.version ?? null },
       progression: { revision: progression.revision, turnNumber: progression.turnNumber, activePlayer: progression.activePlayer,
         phase: progression.phase, gate: progression.gate.kind, chooser: progression.gate.kind === "choice" ? progression.gate.chooser : null,
