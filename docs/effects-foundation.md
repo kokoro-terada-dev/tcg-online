@@ -1,5 +1,7 @@
 # 効果エンジン：基盤フェーズの設計と対応状況
 
+[既存Matchの読み取り変換](match-movement-capture.md) を追加しました。ID・配置を保ったMovementへの取り込みと、元Matchの競合検出まで対応します。排他ロックや既存Matchへの書き戻し、現行ルームへの登録は未実装です。
+
 [Socket接続部品](effect-socket-boundary.md) を追加し、実Socketによる2クライアント通信・個別投影・再同期・切断時停止をテストしました。既存server.ts/Match/UIにはまだ組み込んでいません。
 
 [効果操作のサーバー受付境界](effect-command-boundary.md) を追加しました。認証済みの席を別引数で受け、厳格な入力・再送保護・プレイヤー別公開投影を行う独立部品です。既存Socket/Match/UIにはまだ登録していません。
