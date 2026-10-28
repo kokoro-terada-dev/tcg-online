@@ -4,6 +4,8 @@
 
 条件だけを評価する独立基盤は [条件評価器の設計・対応状況](predicate-runtime.md) を参照してください。条件評価が追加されても、定義全体のschemaOnly状態や対戦への未接続状態は変わりません。
 
+対象選択の独立基盤は [Selectorの設計・対応状況](selector-runtime.md) を参照してください。候補・選択View・回答検証までを追加し、支払い・移動・効果解決にはまだ接続していません。
+
 ## 適用範囲
 
 基準は [利用者提供のv2.0原文](effects-v2-source.md) です。原文は保持し、ここに補足・実装状況を記録します。
@@ -144,7 +146,7 @@ Selectorを拡張する場合は、カード集合/選択肢等の結果型と�
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build
-node --test test/predicates.cjs test/progression.cjs test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
+node --test test/selectors.cjs test/predicates.cjs test/progression.cjs test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
 cd ..
 node --test tools/test-card-master.test.js
 npm run build

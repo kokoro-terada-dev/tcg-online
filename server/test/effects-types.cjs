@@ -9,11 +9,13 @@ test("declaration merging extends typed registries and rejects mismatched comman
 import { Registry } from "./registry";
 import { createBuiltinRegistries } from "./builtins";
 import { PredicateRuntimeRegistry } from "./predicates";
-import type { ActionMap, PredicateMap, ReplacementMap } from "./types";
+import { SelectorRuntimeRegistry } from "./selectors";
+import type { ActionMap, PredicateMap, ReplacementMap, SelectorMap } from "./types";
 declare module "./types" {
   interface ActionMap { probeAction: { kind: "probeAction"; amount: number } }
   interface PredicateMap { probePredicate: { kind: "probePredicate"; enabled: boolean } }
   interface ReplacementMap { probeReplacement: { kind: "probeReplacement"; token: string } }
+  interface SelectorMap { probeSelector: { kind: "probeSelector"; label: string } }
 }
 const actions = new Registry<ActionMap>();
 actions.register("probeAction", () => ({ kind: "probeAction", amount: 1 }));
@@ -23,6 +25,10 @@ const runtime = new PredicateRuntimeRegistry();
 runtime.register("probePredicate", node => ({ state: "known", value: node.enabled }));
 // @ts-expect-error predicate runtime results must be boolean, not numeric
 runtime.register("probePredicate", () => ({ state: "known", value: 1 }));
+const selectors = new SelectorRuntimeRegistry();
+selectors.register("probeSelector", (node, context) => ({ state: "known", value: { kind: "choice", chooser: context.actor, options: [{ id: "one", label: node.label }] } }));
+// @ts-expect-error selector runtime cannot return a boolean as its plan
+selectors.register("probeSelector", () => ({ state: "known", value: true }));
 const replacements = new Registry<ReplacementMap>();
 replacements.register("probeReplacement", () => ({ kind: "probeReplacement", token: "a" }));
 const builtins = createBuiltinRegistries();

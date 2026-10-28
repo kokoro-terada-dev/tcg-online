@@ -80,11 +80,16 @@ export function createPredicateRuntimeRegistry(): PredicateRuntimeRegistry {
 }
 
 export const EVALUATION_LIMITS = Object.freeze({ steps: 512, depth: 24 });
+export type EvaluationBudget = Readonly<{ spend(): void }>;
+export function createEvaluationBudget(): EvaluationBudget {
+  let steps = 0;
+  return Object.freeze({ spend() { if (++steps > 4096) throw new ConditionError("Cumulative evaluation budget exceeded"); } });
+}
 // A parsed definition is required by the caller; success never authorizes an action.
-export function evaluateCondition(predicate: DeepReadonly<Predicate> | undefined, facts: Facts, registry = createPredicateRuntimeRegistry()): Evaluation<boolean> {
+export function evaluateCondition(predicate: DeepReadonly<Predicate> | undefined, facts: Facts, registry = createPredicateRuntimeRegistry(), budget?: EvaluationBudget): Evaluation<boolean> {
   registry.seal();
   let steps = 0, depth = 0;
-  const spend = () => { if (++steps > EVALUATION_LIMITS.steps) throw new ConditionError("Condition evaluation step limit exceeded"); };
+  const spend = () => { if (++steps > EVALUATION_LIMITS.steps) throw new ConditionError("Condition evaluation step limit exceeded"); budget?.spend(); };
   const ctx: EvaluationContext = {
     resolve(value) { spend(); return resolveValue(value, facts); },
     evaluate(node) {

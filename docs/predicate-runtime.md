@@ -73,16 +73,17 @@ PredicateMapの型と構造パーサーに加え、PredicateRuntimeRegistryに�
 
 1回の条件評価は最大512ステップ・深さ24です。子条件だけでなく値参照もステップを消費します。
 拡張ハンドラーが無限に再帰したり参照を繰り返したりしても上限で停止します。
-これは解決全体の予算とは別です。将来のSelectorで多数の候補を評価する際は、候補全体・解決全体にも累積予算を設けます。
+これは解決全体の予算とは別です。Selectorの候補全体には共有4,096ステップの累積予算を追加しました。解決全体の累積予算は今後追加します。
 配列はコピーして返し、元のサーバー状態をfreeze・変更しません。参照は自身のデータプロパティだけを読み、getterや継承プロパティを評価しません。
 
 ## 次の接続条件
 
 対象候補の生成、選択者別の情報公開、インスタンス世代の検証、複数コストの計画・原子的な確定、共通移動器、ResolutionEngineが必要です。
+対象選択の独立基盤は [Selectorの設計](selector-runtime.md) として追加しました。既存Matchからの変換や実際のカード移動はまだありません。
 それらを組み合わせて2端末でターン・攻撃・カウンター・ダメージを確認するまでは、自動対戦が完成したとは扱いません。
 
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build
-node --test test/predicates.cjs test/progression.cjs test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
+node --test test/selectors.cjs test/predicates.cjs test/progression.cjs test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
 ```
