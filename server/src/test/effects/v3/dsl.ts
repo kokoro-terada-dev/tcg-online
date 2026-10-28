@@ -18,6 +18,9 @@ export interface ActionMap {
   IF: NodeMeta & { type: "IF"; condition: Predicate; then: Action[]; else: Action[] };
   SELECT: NodeMeta & { type: "SELECT"; selector: Node<"selector">; bindAs: string };
   MOVE_CARD: NodeMeta & { type: "MOVE_CARD"; cards: CardSetRef; destination: { owner: Player; zone: "hand" | "trash" | "deck"; position: "append" | "top" | "bottom"; faceUp: boolean }; cause: "EFFECT" };
+  KO: NodeMeta & { type: "KO"; cards: CardSetRef };
+  REST: NodeMeta & { type: "REST"; cards: CardSetRef };
+  SET_ACTIVE: NodeMeta & { type: "SET_ACTIVE"; cards: CardSetRef };
 }
 export interface CostMap { REST_DON: NodeMeta & { type: "REST_DON"; count: number } }
 export interface ReplacementMap {}
@@ -44,7 +47,7 @@ export type Effect = {
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };
 export type CardDefinition = {
-  schemaVersion: "3.0.0-subset.2"; cardId: string; cardVersion: string;
+  schemaVersion: "3.0.0-subset.3"; cardId: string; cardVersion: string;
   name: string; cardType: "leader" | "character" | "stage";
   baseStats: { cost: number | null; power: number | null; counter: number | null; life: number | null };
   colors: string[]; traits: string[]; attributes: string[];

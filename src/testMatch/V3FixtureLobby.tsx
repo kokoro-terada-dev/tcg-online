@@ -8,6 +8,8 @@ import TestBoard from "./TestBoard";
 import "./testEffect.css";
 import "./v3Fixture.css";
 const url = import.meta.env.VITE_TEST_SERVER_URL?.trim();
+const scenarios: Record<V3Scenario, string> = { bounce: "公開キャラ → 手札", payDraw: "DONレスト → ドロー", ko: "相手キャラをKO", rest: "相手キャラをレスト", active: "自分のキャラをアクティブ" };
+const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする" };
 export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
   const socket = useRef<Socket | null>(null), roomRef = useRef<V3RoomView | null>(null), viewRef = useRef<V3FixtureView | null>(null), epoch = useRef(0), flight = useRef(false);
   const [room, setRoom] = useState<V3RoomView | null>(null), [view, setView] = useState<V3FixtureView | null>(null), [busy, setBusy] = useState(false), [needsSync, setNeedsSync] = useState(false);
@@ -55,12 +57,12 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="v3合成効果検証">
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
       <div hidden={collapsed}>
-      <strong>v3検証・合成効果</strong><p>{view.scenario === "bounce" ? "キャラを手札へ戻す" : "DONレスト → 1枚ドロー"}</p>
+      <strong>v3検証・合成効果</strong><p>{scenarios[view.scenario]}</p>
       <p role="status">{view.frame.status === "completed" ? "処理完了" : view.frame.status === "blocked" ? "未対応または処理不可・停止中" : view.actor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち"}</p>
       {view.frame.choice?.chooser === view.localPlayerIndex && <Choice key={view.frame.choice.selectionId} view={view} disabled={busy || needsSync} onConfirm={tokens => action("answer", tokens)} />}
       <div className="test-effect-actions">
         {view.actor === view.localPlayerIndex && view.frame.status === "ready" && <button disabled={busy || needsSync} onClick={() => action("advance")}>処理を進める</button>}
-        {view.actor === view.localPlayerIndex && view.frame.status === "waitingForWork" && <button disabled={busy || needsSync} onClick={() => action("work")}>{view.workType === "PAY_COSTS" ? "支払いを確定" : "処理を実行"}</button>}
+        {view.actor === view.localPlayerIndex && view.frame.status === "waitingForWork" && <button disabled={busy || needsSync} onClick={() => action("work")}>{view.workType ? workLabels[view.workType] : "処理を実行"}</button>}
         <button disabled={busy} onClick={() => request("v3:sync")}>再同期</button>
         <button onClick={() => setCollapsed(true)}>盤面を見る</button>
         {isHost && <button disabled={busy} onClick={() => request("v3:end")}>ルームへ戻る</button>}
@@ -83,7 +85,7 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
           cardTypes: Object.fromEntries(deck.mainDeck.map(id => [id, deck.cardTypes[id] ?? "character"])) })) setDeckId(deck.id);
       }}><option value="">選択してください</option>{decks.map(deck => <option key={deck.id} value={deck.id}>{deck.name}</option>)}</select></label>
       <button disabled={busy || !mine?.deckName} onClick={() => request("v3-room:ready", !mine?.ready)}>{mine?.ready ? "READY解除" : "READY"}</button>
-      {isHost && <><label>合成効果<select value={scenario} disabled={busy} onChange={e => setScenario(e.target.value as V3Scenario)}><option value="bounce">公開キャラ → 手札</option><option value="payDraw">DONレスト → ドロー</option></select></label>
+      {isHost && <><label>合成効果<select value={scenario} disabled={busy} onChange={e => setScenario(e.target.value as V3Scenario)}>{Object.entries(scenarios).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>操作者<select value={actor} disabled={busy} onChange={e => setActor(Number(e.target.value) as 0 | 1)}><option value={0}>ホスト</option><option value={1}>ゲスト</option></select></label>
         <button disabled={busy || !room.host.ready || !room.guest?.ready} onClick={() => request("v3:start", { scenario, actor })}>検証開始</button></>}
       <button disabled={busy} onClick={() => request("v3-room:leave")}>退出</button>

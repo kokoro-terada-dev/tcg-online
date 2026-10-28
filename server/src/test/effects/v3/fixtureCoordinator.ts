@@ -109,13 +109,26 @@ export class V3FixtureCoordinator {
         const card = board.cards[id!]!;
         operations.push({ kind: "move", card: { instanceId: card.instanceId, generation: card.generation }, from: { player: work.player, zone: "deck" }, to: { player: work.player, zone: "hand", position: "append", faceUp: true, rotated: false }, cause: "EFFECT_MOVE" });
       }
-    } else {
+    } else if (work.type === "MOVE_CARD") {
       const destination = work.destination, player = destination.owner === "SELF" ? actor : (1 - actor) as 0 | 1;
       ensureMove(work.cards.length > 0 && work.cards.length <= 50 && (destination.zone !== "deck" || work.cards.length === 1), "v3-fixture-move-count-or-order");
       for (const ref of work.cards) {
         const card = getCard(board, ref), from = location(board, card.instanceId);
         ensureMove(card.owner === player && ["character", "stage", "event"].includes(card.kind) && ["character", "stage", "trash", "public"].includes(from.zone) && card.faceUp && visibleTo(board, card, from, 0) && visibleTo(board, card, from, 1), "v3-fixture-illegal-move");
         operations.push({ kind: "move", card: ref, from, to: { player, zone: destination.zone, position: destination.position, faceUp: destination.faceUp, rotated: false }, cause: "EFFECT_MOVE" });
+      }
+    } else {
+      ensureMove(work.cards.length > 0 && work.cards.length <= 50, "v3-fixture-field-action-count");
+      for (const ref of work.cards) {
+        const card = getCard(board, ref), from = location(board, card.instanceId);
+        ensureMove(card.faceUp && visibleTo(board, card, from, 0) && visibleTo(board, card, from, 1), "v3-fixture-field-action-visibility");
+        if (work.type === "KO") {
+          ensureMove(card.kind === "character" && from.zone === "character", "v3-fixture-ko-character-only");
+          operations.push({ kind: "move", card: ref, from, to: { player: card.owner, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "EFFECT_KO" });
+        } else {
+          ensureMove(["REST", "SET_ACTIVE"].includes(work.type) && ["leader", "character", "stage"].includes(from.zone) && card.kind === from.zone, "v3-fixture-rest-field-only");
+          operations.push({ kind: "setRest", card: ref, rotated: work.type === "REST" });
+        }
       }
     }
     return new MovementStore(board).commit({ transactionId: hash(`${board.matchId}:${work.workId}`), matchId: board.matchId, expectedRevision: board.revision,

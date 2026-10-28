@@ -20,12 +20,13 @@ export interface ResolutionEnvironment {
 }
 export type ResolutionIdentity = Readonly<{ matchId: string; resolutionId: string; effectId: string; actor: Seat; source: Ref }>;
 type Instruction = { type: "CHECK"; predicate: DeepReadonly<Predicate> } | { type: "COSTS" } |
-  { type: "SELECT"; action: Extract<A, { type: "SELECT" }> } | { type: "WORK"; action: Extract<A, { type: "DRAW" | "MOVE_CARD" }> } |
+  { type: "SELECT"; action: Extract<A, { type: "SELECT" }> } | { type: "WORK"; action: Extract<A, { type: "DRAW" | "MOVE_CARD" | "KO" | "REST" | "SET_ACTIVE" }> } |
   { type: "BRANCH"; predicate: DeepReadonly<Predicate>; otherwise: number } | { type: "ENTER" } | { type: "EXIT" } | { type: "JUMP"; to: number } | { type: "END" };
 type Choice = { kind: "choice"; selectionId: string; chooser: Seat; min: number; max: number; bindAs: string; expiresAt: number; candidates: { token: string; cardId: string; ref: CardObjectRef }[] };
 export type WorkRequest = DeepReadonly<{ kind: "work"; workId: string; worldRevision: number } & (
   { type: "PAY_COSTS"; costs: Node<"cost">[] } | { type: "DRAW"; player: Seat; count: number } |
-  { type: "MOVE_CARD"; cards: CardObjectRef[]; destination: Extract<Action, { type: "MOVE_CARD" }>["destination"]; cause: "EFFECT" }
+  { type: "MOVE_CARD"; cards: CardObjectRef[]; destination: Extract<Action, { type: "MOVE_CARD" }>["destination"]; cause: "EFFECT" } |
+  { type: "KO" | "REST" | "SET_ACTIVE"; cards: CardObjectRef[] }
 )>;
 type State = {
   version: "v3-frame.1"; identity: ResolutionIdentity; definitionHash: string; compilerVersion: string; registryHash: string; rulesetVersion: string;
@@ -45,7 +46,7 @@ function program(card: ApprovedV3Card, effectId: string): Instruction[] {
       const jump = { type: "JUMP" as const, to: 0 }; code.push(jump); branch.otherwise = code.length;
       code.push({ type: "ENTER" }); append(action.else); code.push({ type: "EXIT" }); jump.to = code.length;
     } else if (action.type === "SELECT") code.push({ type: "SELECT", action });
-    else if (action.type === "DRAW" || action.type === "MOVE_CARD") code.push({ type: "WORK", action });
+    else if (["DRAW", "MOVE_CARD", "KO", "REST", "SET_ACTIVE"].includes(action.type)) code.push({ type: "WORK", action: action as Extract<A, { type: "DRAW" | "MOVE_CARD" | "KO" | "REST" | "SET_ACTIVE" }> });
     else throw new Error("V3_RUNTIME_HANDLER_UNSUPPORTED");
   } };
   append(effect.actions); code.push({ type: "END" }); ensureMove(code.length <= 4096, "v3-program-limit"); return code;
@@ -107,7 +108,8 @@ export class V3ResolutionMachine {
           else {
             const cards = this.#bindings(state)[action.cards.ref.slice("bindings.".length)]; ensureMove(cards, "v3-missing-runtime-binding");
             if (!cards.length) { state.pc++; continue; }
-            state.pending = { kind: "work", type: "MOVE_CARD", workId, worldRevision: state.worldRevision, cards: structuredClone(cards), destination: { ...action.destination }, cause: "EFFECT" };
+            state.pending = action.type === "MOVE_CARD" ? { kind: "work", type: "MOVE_CARD", workId, worldRevision: state.worldRevision, cards: structuredClone(cards), destination: { ...action.destination }, cause: "EFFECT" } :
+              { kind: "work", type: action.type, workId, worldRevision: state.worldRevision, cards: structuredClone(cards) };
           }
           state.status = "waitingForWork";
         } else if (instruction.type === "SELECT") this.#select(state, instruction.action);

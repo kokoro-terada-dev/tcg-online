@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:tcg:effect-v3-subset:2",
-  "title": "V3 compiler subset 2; compilation is not execution approval",
+  "$id": "urn:tcg:effect-v3-subset:3",
+  "title": "V3 compiler subset 3; compilation is not execution approval",
   "type": "object", "additionalProperties": false,
   "required": ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"],
   "properties": {
-    "schemaVersion": { "const": "3.0.0-subset.2" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
+    "schemaVersion": { "const": "3.0.0-subset.3" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
     "name": { "$ref": "#/$defs/label" }, "cardType": { "enum": ["leader", "character", "stage"] },
     "baseStats": {
       "type": "object", "additionalProperties": false, "required": ["cost", "power", "counter", "life"],
@@ -91,7 +91,8 @@
         { "required": ["actions"], "properties": { "type": { "const": "SEQUENCE" }, "actions": { "$ref": "#/$defs/actions" } } },
         { "required": ["condition", "then", "else"], "properties": { "type": { "const": "IF" }, "condition": { "$ref": "#/$defs/predicate" }, "then": { "$ref": "#/$defs/actions" }, "else": { "$ref": "#/$defs/actions" } } },
         { "required": ["selector", "bindAs"], "properties": { "type": { "const": "SELECT" }, "selector": { "$ref": "#/$defs/selector" }, "bindAs": { "$ref": "#/$defs/bindingName" } } },
-        { "required": ["cards", "destination", "cause"], "properties": { "type": { "const": "MOVE_CARD" }, "cards": { "$ref": "#/$defs/cardSetRef" }, "destination": { "$ref": "#/$defs/destination" }, "cause": { "const": "EFFECT" } } }
+        { "required": ["cards", "destination", "cause"], "properties": { "type": { "const": "MOVE_CARD" }, "cards": { "$ref": "#/$defs/cardSetRef" }, "destination": { "$ref": "#/$defs/destination" }, "cause": { "const": "EFFECT" } } },
+        { "required": ["cards"], "properties": { "type": { "enum": ["KO", "REST", "SET_ACTIVE"] }, "cards": { "$ref": "#/$defs/cardSetRef" } } }
       ]
     },
     "cost": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "required": ["count"], "properties": { "type": { "const": "REST_DON" }, "count": { "$ref": "#/$defs/count" } } },

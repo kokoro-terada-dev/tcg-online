@@ -64,6 +64,25 @@ test('v3 room exit removes stale membership and guest loss invalidates the sessi
   assert.equal((await request(guest, 'v3-room:join', code)).ok, false);
 });
 
+for (const actor of [0, 1]) for (const scenario of ['ko', 'rest', 'active']) test(`v3 ${scenario} selection and resulting public board sync for controlling seat ${actor}`, async t => {
+  const { host, clients } = await setup(t), controller = clients[actor], peer = clients[1 - actor];
+  assert.equal((await request(host, 'v3:start', { actor, scenario })).ok, true);
+  let v = (await request(controller, 'v3:sync')).view;
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'start'))).view;
+  assert.equal(v.frame.choice.options.length, 2); assert.deepEqual((await request(peer, 'v3:sync')).view.frame.choice.options, []);
+  v = (await request(controller, 'v3:command', command(v, 'answer', 'choose', { selectionId: v.frame.choice.selectionId, tokens: [v.frame.choice.options[0].token] }))).view;
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'work-request'))).view;
+  assert.equal(v.workType, scenario === 'active' ? 'SET_ACTIVE' : scenario.toUpperCase());
+  const c = command(v, 'work', 'apply'); v = (await request(controller, 'v3:command', c)).view;
+  assert.equal((await request(controller, 'v3:command', c)).view.movement.revision, v.movement.revision);
+  const targetOwner = scenario === 'active' ? actor : 1 - actor, zones = v.movement.players[targetOwner];
+  if (scenario === 'ko') { assert.equal(zones.character.filter(Boolean).length, 1); assert.equal(zones.trash.length, 1); }
+  else assert.equal(zones.character.filter(card => card?.rotated).length, 1);
+  const opposite = (await request(peer, 'v3:sync')).view;
+  assert.deepEqual(opposite.movement.players[targetOwner].character, zones.character); assert.deepEqual(opposite.movement.players[targetOwner].trash, zones.trash);
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'finish'))).view; assert.equal(v.frame.status, 'completed');
+});
+
 test('invalid decks do not replace a ready deck, remote browser Origins are denied, and production startup is disabled', async t => {
   const { service, host } = await setup(t);
   assert.equal((await request(host, 'v3-room:deck', { invalid: true })).ok, false);

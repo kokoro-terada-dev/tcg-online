@@ -79,8 +79,8 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ### Phase 2：限定Compilerと承認ゲート
 
-入力版は3.0.0-subset.2、Compiler版はv3-subset-compiler.2です。
-旧subset.1、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
+入力版は3.0.0-subset.3、Compiler版はv3-subset-compiler.3です。
+旧subset.1/2、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
 schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
 Compilerは型・未知フィールド・参照先・比較の値型・ID重複・原文範囲・複雑度も検証します。
 sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲外終端です。
@@ -91,10 +91,10 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 - predicate: all / any / not / compare（eq / ne / lt / lte / gt / gte）。
 - value ref: SELF/OPPONENTのlifeCount/handCount、SOURCE/CANDIDATEのcost/power/cardType/rotated、選択済みbindingsのcount。自由なJS式や任意プロパティ参照は不可。
 - cost: REST_DON（1〜50）。
-- action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD。
+- action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD / KO / REST / SET_ACTIVE。
 - selector: CARDS（表向き公開カードのみ、SELECT、UNORDERED）。
 
-未対応：自動誘発、イベント、KO、非公開領域の選択、BLIND_SELECT/RANDOM/ALL/ORDER、usageLimit、optional、DON_RETURN、付与、期間、置換、継続、CUSTOM_HANDLER等。
+未対応：自動誘発、イベント、KO時効果の派生実行、非公開領域の選択、BLIND_SELECT/RANDOM/ALL/ORDER、usageLimit、optional、DON_RETURN、付与、期間、置換、継続、CUSTOM_HANDLER等。
 未知ノードは読込時に拒否します。schemaOnlyの既存ノードが存在してもv3対応済みとは扱いません。
 predicate/action/cost/replacement/selector/duration/timingのRegistryを用意しています。
 replacement/durationは登録なしで、現在は到達する効果形式も未対応です。
@@ -177,6 +177,7 @@ UNORDERED回答はサーバー候補順に正規化し、クライアントがto
 期限切れで自動選択・自動キャンセル・コスト返却はしません。期限切れ後の再提示/中止方針はCoordinator側の未実装事項です。
 
 DRAW/MOVE_CARD/REST_DONは盤面操作要求として停止します。REST_DONの複合支払いは1つのPAY_COSTS要求にまとめます。
+KO/REST/SET_ACTIVEも同じく盤面操作要求として停止します。これらはcardsに束縛済みカード集合だけを受け付け、クライアントが原因や移動先を上書きすることはできません。
 workIdは解決IDとpcから決まり、再送や復元でも変わりません。
 workForCoordinatorはサーバー専用APIで、要求の参照情報をSocketへそのまま公開してはいけません。
 信頼済みCoordinatorが全件を原子的に処理し、盤面revisionを1つ増やした場合だけsettleWork(applied)で進めます。
@@ -219,6 +220,8 @@ fixtureEnvironment.tsは実際のMovementStateから候補を列挙し、双方�
 - PAY_COSTS: REST_DONの合計を先に検証し、ちょうど合計枚数のACTIVE DONをcostトランザクションでレスト。部分支払いはしません。
 - DRAW: デッキ先頭から手札へEFFECT_MOVE。相手のviewには手札内容を送りません。
 - MOVE_CARD: 現在の世代を再検証し、表向きのcharacter/stage/trash/publicから持ち主の手札/トラッシュ/デッキへ移動。leader/DONの通常エリア移動や他人の所有物化は拒否。
+- KO: 表向きのキャラクターエリアのキャラだけを持ち主のトラッシュへ移動し、EFFECT_KO/isKO:trueを記録。通常のMOVE_CARDによる直接トラッシュ移動はEFFECT_MOVE/isKO:falseのまま。
+- REST/SET_ACTIVE: 表向きのleader/character/stageのレスト状態をtrue/falseへ絶対指定。すでに指定状態なら切り替えず、世代も変えません。DONレスト支払いとは別命令です。
 - キャラ退出時の付与DON戻しは既存MovementEngineの自動処理を使用。
 - デッキが空になる/不足するドローは、勝敗・派生イベントのポリシー未実装として盤面を変更せずblocked。正式なデッキ切れ裁定の実装ではありません。
 
@@ -227,6 +230,8 @@ fixtureEnvironment.tsは実際のMovementStateから候補を列挙し、双方�
 書込み要求にはframe/movement/progressionの3つのrevisionとrequestIdを使います。別プレイヤー・古いコンテキスト・変更された再送を拒否します。
 MovementEventは原因・isKO・付与DONの自動戻しを含めてサーバー内部に保持し、上限512件で停止します。
 イベント順序を公式の効果解決順とは解釈せず、まだ誘発をスケジュールしません。直接バウンスをKO扱いにすることもありません。
+KO後の古いgenerationの束縛は、次の操作で別オブジェクトとして再利用せず拒否します。
+KOされない耐性・置換・KO時能力等のある実カードへの適用は未対応です。このfixtureはそれらが存在しない前提だけで検証します。
 
 viewForは公開投影のみです。snapshotForCoordinatorは原盤面・進行・署名付きフレーム・レシート・内部イベントを含むサーバー専用APIで、クライアントへ送信してはいけません。
 DB保存、Coordinator全体の再起動時復元、署名鍵の運用構成、分散ロック、既存Matchへの反映は未実装です。
@@ -251,13 +256,17 @@ npm run dev:effects-v3
 9. ホストが「合成効果」と「操作者」を選び、「検証開始」を押します。
 
 開始時に両側へ公開キャラ2枚・ACTIVE DON2枚を配置します。マリガンや本来の対戦開始手順ではありません。
+「自分のキャラをアクティブ」のケースだけ、操作者側のキャラ2枚を最初からレストにします。
 初期手札やライフにキャラが偏った場合は、デッキとの入替えで枚数を保ってテスト用の場を準備します。
 リーダーはサーバー内部でV3-FIXTURE-LEADER-0/1という架空IDへ置き換え、画像表示だけ選んだデッキのリーダーを使います。
 元の実カード番号で能力を自動承認することはしません。実カードの画像・印刷テキストが見えても、その効果を実行するモードではありません。
 
-「公開キャラ → 手札」では、操作者の「処理を進める」→カードを0〜1枚選択→「選択を確定」→「処理を進める」→「処理を実行」→「処理を進める」で完了します。
+「公開キャラ → 手札」では、操作者の「処理を進める」→カードを0〜1枚選択→「選択を確定」→「処理を進める」→「カードを移動」→「処理を進める」で完了します。
 0枚選択の場合は移動要求がないため、途中で処理完了になります。
-「DONレスト → ドロー」では、「処理を進める」→「支払いを確定」→「処理を進める」→「処理を実行」→「処理を進める」で完了します。
+「DONレスト → ドロー」では、「処理を進める」→「支払いを確定」→「処理を進める」→「ドローを実行」→「処理を進める」で完了します。
+「相手キャラをKO」「相手キャラをレスト」「自分のキャラをアクティブ」も、選択→処理を進める→対象の処理ボタン→処理を進める、で確認できます。
+KOは相手の場から相手のトラッシュへ、レストは相手キャラを横向きへ、アクティブ化は自分のレストキャラを縦向きへ更新します。
+相手側の画面にも同じ公開盤面が同期されます。実カードの能力・発動条件を再現するものではありません。
 他方ではカード候補や増えた手札の内容を見られず、公開盤面と枚数だけ更新されます。
 「盤面を見る」でパネルを小さくできます。カードの詳細表示は従来のTestBoardを使用します。
 

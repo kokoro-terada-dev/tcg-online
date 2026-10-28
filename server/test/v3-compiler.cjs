@@ -20,7 +20,7 @@ test('v3 compiler produces immutable versioned non-executable plans and preserve
   assert.deepEqual(plan.requiredHandlers, ['action:DRAW', 'action:IF', 'action:SEQUENCE', 'cost:REST_DON', 'predicate:all', 'predicate:any', 'predicate:compare', 'predicate:not', 'timing:MAIN']);
 });
 test('unknown instructions, undeclared bindings, legacy and draft syntax are never silently translated', () => {
-  for (const mutate of [v => v.effects[0].actions[0] = { type: 'KO', target: 'SOURCE' }, v => v.effects[0].costs[0].type = 'DON_RETURN', v => v.effects[0].timing.type = 'COUNTER', v => v.effects[0].kind = 'replacement', v => v.effects[0].usageLimit = { type: 'perTurn', count: 1 }, v => v.effects[0].resolutionConditions.left = { ref: 'bindings.unbound' }, v => v.effects[0].actions[0].bindAs = 'x', v => v.schemaVersion = '3.0-draft', v => v.dslVersion = 1, v => v.effects[0].sourceZones = ['hand']]) {
+  for (const mutate of [v => v.effects[0].actions[0] = { type: 'CUSTOM_HANDLER', handler: 'unreviewed' }, v => v.effects[0].costs[0].type = 'DON_RETURN', v => v.effects[0].timing.type = 'COUNTER', v => v.effects[0].kind = 'replacement', v => v.effects[0].usageLimit = { type: 'perTurn', count: 1 }, v => v.effects[0].resolutionConditions.left = { ref: 'bindings.unbound' }, v => v.effects[0].actions[0].bindAs = 'x', v => v.schemaVersion = '3.0-draft', v => v.dslVersion = 1, v => v.effects[0].sourceZones = ['hand']]) {
     const data = fixture(); mutate(data); assert.throws(() => compile(data));
   }
 });

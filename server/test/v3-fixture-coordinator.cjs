@@ -45,6 +45,56 @@ function choose(s) {
   const c = s.coordinator, v = c.viewFor(s.actor), context = c.context();
   return { context, id: v.frame.choice.selectionId, tokens: [v.frame.choice.options[0].token] };
 }
+function fieldActions(...types) {
+  return d => { d.effects[0].actions = [d.effects[0].actions[0], ...types.map(type => ({ type, cards: { ref: 'bindings.picked' } }))]; };
+}
+function beginFieldWork(s) {
+  const c = s.coordinator; c.advance(s.actor, 'field-start', c.context()); const choice = choose(s);
+  c.answer(s.actor, 'field-choose', choice.context, choice.id, choice.tokens); c.advance(s.actor, 'field-work', c.context()); return c;
+}
+
+test('effect KO emits a KO event and returns attached DON, unlike a direct move to trash', () => {
+  for (const actor of [0, 1]) {
+    const s = setup({ actor, attach: true, mutate: fieldActions('KO') }), c = beginFieldWork(s), context = c.context();
+    c.applyPendingWork(actor, 'ko', context); assert.equal(c.applyPendingWork(actor, 'ko', context).replayed, true);
+    const snapshot = c.snapshotForCoordinator(), event = snapshot.movementEvents.find(e => e.before?.instanceId === s.target.instanceId);
+    assert.equal(snapshot.movement.players[actor].character[1], null); assert.equal(snapshot.movement.players[actor].trash.includes(s.target.instanceId), true);
+    assert.equal(event.cause.kind, 'EFFECT_KO'); assert.equal(event.isKO, true); assert.equal(event.cause.actor, actor);
+    assert.equal(snapshot.movement.players[actor].attachedDon.length, 0); assert.equal(snapshot.movement.players[actor].restDon.length, 1);
+    c.advance(actor, 'ko-finish', c.context()); assert.equal(c.viewFor(actor).frame.status, 'completed');
+  }
+  const moved = setup({ mutate: d => d.effects[0].actions[1].then[0].destination.zone = 'trash' }), c = beginFieldWork(moved);
+  c.applyPendingWork(0, 'trash', c.context()); const event = c.snapshotForCoordinator().movementEvents.find(e => e.before?.instanceId === moved.target.instanceId);
+  assert.equal(event.isKO, false); assert.equal(event.cause.kind, 'EFFECT_MOVE');
+});
+
+test('REST and SET_ACTIVE are absolute states, preserve object generation, and do not toggle on repeated operations', () => {
+  const s = setup({ mutate: fieldActions('REST', 'REST', 'SET_ACTIVE', 'SET_ACTIVE') }), c = beginFieldWork(s);
+  for (let i = 0; i < 4; i++) {
+    c.applyPendingWork(0, `rest-step-${i}`, c.context()); const snapshot = c.snapshotForCoordinator();
+    assert.equal(snapshot.movement.cards[s.target.instanceId].rotated, i < 2); assert.equal(snapshot.movement.cards[s.target.instanceId].generation, 0);
+    c.advance(0, `rest-next-${i}`, c.context());
+  }
+  assert.equal(c.viewFor(0).frame.status, 'completed');
+  assert.equal(c.snapshotForCoordinator().movementEvents.filter(e => e.kind === 'restChanged').length, 2);
+});
+
+test('KO refuses leaders and REST refuses trash targets without moving or changing any card', () => {
+  for (const type of ['KO', 'REST']) {
+    const s = setup({ deckCount: 10, mutate: d => {
+      fieldActions(type)(d); const selector = d.effects[0].actions[0].selector;
+      selector.zone = type === 'KO' ? 'leader' : 'trash'; selector.cardTypes = [type === 'KO' ? 'leader' : 'character']; selector.excludeSource = false; selector.filters = { type: 'all', conditions: [] };
+    } }), c = beginFieldWork(s), before = c.snapshotForCoordinator();
+    c.applyPendingWork(0, 'invalid-target', c.context()); assert.equal(c.viewFor(0).frame.status, 'blocked'); assert.equal(c.snapshotForCoordinator().movement, before.movement);
+  }
+});
+
+test('a field reference becomes stale after KO and cannot affect the moved card in a later action', () => {
+  const s = setup({ mutate: fieldActions('KO', 'SET_ACTIVE') }), c = beginFieldWork(s);
+  c.applyPendingWork(0, 'ko', c.context()); c.advance(0, 'stale-request', c.context()); const before = c.snapshotForCoordinator();
+  c.applyPendingWork(0, 'stale-work', c.context()); const after = c.snapshotForCoordinator();
+  assert.equal(c.viewFor(0).frame.status, 'blocked'); assert.equal(after.movement, before.movement); assert.equal(after.movement.cards[s.target.instanceId].generation, 1);
+});
 test('public selection moves a real card through MovementEngine and releases progression only on completion for both seats', () => {
   for (const actor of [0, 1]) {
     const s = setup({ actor }), c = s.coordinator;

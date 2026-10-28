@@ -9,7 +9,7 @@ const compile = value => compileV3CardJson(JSON.stringify(value));
 const predicate = (ref, op = 'gt', right = 0) => ({ type: 'compare', left: { ref }, op, right });
 test('public selection compiles typed card sets, count references, filters and effect-only movement', () => {
   const plan = compileV3CardJson(raw), actions = plan.definition.effects[0].actions;
-  assert.equal(plan.compilerVersion, 'v3-subset-compiler.2'); assert.equal(plan.status, 'compiled_not_executable');
+  assert.equal(plan.compilerVersion, 'v3-subset-compiler.3'); assert.equal(plan.status, 'compiled_not_executable');
   assert.equal(actions[0].selector.min, 0); assert.equal(actions[0].selector.onInsufficient, 'fail');
   assert.equal(actions[1].then[0].cards.ref, 'bindings.picked');
   assert.ok(plan.requiredHandlers.includes('selector:CARDS')); assert.ok(plan.requiredHandlers.includes('action:MOVE_CARD'));
@@ -64,5 +64,15 @@ test('sequences share ordered bindings; moves cannot disguise a cost, KO or reve
   deck.effects[0].actions[0].selector.max = 2; assert.throws(() => compile(deck));
 });
 test('old subset versions are refused rather than silently changing approval semantics', () => {
-  const data = fixture(); data.schemaVersion = '3.0.0-subset.1'; assert.throws(() => compile(data));
+  for (const version of ['3.0.0-subset.1', '3.0.0-subset.2']) { const data = fixture(); data.schemaVersion = version; assert.throws(() => compile(data)); }
+});
+
+test('KO and absolute rest actions require a defined card set and cannot masquerade as costs or battle damage', () => {
+  for (const type of ['KO', 'REST', 'SET_ACTIVE']) {
+    const data = fixture(); data.effects[0].actions[1].then[0] = { type, cards: { ref: 'bindings.picked' } };
+    assert.ok(compile(data).requiredHandlers.includes(`action:${type}`));
+    for (const patch of [{ cause: 'BATTLE_KO' }, { destination: { zone: 'trash' } }, { cards: { ref: 'SOURCE' } }, { cards: { ref: 'bindings.missing' } }]) {
+      const copy = structuredClone(data); Object.assign(copy.effects[0].actions[1].then[0], patch); assert.throws(() => compile(copy));
+    }
+  }
 });
