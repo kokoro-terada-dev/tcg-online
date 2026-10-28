@@ -7,6 +7,7 @@ export type V3SessionView = Readonly<{
   resolutionActor: 0 | 1 | null; workType: V3FixtureView["workType"];
   effects: readonly Readonly<{ effectId: string; label: string; enabled: boolean; used: number; limit: number | null }>[];
   playableCards: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string; cost: number | null; zone: "character" | "stage"; slotIndex: number; enabled: boolean }>[];
+  publicReveals: readonly Readonly<{ cardId: string; owner: 0 | 1 }>[];
   history: readonly Readonly<{ turnNumber: number; actor: 0 | 1; cardId: string; effectId: string; resolutionId: string; committed: boolean; declined: boolean }>[];
 }>;
 export type V3SessionCommand = Readonly<{ matchId: string; requestId: string; context: V3SessionContext }> & (

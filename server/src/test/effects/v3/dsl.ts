@@ -14,11 +14,15 @@ export interface PredicateMap {
   compare: NodeMeta & { type: "compare"; left: Value; op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte"; right: Value };
 }
 export interface ActionMap {
+  LOOK_TOP: NodeMeta & { type: "LOOK_TOP"; player: "SELF"; count: number; bindAs: string; onInsufficient: "fail" | "takeAvailable" };
+  REVEAL: NodeMeta & { type: "REVEAL"; cards: CardSetRef; viewers: "BOTH" };
+  ORDER_CARDS: NodeMeta & { type: "ORDER_CARDS"; cards: CardSetRef; excludeCards: CardSetRef | null; bindAs: string; chooser: "SELF" };
+  RETURN_TO_DECK: NodeMeta & { type: "RETURN_TO_DECK"; cards: CardSetRef; player: "SELF"; position: "top" | "bottom" };
   DRAW: NodeMeta & { type: "DRAW"; player: Player; count: number };
   SEQUENCE: NodeMeta & { type: "SEQUENCE"; actions: Action[] };
   IF: NodeMeta & { type: "IF"; condition: Predicate; then: Action[]; else: Action[] };
   SELECT: NodeMeta & { type: "SELECT"; selector: Node<"selector">; bindAs: string };
-  MOVE_CARD: NodeMeta & { type: "MOVE_CARD"; cards: CardSetRef; destination: { owner: Player; zone: "hand" | "trash" | "deck"; position: "append" | "top" | "bottom"; faceUp: boolean }; cause: "EFFECT" };
+  MOVE_CARD: NodeMeta & { type: "MOVE_CARD"; cards: CardSetRef; destination: { owner: Player; zone: "hand" | "trash" | "deck" | "public"; position: "append" | "top" | "bottom"; faceUp: boolean }; cause: "EFFECT" };
   KO: NodeMeta & { type: "KO"; cards: CardSetRef };
   REST: NodeMeta & { type: "REST"; cards: CardSetRef };
   SET_ACTIVE: NodeMeta & { type: "SET_ACTIVE"; cards: CardSetRef };
@@ -31,6 +35,10 @@ export interface CostMap {
 }
 export interface ReplacementMap {}
 export interface SelectorMap {
+  BOUND_CARDS: NodeMeta & { type: "BOUND_CARDS"; cards: CardSetRef; excludeCards: CardSetRef | null;
+    owner: "SELF"; controller: "SELF"; chooser: "SELF"; zone: "deck"; visibility: "OWNER_ONLY"; faceUpOnly: false;
+    cardTypes: ("character" | "event" | "stage")[]; filters: Predicate; excludeSource: boolean; min: number; max: number;
+    selectionMode: "SELECT"; order: "UNORDERED"; onInsufficient: "fail" };
   CARDS: NodeMeta & {
     type: "CARDS"; owner: Player; controller: Player;
     cardTypes: ("leader" | "character" | "event" | "stage" | "don")[];
@@ -55,7 +63,7 @@ export type Effect = {
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };
 export type CardDefinition = {
-  schemaVersion: "3.0.0-subset.10"; cardId: string; cardVersion: string;
+  schemaVersion: "3.0.0-subset.11"; cardId: string; cardVersion: string;
   name: string; cardType: "leader" | "character" | "stage";
   baseStats: { cost: number | null; power: number | null; counter: number | null; life: number | null };
   colors: string[]; traits: string[]; attributes: string[];

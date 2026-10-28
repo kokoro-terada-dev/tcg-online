@@ -79,8 +79,8 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ### Phase 2：限定Compilerと承認ゲート
 
-入力版は3.0.0-subset.10、Compiler版はv3-subset-compiler.10です。
-旧subset.1/2/3/4/5/6/7/8/9、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
+入力版は3.0.0-subset.11、Compiler版はv3-subset-compiler.11です。
+旧subset.1/2/3/4/5/6/7/8/9/10、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
 schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
 Compilerは型・未知フィールド・参照先・比較の値型・ID重複・原文範囲・複雑度も検証します。
 sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲外終端です。
@@ -94,10 +94,10 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 - value ref: SELF/OPPONENTのlifeCount/handCount、SOURCE/CANDIDATEのcost/power/cardType/rotated、選択済みbindingsのcount。自由なJS式や任意プロパティ参照は不可。
 - cost: REST_DON / DISCARD_HAND（各1〜50、DISCARD_HANDは効果単位の合計も50以下）、REST_SOURCE（引数なし、効果単位で1回のみ）。
 - cost: DON_RETURN（count:1〜50、from:activeDon/restDon/attachedDonの単一指定または重複しない配列、効果単位で1命令）。fromはCompiler内で配列へ正規化します。
-- action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD / KO / REST / SET_ACTIVE。
-- selector: CARDS（表向き公開カード、または本人が選ぶ自分の手札。SELECT、UNORDERED）。
+- action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD / KO / REST / SET_ACTIVE / LOOK_TOP / REVEAL / ORDER_CARDS / RETURN_TO_DECK。
+- selector: CARDS（表向き公開カード、本人が選ぶ自分の手札/公開DON）、BOUND_CARDS（閲覧権限のある束縛済みの自分の山札集合）。SELECT、UNORDERED。
 
-未対応：自動誘発、イベント、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL/ORDER、DISCARD_HAND/DON_RETURN以外の選択付きコスト、名称/試合単位の使用制限、効果途中の任意分岐、付与、期間、置換、継続、CUSTOM_HANDLER等。
+未対応：自動誘発、イベント使用、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL、一般ゾーンのORDER（現在は専用ORDER_CARDSのみ）、シャッフル、DISCARD_HAND/DON_RETURN以外の選択付きコスト、名称/試合単位の使用制限、効果途中の任意分岐、付与、期間、置換、継続、CUSTOM_HANDLER等。
 未知ノードは読込時に拒否します。schemaOnlyの既存ノードが存在してもv3対応済みとは扱いません。
 predicate/action/cost/replacement/selector/duration/timingのRegistryを用意しています。
 replacement/durationは登録なしで、現在は到達する効果形式も未対応です。
@@ -132,7 +132,7 @@ SELECTはselectorとbindAsを持ちます。selector内へのbindAs重複指定�
 CARDSはowner/controller/zone/cardTypes/filters/excludeSource/faceUpOnly/min/max/visibility/selectionMode/chooser/order/onInsufficientをすべて明示します。
 公開選択の対象ゾーンはleader/character/stage/trash/publicで、faceUpOnly:true、visibility:PUBLICを必須にします。
 public等に裏向きカードがあっても選択可能という意味ではありません。Runtime接続時にも可視性を再検証する必要があります。
-手札を公開する選択や、デッキ・ライフの選択はコンパイルできません。
+CARDSで手札の内容を両者へ見せる選択や、山札・ライフを直接候補にする指定はコンパイルできません。手札の公開は選択後のREVEAL、山札はLOOK_TOPとBOUND_CARDSを使用します。
 本人の手札選択だけはzone:hand、visibility:OWNER_ONLY、faceUpOnly:false、owner/controller/chooser:SELFの組合せで受け付けます。
 OWNER_ONLYを他ゾーンへ付けたり、owner/controller/chooserのいずれかをOPPONENTに変えたりすることはできません。
 手札の実データが裏向きでも、本人への可視性が確認できれば候補にします。選択のためにカード自体を表向きへ変更しません。
@@ -140,7 +140,7 @@ owner、controller、chooserは別々に定義します。これらは相対プ�
 
 minは0〜max、maxは1〜50。min:0の空選択と、minを満たせない候補不足を区別します。
 onInsufficient:failを必須にし、勝手な枚数補正や部分的な支払いを定義しません。
-実候補の盤面からの算出は未接続です。選択待ち・応答処理は下記の制御機械に実装しています。
+実候補は下記の合成FixtureCoordinatorで盤面から算出します。正式対戦の能力・耐性を無視して候補にする入口ではありません。
 
 bindAsは英字始まりの英数字/アンダースコア、最大64文字です。
 選択済みカード集合は{"ref":"bindings.picked"}、枚数は{"ref":"bindings.picked.count"}で参照します。
@@ -152,7 +152,7 @@ CANDIDATE参照はselector.filters内のみ有効です。型に合わない比�
 cost/powerが不明なときの評価を0/falseに置き換えることはせず、実行時のunknown処理はRuntime側で実装します。
 
 MOVE_CARDは束縛済みカード集合を参照し、cause:EFFECTだけを受け付けます。KOやコスト扱いへの偽装はできません。
-移動先はhand/trashへ表向きappend、deckへ裏向きtop/bottomだけです。デッキは順序未対応のため、最大1枚の束縛だけを許可します。
+移動先はhand/trash/publicへ表向きappend、deckへ裏向きtop/bottomです。MOVE_CARDによるデッキ送りは最大1枚の束縛だけを許可します。閲覧した山札の複数枚の並べ直しにはORDER_CARDSとRETURN_TO_DECKを使用します。
 参照の寿命/generation、所有権、移動禁止、カード枚数保存等の盤面上の合法性は将来のMovementEngine接続時に別途検証します。
 Compiler成功はそれらの合法性検証や公式裁定の承認を意味しません。
 
@@ -192,7 +192,7 @@ DISCARD_HANDは自分の手札のcharacter/stage/eventだけを、合計枚数�
 全コストの実行可能性を選択前と支払い要求前に確認し、不足ならblocked、unknownならそのadvanceを確定せず停止します。
 選択確定は支払計画の保存だけで、DONも手札もまだ変更しません。支払い時にも全参照を再検証します。
 同種のDISCARD_HANDは合算します。この限定fixtureの合算処理を、実カードのコスト選択順の公式裁定とは解釈しません。
-保存フレーム版はv3-frame.6で、選択済みcostCards/costReturnedと支払い済みpaidCostWorkId、候補のゾーン/表示ラベル/返却可能なアクティブDON上限、任意発動の確認結果activationDecision、確定済みかを表すactivationCommittedを含みます。旧フレームは暗黙復元しません。
+保存フレーム版はv3-frame.7で、選択済みcostCards/costReturnedと支払い済みpaidCostWorkId、候補のゾーン/表示ラベル/返却可能なアクティブDON上限、任意発動の確認結果activationDecision、確定済みかを表すactivationCommitted、一時閲覧の後始末が必要かを表すrevealsOpenを含みます。旧フレームは暗黙復元しません。
 DON_RETURNはfromで指定した自分の公開DONから、指定枚数ちょうど選びます。複数ゾーンを配列指定して混在選択できます。
 CARDSも自分のactiveDon/restDon/attachedDonをdon型限定で選択可能で、zoneは単一指定または同じDONゾーン配列を受け付けます。
 複合コストはこのfixtureでは手札→DONの順に選択し、最後にPAY_COSTSで一括確定します。JSONの配列順を公式のコスト選択順とはみなしません。
@@ -254,8 +254,8 @@ fixtureEnvironment.tsは実際のMovementStateから候補を列挙し、双方�
 - PAY_COSTSのREST_SOURCE: 発動元の世代・位置・可視性・所有者・コントローラー・アクティブ状態を再確認してレスト。同じトランザクションでDON/手札も支払い、発動元の世代は変えません。全操作の合計は64以下です。
 - PAY_COSTSのDON_RETURN: 選択DONの世代・元ゾーン・所有者・コントローラー・双方への可視性を再確認してDONデッキ下へ裏向きで戻します。付与は解除、レスト状態も解除し世代は増やします。返却対象をREST_DONの自動選択から除外し、二重使用しません。
 - DRAW: デッキ先頭から手札へEFFECT_MOVE。相手のviewには手札内容を送りません。
-- MOVE_CARD: 現在の世代を再検証し、表向きのcharacter/stage/trash/publicから持ち主の手札/トラッシュ/デッキへ移動。leader/DONの通常エリア移動や他人の所有物化は拒否。
-- MOVE_CARDの自分の手札からの移動: actorの所有/コントロールと本人だけへの可視性を確認し、選択したカードを移動。相手の手札からは移動不可。
+- MOVE_CARD: 現在の世代を再検証し、表向きのcharacter/stage/trash/publicから持ち主の手札/トラッシュ/公開エリア/デッキへ移動。leader/DONの通常エリア移動や他人の所有物化は拒否。
+- MOVE_CARDの自分の手札からの移動: actorの所有/コントロールと本人への可視性を確認し、選択したカードを移動。一時公開済みの自分の手札も可。相手の手札からは移動不可。
 - KO: 表向きのキャラクターエリアのキャラだけを持ち主のトラッシュへ移動し、EFFECT_KO/isKO:trueを記録。通常のMOVE_CARDによる直接トラッシュ移動はEFFECT_MOVE/isKO:falseのまま。
 - REST/SET_ACTIVE: 表向きのleader/character/stageのレスト状態をtrue/falseへ絶対指定。すでに指定状態なら切り替えず、世代も変えません。DONレスト支払いとは別命令です。
 - キャラ退出時の付与DON戻しは既存MovementEngineの自動処理を使用。
@@ -434,6 +434,7 @@ DB復元・終了時能力・勝敗処理・実カード裁定はこの段階に
 
 - 「1枚ドロー」は各リーダー個体・各ターンに1回。ボタンの0/1、1/1で使用回数を表示します。
 - 「任意発動・コストでドロー」は任意確認→手札1枚選択→DONレスト1枚と手札1枚を一括支払い→1枚ドローです。これも個体・各ターンに1回で、辞退では回数を消費しません。
+- 「上から3枚サーチ」は上から3枚を見る→cost:3以下の合成キャラを0〜1枚選ぶ→選んだカードだけを両者へ公開→手札へ→残りの戻す順番を選ぶ→山札下へ→閲覧終了です。各リーダー個体・各ターンに1回です。
 - 効果完了後、同じ盤面で別の効果を開始できます。効果途中は新しい効果やターン終了を拒否します。
 - 「ターン終了」は手番側だけが実行でき、次のプレイヤーのリフレッシュ・通常ドロー・DON追加を合成fixtureの範囲で準備します。試合IDと盤面は維持します。
 - 次のターンでは新しいターン番号に従って使用回数を管理します。自分の次の手番で再び効果を使えます。
@@ -475,7 +476,31 @@ node --test server/test/v3-session-server.cjs
 node --test tools/test-v3-session-client.test.js
 ```
 
-Phase 2の残りでは、非公開選択や順序選択等のCompiler対応を、実行可能な範囲と分けて拡充します。既存のkind形式は別版のまま維持します。
+### 段階2の進捗：サーチ・一時公開・順序選択
+
+サーチ専用のカード別分岐ではなく、次の共通命令で組み立てます。すべて合成検証範囲であり、実カードの裁定承認ではありません。
+
+- LOOK_TOP: player:SELF、count:1〜50、bindAs、onInsufficient:fail/takeAvailableを明示。自分の山札先頭だけを束縛し、MovementStoreで閲覧権限を付けた後に選択できます。カード自体の表裏や世代は変えません。
+- BOUND_CARDS: cardsとexcludeCards:null/集合参照を指定。現在の解決IDで閲覧できる自分の山札だけを候補にします。種類/数値等の既存filtersを使えます。先行参照、候補への集合外カード混入、別解決の権限流用は拒否します。
+- REVEAL: 束縛済みの自分の手札、または閲覧済み山札をviewers:BOTHへ一時公開します。未確認山札、相手の手札の公開は拒否します。同じ範囲を再度LOOK_TOPしても既存の公開権限を縮小しません。
+- ORDER_CARDS: cardsからexcludeCardsを除いた残り全枚数をSELFが並べます。順番は選択したtokenの順です。重複・不足・古いtoken・相手からの回答は拒否します。通常SELECTのUNORDEREDは従来どおりサーバー候補順へ正規化します。
+- RETURN_TO_DECK: 閲覧済みの自分の山札カードをtop/bottomへ、集合の順番を維持して並べます。その他のカードの順番・各カードの世代を保持します。手札から複数枚を戻す命令ではありません。
+- CLOSE_REVEALS: JSONから直接指定せず、解決終了前に制御機械が生成する後始末です。その解決IDの閲覧権限だけを閉じ、完了まで操作ゲートを解放しません。保存復元/再送時にも二重処理しません。
+
+数値条件は対象カードを含む承認済み定義から読みます。既知カードのnullをマスターや0で埋めません。値や修正状態が不明なら選択前に停止します。
+山札から手札/trash/publicへの移動は、現在の閲覧権限と所有者・世代を再確認します。山札を空にする移動は、デッキ切れの裁定接続が未完了のため変更せず停止します。
+REVEALの表示は両端末のパネルに小さい画像として出し、タップで拡大できます。選んでいない山札画像、候補token、戻す順番は相手へ送りません。
+手札へ移動した後は相手への公開を終了します。今回の表示用画像対応表にも、現在見えるカードだけを含めます。既に見た情報を相手の記憶から消すという意味ではありません。
+閲覧中の切断・blocked時は安全停止し、ホストが検証を終了して作り直します。DB復旧や中断取消時の裁定はまだ含めません。
+
+```powershell
+npm run check:effect-v3 -- server/test/fixtures/v3-search-deck.json
+node --test server/test/v3-selection-compiler.cjs server/test/v3-resolution.cjs server/test/v3-fixture-coordinator.cjs
+node --test server/test/v3-session-server.cjs
+```
+
+構文確認用JSONはneeds_reviewのままです。自動的に実カードを承認/変換しません。実カードの特徴条件・使用/登場時誘発や一般のシャッフル等は、段階2以降で引き続き接続します。
+既存のkind形式は別版のまま維持します。
 今後は検証結果を見て、承認済み定義の読込や対象範囲・イベント/置換処理を段階的に拡張します。正式対戦への自動切替や、未承認の実カードへの適用はしません。
 Phase 4以降に置換・継続・バトル統合を進めます。
 同時誘発の順序、複数置換の選択、勝敗チェックの位置、トリガー機会、KO誘発時点、継続効果の循環等は

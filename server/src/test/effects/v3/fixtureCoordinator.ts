@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { MovementStore, visibleTo } from "../../movement/engine";
 import { projectMovementState } from "../../movement/projection";
-import { dataObject, ensureMove, freezeMovement, getCard, location, MovementError, validateMovementState } from "../../movement/state";
+import { dataArray, dataObject, ensureMove, freezeMovement, getCard, location, MovementError, validateMovementState } from "../../movement/state";
 import type { MovementEvent, MovementOperation, MovementState, TransactionResult } from "../../movement/types";
 import type { Progression } from "../../progression/types";
 import { checkTiming } from "../../progression/state";
@@ -22,11 +22,16 @@ const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 export class V3FixtureCoordinator {
   #board: MovementState; #progression: Progression; #machine: V3ResolutionMachine;
   #card: ApprovedV3Card; #identity: ResolutionIdentity; #key: Uint8Array; #facts: PinnedMasterFacts; #now: () => number;
+  #definitions: readonly ApprovedV3Card[];
   #receipts: Receipt[] = []; #busy = false;
   #events: readonly MovementEvent[] = [];
-  constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number }>) {
+  constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; definitions?: readonly ApprovedV3Card[] }>) {
     ensureMove(process.env.NODE_ENV !== "production" && options.mode === "syntheticNoAbilities", "v3-fixture-disabled");
     ensureMove(isApprovedV3Card(options.card), "v3-approved-server-plan-required");
+    const definitions = options.definitions ?? [options.card]; dataArray(definitions, 128);
+    ensureMove(definitions.every(card => isApprovedV3Card(card) && card.rulesetVersion === options.card.rulesetVersion && card.compilerVersion === options.card.compilerVersion && card.registryHash === options.card.registryHash) &&
+      new Set(definitions.map(card => card.definition.cardId)).size === definitions.length && definitions.some(card => card.definitionHash === options.card.definitionHash), "v3-fixture-approved-definitions-required");
+    this.#definitions = [...definitions];
     validateMovementState(options.movement);
     const { identity, movement, progression, card } = options;
     ensureMove(identity.matchId === movement.matchId && movement.turnNumber === progression.turnNumber && checkTiming(progression, identity.actor, "mainEffect").allowed && !progression.battle, "v3-fixture-timing");
@@ -36,7 +41,7 @@ export class V3FixtureCoordinator {
     this.#board = freezeMovement(structuredClone(movement)); this.#progression = freezeMovement(structuredClone(progression));
     this.#identity = freezeMovement(structuredClone(identity)); this.#card = card; this.#key = Uint8Array.from(options.signingKey); this.#now = options.now ?? Date.now;
     this.#facts = pinMasterFacts(movement, { master: options.master, numericPolicy: "certifiedUnmodified" });
-    this.#machine = new V3ResolutionMachine(card, this.#identity, this.#key, fixtureEnvironment(() => this.#board, this.#identity, card, this.#facts, this.#now));
+    this.#machine = new V3ResolutionMachine(card, this.#identity, this.#key, fixtureEnvironment(() => this.#board, this.#identity, card, this.#facts, this.#now, this.#definitions));
     this.#progression = applySystemEvent(this.#progression, this.#progression.revision, { kind: "beginResolution", resolutionId: identity.resolutionId, controller: identity.actor });
   }
   context(): FixtureContext { return { frameRevision: this.#machine.viewFor(this.#identity.actor).revision, movementRevision: this.#board.revision, progressionRevision: this.#progression.revision }; }
@@ -61,7 +66,7 @@ export class V3FixtureCoordinator {
     this.#busy = true;
     try {
       const draft = { board: this.#board, events: [...this.#events] };
-      const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now);
+      const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions);
       const machine = V3ResolutionMachine.restore(this.#card, this.#identity, this.#key, environment, this.#machine.exportForStorage(), current.frameRevision);
       action(machine, draft); const progression = this.#gate(this.#progression, machine);
       // Retain all candidate changes only after frame, movement and progression succeeded.
@@ -94,6 +99,8 @@ export class V3FixtureCoordinator {
   #applyWork(board: MovementState, work: WorkRequest): TransactionResult {
     ensureMove(work.worldRevision === board.revision, "v3-fixture-stale-work");
     const actor = this.#identity.actor, operations: MovementOperation[] = [];
+    const inspected = (ref: Readonly<{ instanceId: string; generation: number }>) => board.reveals.some(grant => grant.scopeId === this.#identity.resolutionId &&
+      grant.card.instanceId === ref.instanceId && grant.card.generation === ref.generation && grant.viewers.includes(actor));
     if (work.type === "PAY_COSTS") {
       let amount = 0, discardCount = 0, restSource = 0;
       const returnCosts = work.costs.filter(cost => cost.type === "DON_RETURN"), returnCost = returnCosts[0], returnCount = returnCost?.count ?? 0;
@@ -131,6 +138,34 @@ export class V3FixtureCoordinator {
           visibleTo(board, card, from, 0) && visibleTo(board, card, from, 1), "v3-fixture-return-cost-unavailable");
         operations.push({ kind: "move", card: ref, from, to: { player: actor, zone: "donDeck", position: "bottom", faceUp: false, rotated: false }, cause: "COST_PAYMENT" });
       }
+    } else if (work.type === "LOOK_TOP") {
+      ensureMove(work.cards.length > 0 && work.cards.length <= 50 && work.cards.every((ref, index) => board.players[actor].deck[index] === ref.instanceId), "v3-fixture-look-top-only");
+      for (const ref of work.cards) {
+        const card = getCard(board, ref), from = location(board, card.instanceId);
+        ensureMove(from.player === actor && from.zone === "deck" && card.owner === actor && card.controller === actor && ["character", "stage", "event"].includes(card.kind), "v3-fixture-look-owner-or-kind");
+        const opponent = (1 - actor) as 0 | 1;
+        const alreadyPublic = board.reveals.some(grant => grant.scopeId === this.#identity.resolutionId && grant.card.instanceId === ref.instanceId && grant.card.generation === ref.generation && grant.viewers.includes(opponent));
+        operations.push({ kind: "reveal", card: ref, scopeId: this.#identity.resolutionId, viewers: alreadyPublic ? [0, 1] : [actor] });
+      }
+    } else if (work.type === "REVEAL") {
+      ensureMove(work.cards.length > 0 && work.cards.length <= 50, "v3-fixture-reveal-count");
+      for (const ref of work.cards) {
+        const card = getCard(board, ref), from = location(board, card.instanceId);
+        ensureMove(from.player === actor && card.owner === actor && card.controller === actor && ["character", "stage", "event"].includes(card.kind) &&
+          (from.zone === "hand" || from.zone === "deck" && inspected(ref)) && visibleTo(board, card, from, actor), "v3-fixture-reveal-uninspected-card");
+        operations.push({ kind: "reveal", card: ref, scopeId: this.#identity.resolutionId, viewers: [0, 1] });
+      }
+    } else if (work.type === "RETURN_TO_DECK") {
+      ensureMove(work.cards.length > 0 && work.cards.length <= 50 && new Set(work.cards.map(ref => ref.instanceId)).size === work.cards.length, "v3-fixture-return-deck-count");
+      for (const ref of work.cards) {
+        const card = getCard(board, ref), from = location(board, card.instanceId);
+        ensureMove(from.player === actor && from.zone === "deck" && card.owner === actor && card.controller === actor && inspected(ref), "v3-fixture-return-uninspected-card");
+      }
+      const selected = new Set(work.cards.map(ref => ref.instanceId)), rest = board.players[actor].deck.filter(id => !selected.has(id!));
+      const ordered = work.cards.map(ref => ref.instanceId), all = work.position === "top" ? [...ordered, ...rest] : [...rest, ...ordered];
+      operations.push({ kind: "reorder", location: { player: actor, zone: "deck" }, cards: all.map(id => ({ instanceId: id!, generation: board.cards[id!]!.generation })), conceal: false });
+    } else if (work.type === "CLOSE_REVEALS") {
+      operations.push({ kind: "closeReveals", scopeId: this.#identity.resolutionId });
     } else if (work.type === "DRAW") {
       // Deck-out timing is deliberately unimplemented in this isolated fixture.
       ensureMove(board.players[work.player].deck.length > work.count, "v3-fixture-deck-out-policy-unresolved");
@@ -141,11 +176,15 @@ export class V3FixtureCoordinator {
     } else if (work.type === "MOVE_CARD") {
       const destination = work.destination, player = destination.owner === "SELF" ? actor : (1 - actor) as 0 | 1;
       ensureMove(work.cards.length > 0 && work.cards.length <= 50 && (destination.zone !== "deck" || work.cards.length === 1), "v3-fixture-move-count-or-order");
+      const fromDeck = work.cards.filter(ref => { const at = location(board, getCard(board, ref).instanceId); return at.player === actor && at.zone === "deck"; }).length;
+      ensureMove(fromDeck === 0 || board.players[actor].deck.length > fromDeck, "v3-fixture-deck-out-policy-unresolved");
       for (const ref of work.cards) {
         const card = getCard(board, ref), from = location(board, card.instanceId);
         const publicSource = ["character", "stage", "trash", "public"].includes(from.zone) && card.faceUp && visibleTo(board, card, from, 0) && visibleTo(board, card, from, 1);
-        const ownHand = from.zone === "hand" && from.player === actor && card.owner === actor && card.controller === actor && visibleTo(board, card, from, actor) && !visibleTo(board, card, from, (1 - actor) as 0 | 1);
-        ensureMove(card.owner === player && ["character", "stage", "event"].includes(card.kind) && (publicSource || ownHand), "v3-fixture-illegal-move");
+        const ownHand = from.zone === "hand" && from.player === actor && card.owner === actor && card.controller === actor && visibleTo(board, card, from, actor);
+        const lookedDeck = from.zone === "deck" && from.player === actor && card.owner === actor && card.controller === actor && inspected(ref) && visibleTo(board, card, from, actor);
+        ensureMove(!lookedDeck || destination.zone !== "deck", "v3-fixture-deck-order-command-required");
+        ensureMove(card.owner === player && ["character", "stage", "event"].includes(card.kind) && (publicSource || ownHand || lookedDeck), "v3-fixture-illegal-move");
         operations.push({ kind: "move", card: ref, from, to: { player, zone: destination.zone, position: destination.position, faceUp: destination.faceUp, rotated: false }, cause: "EFFECT_MOVE" });
       }
     } else {

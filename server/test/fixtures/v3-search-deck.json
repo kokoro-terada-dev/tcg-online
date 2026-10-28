@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "3.0.0-subset.11", "cardId": "EXAMPLE-SEARCH-NOT-REAL", "cardVersion": "fixture.1",
+  "name": "合成テスト用・上から見るサーチ（実在しません）", "cardType": "leader",
+  "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
+  "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",
+  "source": { "text": "合成テスト：自分の山札の上から3枚を見て、コスト3以下のキャラを0〜1枚選び、公開して手札へ加える。残りを選んだ順に山札下へ戻す。公式カードや裁定の定義ではありません。",
+    "triggerText": "", "displayIds": ["EXAMPLE-SEARCH-NOT-REAL"], "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000" },
+  "effects": [{ "id": "main", "kind": "activated", "timing": { "type": "MAIN" }, "sourceZones": ["leader"], "optional": false,
+    "usageLimit": { "type": "PER_TURN", "scope": "SOURCE_OBJECT", "count": 1 }, "activationConditions": { "type": "all", "conditions": [] },
+    "resolutionConditions": { "type": "all", "conditions": [] }, "costs": [], "actions": [
+      { "type": "LOOK_TOP", "player": "SELF", "count": 3, "bindAs": "looked", "onInsufficient": "takeAvailable" },
+      { "type": "SELECT", "bindAs": "selected", "selector": { "type": "BOUND_CARDS", "cards": { "ref": "bindings.looked" }, "excludeCards": null,
+        "owner": "SELF", "controller": "SELF", "chooser": "SELF", "zone": "deck", "visibility": "OWNER_ONLY", "faceUpOnly": false,
+        "cardTypes": ["character"], "filters": { "type": "compare", "left": { "ref": "CANDIDATE.cost" }, "op": "lte", "right": 3 },
+        "excludeSource": false, "min": 0, "max": 1, "selectionMode": "SELECT", "order": "UNORDERED", "onInsufficient": "fail" } },
+      { "type": "REVEAL", "cards": { "ref": "bindings.selected" }, "viewers": "BOTH" },
+      { "type": "MOVE_CARD", "cards": { "ref": "bindings.selected" }, "destination": { "owner": "SELF", "zone": "hand", "position": "append", "faceUp": true }, "cause": "EFFECT" },
+      { "type": "ORDER_CARDS", "cards": { "ref": "bindings.looked" }, "excludeCards": { "ref": "bindings.selected" }, "bindAs": "remaining", "chooser": "SELF" },
+      { "type": "RETURN_TO_DECK", "cards": { "ref": "bindings.remaining" }, "player": "SELF", "position": "bottom" }
+    ] }]
+}

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
 import type { CardDefinition, CardSetRef, Category, CompiledCard, DonZone, Node, NodeMeta, Value } from "./dsl";
 
-export const COMPILER_VERSION = "v3-subset-compiler.10";
+export const COMPILER_VERSION = "v3-subset-compiler.11";
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 function inspectData(input: unknown): void {
@@ -109,6 +109,25 @@ export function builtinV3Registries(): V3Registries {
     const meta = c.fields(n, ["player", "count"]); ensureMove(n.player === "SELF" || n.player === "OPPONENT", "invalid-v3-player");
     return { type: "DRAW", ...meta, player: n.player, count: count(n.count) };
   });
+  r.action.register("LOOK_TOP", "1", (n, c) => {
+    const meta = c.fields(n, ["player", "count", "bindAs", "onInsufficient"]), amount = count(n.count);
+    ensureMove(n.player === "SELF" && ["fail", "takeAvailable"].includes(n.onInsufficient as string), "unsupported-v3-look-policy");
+    return { type: "LOOK_TOP", ...meta, player: "SELF", count: amount, bindAs: c.bind(n.bindAs, amount), onInsufficient: n.onInsufficient as "fail" | "takeAvailable" };
+  });
+  r.action.register("REVEAL", "1", (n, c) => {
+    const meta = c.fields(n, ["cards", "viewers"]); ensureMove(n.viewers === "BOTH", "unsupported-v3-reveal-viewers");
+    return { type: "REVEAL", ...meta, cards: c.cards(n.cards), viewers: "BOTH" };
+  });
+  r.action.register("ORDER_CARDS", "1", (n, c) => {
+    const meta = c.fields(n, ["cards", "excludeCards", "bindAs", "chooser"]), cards = c.cards(n.cards), excludeCards = n.excludeCards === null ? null : c.cards(n.excludeCards);
+    ensureMove(n.chooser === "SELF", "unsupported-v3-order-chooser");
+    return { type: "ORDER_CARDS", ...meta, cards, excludeCards, bindAs: c.bind(n.bindAs, c.maxCards(cards)), chooser: "SELF" };
+  });
+  r.action.register("RETURN_TO_DECK", "1", (n, c) => {
+    const meta = c.fields(n, ["cards", "player", "position"]);
+    ensureMove(n.player === "SELF" && (n.position === "top" || n.position === "bottom"), "unsupported-v3-deck-return");
+    return { type: "RETURN_TO_DECK", ...meta, cards: c.cards(n.cards), player: "SELF", position: n.position };
+  });
   r.action.register("SEQUENCE", "1", (n, c) => ({ type: "SEQUENCE", ...c.fields(n, ["actions"]), actions: c.list("action", n.actions) }));
   r.action.register("IF", "2", (n, c) => ({ type: "IF", ...c.fields(n, ["condition", "then", "else"]), condition: c.read("predicate", n.condition), then: c.branch(n.then), else: c.branch(n.else) }));
   r.selector.register("CARDS", "4", (n, c) => {
@@ -126,17 +145,27 @@ export function builtinV3Registries(): V3Registries {
     const max = count(n.max);
     ensureMove(typeof n.min === "number" && Number.isSafeInteger(n.min) && n.min >= 0 && n.min <= max, "invalid-v3-selection-bounds");
     return { type: "CARDS", ...meta, owner: n.owner, controller: n.controller, chooser: n.chooser, zone: ownDon ? donZones(n.zone) : n.zone, cardTypes: [...n.cardTypes], filters: c.candidate(n.filters),
-      excludeSource: n.excludeSource, faceUpOnly: n.faceUpOnly, min: n.min, max, visibility: n.visibility, selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } as Node<"selector">;
+      excludeSource: n.excludeSource, faceUpOnly: n.faceUpOnly, min: n.min, max, visibility: n.visibility, selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } as Extract<Node<"selector">, { type: "CARDS" }>;
   });
   r.action.register("SELECT", "1", (n, c) => {
     const meta = c.fields(n, ["selector", "bindAs"]), selector = c.read("selector", n.selector);
     return { type: "SELECT", ...meta, selector, bindAs: c.bind(n.bindAs, selector.max) };
   });
+  r.selector.register("BOUND_CARDS", "1", (n, c) => {
+    const meta = c.fields(n, ["cards", "excludeCards", "owner", "controller", "chooser", "zone", "visibility", "faceUpOnly", "cardTypes", "filters", "excludeSource", "min", "max", "selectionMode", "order", "onInsufficient"]);
+    const cards = c.cards(n.cards), excludeCards = n.excludeCards === null ? null : c.cards(n.excludeCards), max = count(n.max);
+    ensureMove(n.owner === "SELF" && n.controller === "SELF" && n.chooser === "SELF" && n.zone === "deck" && n.visibility === "OWNER_ONLY" && n.faceUpOnly === false &&
+      n.selectionMode === "SELECT" && n.order === "UNORDERED" && n.onInsufficient === "fail" && typeof n.excludeSource === "boolean", "unsupported-v3-bound-selection");
+    ensureMove(typeof n.min === "number" && Number.isSafeInteger(n.min) && n.min >= 0 && n.min <= max && max <= c.maxCards(cards), "invalid-v3-bound-selection-bounds");
+    dataArray(n.cardTypes, 3); ensureMove(n.cardTypes.length > 0 && new Set(n.cardTypes).size === n.cardTypes.length && n.cardTypes.every(type => ["character", "event", "stage"].includes(type as string)), "invalid-v3-bound-selector-types");
+    return { type: "BOUND_CARDS", ...meta, cards, excludeCards, owner: "SELF", controller: "SELF", chooser: "SELF", zone: "deck", visibility: "OWNER_ONLY", faceUpOnly: false,
+      cardTypes: [...n.cardTypes] as ("character" | "event" | "stage")[], filters: c.candidate(n.filters), excludeSource: n.excludeSource, min: n.min, max, selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" };
+  });
   r.action.register("MOVE_CARD", "1", (n, c) => {
     const meta = c.fields(n, ["cards", "destination", "cause"]), cards = c.cards(n.cards);
     dataObject(n.destination, ["owner", "zone", "position", "faceUp"]); const destination = n.destination;
     ensureMove((destination.owner === "SELF" || destination.owner === "OPPONENT") && n.cause === "EFFECT", "unsupported-v3-move-cause-or-owner");
-    ensureMove((destination.zone === "hand" || destination.zone === "trash") && destination.position === "append" && destination.faceUp === true ||
+    ensureMove((destination.zone === "hand" || destination.zone === "trash" || destination.zone === "public") && destination.position === "append" && destination.faceUp === true ||
       destination.zone === "deck" && (destination.position === "top" || destination.position === "bottom") && destination.faceUp === false, "unsupported-v3-destination");
     ensureMove(destination.zone !== "deck" || c.maxCards(cards) === 1, "v3-multi-card-deck-order-not-implemented");
     return { type: "MOVE_CARD", ...meta, cards, destination: { ...destination } as Extract<Node<"action">, { type: "MOVE_CARD" }>["destination"], cause: "EFFECT" };
@@ -158,7 +187,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.10", "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.11", "unsupported-v3-schema-version");
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
   ensureMove(typeof input.name === "string" && input.name.trim().length > 0 && input.name.length <= 300, "invalid-v3-card-name");
   ensureMove(input.cardType === "leader" || input.cardType === "character" || input.cardType === "stage", "unsupported-v3-card-type");
@@ -239,7 +268,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
     return { id, kind: "activated", optional: effect.optional, usageLimit, sourceZones: effect.sourceZones as ("leader" | "character" | "stage")[], timing,
       activationConditions, resolutionConditions, costs, actions };
   });
-  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.10", cardId, cardVersion, name: input.name, cardType: input.cardType,
+  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.11", cardId, cardVersion, name: input.name, cardType: input.cardType,
     baseStats: input.baseStats as CardDefinition["baseStats"], colors, traits, attributes, reviewStatus: input.reviewStatus as CardDefinition["reviewStatus"], source, effects };
   inspectData(definition);
   const plan = freezeMovement({ status: "compiled_not_executable" as const, compilerVersion: COMPILER_VERSION, registryHash, definitionHash: digest(canonical(definition)), sourceHash: digest(canonical(source)), definition, requiredHandlers: [...used].sort() });

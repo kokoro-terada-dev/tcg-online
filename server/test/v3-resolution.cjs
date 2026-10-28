@@ -244,3 +244,35 @@ test('a cost-free optional effect continues straight to its actions after confir
   s.machine.answer(0, 'yes', 1, choice.selectionId, [choice.options[0].token]); s.machine.advance('action', 2);
   assert.equal(s.machine.workForCoordinator().type, 'DRAW'); assert.equal(s.env.revision(), 0);
 });
+
+test('look/search/order/cleanup frames restore across every work boundary without losing ordered refs or exposing them to the opponent', () => {
+  const actions = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v3-search-deck.json'), 'utf8')).effects[0].actions;
+  const s = setup(d => { d.effects[0].costs = []; d.effects[0].actions = actions; }), refs = [0, 1, 2].map(i => ({ instanceId: `peek-${i}`, generation: 0 }));
+  s.env.peekTop = () => refs; s.setRows(refs.map(ref => ({ ...s.row, ref, zone: 'deck', faceUp: false, visibleTo: [0] })));
+  let m = s.machine; const restore = rev => { m = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, m.exportForStorage(), rev); };
+  m.advance('look-request', 0); const look = m.workForCoordinator(); assert.equal(look.type, 'LOOK_TOP'); assert.equal(m.viewFor(1).choice, null); restore(1);
+  s.setWorld(1); m.settleWork('look', 1, look.workId, 'applied', 1); m.advance('select', 2); const choice = m.viewFor(0).choice;
+  assert.equal(choice.options.length, 3); assert.deepEqual(m.viewFor(1).choice.options, []);
+  m.answer(0, 'pick', 3, choice.selectionId, [choice.options[1].token]); m.advance('reveal-request', 4); restore(5);
+  s.setWorld(2); m.settleWork('reveal', 5, m.workForCoordinator().workId, 'applied', 2); m.advance('move-request', 6); restore(7);
+  s.setWorld(3); m.settleWork('move', 7, m.workForCoordinator().workId, 'applied', 3);
+  s.setRows([refs[0], refs[2]].map(ref => ({ ...s.row, ref, zone: 'deck', faceUp: false, visibleTo: [0] })));
+  m.advance('order-request', 8); restore(9); const order = m.viewFor(0).choice; assert.equal(order.purpose, 'order'); assert.deepEqual(m.viewFor(1).choice.options, []);
+  assert.throws(() => m.answer(1, 'foreign-order', 9, order.selectionId, order.options.map(option => option.token)));
+  m.answer(0, 'ordered', 9, order.selectionId, [...order.options].reverse().map(option => option.token)); m.advance('return-request', 10);
+  const returned = m.workForCoordinator(); assert.equal(returned.type, 'RETURN_TO_DECK'); assert.deepEqual(returned.cards.map(ref => ref.instanceId), ['peek-2', 'peek-0']); restore(11);
+  s.setWorld(4); m.settleWork('return', 11, returned.workId, 'applied', 4); m.advance('cleanup-request', 12); const cleanup = m.workForCoordinator();
+  assert.equal(cleanup.type, 'CLOSE_REVEALS'); assert.equal(m.viewFor(0).status, 'waitingForWork'); restore(13);
+  s.setWorld(5); m.settleWork('cleanup', 13, cleanup.workId, 'applied', 5); m.advance('finish', 14);
+  assert.equal(m.viewFor(0).status, 'completed'); assert.equal(JSON.parse(JSON.parse(m.exportForStorage()).payload).revealsOpen, false);
+});
+
+test('scoped search refuses candidates outside its bound refs and unknown private look providers', () => {
+  const actions = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v3-search-deck.json'), 'utf8')).effects[0].actions;
+  const s = setup(d => { d.effects[0].costs = []; d.effects[0].actions = actions; }); const initial = s.machine.exportForStorage();
+  assert.throws(() => s.machine.advance('unknown-peek', 0)); assert.equal(s.machine.exportForStorage(), initial);
+  s.env.peekTop = () => [{ instanceId: 'inspected', generation: 0 }]; s.machine.advance('look-request', 0);
+  s.setWorld(1); s.machine.settleWork('look', 1, s.machine.workForCoordinator().workId, 'applied', 1);
+  s.setRows([{ ...s.row, ref: { instanceId: 'outside-look', generation: 0 }, zone: 'deck', faceUp: false, visibleTo: [0] }]);
+  const before = s.machine.exportForStorage(); assert.throws(() => s.machine.advance('outside-bound', 2)); assert.equal(s.machine.exportForStorage(), before);
+});

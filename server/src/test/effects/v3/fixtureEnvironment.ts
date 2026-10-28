@@ -1,5 +1,5 @@
 import { visibleTo } from "../../movement/engine";
-import { getCard, location } from "../../movement/state";
+import { ensureMove, getCard, location } from "../../movement/state";
 import type { MovementState } from "../../movement/types";
 import type { CardObjectRef, DeepReadonly } from "../types";
 import type { PinnedMasterFacts } from "../masterFacts";
@@ -10,7 +10,8 @@ import type { ResolutionEnvironment, ResolutionIdentity } from "./resolution";
 
 const UNKNOWN = Symbol("unknown");
 type Scalar = string | number | boolean | null | typeof UNKNOWN;
-export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number): ResolutionEnvironment {
+export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition]): ResolutionEnvironment {
+  const knownDefinitions = new Map(definitions.map(card => [card.definition.cardId, card]));
   const seat = (side: string): 0 | 1 => side === "SELF" ? identity.actor : (1 - identity.actor) as 0 | 1;
   const read = (value: DeepReadonly<Value>, bindings: Readonly<Record<string, readonly Readonly<CardObjectRef>[]>>, candidate?: Readonly<CardObjectRef>): Scalar => {
     if (value === null || typeof value !== "object") return value;
@@ -26,10 +27,11 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       if (field === "cardType") return card.kind === "unknown" ? UNKNOWN : card.kind;
       if (field !== "cost" && field !== "power") return UNKNOWN;
       let number: unknown;
-      if (card.cardId === definition.definition.cardId) {
-        if (card.kind !== definition.definition.cardType || card.modifierIds.length || card.grantIds.length) return UNKNOWN;
+      const known = knownDefinitions.get(card.cardId);
+      if (known) {
+        if (card.kind !== known.definition.cardType || card.modifierIds.length || card.grantIds.length) return UNKNOWN;
         if (field === "power" && state.players.some(zones => zones.attachedDon.some(id => state.cards[id!]!.attachedTo?.instanceId === card.instanceId))) return UNKNOWN;
-        number = definition.definition.baseStats[field];
+        number = known.definition.baseStats[field];
       } else number = masterCardFacts(state, card, facts)[field];
       return typeof number === "number" && Number.isSafeInteger(number) ? number : UNKNOWN;
     } catch { return UNKNOWN; }
@@ -57,6 +59,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
   };
   return {
     revision: () => board().revision, now, evaluate,
+    peekTop: amount => board().players[identity.actor].deck.slice(0, amount).map(id => ({ instanceId: id!, generation: board().cards[id!]!.generation })),
     canPayCosts: (costs, discarded, returned) => {
       const state = board(), actor = identity.actor; let rest = 0, discard = 0, restSource = 0;
       const returns = costs.filter(cost => cost.type === "DON_RETURN");
@@ -93,14 +96,25 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       if (state.players[actor].hand.filter(id => eligible({ instanceId: id!, generation: state.cards[id!]!.generation })).length < discard) return false;
       return discarded === null || discarded.length === discard && new Set(discarded.map(ref => ref.instanceId)).size === discard && discarded.every(eligible);
     },
-    candidates: selector => {
+    candidates: (selector, bindings) => {
       const state = board();
       const zones = typeof selector.zone === "string" ? [selector.zone] : selector.zone;
-      return zones.flatMap(zone => state.players[seat(selector.owner)][zone]).flatMap(id => {
+      let ids: readonly (string | null)[] = zones.flatMap(zone => state.players[seat(selector.owner)][zone]);
+      if (selector.type === "BOUND_CARDS") {
+        const cards = bindings[selector.cards.ref.slice("bindings.".length)], excluded = selector.excludeCards ? bindings[selector.excludeCards.ref.slice("bindings.".length)] : [];
+        ensureMove(cards && excluded, "v3-missing-bound-candidates");
+        ids = cards.filter(ref => !excluded.some(other => other.instanceId === ref.instanceId && other.generation === ref.generation)).map(ref => {
+          const card = getCard(state, ref), at = location(state, card.instanceId);
+          ensureMove(at.player === identity.actor && at.zone === "deck" && card.owner === identity.actor && card.controller === identity.actor &&
+            state.reveals.some(grant => grant.scopeId === identity.resolutionId && grant.card.instanceId === ref.instanceId && grant.card.generation === ref.generation && grant.viewers.includes(identity.actor)), "v3-uninspected-bound-candidate");
+          return card.instanceId;
+        });
+      }
+      return ids.flatMap(id => {
         if (id === null) return [];
         const card = state.cards[id]!, at = location(state, id);
         const viewers = ([0, 1] as const).filter(viewer => visibleTo(state, card, at, viewer));
-        const visible = selector.visibility === "PUBLIC" ? card.faceUp && viewers.length === 2 :
+        const visible = selector.type === "BOUND_CARDS" ? viewers.includes(identity.actor) : selector.visibility === "PUBLIC" ? card.faceUp && viewers.length === 2 :
           at.zone === "hand" && card.owner === identity.actor && card.controller === identity.actor && viewers.length === 1 && viewers[0] === identity.actor;
         if (card.owner !== seat(selector.owner) || card.controller !== seat(selector.controller) || !visible || !selector.cardTypes.some(type => type === card.kind)) return [];
         let label: string | undefined;

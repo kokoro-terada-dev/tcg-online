@@ -9,7 +9,7 @@ const compile = value => compileV3CardJson(JSON.stringify(value));
 const predicate = (ref, op = 'gt', right = 0) => ({ type: 'compare', left: { ref }, op, right });
 test('public selection compiles typed card sets, count references, filters and effect-only movement', () => {
   const plan = compileV3CardJson(raw), actions = plan.definition.effects[0].actions;
-  assert.equal(plan.compilerVersion, 'v3-subset-compiler.10'); assert.equal(plan.status, 'compiled_not_executable');
+  assert.equal(plan.compilerVersion, 'v3-subset-compiler.11'); assert.equal(plan.status, 'compiled_not_executable');
   assert.equal(actions[0].selector.min, 0); assert.equal(actions[0].selector.onInsufficient, 'fail');
   assert.equal(actions[1].then[0].cards.ref, 'bindings.picked');
   assert.ok(plan.requiredHandlers.includes('selector:CARDS')); assert.ok(plan.requiredHandlers.includes('action:MOVE_CARD'));
@@ -64,7 +64,7 @@ test('sequences share ordered bindings; moves cannot disguise a cost, KO or reve
   deck.effects[0].actions[0].selector.max = 2; assert.throws(() => compile(deck));
 });
 test('old subset versions are refused rather than silently changing approval semantics', () => {
-  for (const version of ['3.0.0-subset.1', '3.0.0-subset.2', '3.0.0-subset.3', '3.0.0-subset.4', '3.0.0-subset.5', '3.0.0-subset.6', '3.0.0-subset.7', '3.0.0-subset.8', '3.0.0-subset.9']) { const data = fixture(); data.schemaVersion = version; assert.throws(() => compile(data)); }
+  for (const version of ['3.0.0-subset.1', '3.0.0-subset.2', '3.0.0-subset.3', '3.0.0-subset.4', '3.0.0-subset.5', '3.0.0-subset.6', '3.0.0-subset.7', '3.0.0-subset.8', '3.0.0-subset.9', '3.0.0-subset.10']) { const data = fixture(); data.schemaVersion = version; assert.throws(() => compile(data)); }
 });
 
 test('KO and absolute rest actions require a defined card set and cannot masquerade as costs or battle damage', () => {
@@ -140,4 +140,22 @@ test('effect optionality is an explicit boolean and changes the reviewed definit
   const optional = compile(data); assert.equal(optional.definition.effects[0].optional, true); assert.notEqual(optional.definitionHash, required.definitionHash);
   for (const value of [null, 'true', 1, {}, []]) { data.effects[0].optional = value; assert.throws(() => compile(data)); }
   delete data.effects[0].optional; assert.throws(() => compile(data));
+});
+
+test('look, scoped search, reveal and chosen deck order compile as explicit primitives', () => {
+  const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v3-search-deck.json'), 'utf8'));
+  const plan = compile(data);
+  for (const handler of ['action:LOOK_TOP', 'selector:BOUND_CARDS', 'action:REVEAL', 'action:ORDER_CARDS', 'action:RETURN_TO_DECK']) assert.ok(plan.requiredHandlers.includes(handler));
+  const mutations = [
+    d => d.effects[0].actions[0].player = 'OPPONENT', d => d.effects[0].actions[0].count = 0,
+    d => d.effects[0].actions[0].onInsufficient = 'guess', d => d.effects[0].actions[1].selector.cards.ref = 'bindings.missing',
+    d => d.effects[0].actions[1].selector.max = 4, d => d.effects[0].actions[1].selector.zone = 'hand',
+    d => d.effects[0].actions[1].selector.chooser = 'OPPONENT', d => d.effects[0].actions[1].selector.visibility = 'PUBLIC',
+    d => d.effects[0].actions[2].viewers = 'SELF', d => d.effects[0].actions[4].excludeCards.ref = 'bindings.missing',
+    d => d.effects[0].actions[4].bindAs = 'looked', d => d.effects[0].actions[5].player = 'OPPONENT',
+  ];
+  for (const mutate of mutations) { const invalid = structuredClone(data); mutate(invalid); assert.throws(() => compile(invalid)); }
+  const branch = structuredClone(data); branch.effects[0].actions = [{ type: 'IF', condition: { type: 'all', conditions: [] }, then: [branch.effects[0].actions[0]], else: [] }, branch.effects[0].actions[1]];
+  assert.throws(() => compile(branch));
+  const publicMove = structuredClone(data); publicMove.effects[0].actions[3].destination.zone = 'public'; assert.doesNotThrow(() => compile(publicMove));
 });

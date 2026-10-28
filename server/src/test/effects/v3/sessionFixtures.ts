@@ -9,18 +9,28 @@ import { ApprovedV3Catalog } from "./approval";
 import { V3SyntheticMatchCoordinator } from "./matchCoordinator";
 import type { V3SessionView } from "./sessionProtocol";
 import { ensureMove } from "../../movement/state";
-const labels: Record<string, string> = { draw: "1枚ドロー", paidDraw: "任意発動・コストでドロー" };
+const labels: Record<string, string> = { draw: "1枚ドロー", paidDraw: "任意発動・コストでドロー", search: "上から3枚サーチ" };
 export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], firstPlayer: 0 | 1, key: Uint8Array) {
   const match = createMatch(decks[0], decks[1]), imageAliases: Record<string, string> = {}, always = () => ({ type: "all", conditions: [] });
   const plans = ([0, 1] as const).map(actor => {
     const z = match.players[actor].zones, leader = z.leader[0]!, cardId = `V3-SESSION-LEADER-${actor}`;
     imageAliases[cardId] = leader.cardId; leader.cardId = cardId;
     for (let i = 0; i < 2; i++) z.activeDon.push({ ...z.donDeck.shift()!, faceUp: true, rotated: false });
-    return compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.10", cardId, cardVersion: "session-fixture.1", name: "Synthetic session leader", cardType: "leader",
+    return compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.11", cardId, cardVersion: "session-fixture.2", name: "Synthetic session leader", cardType: "leader",
       baseStats: { cost: null, power: null, counter: null, life: null }, colors: [], traits: [], attributes: [], reviewStatus: "approved",
-      source: { text: "Synthetic session only: draw once per object turn, or optionally rest one DON and discard one hand to draw. Not a real card or official ruling.", triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-fixture.1").digest("hex") },
-      effects: ["draw", "paidDraw"].map(id => ({ id, kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: id === "paidDraw", usageLimit: { type: "PER_TURN", scope: "SOURCE_OBJECT", count: 1 },
-        activationConditions: always(), resolutionConditions: always(), costs: id === "paidDraw" ? [{ type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }] : [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] })) }));
+      source: { text: "Synthetic session only: draw once per object turn, or optionally rest one DON and discard one hand to draw; or look at three cards, reveal up to one character with cost at most three and add it to hand, then return the rest to deck bottom in chosen order. Not a real card or official ruling.", triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-fixture.2").digest("hex") },
+      effects: [...["draw", "paidDraw"].map(id => ({ id, kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: id === "paidDraw", usageLimit: { type: "PER_TURN", scope: "SOURCE_OBJECT", count: 1 },
+        activationConditions: always(), resolutionConditions: always(), costs: id === "paidDraw" ? [{ type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }] : [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] })),
+        { id: "search", kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: false, usageLimit: { type: "PER_TURN", scope: "SOURCE_OBJECT", count: 1 },
+          activationConditions: always(), resolutionConditions: always(), costs: [], actions: [
+            { type: "LOOK_TOP", player: "SELF", count: 3, bindAs: "looked", onInsufficient: "takeAvailable" },
+            { type: "SELECT", bindAs: "selected", selector: { type: "BOUND_CARDS", cards: { ref: "bindings.looked" }, excludeCards: null, owner: "SELF", controller: "SELF", chooser: "SELF", zone: "deck", visibility: "OWNER_ONLY", faceUpOnly: false,
+              cardTypes: ["character"], filters: { type: "compare", left: { ref: "CANDIDATE.cost" }, op: "lte", right: 3 }, excludeSource: false, min: 0, max: 1, selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } },
+            { type: "REVEAL", cards: { ref: "bindings.selected" }, viewers: "BOTH" },
+            { type: "MOVE_CARD", cards: { ref: "bindings.selected" }, destination: { owner: "SELF", zone: "hand", position: "append", faceUp: true }, cause: "EFFECT" },
+            { type: "ORDER_CARDS", cards: { ref: "bindings.looked" }, excludeCards: { ref: "bindings.selected" }, bindAs: "remaining", chooser: "SELF" },
+            { type: "RETURN_TO_DECK", cards: { ref: "bindings.remaining" }, player: "SELF", position: "bottom" },
+          ] }] }));
   });
   const mainIds = new Set<string>();
   for (const actor of [0, 1] as const) for (const zone of ["deck", "hand", "life"] as const) for (const object of match.players[actor].zones[zone]) {
@@ -28,7 +38,7 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
     const originalId = object.cardId, kind = object.kind, cardId = `V3-SESSION-MAIN-${createHash("sha256").update(JSON.stringify([kind, originalId])).digest("hex")}`;
     ensureMove(!imageAliases[cardId] || imageAliases[cardId] === originalId, "v3-session-image-alias-conflict"); imageAliases[cardId] = originalId; object.cardId = cardId;
     if (mainIds.has(cardId)) continue; mainIds.add(cardId);
-    plans.push(compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.10", cardId, cardVersion: "session-vanilla.1", name: `Synthetic ${kind}`, cardType: kind,
+    plans.push(compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.11", cardId, cardVersion: "session-vanilla.1", name: `Synthetic ${kind}`, cardType: kind,
       baseStats: { cost: kind === "character" ? 2 : 1, power: kind === "character" ? 2000 : null, counter: kind === "character" ? 1000 : 0, life: null },
       colors: [], traits: [], attributes: [], reviewStatus: "approved", effects: [],
       source: { text: "", triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-vanilla.1").digest("hex") } })));

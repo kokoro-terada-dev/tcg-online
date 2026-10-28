@@ -119,3 +119,53 @@ test('synthetic image aliases do not disclose the opponent deck or hand before a
   assert.equal(Object.values(publicView.imageAliases).includes('GUEST-CARD'), true);
   assert.equal(publicView.movement.players[1].hand.every(card => card.cardId === null), true);
 });
+
+for (const actor of [0, 1]) for (const picked of [false, true]) test(`seat ${actor} searches privately, publishes only its chosen card, orders the remainder and closes knowledge (picked=${picked})`, async t => {
+  const searchDeck = { ...deck, mainDeck: Array.from({ length: 50 }, (_, i) => `SEARCH-${i}`), cardTypes: Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`SEARCH-${i}`, 'character'])) };
+  const decks = [deck, deck]; decks[actor] = searchDeck;
+  const { clients } = await setup(t, actor, decks), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView;
+  v = await send(own, v, 'activate', { effectId: 'search' }); v = await send(own, v, 'advance');
+  assert.equal(v.workType, 'LOOK_TOP'); assert.equal(v.movement.players[actor].deck.every(card => card.cardId === null), true);
+  v = await send(own, v, 'work');
+  const visible = v.movement.players[actor].deck.filter(card => card.cardId !== null);
+  assert.equal(visible.length, 3);
+  let other = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.equal(other.movement.players[actor].deck.every(card => card.cardId === null && card.ref === null), true);
+  for (const card of visible) assert.equal(other.imageAliases[card.cardId], undefined);
+  v = await send(own, v, 'advance'); const selection = v.frame.choice;
+  assert.equal(selection.options.length, 3); assert.equal(selection.min, 0);
+  assert.deepEqual((await request(peer, 'v3-session:sync')).sessionView.frame.choice.options, []);
+  assert.equal((await request(peer, 'v3-session:command', command(v, 'answer', { selectionId: selection.selectionId, tokens: [selection.options[0].token] }))).ok, false);
+  const selected = selection.options[1];
+  v = await send(own, v, 'answer', { selectionId: selection.selectionId, tokens: picked ? [selected.token] : [] });
+  if (picked) {
+    v = await send(own, v, 'advance'); assert.equal(v.workType, 'REVEAL'); v = await send(own, v, 'work');
+    other = (await request(peer, 'v3-session:sync')).sessionView;
+    assert.equal(other.publicReveals.length, 1); assert.equal(other.publicReveals[0].cardId, selected.cardId);
+    assert.equal(other.imageAliases[selected.cardId], v.imageAliases[selected.cardId]);
+    for (const card of visible.filter(card => card.cardId !== selected.cardId)) assert.equal(other.imageAliases[card.cardId], undefined);
+    v = await send(own, v, 'advance'); assert.equal(v.workType, 'MOVE_CARD'); v = await send(own, v, 'work');
+    assert.equal(v.movement.players[actor].hand.length, 6);
+    other = (await request(peer, 'v3-session:sync')).sessionView;
+    assert.deepEqual(other.publicReveals, []); assert.equal(other.imageAliases[selected.cardId], undefined);
+    assert.equal(other.movement.players[actor].hand.every(card => card.cardId === null && card.ref === null), true);
+  }
+  v = await send(own, v, 'advance'); const order = v.frame.choice;
+  assert.equal(order.purpose, 'order'); assert.equal(order.options.length, picked ? 2 : 3); assert.equal(order.min, order.options.length); assert.equal(order.max, order.min);
+  assert.deepEqual((await request(peer, 'v3-session:sync')).sessionView.frame.choice.options, []);
+  const rejected = await request(own, 'v3-session:command', command(v, 'answer', { selectionId: order.selectionId, tokens: [order.options[0].token] }));
+  assert.equal(rejected.ok, false); assert.deepEqual(rejected.sessionView.context, v.context);
+  v = await send(own, v, 'answer', { selectionId: order.selectionId, tokens: [...order.options].reverse().map(option => option.token) });
+  v = await send(own, v, 'advance'); assert.equal(v.workType, 'RETURN_TO_DECK');
+  const returning = command(v, 'work'); v = (await request(own, 'v3-session:command', returning)).sessionView;
+  assert.equal((await request(own, 'v3-session:command', returning)).sessionView.context.revision, v.context.revision);
+  const remainder = visible.filter(card => !picked || card.cardId !== selected.cardId).reverse().map(card => card.cardId);
+  assert.deepEqual(v.movement.players[actor].deck.slice(-remainder.length).map(card => card.cardId), remainder);
+  v = await send(own, v, 'advance'); assert.equal(v.workType, 'CLOSE_REVEALS');
+  assert.equal((await request(own, 'v3-session:command', command(v, 'endTurn'))).ok, false);
+  v = await send(own, v, 'work'); v = await send(own, v, 'advance');
+  assert.equal(v.frame.status, 'completed'); assert.equal(v.gate, 'idle'); assert.equal(v.effects.find(effect => effect.effectId === 'search').used, 1);
+  assert.equal(v.movement.players[actor].deck.every(card => card.cardId === null && card.ref === null), true);
+  for (const card of visible.filter(card => !picked || card.cardId !== selected.cardId)) assert.equal(v.imageAliases[card.cardId], undefined);
+});

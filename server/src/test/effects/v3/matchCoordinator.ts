@@ -81,7 +81,7 @@ export class V3SyntheticMatchCoordinator {
       ensureMove(limit === null || (this.#usage.get(usageKey) ?? 0) < limit, "v3-match-usage-exhausted");
       const resolutionId = randomUUID(), coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: this.#board, progression: this.#progression,
-        signingKey: this.#key, master: this.#master, now: this.#now });
+        signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()] });
       this.#archive(); this.#active = { coordinator, actor, cardId: object.cardId, effectId, source: { ...source }, resolutionId, usageKey, counted: false };
       this.#progression = coordinator.snapshotForCoordinator().progression;
     });
@@ -176,9 +176,11 @@ export class V3SyntheticMatchCoordinator {
   viewFor(viewer: Seat) {
     ensureMove(viewer === 0 || viewer === 1, "v3-match-viewer");
     const active = this.#active?.coordinator.viewFor(viewer);
+    const revealIds = [...new Set(this.#board.reveals.filter(grant => grant.viewers.includes(0) && grant.viewers.includes(1)).map(grant => grant.card.instanceId))];
     return freezeMovement({ mode: "v3-synthetic-session" as const, context: this.context(), movement: active?.movement ?? projectMovementState(this.#board, viewer),
       frame: active?.frame ?? null, turnNumber: this.#progression.turnNumber, activePlayer: this.#progression.activePlayer, phase: this.#progression.phase,
-      gate: this.#progression.gate.kind, resolutionActor: this.#active?.actor ?? null, history: [...this.#history] });
+      gate: this.#progression.gate.kind, resolutionActor: this.#active?.actor ?? null, history: [...this.#history],
+      publicReveals: revealIds.map(id => ({ cardId: this.#board.cards[id]!.cardId, owner: this.#board.cards[id]!.owner })) });
   }
   effectsFor(actor: Seat, source: Readonly<CardObjectRef>) {
     ensureMove(actor === 0 || actor === 1, "v3-match-actor"); const object = getCard(this.#board, source), card = this.#cards.get(object.cardId);

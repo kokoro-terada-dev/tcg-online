@@ -68,6 +68,81 @@ function discardCosts(d) {
   d.effects[0].costs = [{ type: 'REST_DON', count: 1 }, { type: 'DISCARD_HAND', count: 1 }];
   d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }];
 }
+function searchDeck(d) {
+  const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v3-search-deck.json'), 'utf8'));
+  d.effects[0].actions = data.effects[0].actions;
+}
+
+test('search privately looks, reveals only the selected card, preserves chosen remainder order and closes grants before releasing the gate', () => {
+  for (const actor of [0, 1]) for (const picked of [false, true]) for (const position of ['top', 'bottom']) {
+    const { coordinator: c } = setup({ actor, mutate: d => { searchDeck(d); d.effects[0].actions.at(-1).position = position; } }), before = c.snapshotForCoordinator().movement, top = before.players[actor].deck.slice(0, 3);
+    c.advance(actor, 'look-request', c.context()); assert.equal(c.pendingWorkKind(), 'LOOK_TOP');
+    assert.equal(c.viewFor(actor).movement.players[actor].deck.every(card => card.cardId === null), true);
+    c.applyPendingWork(actor, 'look', c.context()); assert.equal(c.viewFor(actor).movement.players[actor].deck.filter(card => card.cardId !== null).length, 3);
+    assert.equal(c.viewFor(1 - actor).movement.players[actor].deck.every(card => card.cardId === null && card.ref === null), true);
+    c.advance(actor, 'select', c.context()); const choice = c.viewFor(actor).frame.choice;
+    assert.equal(choice.options.length, 3); assert.deepEqual(c.viewFor(1 - actor).frame.choice.options, []);
+    c.answer(actor, 'pick', c.context(), choice.selectionId, picked ? [choice.options[1].token] : []);
+    if (picked) {
+      c.advance(actor, 'reveal-request', c.context()); assert.equal(c.pendingWorkKind(), 'REVEAL'); c.applyPendingWork(actor, 'reveal', c.context());
+      assert.equal(c.viewFor(1 - actor).movement.players[actor].deck.filter(card => card.cardId !== null).length, 1);
+      c.advance(actor, 'move-request', c.context()); c.applyPendingWork(actor, 'move', c.context());
+      assert.equal(c.viewFor(actor).movement.players[actor].hand.length, 6); assert.equal(c.viewFor(1 - actor).movement.players[actor].hand.every(card => card.cardId === null), true);
+    }
+    c.advance(actor, 'order-request', c.context()); const order = c.viewFor(actor).frame.choice;
+    assert.equal(order.purpose, 'order'); assert.equal(order.min, picked ? 2 : 3); assert.equal(order.max, order.min);
+    assert.deepEqual(c.viewFor(1 - actor).frame.choice.options, []);
+    assert.throws(() => c.answer(actor, 'incomplete-order', c.context(), order.selectionId, [order.options[0].token]));
+    c.answer(actor, 'ordered', c.context(), order.selectionId, [...order.options].reverse().map(option => option.token));
+    c.advance(actor, 'return-request', c.context()); assert.equal(c.pendingWorkKind(), 'RETURN_TO_DECK');
+    const context = c.context(); c.applyPendingWork(actor, 'return', context); assert.equal(c.applyPendingWork(actor, 'return', context).replayed, true);
+    const remainder = top.filter((_, i) => !picked || i !== 1).reverse(), afterReturn = c.snapshotForCoordinator().movement;
+    assert.deepEqual(afterReturn.players[actor].deck, position === 'top' ? [...remainder, ...before.players[actor].deck.slice(3)] : [...before.players[actor].deck.slice(3), ...remainder]);
+    for (const id of remainder) assert.equal(afterReturn.cards[id].generation, before.cards[id].generation);
+    c.advance(actor, 'cleanup-request', c.context()); assert.equal(c.pendingWorkKind(), 'CLOSE_REVEALS'); assert.notEqual(c.viewFor(actor).progression.gate, 'idle');
+    c.applyPendingWork(actor, 'cleanup', c.context()); assert.deepEqual(c.snapshotForCoordinator().movement.reveals, []);
+    c.advance(actor, 'complete', c.context()); assert.equal(c.viewFor(actor).frame.status, 'completed'); assert.equal(c.viewFor(actor).progression.gate, 'idle');
+    assert.equal(c.viewFor(actor).movement.players[actor].deck.every(card => card.cardId === null), true);
+  }
+});
+
+test('hand reveal can move to the public area, and looking again never conceals an existing public grant', () => {
+  const hand = setup({ mutate: d => {
+    privateHand(d); d.effects[0].actions = [d.effects[0].actions[0], { type: 'REVEAL', cards: { ref: 'bindings.picked' }, viewers: 'BOTH' },
+      { type: 'MOVE_CARD', cards: { ref: 'bindings.picked' }, destination: { owner: 'SELF', zone: 'public', position: 'append', faceUp: true }, cause: 'EFFECT' }];
+  } }).coordinator;
+  hand.advance(0, 'select', hand.context()); const choice = hand.viewFor(0).frame.choice;
+  hand.answer(0, 'pick', hand.context(), choice.selectionId, [choice.options[0].token]);
+  hand.advance(0, 'reveal', hand.context()); hand.applyPendingWork(0, 'reveal-work', hand.context());
+  assert.equal(hand.viewFor(1).movement.players[0].hand.filter(card => card.cardId !== null).length, 1);
+  hand.advance(0, 'move', hand.context()); hand.applyPendingWork(0, 'move-work', hand.context());
+  assert.equal(hand.viewFor(1).movement.players[0].public.length, 1); assert.equal(hand.viewFor(1).movement.players[0].public[0].faceUp, true);
+  hand.advance(0, 'close', hand.context()); hand.applyPendingWork(0, 'close-work', hand.context()); hand.advance(0, 'complete', hand.context());
+  assert.equal(hand.viewFor(0).frame.status, 'completed'); assert.equal(hand.viewFor(1).movement.players[0].public[0].cardId, choice.options[0].cardId);
+  const again = setup({ mutate: d => { searchDeck(d); d.effects[0].actions.splice(3, 0, { type: 'LOOK_TOP', player: 'SELF', count: 3, bindAs: 'again', onInsufficient: 'takeAvailable' }); } }).coordinator;
+  again.advance(0, 'look', again.context()); again.applyPendingWork(0, 'look-work', again.context()); again.advance(0, 'select', again.context());
+  const selected = again.viewFor(0).frame.choice; again.answer(0, 'pick', again.context(), selected.selectionId, [selected.options[0].token]);
+  again.advance(0, 'reveal', again.context()); again.applyPendingWork(0, 'reveal-work', again.context()); again.advance(0, 'look-again', again.context()); again.applyPendingWork(0, 'look-again-work', again.context());
+  assert.equal(again.viewFor(1).movement.players[0].deck.filter(card => card.cardId !== null).length, 1);
+});
+
+test('look shortage is explicit, a one-card remainder can be ordered, and a last-card move stops without partial movement', () => {
+  const strict = setup({ deckCount: 2, mutate: d => { searchDeck(d); d.effects[0].actions[0].onInsufficient = 'fail'; } }).coordinator;
+  const initial = strict.snapshotForCoordinator(); assert.throws(() => strict.advance(0, 'short-look', strict.context())); assert.deepEqual(strict.snapshotForCoordinator(), initial);
+  const c = setup({ deckCount: 1, mutate: searchDeck }).coordinator;
+  c.advance(0, 'look-request', c.context()); c.applyPendingWork(0, 'look', c.context()); c.advance(0, 'select', c.context()); const choice = c.viewFor(0).frame.choice;
+  assert.equal(choice.options.length, 1); c.answer(0, 'pick', c.context(), choice.selectionId, [choice.options[0].token]);
+  c.advance(0, 'reveal-request', c.context()); c.applyPendingWork(0, 'reveal', c.context()); c.advance(0, 'move-request', c.context());
+  const before = c.snapshotForCoordinator().movement; c.applyPendingWork(0, 'blocked-last-card', c.context());
+  assert.equal(c.viewFor(0).frame.status, 'blocked'); assert.equal(c.snapshotForCoordinator().movement, before);
+  const one = setup({ deckCount: 1, mutate: searchDeck }).coordinator;
+  one.advance(0, 'look-request', one.context()); one.applyPendingWork(0, 'look', one.context()); one.advance(0, 'select', one.context());
+  one.answer(0, 'skip', one.context(), one.viewFor(0).frame.choice.selectionId, []); one.advance(0, 'order-request', one.context());
+  const order = one.viewFor(0).frame.choice; assert.equal(order.purpose, 'order'); assert.equal(order.min, 1);
+  one.answer(0, 'order', one.context(), order.selectionId, [order.options[0].token]); one.advance(0, 'return-request', one.context()); one.applyPendingWork(0, 'return', one.context());
+  one.advance(0, 'cleanup-request', one.context()); one.applyPendingWork(0, 'cleanup', one.context()); one.advance(0, 'finish', one.context());
+  assert.equal(one.viewFor(0).frame.status, 'completed'); assert.deepEqual(one.snapshotForCoordinator().movement.reveals, []);
+});
 
 test('optional activation releases the gate without payment when declined, or continues through normal hand and DON costs', () => {
   for (const actor of [0, 1]) for (const accepted of [false, true]) {
