@@ -1,4 +1,4 @@
-import type { Action, CardObjectRef, DeepReadonly, EffectDefinition } from "./types";
+import type { Action, CardObjectRef, DeepReadonly, EffectDefinition, Predicate } from "./types";
 import { validateEffectDefinition } from "./validation";
 import { MovementResolution, type ResolutionIdentity } from "../movement/resolution";
 import { ensureMove, getCard, location } from "../movement/state";
@@ -12,12 +12,14 @@ import { movementSelectionSnapshot, movementSourceFacts } from "./movementSelect
 import { visibleTo } from "../movement/engine";
 import { pinMasterFacts, type MasterFactOptions, type PinnedMasterFacts } from "./masterFacts";
 import { prepareDonPayment, validateDonPayments, type DonPayment } from "./movementCosts";
+import type { Phase, Player } from "../progression/types";
 
 type Leaf = DeepReadonly<Extract<Action, { kind: "draw" | "move" | "select" | "if" | "optional" }>>;
 type Scope = { parent: Scope | null; bindings: Map<string, SelectionResult> };
 type Guard = Readonly<{ branchId: number; value: boolean }>;
 type Instruction = { action: Leaf; scope: Scope; guards: readonly Guard[]; branchId?: number };
 export type SelectionPending = Readonly<{ kind: "selectionPending" }>;
+export type EffectTurnContext = Readonly<{ turnNumber: number; activePlayer: Player; phase: Phase }>;
 
 // Server-only adapter: activation legality must be established by the future match coordinator.
 export class PreparedMovementEffect {
@@ -34,9 +36,16 @@ export class PreparedMovementEffect {
   #conditionBudget = createEvaluationBudget();
   #catalog: PinnedMasterFacts;
   #costs: readonly DonPayment[];
-  constructor(state: MovementState, identity: ResolutionIdentity, input: unknown, masterOptions?: MasterFactOptions) {
+  #condition: DeepReadonly<Predicate> | undefined;
+  #turnContext: EffectTurnContext | undefined;
+  constructor(state: MovementState, identity: ResolutionIdentity, input: unknown, masterOptions?: MasterFactOptions, turnContext?: EffectTurnContext) {
     const definition = validateEffectDefinition(input).definition;
-    ensureMove(definition.condition === undefined, "action-runtime-condition-not-supported");
+    this.#condition = definition.condition;
+    if (turnContext) {
+      ensureMove(turnContext.turnNumber === state.turnNumber && [0, 1].includes(turnContext.activePlayer) &&
+        ["refresh", "draw", "don", "main", "end"].includes(turnContext.phase), "action-runtime-invalid-turn-context");
+      this.#turnContext = Object.freeze({ turnNumber: turnContext.turnNumber, activePlayer: turnContext.activePlayer, phase: turnContext.phase });
+    }
     this.#costs = definition.costs.map(cost => {
       ensureMove(cost.kind === "payDon", "action-runtime-cost-kind-not-supported");
       return cost;
@@ -102,7 +111,8 @@ export class PreparedMovementEffect {
         value.kind === "choice" ? known(value.optionId) : unknown("card-set-is-not-scalar"));
       scope = scope.parent;
     }
-    return { ...snapshot, facts: { ...snapshot.facts, variables } };
+    return { ...snapshot, facts: { ...snapshot.facts, variables,
+      game: { ...snapshot.facts.game, ...(this.#turnContext ?? {}) } } };
   }
   #finishInstruction(result: TransactionResult): TransactionResult {
     this.#cursor++;
@@ -140,6 +150,9 @@ export class PreparedMovementEffect {
     ensureMove(this.#resolution.view().status === "prepared" && expectedRevision === this.snapshot().revision, "action-runtime-not-prepared-or-current");
     this.#busy = true;
     try {
+      const condition = evaluateCondition(this.#condition, this.#selectionSnapshot().facts, undefined, this.#conditionBudget);
+      ensureMove(condition.state === "known", "action-runtime-activation-data-unavailable");
+      ensureMove(condition.value, "action-runtime-activation-condition-false");
       const operations = this.#costs.length === 0 ? [] : prepareDonPayment(this.snapshot(), this.#actor,
         this.#resolutionId, this.#costs, this.#sourceFacts, this.#catalog);
       const result = this.#resolution.pay(this.#actor, expectedRevision, operations, rules);

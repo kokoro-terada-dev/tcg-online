@@ -6,6 +6,8 @@ Action実行器はサーバーのMasterSnapshotを版固定で参照できます
 
 payDonだけの効果定義は、既存CostPlanSessionによる計画・再検証から独立Movement上の一括支払いへ接続しました。手札の破棄などを含む複合コスト、実際の対戦・UI・通信への接続はまだありません。
 
+[起動効果の接続](activation-runtime.md) では盤面起動効果のmain/counterタイミング、支払い前condition、選択gate、完了解除を連動させました。誘発・手札イベント・完全な発動合法性・既存対戦は未接続です。
+
 支払い確定と効果処理の境界を管理する独立基盤は [Resolution lifecycle](resolution-runtime.md) を参照してください。DSL実行・既存対戦への接続はまだありません。
 
 後続の独立したターン・フェーズ基盤は [進行管理の設計・対応状況](progression-foundation.md) を参照してください。DSLも進行基盤も、現行対戦への接続はまだ行っていません。
