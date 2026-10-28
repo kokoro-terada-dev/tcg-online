@@ -8,7 +8,9 @@ import { EffectCatalog } from "./effects/effectCatalog";
 export async function startLocalEffectServer(port = 3002) {
   if (process.env.NODE_ENV === "production") throw new Error("Local effect fixtures are disabled in production");
   if (!Number.isSafeInteger(port) || port < 0 || port > 65535) throw new Error("Invalid local effect port");
-  const service = createTestServer({ effectFactory(match) {
+  // The fixed discard/draw demo does not interpret real card facts. Keep it independent
+  // of saved recipe/master type conflicts without weakening the real engine's checks.
+  const service = createTestServer({ master: null, effectFactory(match) {
     let progression = createProgression(0);
     while (true) {
       progression = applySystemEvent(progression, progression.revision, { kind: "settlePhase", phaseToken: progression.phaseToken });

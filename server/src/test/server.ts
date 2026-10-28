@@ -5,7 +5,7 @@ import { Server } from "socket.io";
 import { applyCommand, createMatch, parseDeck, projectMatch } from "./game";
 import type { Match } from "./game";
 import type { DeckInput, RoomView } from "./protocol";
-import { loadMaster } from "./cardMaster";
+import { loadMaster, type MasterSnapshot } from "./cardMaster";
 import { EffectMatchOwner } from "./effects/effectMatchOwner";
 import { OwnedEffectEndpoint } from "./effects/ownedEffectEndpoint";
 import { bindEffectSocket } from "./effects/effectSocket";
@@ -15,11 +15,11 @@ type Room = { roomId: string; host: Seat; guest: Seat | null; game: Match | null
   effects: { owner: EffectMatchOwner; endpoint: OwnedEffectEndpoint } | null };
 type Reply = (result: { ok: boolean; error?: string }) => void;
 
-export type TestServerOptions = Readonly<{ effectFactory?: (match: Match) => EffectMatchOwner }>;
+export type TestServerOptions = Readonly<{ effectFactory?: (match: Match) => EffectMatchOwner; master?: MasterSnapshot | null }>;
 export function createTestServer(options: TestServerOptions = {}) {
   const effectFactory = options.effectFactory;
   if (effectFactory !== undefined && typeof effectFactory !== "function") throw new Error("Invalid server effect factory");
-  const master = loadMaster();
+  const master = options.master === undefined ? loadMaster() : options.master;
   const app = express();
   const http = createServer(app);
   const origins = (process.env.ALLOWED_ORIGINS ?? "https://tcg-online-theta.vercel.app").split(",").map((s) => s.trim());
