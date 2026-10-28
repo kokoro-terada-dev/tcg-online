@@ -62,9 +62,11 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       return state.players[seat(selector.owner)][selector.zone].flatMap(id => {
         if (id === null) return [];
         const card = state.cards[id]!, at = location(state, id);
-        if (card.owner !== seat(selector.owner) || card.controller !== seat(selector.controller) || !card.faceUp || !selector.cardTypes.some(type => type === card.kind) ||
-          !visibleTo(state, card, at, 0) || !visibleTo(state, card, at, 1)) return [];
-        return [{ ref: { instanceId: id, generation: card.generation }, cardId: card.cardId, owner: card.owner, controller: card.controller, zone: at.zone, kind: card.kind, faceUp: true, visibleTo: [0, 1] as const }];
+        const viewers = ([0, 1] as const).filter(viewer => visibleTo(state, card, at, viewer));
+        const visible = selector.visibility === "PUBLIC" ? card.faceUp && viewers.length === 2 :
+          at.zone === "hand" && card.owner === identity.actor && card.controller === identity.actor && viewers.length === 1 && viewers[0] === identity.actor;
+        if (card.owner !== seat(selector.owner) || card.controller !== seat(selector.controller) || !visible || !selector.cardTypes.some(type => type === card.kind)) return [];
+        return [{ ref: { instanceId: id, generation: card.generation }, cardId: card.cardId, owner: card.owner, controller: card.controller, zone: at.zone, kind: card.kind, faceUp: card.faceUp, visibleTo: viewers }];
       });
     },
   };

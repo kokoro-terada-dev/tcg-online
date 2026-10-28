@@ -1,5 +1,5 @@
 import type { MovementView } from "../../movement/types";
-export type V3Scenario = "bounce" | "payDraw" | "ko" | "rest" | "active";
+export type V3Scenario = "bounce" | "payDraw" | "ko" | "rest" | "active" | "discardDraw";
 export type V3FixtureView = Readonly<{
   frame: Readonly<{ mode: "work_requests_only"; resolutionId: string; revision: number; worldRevision: number;
     status: "ready" | "waitingForChoice" | "waitingForWork" | "completed" | "blocked";

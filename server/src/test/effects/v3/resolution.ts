@@ -10,13 +10,13 @@ type Seat = 0 | 1;
 type Bindings = Readonly<Record<string, readonly Ref[]>>;
 type A = DeepReadonly<Action>;
 type Selector = DeepReadonly<Node<"selector">>;
-export type PublicCandidate = Readonly<{ ref: Ref; cardId: string; owner: Seat; controller: Seat; zone: string; kind: string; faceUp: boolean; visibleTo: readonly Seat[] }>;
+export type ResolutionCandidate = Readonly<{ ref: Ref; cardId: string; owner: Seat; controller: Seat; zone: string; kind: string; faceUp: boolean; visibleTo: readonly Seat[] }>;
 // Server-owned, pure reads. This interface is not a socket payload or a game-rule implementation.
 export interface ResolutionEnvironment {
   revision(): number;
   now(): number;
   evaluate(predicate: DeepReadonly<Predicate>, bindings: Bindings, candidate?: Ref): boolean | "unknown";
-  candidates(selector: Selector, bindings: Bindings): readonly PublicCandidate[];
+  candidates(selector: Selector, bindings: Bindings): readonly ResolutionCandidate[];
 }
 export type ResolutionIdentity = Readonly<{ matchId: string; resolutionId: string; effectId: string; actor: Seat; source: Ref }>;
 type Instruction = { type: "CHECK"; predicate: DeepReadonly<Predicate> } | { type: "COSTS" } |
@@ -121,7 +121,9 @@ export class V3ResolutionMachine {
     const seen = new Set<string>(), candidates: Choice["candidates"] = [];
     for (const row of rows) {
       reference(row.ref); label(row.cardId); ensureMove(!seen.has(row.ref.instanceId), "v3-duplicate-candidate"); seen.add(row.ref.instanceId);
-      ensureMove(row.faceUp === true && row.visibleTo.includes(0) && row.visibleTo.includes(1) && row.owner === relative(state.identity.actor, selector.owner) &&
+      const visible = selector.visibility === "PUBLIC" ? row.faceUp === true && row.visibleTo.includes(0) && row.visibleTo.includes(1) :
+        row.zone === "hand" && row.owner === state.identity.actor && row.controller === state.identity.actor && row.visibleTo.includes(state.identity.actor) && !row.visibleTo.includes((1 - state.identity.actor) as Seat);
+      ensureMove(visible && row.owner === relative(state.identity.actor, selector.owner) &&
         row.controller === relative(state.identity.actor, selector.controller) && row.zone === selector.zone && selector.cardTypes.some(type => type === row.kind), "v3-nonpublic-or-ineligible-candidate");
       if (selector.excludeSource && row.ref.instanceId === state.identity.source.instanceId && row.ref.generation === state.identity.source.generation) continue;
       if (!this.#evaluate(selector.filters, state, row.ref)) continue;

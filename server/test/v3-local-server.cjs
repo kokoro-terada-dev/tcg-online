@@ -83,6 +83,28 @@ for (const actor of [0, 1]) for (const scenario of ['ko', 'rest', 'active']) tes
   v = (await request(controller, 'v3:command', command(v, 'advance', 'finish'))).view; assert.equal(v.frame.status, 'completed');
 });
 
+for (const actor of [0, 1]) test(`private hand selection and discard/draw cannot leak candidates to seat ${1 - actor}`, async t => {
+  const { host, clients } = await setup(t), controller = clients[actor], peer = clients[1 - actor];
+  assert.equal((await request(host, 'v3:start', { actor, scenario: 'discardDraw' })).ok, true);
+  let v = (await request(controller, 'v3:sync')).view; v = (await request(controller, 'v3:command', command(v, 'advance', 'hand-start'))).view;
+  assert.equal(v.frame.choice.min, 1); assert.equal(v.frame.choice.options.length, 5);
+  const opposite = (await request(peer, 'v3:sync')).view; assert.deepEqual(opposite.frame.choice.options, []);
+  for (const option of v.frame.choice.options) assert.equal(JSON.stringify(opposite).includes(option.token), false);
+  for (const card of v.movement.players[actor].hand) assert.equal(JSON.stringify(opposite).includes(card.ref.instanceId), false);
+  const answer = command(v, 'answer', 'choose', { selectionId: v.frame.choice.selectionId, tokens: [v.frame.choice.options[0].token] });
+  assert.equal((await request(peer, 'v3:command', answer)).ok, false);
+  v = (await request(controller, 'v3:command', answer)).view; v = (await request(controller, 'v3:command', command(v, 'advance', 'discard-request'))).view;
+  const discard = command(v, 'work', 'discard'); v = (await request(controller, 'v3:command', discard)).view;
+  assert.equal((await request(controller, 'v3:command', discard)).view.movement.revision, v.movement.revision);
+  assert.equal(v.movement.players[actor].hand.length, 4); assert.equal(v.movement.players[actor].trash.length, 1);
+  assert.equal((await request(peer, 'v3:sync')).view.movement.players[actor].trash[0].cardId, v.movement.players[actor].trash[0].cardId);
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'draw-request'))).view;
+  v = (await request(controller, 'v3:command', command(v, 'work', 'draw'))).view;
+  v = (await request(controller, 'v3:command', command(v, 'advance', 'finish'))).view;
+  assert.equal(v.frame.status, 'completed'); assert.equal(v.movement.players[actor].hand.length, 5);
+  assert.equal((await request(peer, 'v3:sync')).view.movement.players[actor].hand.every(card => card.cardId === null && card.ref === null), true);
+});
+
 test('invalid decks do not replace a ready deck, remote browser Origins are denied, and production startup is disabled', async t => {
   const { service, host } = await setup(t);
   assert.equal((await request(host, 'v3-room:deck', { invalid: true })).ok, false);

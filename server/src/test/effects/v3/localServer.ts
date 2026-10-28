@@ -35,15 +35,17 @@ function fixture(room: Room, scenario: V3Scenario, actor: 0 | 1, signingKey: Uin
   }
   const cardId = `V3-FIXTURE-LEADER-${actor}`, always = () => ({ type: "all", conditions: [] });
   const side = scenario === "ko" || scenario === "rest" ? "OPPONENT" : "SELF";
+  const privateHand = scenario === "discardDraw";
   const fieldAction = { ko: "KO", rest: "REST", active: "SET_ACTIVE" } as const;
   const actions = scenario === "payDraw" ? [{ type: "DRAW", player: "SELF", count: 1 }] : [
-    { type: "SELECT", bindAs: "picked", selector: { type: "CARDS", owner: side, controller: side, zone: "character", cardTypes: ["character"],
+    { type: "SELECT", bindAs: "picked", selector: { type: "CARDS", owner: side, controller: side, zone: privateHand ? "hand" : "character", cardTypes: privateHand ? ["character", "stage", "event"] : ["character"],
       filters: scenario === "rest" || scenario === "active" ? { type: "compare", left: { ref: "CANDIDATE.rotated" }, op: "eq", right: scenario === "active" } : always(),
-      excludeSource: true, faceUpOnly: true, min: 0, max: 1, visibility: "PUBLIC", selectionMode: "SELECT", chooser: "SELF", order: "UNORDERED", onInsufficient: "fail" } },
-    scenario === "bounce" ? { type: "MOVE_CARD", cards: { ref: "bindings.picked" }, destination: { owner: "SELF", zone: "hand", position: "append", faceUp: true }, cause: "EFFECT" } :
+      excludeSource: !privateHand, faceUpOnly: !privateHand, min: privateHand ? 1 : 0, max: 1, visibility: privateHand ? "OWNER_ONLY" : "PUBLIC", selectionMode: "SELECT", chooser: "SELF", order: "UNORDERED", onInsufficient: "fail" } },
+    scenario === "bounce" || privateHand ? { type: "MOVE_CARD", cards: { ref: "bindings.picked" }, destination: { owner: "SELF", zone: privateHand ? "trash" : "hand", position: "append", faceUp: true }, cause: "EFFECT" } :
       { type: fieldAction[scenario], cards: { ref: "bindings.picked" } },
+    ...(privateHand ? [{ type: "DRAW", player: "SELF", count: 1 }] : []),
   ];
-  const plan = compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.3", cardId, cardVersion: `synthetic.${scenario}.1`, name: "V3 synthetic fixture leader", cardType: "leader",
+  const plan = compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.4", cardId, cardVersion: `synthetic.${scenario}.1`, name: "V3 synthetic fixture leader", cardType: "leader",
     baseStats: { cost: null, power: null, counter: null, life: null }, colors: [], traits: [], attributes: [], reviewStatus: "approved",
     source: { text: `Synthetic test only: ${scenario}. Not an official card ability or ruling.`, triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-synthetic-ui.1").digest("hex") },
     effects: [{ id: "main", kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: false, activationConditions: always(), resolutionConditions: always(), costs: scenario === "payDraw" ? [{ type: "REST_DON", count: 1 }] : [], actions }] }));
@@ -119,7 +121,7 @@ export async function startLocalV3Server(port = 0) {
       const seat = actor === 0 ? room.host : room.guest!; ensureMove(seat.deck, "v3-deck-required"); seat.ready = input; publish(room); });
     handle("v3:start", input => {
       const room = roomFor(socket.id); ensureMove(room && room.host.socketId === socket.id && !room.session && room.guest && room.host.ready && room.guest.ready && io.sockets.sockets.get(room.guest.socketId)?.connected, "v3-cannot-start");
-      dataObject(input, ["scenario", "actor"]); ensureMove((input.scenario === "bounce" || input.scenario === "payDraw" || input.scenario === "ko" || input.scenario === "rest" || input.scenario === "active") && (input.actor === 0 || input.actor === 1), "v3-fixture-options");
+      dataObject(input, ["scenario", "actor"]); ensureMove((input.scenario === "bounce" || input.scenario === "payDraw" || input.scenario === "ko" || input.scenario === "rest" || input.scenario === "active" || input.scenario === "discardDraw") && (input.actor === 0 || input.actor === 1), "v3-fixture-options");
       room.session = fixture(room, input.scenario, input.actor, key); publish(room); publishGame(room);
     });
     const active = () => { const room = roomFor(socket.id), actor = room ? actorFor(room, socket.id) : null;

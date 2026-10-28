@@ -11,7 +11,7 @@ const { ApprovedV3Catalog } = require('../dist/test/effects/v3/approval.js');
 const { V3FixtureCoordinator } = require('../dist/test/effects/v3/fixtureCoordinator.js');
 const { MovementStore } = require('../dist/test/movement/engine.js');
 const key = Buffer.alloc(32, 9); // Synthetic key, not a deployment secret.
-function setup({ actor = 0, don = 2, mutate = () => {}, attach = false, hidden = false, missingStats = false, deckCount } = {}) {
+function setup({ actor = 0, don = 2, mutate = () => {}, attach = false, hidden = false, missingStats = false, deckCount, handCount, handFaceDown = false } = {}) {
   const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v3-select-move.json'), 'utf8'));
   data.reviewStatus = 'approved'; data.baseStats.cost = 2; data.baseStats.power = 2000; mutate(data);
   const plan = compileV3CardJson(JSON.stringify(data)), record = { status: 'approved', cardId: data.cardId, cardVersion: data.cardVersion, definitionHash: plan.definitionHash, sourceHash: plan.sourceHash, compilerVersion: plan.compilerVersion, registryHash: plan.registryHash,
@@ -25,6 +25,8 @@ function setup({ actor = 0, don = 2, mutate = () => {}, attach = false, hidden =
   if (hidden) { zones.public.push(zones.character[1]); zones.character[1] = null; }
   for (let i = 0; i < don; i++) zones.activeDon.push({ ...zones.donDeck.shift(), faceUp: true, rotated: false });
   if (deckCount !== undefined) zones.trash.push(...zones.deck.splice(deckCount).map(card => ({ ...card, faceUp: true })));
+  if (handCount !== undefined) zones.trash.push(...zones.hand.splice(handCount).map(card => ({ ...card, faceUp: true })));
+  if (handFaceDown) zones.hand = zones.hand.map(card => ({ ...card, faceUp: false }));
   let progression = createProgression(actor);
   while (true) {
     progression = applySystemEvent(progression, progression.revision, { kind: 'settlePhase', phaseToken: progression.phaseToken });
@@ -52,6 +54,40 @@ function beginFieldWork(s) {
   const c = s.coordinator; c.advance(s.actor, 'field-start', c.context()); const choice = choose(s);
   c.answer(s.actor, 'field-choose', choice.context, choice.id, choice.tokens); c.advance(s.actor, 'field-work', c.context()); return c;
 }
+function privateHand(d) {
+  const select = d.effects[0].actions[0];
+  Object.assign(select.selector, { zone: 'hand', visibility: 'OWNER_ONLY', faceUpOnly: false, min: 1, max: 1, owner: 'SELF', controller: 'SELF', chooser: 'SELF', filters: { type: 'all', conditions: [] } });
+  d.effects[0].actions = [select, { type: 'MOVE_CARD', cards: { ref: 'bindings.picked' }, destination: { owner: 'SELF', zone: 'trash', position: 'append', faceUp: true }, cause: 'EFFECT' }, { type: 'DRAW', player: 'SELF', count: 1 }];
+}
+
+test('private hand discard is published only after the move and subsequent draw stays hidden for both actors', () => {
+  for (const actor of [0, 1]) {
+    const s = setup({ actor, mutate: privateHand, handFaceDown: true }), c = s.coordinator, before = c.snapshotForCoordinator(), selectedId = before.movement.players[actor].hand[0];
+    assert.equal(before.movement.cards[selectedId].faceUp, false);
+    c.advance(actor, 'private-start', c.context()); const choice = choose(s);
+    assert.equal(c.viewFor(actor).frame.choice.options.length, 5); assert.deepEqual(c.viewFor(1 - actor).frame.choice.options, []);
+    assert.throws(() => c.answer(1 - actor, 'foreign-hand', choice.context, choice.id, choice.tokens));
+    assert.throws(() => c.answer(actor, 'cannot-skip', choice.context, choice.id, []));
+    c.answer(actor, 'private-answer', choice.context, choice.id, choice.tokens); c.advance(actor, 'discard-request', c.context());
+    const context = c.context(); c.applyPendingWork(actor, 'discard', context); assert.equal(c.applyPendingWork(actor, 'discard', context).replayed, true);
+    const moved = c.snapshotForCoordinator(), event = moved.movementEvents.find(e => e.before?.instanceId === selectedId);
+    assert.equal(moved.movement.players[actor].hand.length, 4); assert.equal(moved.movement.players[actor].trash.includes(selectedId), true);
+    assert.equal(moved.movement.cards[selectedId].faceUp, true); assert.equal(event.cause.kind, 'EFFECT_MOVE'); assert.equal(event.isKO, false);
+    assert.deepEqual(event.visibleBefore, [actor]); assert.deepEqual(event.visibleAfter, [0, 1]);
+    assert.equal(c.viewFor(1 - actor).movement.players[actor].trash[0].ref.instanceId, selectedId);
+    c.advance(actor, 'draw-request', c.context()); c.applyPendingWork(actor, 'draw', c.context()); c.advance(actor, 'private-finish', c.context());
+    const view = c.viewFor(actor); assert.equal(view.frame.status, 'completed'); assert.equal(view.movement.players[actor].hand.length, 5);
+    assert.equal(view.movement.players[actor].activeDon.length, 2); assert.equal(view.movement.players[actor].restDon.length, 0);
+    assert.equal(c.viewFor(1 - actor).movement.players[actor].hand.every(card => card.cardId === null && card.ref === null), true);
+  }
+});
+
+test('empty required hand selection stops without drawing, and allowing hand moves does not authorize hand KO', () => {
+  const empty = setup({ mutate: privateHand, handCount: 0 }).coordinator, before = empty.snapshotForCoordinator();
+  assert.throws(() => empty.advance(0, 'no-hand', empty.context())); assert.equal(empty.snapshotForCoordinator().movement, before.movement); assert.equal(empty.snapshotForCoordinator().frame, before.frame);
+  const s = setup({ mutate: d => { privateHand(d); d.effects[0].actions[1] = { type: 'KO', cards: { ref: 'bindings.picked' } }; } }), c = beginFieldWork(s), state = c.snapshotForCoordinator().movement;
+  c.applyPendingWork(0, 'illegal-hand-ko', c.context()); assert.equal(c.viewFor(0).frame.status, 'blocked'); assert.equal(c.snapshotForCoordinator().movement, state);
+});
 
 test('effect KO emits a KO event and returns attached DON, unlike a direct move to trash', () => {
   for (const actor of [0, 1]) {

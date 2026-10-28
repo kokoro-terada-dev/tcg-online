@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:tcg:effect-v3-subset:3",
-  "title": "V3 compiler subset 3; compilation is not execution approval",
+  "$id": "urn:tcg:effect-v3-subset:4",
+  "title": "V3 compiler subset 4; compilation is not execution approval",
   "type": "object", "additionalProperties": false,
   "required": ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"],
   "properties": {
-    "schemaVersion": { "const": "3.0.0-subset.3" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
+    "schemaVersion": { "const": "3.0.0-subset.4" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
     "name": { "$ref": "#/$defs/label" }, "cardType": { "enum": ["leader", "character", "stage"] },
     "baseStats": {
       "type": "object", "additionalProperties": false, "required": ["cost", "power", "counter", "life"],
@@ -65,15 +65,18 @@
     "cardSetRef": { "type": "object", "additionalProperties": false, "required": ["ref"], "properties": { "ref": { "type": "string", "pattern": "^bindings\\.[A-Za-z][A-Za-z0-9_]{0,63}$" } } },
     "player": { "enum": ["SELF", "OPPONENT"] },
     "selector": {
-      "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false,
+      "allOf": [{ "$ref": "#/$defs/meta" }, { "oneOf": [
+        { "properties": { "zone": { "enum": ["leader", "character", "stage", "trash", "public"] }, "visibility": { "const": "PUBLIC" }, "faceUpOnly": { "const": true } } },
+        { "properties": { "zone": { "const": "hand" }, "visibility": { "const": "OWNER_ONLY" }, "faceUpOnly": { "const": false }, "owner": { "const": "SELF" }, "controller": { "const": "SELF" }, "chooser": { "const": "SELF" } } }
+      ] }], "unevaluatedProperties": false,
       "required": ["owner", "controller", "zone", "cardTypes", "filters", "excludeSource", "faceUpOnly", "min", "max", "visibility", "selectionMode", "chooser", "order", "onInsufficient"],
       "properties": {
         "type": { "const": "CARDS" }, "owner": { "$ref": "#/$defs/player" }, "controller": { "$ref": "#/$defs/player" }, "chooser": { "$ref": "#/$defs/player" },
-        "zone": { "enum": ["leader", "character", "stage", "trash", "public"] },
+        "zone": { "enum": ["leader", "character", "stage", "trash", "public", "hand"] },
         "cardTypes": { "type": "array", "minItems": 1, "maxItems": 5, "uniqueItems": true, "items": { "enum": ["leader", "character", "event", "stage", "don"] } },
-        "filters": { "$ref": "#/$defs/predicate" }, "excludeSource": { "type": "boolean" }, "faceUpOnly": { "const": true },
+        "filters": { "$ref": "#/$defs/predicate" }, "excludeSource": { "type": "boolean" }, "faceUpOnly": { "type": "boolean" },
         "min": { "type": "integer", "minimum": 0, "maximum": 50 }, "max": { "$ref": "#/$defs/count" },
-        "visibility": { "const": "PUBLIC" }, "selectionMode": { "const": "SELECT" }, "order": { "const": "UNORDERED" }, "onInsufficient": { "const": "fail" }
+        "visibility": { "enum": ["PUBLIC", "OWNER_ONLY"] }, "selectionMode": { "const": "SELECT" }, "order": { "const": "UNORDERED" }, "onInsufficient": { "const": "fail" }
       }
     },
     "destination": {

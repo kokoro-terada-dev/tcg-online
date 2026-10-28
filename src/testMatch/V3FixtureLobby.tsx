@@ -8,7 +8,7 @@ import TestBoard from "./TestBoard";
 import "./testEffect.css";
 import "./v3Fixture.css";
 const url = import.meta.env.VITE_TEST_SERVER_URL?.trim();
-const scenarios: Record<V3Scenario, string> = { bounce: "公開キャラ → 手札", payDraw: "DONレスト → ドロー", ko: "相手キャラをKO", rest: "相手キャラをレスト", active: "自分のキャラをアクティブ" };
+const scenarios: Record<V3Scenario, string> = { bounce: "公開キャラ → 手札", payDraw: "DONレスト → ドロー", ko: "相手キャラをKO", rest: "相手キャラをレスト", active: "自分のキャラをアクティブ", discardDraw: "手札を捨ててドロー" };
 const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする" };
 export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
   const socket = useRef<Socket | null>(null), roomRef = useRef<V3RoomView | null>(null), viewRef = useRef<V3FixtureView | null>(null), epoch = useRef(0), flight = useRef(false);

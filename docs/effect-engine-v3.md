@@ -79,8 +79,8 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ### Phase 2：限定Compilerと承認ゲート
 
-入力版は3.0.0-subset.3、Compiler版はv3-subset-compiler.3です。
-旧subset.1/2、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
+入力版は3.0.0-subset.4、Compiler版はv3-subset-compiler.4です。
+旧subset.1/2/3、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
 schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
 Compilerは型・未知フィールド・参照先・比較の値型・ID重複・原文範囲・複雑度も検証します。
 sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲外終端です。
@@ -92,9 +92,9 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 - value ref: SELF/OPPONENTのlifeCount/handCount、SOURCE/CANDIDATEのcost/power/cardType/rotated、選択済みbindingsのcount。自由なJS式や任意プロパティ参照は不可。
 - cost: REST_DON（1〜50）。
 - action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD / KO / REST / SET_ACTIVE。
-- selector: CARDS（表向き公開カードのみ、SELECT、UNORDERED）。
+- selector: CARDS（表向き公開カード、または本人が選ぶ自分の手札。SELECT、UNORDERED）。
 
-未対応：自動誘発、イベント、KO時効果の派生実行、非公開領域の選択、BLIND_SELECT/RANDOM/ALL/ORDER、usageLimit、optional、DON_RETURN、付与、期間、置換、継続、CUSTOM_HANDLER等。
+未対応：自動誘発、イベント、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL/ORDER、DISCARD_HAND等の選択付きコスト、usageLimit、optional、DON_RETURN、付与、期間、置換、継続、CUSTOM_HANDLER等。
 未知ノードは読込時に拒否します。schemaOnlyの既存ノードが存在してもv3対応済みとは扱いません。
 predicate/action/cost/replacement/selector/duration/timingのRegistryを用意しています。
 replacement/durationは登録なしで、現在は到達する効果形式も未対応です。
@@ -127,9 +127,12 @@ CLIはコンパイル結果の概要を表示するだけで、入力・マス�
 
 SELECTはselectorとbindAsを持ちます。selector内へのbindAs重複指定は受け付けません。
 CARDSはowner/controller/zone/cardTypes/filters/excludeSource/faceUpOnly/min/max/visibility/selectionMode/chooser/order/onInsufficientをすべて明示します。
-選択対象ゾーンはleader/character/stage/trash/publicのみで、faceUpOnly:true、visibility:PUBLICを必須にします。
+公開選択の対象ゾーンはleader/character/stage/trash/publicで、faceUpOnly:true、visibility:PUBLICを必須にします。
 public等に裏向きカードがあっても選択可能という意味ではありません。Runtime接続時にも可視性を再検証する必要があります。
-手札・デッキ・ライフの内容を公開する選択はコンパイルできません。
+手札を公開する選択や、デッキ・ライフの選択はコンパイルできません。
+本人の手札選択だけはzone:hand、visibility:OWNER_ONLY、faceUpOnly:false、owner/controller/chooser:SELFの組合せで受け付けます。
+OWNER_ONLYを他ゾーンへ付けたり、owner/controller/chooserのいずれかをOPPONENTに変えたりすることはできません。
+手札の実データが裏向きでも、本人への可視性が確認できれば候補にします。選択のためにカード自体を表向きへ変更しません。
 owner、controller、chooserは別々に定義します。これらは相対プレイヤーであり、クライアントが任意のsocketやplayerIndexを渡すものではありません。
 
 minは0〜max、maxは1〜50。min:0の空選択と、minを満たせない候補不足を区別します。
@@ -172,6 +175,8 @@ Environmentのunknownはfalse/0にせず停止し、そのadvance呼出しで変
 
 SELECT待ちは2分で期限切れになります。chooserだけへ不透明token/cardIdを送り、他方には候補を送らず、bindingsやrefはどちらのviewにも出しません。
 公開候補でもowner/controller/zone/種類/表向き/双方の可視性/重複を再確認します。
+OWNER_ONLYでは手札であること、actorと所有者/コントローラーの一致、本人だけへの可視性を再確認します。
+相手側の候補配列は空のままで、手札の実IDやトークンも送信しません。
 actor、selectionId、revision、期限、枚数、token、世界revisionを検証してから回答を適用します。
 UNORDERED回答はサーバー候補順に正規化し、クライアントがtokenの並びで移動順を指定することを防ぎます。
 期限切れで自動選択・自動キャンセル・コスト返却はしません。期限切れ後の再提示/中止方針はCoordinator側の未実装事項です。
@@ -220,6 +225,7 @@ fixtureEnvironment.tsは実際のMovementStateから候補を列挙し、双方�
 - PAY_COSTS: REST_DONの合計を先に検証し、ちょうど合計枚数のACTIVE DONをcostトランザクションでレスト。部分支払いはしません。
 - DRAW: デッキ先頭から手札へEFFECT_MOVE。相手のviewには手札内容を送りません。
 - MOVE_CARD: 現在の世代を再検証し、表向きのcharacter/stage/trash/publicから持ち主の手札/トラッシュ/デッキへ移動。leader/DONの通常エリア移動や他人の所有物化は拒否。
+- MOVE_CARDの自分の手札からの移動: actorの所有/コントロールと本人だけへの可視性を確認し、選択したカードを移動。相手の手札からは移動不可。
 - KO: 表向きのキャラクターエリアのキャラだけを持ち主のトラッシュへ移動し、EFFECT_KO/isKO:trueを記録。通常のMOVE_CARDによる直接トラッシュ移動はEFFECT_MOVE/isKO:falseのまま。
 - REST/SET_ACTIVE: 表向きのleader/character/stageのレスト状態をtrue/falseへ絶対指定。すでに指定状態なら切り替えず、世代も変えません。DONレスト支払いとは別命令です。
 - キャラ退出時の付与DON戻しは既存MovementEngineの自動処理を使用。
@@ -267,6 +273,18 @@ npm run dev:effects-v3
 「相手キャラをKO」「相手キャラをレスト」「自分のキャラをアクティブ」も、選択→処理を進める→対象の処理ボタン→処理を進める、で確認できます。
 KOは相手の場から相手のトラッシュへ、レストは相手キャラを横向きへ、アクティブ化は自分のレストキャラを縦向きへ更新します。
 相手側の画面にも同じ公開盤面が同期されます。実カードの能力・発動条件を再現するものではありません。
+「手札を捨ててドロー」では、自分だけに見える手札候補から必ず1枚選択します。選択確定だけではまだ公開・移動しません。
+「処理を進める」→「カードを移動」で、そのカードだけ表向きのトラッシュへ移動します。
+さらに「処理を進める」→「ドローを実行」→「処理を進める」で完了します。手札は5→4→5枚になり、引いたカードは相手には見えません。
+これはEFFECT_MOVEによる手札破棄で、COST_PAYMENTではありません。DONも支払いません。
+手札を捨てることをコストとして扱うカードは、今後DISCARD_HAND等の支払計画・原子的確定に別途実装します。
+手札が足りない場合は停止し、勝手に0枚を選んでドローへ進むことはしません。
+
+同じ構文を確認する、非実在・未承認のJSON例も用意しています。
+
+```powershell
+npm run check:effect-v3 -- server/test/fixtures/v3-hand-discard-draw.json
+```
 他方ではカード候補や増えた手札の内容を見られず、公開盤面と枚数だけ更新されます。
 「盤面を見る」でパネルを小さくできます。カードの詳細表示は従来のTestBoardを使用します。
 

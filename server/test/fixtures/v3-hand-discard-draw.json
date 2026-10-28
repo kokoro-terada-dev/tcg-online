@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "3.0.0-subset.4", "cardId": "EXAMPLE-HAND-NOT-REAL", "cardVersion": "fixture.1",
+  "name": "合成テスト用・手札破棄とドロー（実在しません）", "cardType": "leader",
+  "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
+  "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",
+  "source": {
+    "text": "合成テスト：自分の手札1枚を効果でトラッシュへ移し、カードを1枚引く。コスト支払いではなく、公式カードや裁定の定義でもありません。",
+    "triggerText": "", "displayIds": ["EXAMPLE-HAND-NOT-REAL"],
+    "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "effects": [{
+    "id": "main", "kind": "activated", "timing": { "type": "MAIN" }, "sourceZones": ["leader"], "optional": false,
+    "activationConditions": { "type": "all", "conditions": [] }, "resolutionConditions": { "type": "all", "conditions": [] }, "costs": [],
+    "actions": [
+      { "type": "SELECT", "bindAs": "discarded", "selector": {
+        "type": "CARDS", "owner": "SELF", "controller": "SELF", "zone": "hand", "cardTypes": ["character", "stage", "event"],
+        "filters": { "type": "all", "conditions": [] }, "excludeSource": false, "faceUpOnly": false,
+        "min": 1, "max": 1, "visibility": "OWNER_ONLY", "selectionMode": "SELECT", "chooser": "SELF", "order": "UNORDERED", "onInsufficient": "fail"
+      } },
+      { "type": "MOVE_CARD", "cards": { "ref": "bindings.discarded" }, "destination": { "owner": "SELF", "zone": "trash", "position": "append", "faceUp": true }, "cause": "EFFECT" },
+      { "type": "DRAW", "player": "SELF", "count": 1 }
+    ]
+  }]
+}

@@ -94,6 +94,22 @@ test('work waits also survive restore and retain the same coordinator work ID', 
   s.setWorld(1); restored.settleWork('paid', 1, work.workId, 'applied', 1);
   restored.advance('select', 2); assert.equal(restored.viewFor(0).status, 'waitingForChoice');
 });
+
+test('owner-only hand candidates are projected only to the owning chooser and survive signed restore', () => {
+  for (const actor of [0, 1]) {
+    const s = setup(d => Object.assign(d.effects[0].actions[0].selector, { zone: 'hand', visibility: 'OWNER_ONLY', faceUpOnly: false, owner: 'SELF', controller: 'SELF', chooser: 'SELF', filters: { type: 'all', conditions: [] } }), actor);
+    const row = { ...s.row, zone: 'hand', faceUp: false, visibleTo: [actor] }; s.setRows([row]); s.machine.advance('hand', 0);
+    const mine = s.machine.viewFor(actor), other = s.machine.viewFor(1 - actor);
+    assert.equal(mine.choice.options[0].cardId, row.cardId); assert.deepEqual(other.choice.options, []);
+    assert.equal(JSON.stringify(other).includes(mine.choice.options[0].token), false);
+    const restored = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, s.machine.exportForStorage(), 1);
+    assert.deepEqual(restored.viewFor(actor), mine);
+    assert.throws(() => restored.answer(1 - actor, 'foreign', 1, mine.choice.selectionId, [mine.choice.options[0].token]));
+    restored.answer(actor, 'mine', 1, mine.choice.selectionId, [mine.choice.options[0].token]);
+    const invalid = setup(d => Object.assign(d.effects[0].actions[0].selector, { zone: 'hand', visibility: 'OWNER_ONLY', faceUpOnly: false, owner: 'SELF', controller: 'SELF', chooser: 'SELF' }), actor);
+    invalid.setRows([{ ...row, visibleTo: [0, 1] }]); assert.throws(() => invalid.machine.advance('bad-visibility', 0));
+  }
+});
 test('costs are requested as one atomic batch and work acknowledgement is versioned and idempotent', () => {
   const s = setup(d => d.effects[0].costs = [{ type: 'REST_DON', count: 1 }, { type: 'REST_DON', count: 2 }]), m = s.machine;
   m.advance('cost', 0); const work = m.workForCoordinator(); assert.equal(work.type, 'PAY_COSTS'); assert.equal(work.costs.length, 2);

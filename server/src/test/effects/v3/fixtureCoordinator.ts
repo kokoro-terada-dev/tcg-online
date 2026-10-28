@@ -114,7 +114,9 @@ export class V3FixtureCoordinator {
       ensureMove(work.cards.length > 0 && work.cards.length <= 50 && (destination.zone !== "deck" || work.cards.length === 1), "v3-fixture-move-count-or-order");
       for (const ref of work.cards) {
         const card = getCard(board, ref), from = location(board, card.instanceId);
-        ensureMove(card.owner === player && ["character", "stage", "event"].includes(card.kind) && ["character", "stage", "trash", "public"].includes(from.zone) && card.faceUp && visibleTo(board, card, from, 0) && visibleTo(board, card, from, 1), "v3-fixture-illegal-move");
+        const publicSource = ["character", "stage", "trash", "public"].includes(from.zone) && card.faceUp && visibleTo(board, card, from, 0) && visibleTo(board, card, from, 1);
+        const ownHand = from.zone === "hand" && from.player === actor && card.owner === actor && card.controller === actor && visibleTo(board, card, from, actor) && !visibleTo(board, card, from, (1 - actor) as 0 | 1);
+        ensureMove(card.owner === player && ["character", "stage", "event"].includes(card.kind) && (publicSource || ownHand), "v3-fixture-illegal-move");
         operations.push({ kind: "move", card: ref, from, to: { player, zone: destination.zone, position: destination.position, faceUp: destination.faceUp, rotated: false }, cause: "EFFECT_MOVE" });
       }
     } else {

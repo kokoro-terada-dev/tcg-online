@@ -27,12 +27,12 @@ export interface ReplacementMap {}
 export interface SelectorMap {
   CARDS: NodeMeta & {
     type: "CARDS"; owner: Player; controller: Player;
-    zone: "leader" | "character" | "stage" | "trash" | "public";
     cardTypes: ("leader" | "character" | "event" | "stage" | "don")[];
-    filters: Predicate; excludeSource: boolean; faceUpOnly: true;
-    min: number; max: number; visibility: "PUBLIC"; selectionMode: "SELECT";
+    filters: Predicate; excludeSource: boolean;
+    min: number; max: number; selectionMode: "SELECT";
     chooser: Player; order: "UNORDERED"; onInsufficient: "fail";
-  };
+  } & ({ zone: "leader" | "character" | "stage" | "trash" | "public"; visibility: "PUBLIC"; faceUpOnly: true } |
+    { zone: "hand"; visibility: "OWNER_ONLY"; faceUpOnly: false; owner: "SELF"; controller: "SELF"; chooser: "SELF" });
 }
 export interface DurationMap {}
 export interface TimingMap { MAIN: NodeMeta & { type: "MAIN" } }
@@ -47,7 +47,7 @@ export type Effect = {
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };
 export type CardDefinition = {
-  schemaVersion: "3.0.0-subset.3"; cardId: string; cardVersion: string;
+  schemaVersion: "3.0.0-subset.4"; cardId: string; cardVersion: string;
   name: string; cardType: "leader" | "character" | "stage";
   baseStats: { cost: number | null; power: number | null; counter: number | null; life: number | null };
   colors: string[]; traits: string[]; attributes: string[];
