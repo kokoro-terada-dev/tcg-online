@@ -10,6 +10,7 @@
 - `move`: 先行命令のカード集合変数から移動。原因はEFFECT_MOVEのみ。
 - `sequence`: 順次実行。同じ変数スコープを引き継ぎます。
 - `repeat`: 固定回数の繰り返し。反復ごとに独立した子スコープを作ります。
+- `select`: 既存SelectionSessionでカード・選択肢を選び、結果を変数へ保存します。
 
 移動後のsaveAsには、実際に移動したカードの新しいgenerationを保存します。
 移動を防止されたカードや、付与DONの自動返却は、その命令の結果集合へ混入しません。
@@ -25,6 +26,27 @@
 3. `advance(revision, rules)` で末端命令を1個ずつ実行します。
 4. 全命令の完了時にcompletedへ遷移します。
 
+## 選択待ちと再開
+
+手動選択ではadvanceが `{ kind: "selectionPending" }` を返し、表示状態が
+waitingForSelectionになります。この段階では盤面revisionは増えません。
+`selectionViewFor(viewer)` は選択者だけに不透明トークン付きの選択Viewを返します。
+非選択者にはnullを返し、詳細な候補や非公開カード情報を送信しません。
+
+`answerSelection(actor, reply, rules)` は選択者・matchId・resolutionId・selectionId・revision・
+カード世代・位置・候補条件を再検証します。正常回答を確定するとrevisionが増え、
+次のadvanceで後続命令へ進めます。待機中のadvanceや回答再送は拒否します。
+誤った回答は修正できますが、正常回答の確定に失敗した場合はblockedになります。
+
+ALL/RANDOMは回答待ちせずサーバー内で確定します。ORDERは回答順を保持します。
+choiceも回答できますが、結果を使うif等の分岐命令はまだ未対応です。
+
+候補Snapshotは実行器自身の盤面から作成し、外部から別の盤面を注入しません。
+Movementが保持する種別・レスト・領域・枚数・ターン番号だけをFactsにします。
+コスト・パワー・特徴などは未接続であり、必要ならunknownとして停止します。
+選択で新しい公開権限を作らず、既存の公開状態・一時公開権限だけを利用します。
+ブラインド選択はカード名や実体IDを公開せず、隠し情報による絞り込み権限も付与しません。
+
 古いrevision、再送、再入を拒否します。命令内の移動は一括確定します。
 後続命令で失敗した場合はblockedとなり、それ以前に確定した命令を巻き戻しません。
 snapshotと実行結果は非公開サーバーデータです。送信には既存Movement投影が必須です。
@@ -32,10 +54,10 @@ snapshotと実行結果は非公開サーバーデータです。送信には既
 ## 明示的な未対応
 
 - コストあり、conditionありの定義（支払い前に拒否）
-- select、if、optional、modify、耐性、置換の設置と誘発待機
+- if、optional、modify、耐性、置換の設置と誘発待機
 - 複数カードの山札上への移動順序（推測せず停止）
 - 山札不足時の部分ドローや敗北判定（推測せず停止）
-- CostPlan/Selector/Progressionとの接続、通信待機、保存・再接続
+- CostPlan/Progression/カードマスターとの接続、Socket通信、保存・再接続
 
 ドローは1命令最大64枚、展開後の末端命令は最大128個です。
 構造検証の既存上限とMovementの操作・イベント上限も有効です。
@@ -45,5 +67,5 @@ snapshotと実行結果は非公開サーバーデータです。送信には既
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build
-node --test test/movement-actions.cjs test/resolution.cjs
+node --test test/action-selection.cjs test/movement-actions.cjs test/resolution.cjs
 ```

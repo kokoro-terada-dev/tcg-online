@@ -3,10 +3,16 @@ import { validateEffectDefinition } from "./validation";
 import { MovementResolution, type ResolutionIdentity } from "../movement/resolution";
 import { ensureMove, getCard, location } from "../movement/state";
 import type { MovementOperation, MovementRules, MovementState, TransactionResult } from "../movement/types";
+import { SelectionSession } from "./selectionSession";
+import type { SelectionResult, SelectionView, Seat } from "./selectionTypes";
+import type { FactRecord } from "./facts";
+import { movementSelectionSnapshot, movementSourceFacts } from "./movementSelection";
+import { visibleTo } from "../movement/engine";
 
-type Leaf = DeepReadonly<Extract<Action, { kind: "draw" | "move" }>>;
-type Scope = { parent: Scope | null; bindings: Map<string, readonly CardObjectRef[]> };
+type Leaf = DeepReadonly<Extract<Action, { kind: "draw" | "move" | "select" }>>;
+type Scope = { parent: Scope | null; bindings: Map<string, SelectionResult> };
 type Instruction = { action: Leaf; scope: Scope };
+export type SelectionPending = Readonly<{ kind: "selectionPending" }>;
 
 // Server-only adapter: activation legality must be established by the future match coordinator.
 export class PreparedMovementEffect {
@@ -15,6 +21,9 @@ export class PreparedMovementEffect {
   #cursor = 0;
   #actor: 0 | 1;
   #busy = false;
+  #pending: SelectionSession | null = null;
+  #resolutionId: string;
+  #sourceFacts: FactRecord;
   constructor(state: MovementState, identity: ResolutionIdentity, input: unknown) {
     const definition = validateEffectDefinition(input).definition;
     ensureMove(definition.costs.length === 0 && definition.condition === undefined, "action-runtime-cost-or-condition-not-supported");
@@ -22,6 +31,8 @@ export class PreparedMovementEffect {
     const source = getCard(state, identity.source!);
     ensureMove(source.cardId === definition.cardId && source.controller === identity.actor, "action-runtime-source-mismatch");
     this.#actor = identity.actor;
+    this.#resolutionId = identity.resolutionId;
+    this.#sourceFacts = movementSourceFacts(state, identity.source!);
     this.#compile(definition.actions, { parent: null, bindings: new Map() });
     this.#resolution = new MovementResolution(state, identity);
   }
@@ -36,6 +47,7 @@ export class PreparedMovementEffect {
           break;
         case "draw":
         case "move":
+        case "select":
           if (action.kind === "move") ensureMove(action.cards.kind === "ref" && action.cards.from === "VARIABLE" && action.cause === "EFFECT_MOVE", "action-runtime-move-form-not-supported");
           ensureMove(this.#instructions.length < 128, "action-runtime-step-limit");
           this.#instructions.push({ action, scope }); break;
@@ -49,7 +61,39 @@ export class PreparedMovementEffect {
     this.#instructions.length = length;
   }
   snapshot(): MovementState { return this.#resolution.snapshot(); }
-  view() { return this.#resolution.view(); }
+  view() {
+    const view = this.#resolution.view();
+    return Object.freeze({ ...view, status: this.#pending ? "waitingForSelection" as const : view.status });
+  }
+  selectionViewFor(viewer: Seat): SelectionView | null { return this.#pending?.viewFor(viewer) ?? null; }
+  #selectionSnapshot() { return movementSelectionSnapshot(this.snapshot(), this.#actor, this.#sourceFacts); }
+  #finishInstruction(result: TransactionResult): TransactionResult {
+    this.#cursor++;
+    if (this.#cursor === this.#instructions.length) this.#resolution.complete(this.#actor, result.state.revision);
+    return result;
+  }
+  #commitSelection(result: SelectionResult, rules: MovementRules): TransactionResult {
+    const instruction = this.#instructions[this.#cursor]!;
+    ensureMove(instruction.action.kind === "select", "action-runtime-not-selection");
+    const committed = this.#resolution.step(this.#actor, this.snapshot().revision, [], rules);
+    instruction.scope.bindings.set(instruction.action.saveAs, result);
+    this.#pending = null;
+    return this.#finishInstruction(committed);
+  }
+  answerSelection(actor: Seat, reply: unknown, rules: MovementRules): TransactionResult {
+    ensureMove(!this.#busy && this.#pending !== null, "action-runtime-not-answerable");
+    this.#busy = true;
+    let accepted = false;
+    try {
+      const result = this.#pending!.answer(actor, reply, this.#selectionSnapshot());
+      accepted = true;
+      return this.#commitSelection(result, rules);
+    } catch (error) {
+      // Invalid answers may be corrected. A valid answer whose commit fails may not be replayed.
+      if (accepted) { this.#pending = null; if (this.#resolution.view().status === "resolving") this.#resolution.block(this.#actor, this.snapshot().revision); }
+      throw error;
+    } finally { this.#busy = false; }
+  }
   toJSON(): never { throw new Error("server-only-action-runtime"); }
   start(expectedRevision: number, rules: MovementRules): TransactionResult {
     ensureMove(!this.#busy, "reentrant-action-runtime"); this.#busy = true;
@@ -59,7 +103,7 @@ export class PreparedMovementEffect {
       return result;
     } finally { this.#busy = false; }
   }
-  advance(expectedRevision: number, rules: MovementRules): TransactionResult {
+  advance(expectedRevision: number, rules: MovementRules): TransactionResult | SelectionPending {
     ensureMove(!this.#busy, "reentrant-action-runtime");
     ensureMove(this.view().status === "resolving" && expectedRevision === this.snapshot().revision, "action-runtime-not-current");
     this.#busy = true;
@@ -67,6 +111,24 @@ export class PreparedMovementEffect {
       const { action, scope } = this.#instructions[this.#cursor]!;
       const state = this.snapshot();
       const seat = (who: "SELF" | "OPPONENT"): 0 | 1 => who === "SELF" ? this.#actor : this.#actor === 0 ? 1 : 0;
+      if (action.kind === "select") {
+        const snapshot = this.#selectionSnapshot();
+        const chooser = seat(action.selector.chooser);
+        const prepared = SelectionSession.prepare({ matchId: state.matchId, resolutionId: this.#resolutionId,
+          actor: this.#actor, selector: action.selector, snapshot,
+          disclosure: { revealToChooser: snapshot.cards.filter(card => action.selector.kind === "cards" && action.selector.zones.includes(card.zone) &&
+            (action.selector.owner === "ANY" || card.owner === seat(action.selector.owner)) &&
+            (action.selector.controller === undefined || action.selector.controller === "ANY" || card.controller === seat(action.selector.controller)) &&
+            visibleTo(state, state.cards[card.instanceId]!, location(state, card.instanceId), chooser))
+            .map(card => ({ instanceId: card.instanceId, generation: card.generation })) } });
+        ensureMove(prepared.state === "known", "action-runtime-selection-data-unavailable");
+        const session = prepared.value;
+        if (action.selector.kind === "cards" && ["ALL", "RANDOM"].includes(action.selector.mode)) {
+          return this.#commitSelection(session.resolveAutomatic(snapshot), rules);
+        }
+        this.#pending = session;
+        return Object.freeze({ kind: "selectionPending" as const });
+      }
       let operations: MovementOperation[];
       if (action.kind === "draw") {
         const owner = seat(action.player), deck = state.players[owner].deck;
@@ -78,11 +140,12 @@ export class PreparedMovementEffect {
         const expression = action.cards;
         ensureMove(expression.kind === "ref" && expression.from === "VARIABLE", "action-runtime-invalid-binding");
         const name = (expression as { name: string }).name;
-        let current: Scope | null = scope, refs: readonly CardObjectRef[] | undefined;
-        while (current && !refs) { refs = current.bindings.get(name); current = current.parent; }
-        ensureMove(refs !== undefined, "action-runtime-binding-unavailable");
-        ensureMove(action.destination.position !== "top" || refs!.length <= 1, "action-runtime-top-order-not-supported");
-        operations = refs!.map(reference => {
+        let current: Scope | null = scope, binding: SelectionResult | undefined;
+        while (current && !binding) { binding = current.bindings.get(name); current = current.parent; }
+        ensureMove(binding?.kind === "cards", "action-runtime-binding-unavailable");
+        const refs = binding.cards;
+        ensureMove(action.destination.position !== "top" || refs.length <= 1, "action-runtime-top-order-not-supported");
+        operations = refs.map(reference => {
           const card = getCard(state, reference);
           return { kind: "move", card: reference, from: location(state, card.instanceId),
             to: { player: seat(action.destination.owner), zone: action.destination.zone, position: action.destination.position,
@@ -90,11 +153,9 @@ export class PreparedMovementEffect {
         });
       }
       const result = this.#resolution.step(this.#actor, expectedRevision, operations, rules);
-      if (action.saveAs) scope.bindings.set(action.saveAs, result.events.filter(event => event.kind === "moved" && event.cause.parentEventId === null && event.after !== null)
-        .map(event => ({ instanceId: event.after!.instanceId, generation: event.after!.generation })));
-      this.#cursor++;
-      if (this.#cursor === this.#instructions.length) this.#resolution.complete(this.#actor, result.state.revision);
-      return result;
+      if (action.saveAs) scope.bindings.set(action.saveAs, { kind: "cards", cards: result.events.filter(event => event.kind === "moved" && event.cause.parentEventId === null && event.after !== null)
+        .map(event => ({ instanceId: event.after!.instanceId, generation: event.after!.generation })) });
+      return this.#finishInstruction(result);
     } catch (error) {
       if (this.view().status === "resolving") this.#resolution.block(this.#actor, this.snapshot().revision);
       throw error;
