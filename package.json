@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:effects": "node tools/run-local-effects.js",
     "build:card-master": "node tools/build-card-master.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
