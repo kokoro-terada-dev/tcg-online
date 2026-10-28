@@ -9,7 +9,7 @@ const compile = value => compileV3CardJson(JSON.stringify(value));
 const predicate = (ref, op = 'gt', right = 0) => ({ type: 'compare', left: { ref }, op, right });
 test('public selection compiles typed card sets, count references, filters and effect-only movement', () => {
   const plan = compileV3CardJson(raw), actions = plan.definition.effects[0].actions;
-  assert.equal(plan.compilerVersion, 'v3-subset-compiler.4'); assert.equal(plan.status, 'compiled_not_executable');
+  assert.equal(plan.compilerVersion, 'v3-subset-compiler.5'); assert.equal(plan.status, 'compiled_not_executable');
   assert.equal(actions[0].selector.min, 0); assert.equal(actions[0].selector.onInsufficient, 'fail');
   assert.equal(actions[1].then[0].cards.ref, 'bindings.picked');
   assert.ok(plan.requiredHandlers.includes('selector:CARDS')); assert.ok(plan.requiredHandlers.includes('action:MOVE_CARD'));
@@ -64,7 +64,7 @@ test('sequences share ordered bindings; moves cannot disguise a cost, KO or reve
   deck.effects[0].actions[0].selector.max = 2; assert.throws(() => compile(deck));
 });
 test('old subset versions are refused rather than silently changing approval semantics', () => {
-  for (const version of ['3.0.0-subset.1', '3.0.0-subset.2', '3.0.0-subset.3']) { const data = fixture(); data.schemaVersion = version; assert.throws(() => compile(data)); }
+  for (const version of ['3.0.0-subset.1', '3.0.0-subset.2', '3.0.0-subset.3', '3.0.0-subset.4']) { const data = fixture(); data.schemaVersion = version; assert.throws(() => compile(data)); }
 });
 
 test('KO and absolute rest actions require a defined card set and cannot masquerade as costs or battle damage', () => {
@@ -84,4 +84,13 @@ test('owner-only hand selection cannot widen visibility, chooser, controller or 
   for (const patch of [{ owner: 'OPPONENT' }, { controller: 'OPPONENT' }, { chooser: 'OPPONENT' }, { visibility: 'PUBLIC' }, { faceUpOnly: true }, { zone: 'deck' }, { zone: 'life' }, { zone: 'public' }, { selectionMode: 'BLIND_SELECT' }]) {
     const copy = structuredClone(data); Object.assign(copy.effects[0].actions[0].selector, patch); assert.throws(() => compile(copy));
   }
+});
+
+test('hand discard costs are explicit exact counts, independent of actions and bounded as a bundle', () => {
+  const data = fixture(); data.effects[0].costs = [{ type: 'REST_DON', count: 1 }, { type: 'DISCARD_HAND', count: 2 }];
+  const plan = compile(data); assert.ok(plan.requiredHandlers.includes('cost:DISCARD_HAND'));
+  for (const patch of [{ count: 0 }, { count: 1.5 }, { owner: 'OPPONENT' }, { optional: true }, { bindAs: 'paid' }]) {
+    const invalid = structuredClone(data); Object.assign(invalid.effects[0].costs[1], patch); assert.throws(() => compile(invalid));
+  }
+  data.effects[0].costs = [{ type: 'DISCARD_HAND', count: 50 }, { type: 'DISCARD_HAND', count: 1 }]; assert.throws(() => compile(data));
 });

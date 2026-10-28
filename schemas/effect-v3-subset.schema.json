@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:tcg:effect-v3-subset:4",
-  "title": "V3 compiler subset 4; compilation is not execution approval",
+  "$id": "urn:tcg:effect-v3-subset:5",
+  "title": "V3 compiler subset 5; compilation is not execution approval",
   "type": "object", "additionalProperties": false,
   "required": ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"],
   "properties": {
-    "schemaVersion": { "const": "3.0.0-subset.4" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
+    "schemaVersion": { "const": "3.0.0-subset.5" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
     "name": { "$ref": "#/$defs/label" }, "cardType": { "enum": ["leader", "character", "stage"] },
     "baseStats": {
       "type": "object", "additionalProperties": false, "required": ["cost", "power", "counter", "life"],
@@ -98,7 +98,7 @@
         { "required": ["cards"], "properties": { "type": { "enum": ["KO", "REST", "SET_ACTIVE"] }, "cards": { "$ref": "#/$defs/cardSetRef" } } }
       ]
     },
-    "cost": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "required": ["count"], "properties": { "type": { "const": "REST_DON" }, "count": { "$ref": "#/$defs/count" } } },
+    "cost": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "required": ["count"], "properties": { "type": { "enum": ["REST_DON", "DISCARD_HAND"] }, "count": { "$ref": "#/$defs/count" } } },
     "timing": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "properties": { "type": { "const": "MAIN" } } },
     "effect": {
       "type": "object", "additionalProperties": false,

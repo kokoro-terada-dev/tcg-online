@@ -59,6 +59,51 @@ function privateHand(d) {
   Object.assign(select.selector, { zone: 'hand', visibility: 'OWNER_ONLY', faceUpOnly: false, min: 1, max: 1, owner: 'SELF', controller: 'SELF', chooser: 'SELF', filters: { type: 'all', conditions: [] } });
   d.effects[0].actions = [select, { type: 'MOVE_CARD', cards: { ref: 'bindings.picked' }, destination: { owner: 'SELF', zone: 'trash', position: 'append', faceUp: true }, cause: 'EFFECT' }, { type: 'DRAW', player: 'SELF', count: 1 }];
 }
+function discardCosts(d) {
+  d.effects[0].costs = [{ type: 'REST_DON', count: 1 }, { type: 'DISCARD_HAND', count: 1 }];
+  d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }];
+}
+
+test('composite DON and hand costs stay unchanged through choice, then commit both once in a single revision', () => {
+  for (const actor of [0, 1]) {
+    const s = setup({ actor, mutate: discardCosts, handFaceDown: true }), c = s.coordinator, initial = c.snapshotForCoordinator();
+    c.advance(actor, 'cost-start', c.context()); const choice = choose(s); assert.equal(c.viewFor(actor).frame.choice.purpose, 'cost');
+    assert.deepEqual(c.viewFor(1 - actor).frame.choice.options, []); assert.equal(c.snapshotForCoordinator().movement, initial.movement);
+    assert.throws(() => c.answer(1 - actor, 'foreign-cost', choice.context, choice.id, choice.tokens));
+    assert.throws(() => c.answer(actor, 'too-few', choice.context, choice.id, []));
+    c.answer(actor, 'cost-choice', choice.context, choice.id, choice.tokens); assert.equal(c.snapshotForCoordinator().movement, initial.movement);
+    c.advance(actor, 'cost-plan', c.context()); assert.equal(c.pendingWorkKind(), 'PAY_COSTS'); assert.equal(c.snapshotForCoordinator().movement, initial.movement);
+    const context = c.context(); c.applyPendingWork(actor, 'pay-both', context); assert.equal(c.applyPendingWork(actor, 'pay-both', context).replayed, true);
+    const paid = c.snapshotForCoordinator(); assert.equal(paid.movement.revision, initial.movement.revision + 1);
+    assert.equal(paid.movement.players[actor].activeDon.length, 1); assert.equal(paid.movement.players[actor].restDon.length, 1);
+    assert.equal(paid.movement.players[actor].hand.length, 4); assert.equal(paid.movement.players[actor].trash.length, 1);
+    assert.equal(paid.movementEvents.length, 2); assert.equal(new Set(paid.movementEvents.map(e => e.eventId.split(':')[0])).size, 1);
+    assert.equal(paid.movementEvents.every(e => e.cause.kind === 'COST_PAYMENT' && e.isKO === false), true);
+    assert.equal(c.viewFor(1 - actor).movement.players[actor].trash[0].cardId, c.viewFor(actor).movement.players[actor].trash[0].cardId);
+    c.advance(actor, 'draw-plan', c.context()); c.applyPendingWork(actor, 'draw', c.context()); c.advance(actor, 'finish', c.context());
+    assert.equal(c.viewFor(actor).frame.status, 'completed'); assert.equal(c.viewFor(actor).movement.players[actor].hand.length, 5);
+    assert.equal(c.viewFor(1 - actor).movement.players[actor].hand.every(card => card.cardId === null && card.ref === null), true);
+  }
+});
+
+test('a shortage in either side of a composite cost causes no partial hand or DON payment', () => {
+  for (const options of [{ don: 0 }, { handCount: 0 }]) {
+    const c = setup({ ...options, mutate: discardCosts }).coordinator, before = c.snapshotForCoordinator(); c.advance(0, 'unpayable-cost', c.context());
+    assert.equal(c.viewFor(0).frame.status, 'blocked'); assert.equal(c.snapshotForCoordinator().movement, before.movement); assert.equal(c.snapshotForCoordinator().movementEvents.length, 0);
+  }
+});
+
+test('multiple discard cost nodes aggregate exact selections, and failed resolution conditions do not refund paid costs', () => {
+  const c = setup({ mutate: d => {
+    discardCosts(d); d.effects[0].costs = [{ type: 'DISCARD_HAND', count: 1 }, { type: 'DISCARD_HAND', count: 1 }];
+    d.effects[0].resolutionConditions = { type: 'compare', left: 1, op: 'eq', right: 0 };
+  } }).coordinator;
+  c.advance(0, 'choose-two', c.context()); const choice = c.viewFor(0).frame.choice; assert.equal(choice.min, 2); assert.equal(choice.max, 2);
+  c.answer(0, 'two', c.context(), choice.selectionId, choice.options.slice(0, 2).map(option => option.token)); c.advance(0, 'plan', c.context()); c.applyPendingWork(0, 'pay-two', c.context());
+  c.advance(0, 'no-effect', c.context()); const v = c.viewFor(0);
+  assert.equal(v.frame.status, 'completed'); assert.equal(v.movement.players[0].hand.length, 3); assert.equal(v.movement.players[0].trash.length, 2);
+  assert.equal(v.movement.players[0].activeDon.length, 2); assert.equal(v.movement.players[0].restDon.length, 0);
+});
 
 test('private hand discard is published only after the move and subsequent draw stays hidden for both actors', () => {
   for (const actor of [0, 1]) {

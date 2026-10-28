@@ -57,6 +57,18 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
   };
   return {
     revision: () => board().revision, now, evaluate,
+    canPayCosts: (costs, discarded) => {
+      const state = board(), actor = identity.actor; let rest = 0, discard = 0;
+      for (const cost of costs) { if (cost.type === "REST_DON") rest += cost.count; else if (cost.type === "DISCARD_HAND") discard += cost.count; else return "unknown"; }
+      const eligible = (ref: Readonly<CardObjectRef>) => {
+        try { const card = getCard(state, ref), at = location(state, ref.instanceId);
+          return at.player === actor && at.zone === "hand" && card.owner === actor && card.controller === actor && ["character", "stage", "event"].includes(card.kind) && visibleTo(state, card, at, actor) && !visibleTo(state, card, at, (1 - actor) as 0 | 1);
+        } catch { return false; }
+      };
+      if (rest + discard > 64 || discard > 50 || state.players[actor].activeDon.filter(id => { const card = state.cards[id!]!; return card.kind === "don" && card.owner === actor && card.controller === actor && !card.rotated; }).length < rest) return false;
+      if (state.players[actor].hand.filter(id => eligible({ instanceId: id!, generation: state.cards[id!]!.generation })).length < discard) return false;
+      return discarded === null || discarded.length === discard && new Set(discarded.map(ref => ref.instanceId)).size === discard && discarded.every(eligible);
+    },
     candidates: selector => {
       const state = board();
       return state.players[seat(selector.owner)][selector.zone].flatMap(id => {

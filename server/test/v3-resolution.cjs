@@ -129,3 +129,26 @@ test('branch-local bindings disappear after suspension and scopes exit before co
   assert.equal(m.workForCoordinator().type, 'DRAW'); assert.equal(m.workForCoordinator().player, 1);
   const state = JSON.parse(JSON.parse(m.exportForStorage()).payload); assert.equal(state.scopes.length, 1); assert.deepEqual(state.scopes[0], {});
 });
+
+test('composite hand costs restore the selected plan, then produce one payment work without paying on selection', () => {
+  const s = setup(d => { d.effects[0].costs = [{ type: 'REST_DON', count: 1 }, { type: 'DISCARD_HAND', count: 1 }]; d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }]; });
+  s.env.canPayCosts = () => true; s.setRows([{ ...s.row, zone: 'hand', faceUp: false, visibleTo: [0] }]);
+  const m = s.machine; m.advance('start-cost', 0); const choice = m.viewFor(0).choice;
+  assert.equal(choice.purpose, 'cost'); assert.equal(choice.min, 1); assert.deepEqual(m.viewFor(1).choice.options, []); assert.equal(m.workForCoordinator(), null);
+  m.answer(0, 'choose-cost', 1, choice.selectionId, [choice.options[0].token]); assert.equal(m.workForCoordinator(), null); assert.equal(s.env.revision(), 0);
+  const restored = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, m.exportForStorage(), 2);
+  restored.advance('plan-payment', 2); const work = restored.workForCoordinator();
+  assert.equal(work.type, 'PAY_COSTS'); assert.equal(work.costs.length, 2); assert.deepEqual(work.discarded, [{ instanceId: 'candidate', generation: 0 }]);
+  const waiting = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, restored.exportForStorage(), 3); assert.deepEqual(waiting.workForCoordinator(), work);
+  s.setWorld(1); waiting.settleWork('pay', 3, work.workId, 'applied', 1);
+  assert.equal(waiting.settleWork('pay', 3, work.workId, 'applied', 1).replayed, true);
+  const state = JSON.parse(JSON.parse(waiting.exportForStorage()).payload); assert.equal(state.costCards, null); assert.equal(state.paidCostWorkId, work.workId);
+  waiting.advance('draw', 4); assert.equal(waiting.workForCoordinator().type, 'DRAW');
+});
+
+test('unknown cost feasibility never becomes payable, and an unpayable bundle blocks before revealing choices', () => {
+  const s = setup(d => d.effects[0].costs = [{ type: 'DISCARD_HAND', count: 1 }]); const initial = s.machine.exportForStorage();
+  assert.throws(() => s.machine.advance('unknown-cost', 0)); assert.equal(s.machine.exportForStorage(), initial);
+  s.env.canPayCosts = () => false; s.machine.advance('not-payable', 0);
+  assert.equal(s.machine.viewFor(0).status, 'blocked'); assert.equal(s.machine.viewFor(0).choice, null); assert.equal(s.machine.workForCoordinator(), null);
+});

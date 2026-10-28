@@ -95,12 +95,22 @@ export class V3FixtureCoordinator {
     ensureMove(work.worldRevision === board.revision, "v3-fixture-stale-work");
     const actor = this.#identity.actor, operations: MovementOperation[] = [];
     if (work.type === "PAY_COSTS") {
-      let amount = 0;
-      for (const cost of work.costs) { ensureMove(cost.type === "REST_DON", "v3-fixture-unsupported-cost"); amount += cost.count; }
-      ensureMove(Number.isSafeInteger(amount) && amount > 0 && amount <= 64 && board.players[actor].activeDon.length >= amount, "v3-fixture-unpayable");
+      let amount = 0, discardCount = 0;
+      for (const cost of work.costs) {
+        if (cost.type === "REST_DON") amount += cost.count;
+        else if (cost.type === "DISCARD_HAND") discardCount += cost.count;
+        else ensureMove(false, "v3-fixture-unsupported-cost");
+      }
+      ensureMove(Number.isSafeInteger(amount + discardCount) && amount + discardCount > 0 && amount + discardCount <= 64 && board.players[actor].activeDon.length >= amount &&
+        work.discarded.length === discardCount && new Set(work.discarded.map(ref => ref.instanceId)).size === discardCount, "v3-fixture-unpayable");
       for (const id of board.players[actor].activeDon.slice(0, amount)) {
         const card = board.cards[id!]!; ensureMove(card.kind === "don" && card.owner === actor && card.controller === actor && !card.rotated, "v3-fixture-don-unavailable");
         operations.push({ kind: "setRest", card: { instanceId: card.instanceId, generation: card.generation }, rotated: true });
+      }
+      for (const ref of work.discarded) {
+        const card = getCard(board, ref), from = location(board, card.instanceId);
+        ensureMove(from.zone === "hand" && from.player === actor && card.owner === actor && card.controller === actor && ["character", "stage", "event"].includes(card.kind) && visibleTo(board, card, from, actor) && !visibleTo(board, card, from, (1 - actor) as 0 | 1), "v3-fixture-discard-cost-unavailable");
+        operations.push({ kind: "move", card: ref, from, to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "COST_PAYMENT" });
       }
     } else if (work.type === "DRAW") {
       // Deck-out timing is deliberately unimplemented in this isolated fixture.
