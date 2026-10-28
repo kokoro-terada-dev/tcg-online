@@ -13,6 +13,7 @@ import { getCard } from "../movement/state";
 import type { CardObjectRef } from "./types";
 import type { EffectCatalog } from "./effectCatalog";
 import type { EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand } from "../effectProtocol";
+import { projectMovementState } from "../movement/projection";
 
 type Mode = "legacy" | "automated" | "faulted" | "closed";
 type OwnerFailure = Readonly<{ ok: false; code: "owner_unavailable" | "legacy_conflict" }>;
@@ -29,6 +30,7 @@ export class EffectMatchOwner {
   #busy = false;
   #catalog: EffectCatalog | null;
   #activationEnabled: boolean;
+  #idle: { resolutionId: string; rules: MovementRules; numericPolicy?: MasterFactOptions["numericPolicy"] } | null = null;
   #activationReceipts: [Map<string, { fingerprint: string; ok: boolean; code: EffectCommandResponse["code"] }>, Map<string, { fingerprint: string; ok: boolean; code: EffectCommandResponse["code"] }>] = [new Map(), new Map()];
   constructor(match: Match, catalog: EffectCatalog | null = null, allowRegisteredActivation = false) {
     ensureMove(typeof allowRegisteredActivation === "boolean", "invalid-activation-policy");
@@ -61,6 +63,14 @@ export class EffectMatchOwner {
     const pinned = freezeState(structuredClone(progression));
     capture.assertCurrent(this.#legacy);
     this.#capture = capture; this.#board = capture.snapshot().movement; this.#progression = pinned; this.#mode = "automated";
+  }
+  prepareRegisteredIdle(rules: MovementRules, numericPolicy?: MasterFactOptions["numericPolicy"]): void {
+    ensureMove(!this.#busy && this.#mode === "automated" && this.#active === null && this.#idle === null &&
+      this.#activationEnabled && this.#catalog !== null && this.#current(), "owner-cannot-prepare-idle");
+    ensureMove(["certifiedNone", "unresolved", "evaluate"].includes(rules.status) &&
+      (numericPolicy === undefined || numericPolicy === "unresolved" || numericPolicy === "certifiedUnmodified"), "invalid-idle-policy");
+    const pinnedRules: MovementRules = rules.status === "evaluate" ? Object.freeze({ status: "evaluate", check: rules.check.bind(rules) }) : Object.freeze({ status: rules.status });
+    this.#idle = { resolutionId: randomUUID(), rules: pinnedRules, numericPolicy };
   }
   openEffect(identity: ResolutionIdentity, definition: unknown, rules: MovementRules,
     numericPolicy?: MasterFactOptions["numericPolicy"]): void {
@@ -102,7 +112,7 @@ export class EffectMatchOwner {
         checkTiming(progression, actor, entry.trigger.window === "main" ? "mainEffect" : "counterEffect").allowed }));
     return freezeMovement({ matchId: board.matchId, movementRevision: board.revision, progressionRevision: progression.revision,
       catalogVersion: this.#catalog?.version ?? null, activationEnabled: this.#activationEnabled && progression.gate.kind === "idle" &&
-        !!this.#active && ["prepared", "completed"].includes(this.#active.effect.view().status), source: { ...query.source }, effects });
+        (this.#active ? ["prepared", "completed"].includes(this.#active.effect.view().status) : this.#idle !== null), source: { ...query.source }, effects });
   }
   activateRegistered(actor: Player, input: unknown): EffectCommandResponse {
     player(actor);
@@ -132,15 +142,17 @@ export class EffectMatchOwner {
     try {
       const catalog = this.registeredEffectsFor(actor, { matchId: command.matchId, expectedMovementRevision: command.expectedMovementRevision,
         expectedProgressionRevision: command.expectedProgressionRevision, source: command.source });
-      ensureMove(catalog.activationEnabled && catalog.catalogVersion === command.catalogVersion && command.resolutionId === this.#active?.resolutionId &&
+      ensureMove(catalog.activationEnabled && catalog.catalogVersion === command.catalogVersion && command.resolutionId === (this.#active?.resolutionId ?? this.#idle?.resolutionId) &&
         catalog.effects.some(entry => entry.effectId === command.effectId && entry.timingAvailable), "registered-activation-unavailable");
       ensureMove(this.#used.size < 1024, "owner-resolution-limit");
-      const previous = this.#active!, state = previous.effect.snapshot(), card = getCard(state.movement, command.source);
+      const previous = this.#active ?? this.#idle!, state = this.snapshot(), card = getCard(state.movement!, command.source);
       const definition = this.#catalog!.resolve(command.effectId, card.cardId);
       ensureMove(definition !== null, "owner-effect-not-registered-for-card");
       this.#busy = true;
       try {
-        const resolutionId = randomUUID(), effect = new TimedMovementEffect(state.movement, state.progression,
+        const resolutionId = this.#active ? randomUUID() : this.#idle!.resolutionId;
+        ensureMove(!this.#used.has(resolutionId), "owner-resolution-id-used");
+        const effect = new TimedMovementEffect(state.movement!, state.progression!,
           { resolutionId, actor, source: command.source }, definition, { master: this.#legacy.master,
             ...(previous.numericPolicy === undefined ? {} : { numericPolicy: previous.numericPolicy }) });
         // Prepare and validate off to the side. Do not discard the old runtime on failure.
@@ -157,6 +169,10 @@ export class EffectMatchOwner {
   }
   handleEffect(actor: Player, input: unknown): EffectCommandResponse | OwnerFailure {
     player(actor);
+    if (!this.#active && this.#idle) {
+      const view = this.effectViewFor(actor);
+      if (view) return freezeMovement({ ok: false, code: "wrong_context", replayed: false, view });
+    }
     if (this.#busy || this.#mode !== "automated" || !this.#active) return { ok: false, code: "owner_unavailable" };
     this.#busy = true;
     try {
@@ -169,20 +185,35 @@ export class EffectMatchOwner {
   }
   effectViewFor(viewer: Player): EffectTransportView | null {
     player(viewer);
-    if (this.#busy || this.#mode !== "automated" || !this.#active || !this.#current()) return null;
-    return this.#active.host.viewFor(viewer);
+    if (this.#busy || this.#mode !== "automated" || !this.#current()) return null;
+    if (this.#active) return this.#active.host.viewFor(viewer);
+    if (!this.#idle || !this.#board || !this.#progression) return null;
+    const progression = this.#progression;
+    return freezeMovement({ matchId: this.#board.matchId, localPlayerIndex: viewer, movement: projectMovementState(this.#board, viewer),
+      effect: { resolutionId: this.#idle.resolutionId, actor: progression.activePlayer, status: "idle", completedSteps: 0, masterVersion: this.#legacy.master?.version ?? null },
+      progression: { revision: progression.revision, turnNumber: progression.turnNumber, activePlayer: progression.activePlayer,
+        phase: progression.phase, gate: progression.gate.kind, chooser: progression.gate.kind === "choice" ? progression.gate.chooser : null,
+        finished: progression.outcome !== null, winner: progression.outcome?.winner ?? null }, selection: null });
+  }
+  releaseRegisteredEffect(cancelPrepared = false): void {
+    if (!this.#idle || !this.#active) return;
+    const status = this.#active.effect.view().status;
+    if (status === "completed") this.finishEffect();
+    else if (cancelPrepared && status === "prepared") this.discardPreparedEffect();
   }
   finishEffect(): void {
     ensureMove(!this.#busy && this.#mode === "automated" && this.#active !== null, "owner-no-active-effect");
     ensureMove(this.#current(), "owner-legacy-conflict");
     ensureMove(this.#active.effect.view().status === "completed" && this.#active.effect.snapshot().progression.gate.kind === "idle", "owner-effect-not-complete");
     this.#remember(); this.#active = null;
+    if (this.#idle) this.#idle = { ...this.#idle, resolutionId: randomUUID() };
   }
   discardPreparedEffect(): void {
     ensureMove(!this.#busy && this.#mode === "automated" && this.#active !== null, "owner-no-active-effect");
     ensureMove(this.#current(), "owner-legacy-conflict");
     ensureMove(this.#active.effect.view().status === "prepared" && this.#active.effect.snapshot().progression.gate.kind === "idle", "owner-effect-already-started");
     this.#remember(); this.#active = null;
+    if (this.#idle) this.#idle = { ...this.#idle, resolutionId: randomUUID() };
   }
   close(): void {
     ensureMove(!this.#busy, "owner-busy"); this.#remember(); this.#active = null; this.#mode = "closed";

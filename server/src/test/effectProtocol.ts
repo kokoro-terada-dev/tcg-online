@@ -8,7 +8,8 @@ export type EffectSelectionView = Readonly<{ matchId: string; resolutionId: stri
   { kind: "choice"; chooser: Player; options: readonly Readonly<{ token: string; label: string }>[] });
 export type EffectTransportView = Readonly<{
   matchId: string; localPlayerIndex: Player; movement: MovementView;
-  effect: Readonly<{ resolutionId: string; actor: Player; status: "prepared" | "resolving" | "completed" | "cancelled" | "blocked" | "waitingForSelection" | "waitingForCostSelection" | "costsReady"; completedSteps: number; masterVersion: string | null }>;
+  // While idle, resolutionId reserves the next resolution; there is no running effect.
+  effect: Readonly<{ resolutionId: string; actor: Player; status: "idle" | "prepared" | "resolving" | "completed" | "cancelled" | "blocked" | "waitingForSelection" | "waitingForCostSelection" | "costsReady"; completedSteps: number; masterVersion: string | null }>;
   progression: Readonly<{ revision: number; turnNumber: number; activePlayer: Player; phase: string; gate: "idle" | "resolving" | "choice"; chooser: Player | null; finished: boolean; winner: Player | null }>;
   selection: EffectSelectionView | null;
 }>;

@@ -23,7 +23,8 @@ export class OwnedEffectEndpoint {
     if (input && typeof input === "object" && Object.getOwnPropertyDescriptor(input, "kind")?.value === "activateRegistered") return this.#owner.activateRegistered(actor, input);
     const result = this.#owner.handleEffect(actor, input);
     if (!("view" in result)) throw new OwnedEffectUnavailable();
-    return result;
+    if (result.ok) this.#owner.releaseRegisteredEffect(input !== null && typeof input === "object" && Object.getOwnPropertyDescriptor(input, "kind")?.value === "cancelCosts");
+    return { ...result, view: this.viewFor(actor) };
   }
   catalogFor(actor: Player, input: unknown): EffectCatalogView {
     dataObject(input, ["matchId", "expectedMovementRevision", "expectedProgressionRevision", "source"]);

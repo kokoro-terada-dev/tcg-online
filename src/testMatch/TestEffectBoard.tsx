@@ -28,6 +28,7 @@ export default function TestEffectBoard(props: Props) {
       <div hidden={collapsed}>
       {selection ? <Selection key={selection.selectionId} selection={selection} disabled={disabled}
         onConfirm={tokens => onAction(view.effect.status === "waitingForCostSelection" ? "answerCosts" : "answerEffect", tokens)} /> : <p role="status">{
+        view.effect.status === "idle" ? (view.progression.activePlayer === view.localPlayerIndex ? "自分のターン・待機中" : "相手のターン・待機中") :
         view.effect.status === "completed" ? "処理完了" : view.effect.status === "blocked" ? "処理を続行できません" :
         !mine || view.effect.status === "waitingForSelection" ? "相手の操作を待っています" :
         view.effect.status === "costsReady" ? "支払いを確定してください" : "効果処理"

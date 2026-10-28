@@ -83,3 +83,14 @@ test("stale, disabled and unlisted registered activations are not sent", () => {
   assert.throws(() => registeredEffectCommand(v, c, 'missing', 'request'));
   for (const patch of [{ activationEnabled: false }, { movementRevision: 2 }, { catalogVersion: null }, { effects: [{ effectId: 'TEST.main', timingAvailable: false }] }]) assert.throws(() => registeredEffectCommand(v, { ...c, ...patch }, 'TEST.main', 'request'));
 });
+test("idle views are displayable and synchronizable but cannot issue running-effect commands", () => {
+  const v = view(); v.effect.status = 'idle';
+  assert.equal(effectBoardView(v).players[0].zones.hand.length, 1); assert.equal(acceptEffectView(null, v), true);
+  for (const kind of ['start', 'beginCosts', 'cancelCosts', 'advance', 'commitCosts', 'answerCosts', 'answerEffect']) assert.throws(() => effectCommand(v, kind, 'request'));
+});
+test("an idle context can activate a registered effect and reject a late previous-context view", () => {
+  const v = view(); v.effect.status = 'idle'; v.effect.resolutionId = 'next'; v.movement.players[0].leader[0] = { ...v.movement.players[0].hand[0] };
+  const c = { matchId: 'm', movementRevision: 3, progressionRevision: 7, source: { instanceId: 'a', generation: 3 }, catalogVersion: 'version', activationEnabled: true, effects: [{ effectId: 'TEST.main', timingAvailable: true }] };
+  assert.equal(registeredEffectCommand(v, c, 'TEST.main', 'request').resolutionId, 'next');
+  assert.equal(acceptEffectView(v, { ...view(), progression: { revision: 6 } }), false);
+});

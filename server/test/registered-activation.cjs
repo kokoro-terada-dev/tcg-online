@@ -7,13 +7,14 @@ const { EffectCatalog } = require('../dist/test/effects/effectCatalog.js');
 const { EffectMatchOwner } = require('../dist/test/effects/effectMatchOwner.js');
 const { OwnedEffectEndpoint } = require('../dist/test/effects/ownedEffectEndpoint.js');
 const definition = (effectId = 'TEST.draw', cardId = 'LEADER') => ({ dslVersion: 1, effectId, cardId, trigger: { kind: 'activate', window: 'main' }, costs: [], actions: [{ kind: 'draw', player: 'SELF', amount: 1 }] });
-function setup(actor = 0, enabled = true, extra = []) {
+function setup(actor = 0, enabled = true, extra = [], idle = false) {
   const recipe = { name: 'Test', leaderCardId: 'LEADER', mainDeck: Array(50).fill('CHAR'), donDeck: Array(10).fill('DON'), cardTypes: { CHAR: 'character' }, leaderLifeCount: 5 };
   const match = createMatch(recipe, recipe), catalog = new EffectCatalog([definition(), definition('CHAR.only', 'CHAR'), ...extra]);
   const owner = new EffectMatchOwner(match, catalog, enabled); let p = createProgression(actor);
   while (true) { p = applySystemEvent(p, p.revision, { kind: 'settlePhase', phaseToken: p.phaseToken }); if (p.phase === 'main') break; p = applySystemEvent(p, p.revision, { kind: 'advancePhase', phaseToken: p.phaseToken }); }
   owner.adopt(p); const source = { instanceId: match.players[actor].zones.leader[0].id, generation: 0 };
-  owner.openRegisteredEffect('TEST.draw', actor, source, { status: 'certifiedNone' });
+  if (idle) owner.prepareRegisteredIdle({ status: 'certifiedNone' });
+  else owner.openRegisteredEffect('TEST.draw', actor, source, { status: 'certifiedNone' });
   const endpoint = new OwnedEffectEndpoint(owner);
   function command(patch = {}) { const v = endpoint.viewFor(actor); return { kind: 'activateRegistered', matchId: v.matchId, resolutionId: v.effect.resolutionId, requestId: 'activate', expectedMovementRevision: v.movement.revision, expectedProgressionRevision: v.progression.revision, source: { ...source }, effectId: 'TEST.draw', catalogVersion: catalog.version, ...patch }; }
   function step(kind, requestId = kind) { const v = endpoint.viewFor(actor); return endpoint.handle(actor, { kind, requestId, matchId: v.matchId, resolutionId: v.effect.resolutionId, expectedMovementRevision: v.movement.revision, expectedProgressionRevision: v.progression.revision }); }
@@ -79,4 +80,58 @@ test('activation receipts have a per-player bounded limit', () => {
   const s = setup();
   for (let i = 0; i < 1024; i++) assert.equal(s.endpoint.handle(0, s.command({ requestId: `bad-${i}`, effectId: 'missing' })).ok, false);
   assert.equal(s.endpoint.handle(0, s.command()).code, 'request_limit');
+});
+
+test('idle mode reserves a context but creates no runtime, payment or card move for either seat', () => {
+  for (const actor of [0, 1]) {
+    const s = setup(actor, true, [], true), v = s.endpoint.viewFor(actor), before = s.owner.snapshot();
+    assert.equal(v.effect.status, 'idle'); assert.equal(v.selection, null); assert.equal(before.activeResolutionId, null);
+    assert.equal(s.endpoint.available(), true); assert.equal(v.movement.revision, 0);
+    assert.equal(s.endpoint.viewFor(1 - actor).movement.players[actor].hand.every(card => card.cardId === null), true);
+    assert.equal(s.step('beginCosts').ok, false); assert.equal(s.step('advance').ok, false);
+    assert.equal(s.owner.snapshot().movement, before.movement); assert.equal(s.owner.snapshot().progression, before.progression);
+    const r = s.endpoint.handle(actor, s.command()); assert.equal(r.ok, true); assert.equal(r.view.effect.resolutionId, v.effect.resolutionId);
+    assert.equal(r.view.effect.status, 'costsReady');
+  }
+});
+test('completion retires the runtime, keeps the resulting board and allows a fresh activation', () => {
+  const s = setup(0, true, [], true), c = s.command();
+  assert.equal(s.endpoint.handle(0, c).ok, true); s.step('commitCosts'); const r = s.step('advance');
+  assert.equal(r.ok, true); assert.equal(r.view.effect.status, 'idle'); assert.notEqual(r.view.effect.resolutionId, c.resolutionId);
+  assert.equal(s.owner.snapshot().activeResolutionId, null); assert.equal(r.view.movement.players[0].hand.length, 6);
+  const before = s.owner.snapshot(), late = s.endpoint.handle(0, c);
+  assert.equal(late.replayed, true); assert.equal(late.view.effect.status, 'idle'); assert.equal(s.owner.snapshot().movement, before.movement);
+  const stale = { kind: 'advance', requestId: 'late-advance', matchId: c.matchId, resolutionId: c.resolutionId, expectedMovementRevision: r.view.movement.revision, expectedProgressionRevision: r.view.progression.revision };
+  assert.equal(s.endpoint.handle(0, stale).ok, false);
+  assert.equal(s.endpoint.handle(0, s.command({ requestId: 'second' })).ok, true);
+  const next = s.owner.snapshot().activeResolutionId;
+  assert.equal(s.endpoint.handle(0, stale).ok, false); assert.equal(s.owner.snapshot().activeResolutionId, next);
+  assert.equal(s.endpoint.handle(0, c).view.effect.resolutionId, next);
+});
+test('unpaid cancellation returns to a fresh idle context without refunding or moving anything', () => {
+  const s = setup(0, true, [], true), c = s.command(), before = s.owner.snapshot();
+  s.endpoint.handle(0, c); const r = s.step('cancelCosts');
+  assert.equal(r.ok, true); assert.equal(r.view.effect.status, 'idle'); assert.notEqual(r.view.effect.resolutionId, c.resolutionId);
+  assert.deepEqual(s.owner.snapshot().movement, before.movement); assert.equal(s.owner.snapshot().activeResolutionId, null);
+  assert.equal(s.endpoint.handle(0, c).replayed, true); assert.equal(s.endpoint.viewFor(0).effect.status, 'idle');
+});
+test('paid or resolving effects are not released by an unsuccessful cancellation', () => {
+  const s = setup(0, true, [], true); s.endpoint.handle(0, s.command()); s.step('commitCosts');
+  const before = s.owner.snapshot(); assert.equal(s.step('cancelCosts').ok, false); s.owner.releaseRegisteredEffect(true);
+  assert.equal(s.owner.snapshot().activeResolutionId, before.activeResolutionId); assert.equal(s.endpoint.viewFor(0).effect.status, 'resolving');
+  assert.equal(s.step('advance').view.effect.status, 'idle');
+});
+test('idle session configuration requires server opt-in and valid policies', () => {
+  const s = setup(0, false); s.owner.discardPreparedEffect();
+  assert.throws(() => s.owner.prepareRegisteredIdle({ status: 'certifiedNone' })); assert.equal(s.endpoint.available(), false);
+  const enabled = setup(); enabled.owner.discardPreparedEffect();
+  assert.throws(() => enabled.owner.prepareRegisteredIdle({ status: 'invalid' })); assert.equal(enabled.endpoint.available(), false);
+  enabled.owner.prepareRegisteredIdle({ status: 'certifiedNone' });
+  const id = enabled.endpoint.viewFor(0).effect.resolutionId;
+  assert.throws(() => enabled.owner.prepareRegisteredIdle({ status: 'certifiedNone' })); assert.equal(enabled.endpoint.viewFor(0).effect.resolutionId, id);
+});
+test('closed or legacy-conflicted idle owners expose no stale public view', () => {
+  const closed = setup(0, true, [], true); closed.owner.close(); assert.equal(closed.endpoint.available(), false); assert.throws(() => closed.endpoint.viewFor(0));
+  const changed = setup(0, true, [], true); changed.match.players[0].zones.hand.pop();
+  assert.equal(changed.endpoint.available(), false); assert.equal(changed.owner.snapshot().mode, 'faulted'); assert.throws(() => changed.endpoint.viewFor(0));
 });

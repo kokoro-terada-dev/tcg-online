@@ -78,7 +78,7 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
   }
   function effectRequest(kind?: EffectCommandKind, tokens?: readonly string[], activation?: RegisteredEffectCommand) {
     const socket = socketRef.current, current = effectRef.current;
-    if (!socket?.connected || !current || busy || effectFlight.current || ((kind !== undefined || activation) && needsSync)) return;
+    if (!socket?.connected || !current || busy || effectFlight.current || (kind !== undefined && current.effect.status === "idle") || ((kind !== undefined || activation) && needsSync)) return;
     const sentEpoch = epoch.current, resolutionId = current.effect.resolutionId;
     const value = activation ?? (kind === undefined ? undefined : effectCommand(current, kind, crypto.randomUUID(), tokens));
     effectFlight.current = true; setBusy(true); setError("");

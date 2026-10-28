@@ -32,6 +32,7 @@ export function acceptEffectView(current: EffectTransportView | null, next: Effe
     next.movement.revision >= current.movement.revision && next.progression.revision >= current.progression.revision);
 }
 export function effectCommand(view: EffectTransportView, kind: EffectCommandKind, requestId: string, tokens: readonly string[] = []): EffectCommand {
+  if (view.effect.status === "idle") throw new Error("No running effect");
   const base = { matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
     expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision };
   if (kind === "answerCosts" || kind === "answerEffect") {
