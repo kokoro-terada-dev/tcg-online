@@ -138,10 +138,11 @@ moveCardsの対象は既存Cost Registryの自分の手札・盤面・DON領域�
 最大16コスト、各selector.maxの合計による潜在操作数は64以下です。
 複数カードのtop挿入順は推測せず事前に拒否します。
 
-これは通信UIや、コスト選択中のProgression choice gateとの接続ではありません。
-TimedMovementEffectも計画作成と最終startをサポートしますが、計画中は元のidleを保持します。
-独立モデルでは所有者が盤面を保持するため変更競合は発生しません。既存Matchへ接続する際は、
-計画中の操作ロック・切断・選択UIを別途実装し、同じ盤面を並行して書き換えてはいけません。
+この低レベルのSessionは単独ではProgressionのgateを管理しません。
+TimedMovementEffectのbeginCostSelection/answerCostSelection/commitCostSelection/cancelCostSelectionは、
+Sessionを内部所有して計画中のchoice gateと操作ロックを連動させます。
+詳細は [起動効果の接続](activation-runtime.md) を参照してください。
+通信UI・切断対応・Match全体の直列化は未接続です。同じ盤面を並行して書き換えてはいけません。
 
 ## 明示的な未対応
 
@@ -149,7 +150,7 @@ TimedMovementEffectも計画作成と最終startをサポートしますが、�
 - modify、耐性、置換の設置と誘発待機
 - 複数カードの山札上への移動順序（推測せず停止）
 - 山札不足時の部分ドローや敗北判定（推測せず停止）
-- コスト計画中の通信・進行gate、完全な現在値計算、Socket通信、保存・再接続
+- コスト計画中の通信UI、完全な現在値計算、Socket通信、保存・再接続
 
 ドローは1命令最大64枚、展開後の末端命令は最大128個です。
 構造検証の既存上限とMovementの操作・イベント上限も有効です。

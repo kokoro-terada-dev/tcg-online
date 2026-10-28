@@ -2,6 +2,8 @@
 
 後続の [Action実行器](action-runtime.md) では、CostPlanSessionの計画をMovementResolutionへ接続し、独立したpayDon/restCards/moveCardsの選択と一括確定まで実行します。本書のCostPlanSession自体は引き続き計画と再検証だけを行います。詳しいAPI・未接続のUI/進行gate境界はAction実行器の「複合コストの選択と確定」を参照してください。orderedと既存対戦の支払いは未対応です。
 
+TimedMovementEffectではコスト計画のchoice gate・操作ロック・未払いキャンセルも連動します。低レベルのCostPlanSession/CompositeCostSession単独では進行管理を所有しません。
+
 ## 今回の範囲
 
 支払い前のスナップショットから、複数コストをまとめて満たすカード/DONの組み合わせを検証します。

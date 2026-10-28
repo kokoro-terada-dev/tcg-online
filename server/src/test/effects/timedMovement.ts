@@ -20,6 +20,8 @@ export class TimedMovementEffect {
   #identity: ResolutionIdentity;
   #busy = false;
   #intent: "mainEffect" | "counterEffect";
+  #costPlanning: CompositeCostSession | null = null;
+  #costAnswers = 0;
   constructor(board: MovementState, progression: Progression, identity: ResolutionIdentity, input: unknown, masterOptions?: MasterFactOptions) {
     const definition = validateEffectDefinition(input).definition;
     ensureMove(definition.trigger.kind === "activate" && definition.trigger.window !== "trigger", "timed-effect-trigger-not-supported");
@@ -42,9 +44,11 @@ export class TimedMovementEffect {
   snapshot(): Readonly<{ movement: MovementState; progression: Progression }> {
     return Object.freeze({ movement: this.#effect.snapshot(), progression: this.#progression });
   }
-  view() { return Object.freeze({ ...this.#effect.view(), progressionRevision: this.#progression.revision,
+  view() { return Object.freeze({ ...this.#effect.view(), status: this.#costPlanning
+    ? this.#costPlanning.view().status === "selecting" ? "waitingForCostSelection" as const : "costsReady" as const
+    : this.#effect.view().status, progressionRevision: this.#progression.revision,
     turnNumber: this.#progression.turnNumber, activePlayer: this.#progression.activePlayer, phase: this.#progression.phase }); }
-  selectionViewFor(viewer: Player): SelectionView | null { return this.#effect.selectionViewFor(viewer); }
+  selectionViewFor(viewer: Player): SelectionView | null { return this.#costPlanning ? this.#costPlanning.viewFor(viewer) : this.#effect.selectionViewFor(viewer); }
   toJSON(): never { throw new Error("server-only-timed-effect"); }
   #check(expected: EffectRevisions): void {
     ensureMove(!this.#busy, "reentrant-timed-effect");
@@ -61,6 +65,68 @@ export class TimedMovementEffect {
     if (this.#effect.view().status === "completed") return applySystemEvent(next, next.revision,
       { kind: "finishResolution", resolutionId: this.#identity.resolutionId });
     return next;
+  }
+  #costGate(next: Progression, session: CompositeCostSession): Progression {
+    if (session.view().status !== "selecting") return next;
+    const choice = session.viewFor(this.#identity.actor);
+    ensureMove(choice !== null, "timed-effect-missing-cost-selection");
+    return applySystemEvent(next, next.revision, { kind: "waitForChoice", resolutionId: this.#identity.resolutionId,
+      selectionId: choice.selectionId, chooser: choice.chooser });
+  }
+  beginCostSelection(actor: Player, expected: EffectRevisions): void {
+    this.#check(expected);
+    ensureMove(actor === this.#identity.actor && this.#costPlanning === null, "timed-effect-cannot-plan-costs");
+    ensureMove(this.#progression.revision <= Number.MAX_SAFE_INTEGER - 390, "timed-effect-revision-limit");
+    ensureMove(checkTiming(this.#progression, actor, this.#intent).allowed, "timed-effect-window-unavailable");
+    const next = applySystemEvent(this.#progression, expected.progression,
+      { kind: "beginResolution", resolutionId: this.#identity.resolutionId, controller: actor });
+    this.#busy = true;
+    try {
+      const session = this.#effect.createCostSession(expected.movement);
+      const locked = this.#costGate(next, session);
+      this.#costPlanning = session; this.#costAnswers = 0; this.#progression = locked;
+    } finally { this.#busy = false; }
+  }
+  answerCostSelection(actor: Player, expected: EffectRevisions, reply: unknown): boolean {
+    this.#check(expected);
+    ensureMove(actor === this.#identity.actor && this.#costPlanning?.view().status === "selecting" && this.#progression.gate.kind === "choice", "timed-effect-not-selecting-costs");
+    ensureMove(this.#costAnswers < 64, "timed-effect-cost-answer-limit");
+    const gate = this.#progression.gate;
+    const next = applySystemEvent(this.#progression, expected.progression,
+      { kind: "acceptChoice", resolutionId: this.#identity.resolutionId, selectionId: gate.selectionId, chooser: actor });
+    this.#busy = true;
+    try {
+      const accepted = this.#costPlanning.answer(actor, reply);
+      this.#costAnswers++;
+      this.#progression = this.#costGate(next, this.#costPlanning);
+      return accepted;
+    } finally { this.#busy = false; }
+  }
+  commitCostSelection(actor: Player, expected: EffectRevisions, rules: MovementRules): TransactionResult {
+    this.#check(expected);
+    ensureMove(actor === this.#identity.actor && this.#costPlanning?.view().status === "ready" && this.#progression.gate.kind === "resolving", "timed-effect-costs-not-ready");
+    this.#busy = true;
+    try {
+      const result = this.#effect.start(expected.movement, rules, this.#costPlanning);
+      this.#costPlanning = null;
+      this.#progression = this.#sync(this.#progression);
+      return result;
+    } catch (error) {
+      if (this.#effect.view().status !== "prepared") this.#costPlanning = null;
+      throw error;
+    } finally { this.#busy = false; }
+  }
+  cancelCostSelection(actor: Player, expected: EffectRevisions): void {
+    this.#check(expected);
+    ensureMove(actor === this.#identity.actor && this.#costPlanning !== null && this.#effect.view().status === "prepared", "timed-effect-cannot-cancel-costs");
+    let next = this.#progression;
+    if (next.gate.kind === "choice") next = applySystemEvent(next, next.revision,
+      { kind: "acceptChoice", resolutionId: this.#identity.resolutionId, selectionId: next.gate.selectionId, chooser: actor });
+    next = applySystemEvent(next, next.revision, { kind: "finishResolution", resolutionId: this.#identity.resolutionId });
+    this.#busy = true;
+    try {
+      this.#costPlanning.cancel(actor); this.#costPlanning = null; this.#progression = next;
+    } finally { this.#busy = false; }
   }
   createCostSession(actor: Player, expected: EffectRevisions): CompositeCostSession {
     this.#check(expected); ensureMove(actor === this.#identity.actor, "wrong-timed-effect-actor");
@@ -83,10 +149,13 @@ export class TimedMovementEffect {
       const result = this.#effect.start(expected.movement, rules, payment);
       this.#progression = this.#sync(next);
       return result;
+    } catch (error) {
+      if (this.#effect.view().status === "blocked") this.#progression = next;
+      throw error;
     } finally { this.#busy = false; }
   }
   advance(actor: Player, expected: EffectRevisions, rules: MovementRules): TransactionResult | SelectionPending {
-    this.#check(expected); ensureMove(actor === this.#identity.actor && this.#progression.gate.kind === "resolving", "timed-effect-not-resolving");
+    this.#check(expected); ensureMove(actor === this.#identity.actor && this.#costPlanning === null && this.#progression.gate.kind === "resolving", "timed-effect-not-resolving");
     this.#busy = true;
     try {
       const result = this.#effect.advance(expected.movement, rules);
@@ -96,6 +165,7 @@ export class TimedMovementEffect {
   }
   answerSelection(actor: Player, expected: EffectRevisions, reply: unknown, rules: MovementRules): TransactionResult {
     this.#check(expected);
+    ensureMove(this.#costPlanning === null, "timed-effect-use-cost-answer");
     const gate = this.#progression.gate;
     ensureMove(gate.kind === "choice", "timed-effect-not-waiting");
     const next = applySystemEvent(this.#progression, expected.progression,

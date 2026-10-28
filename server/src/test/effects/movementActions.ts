@@ -183,6 +183,9 @@ export class PreparedMovementEffect {
         { kind: "cards", cards: refs.map(ref => ({ instanceId: ref.instanceId, generation: result.state.cards[ref.instanceId]!.generation })) });
       if (this.#instructions.length === 0) this.#resolution.complete(this.#actor, result.state.revision);
       return result;
+    } catch (error) {
+      if (this.#resolution.view().status === "resolving") this.#resolution.block(this.#actor, this.snapshot().revision);
+      throw error;
     } finally { this.#busy = false; }
   }
   advance(expectedRevision: number, rules: MovementRules): TransactionResult | SelectionPending {

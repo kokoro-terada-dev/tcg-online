@@ -28,13 +28,32 @@ SOURCE/TARGETや候補の内容は既存SelectionSessionで再検証します。
 
 ## 支払い前の複合コスト計画
 
-createCostSession(actor, revisions)で、タイミングと発動条件を確認したうえで
-別のCompositeCostSessionを作れます。計画の選択はそのsession.answer/viewForで行い、
-readyになったものをstart(actor, revisions, rules, session)へ渡します。
-全コストが成立した場合だけ、支払いとbeginResolutionを確定します。
-計画中はまだ未払いで、Progressionは元のidleです。TimedMovementEffect自体は
-外部から盤面を変更するAPIを持ちませんが、既存Matchへの接続では計画中のロックと
-choice gate、切断対応を追加する必要があります。効果処理中のanswerSelectionとは別APIです。
+進行管理に連動させる場合は、次の管理APIを使用します。Session本体は公開しません。
+
+1. beginCostSelection(actor, revisions)で発動条件とタイミングを確認し、未払いの計画を作成します。
+2. 選択が必要ならgateをchoice、表示状態をwaitingForCostSelectionにします。
+3. selectionViewFor(actor)を本人だけへ送り、answerCostSelection(actor, revisions, reply)で選びます。
+4. 全選択がそろうとgateはresolving、表示状態はcostsReadyになります。まだ支払っていません。
+5. commitCostSelection(actor, revisions, rules)で全コストを一括支払いし、通常の効果解決へ進めます。
+
+選択不要の自動計画は、choiceを作らずcostsReadyへ進みます。計画中はMovementの状態・revisionは
+変わりません。Progressionのrevisionはgateの遷移に応じて増えます。
+コスト選択中の通常start/advanceや効果回答APIを拒否し、既存gateがターン・バトル進行を止めます。
+残りのコストを支払えなくなる回答はfalseとなり、新しいselectionIdで再選択します。
+古いID・古い両revision・不正トークン・別プレイヤーの操作は拒否します。
+
+cancelCostSelection(actor, revisions)は選択中・readyの未払い計画だけを破棄し、idleへ戻します。
+古い回答は再利用できません。計画の再作成は可能ですが、これは効果解決済みの再発動ではありません。
+支払い失敗時はcostsReadyとロックを維持し、再確定か未払いキャンセルを選べます。
+支払い成功後はキャンセルできず、後続の効果対象選択には従来のanswerSelectionを使います。
+確定後のエラーはコストを返却せず、blockedな解決としてロックを維持します。
+
+有効な回答処理は1計画につき最大64回です。不成立による選び直しも含み、上限後もキャンセル可能です。
+開始時に進行revisionの余裕を390遷移分確保します（計画・選び直し・解決用）。
+実際の通信、UI、切断・再接続、Match全体での直列化はまだ未接続です。
+
+低レベルのcreateCostSession/start(session)も独立テスト・信頼する内部計画用に残します。
+この旧経路単独では計画中のgateを管理しません。実際の選択待ちの接続に使ってはいけません。
 
 ## 支払いとゲートの一貫性
 

@@ -184,3 +184,24 @@ test('caller mutation cannot change a captured timing window or condition', () =
   r.start(0, revisions(r), rules); r.advance(0, revisions(r), rules);
   assert.equal(r.view().status, 'completed'); assert.equal(r.snapshot().progression.activePlayer, 0);
 });
+test('counter cost planning locks the defender window without advancing the battle', () => {
+  for (const first of [0, 1]) {
+    const actor = 1 - first, r = runtime(counter(first), actor, {
+      trigger: { kind: 'activate', window: 'counter' }, actions: [],
+      costs: [{ kind: 'payDon', amount: 1 }, { kind: 'restCards', selector: { kind: 'cards', owner: 'SELF', chooser: 'SELF', zones: ['leader'], min: 1, max: 1, mode: 'SELECT' } }]
+    });
+    const battle = r.snapshot().progression.battle; r.beginCostSelection(actor, revisions(r));
+    assert.equal(r.snapshot().progression.gate.kind, 'choice'); assert.equal(r.selectionViewFor(first), null);
+    const view = r.selectionViewFor(actor);
+    r.answerCostSelection(actor, revisions(r), { matchId: view.matchId, resolutionId: view.resolutionId, selectionId: view.selectionId,
+      revision: view.revision, tokens: [view.candidates[0].token] });
+    r.commitCostSelection(actor, revisions(r), rules);
+    assert.deepEqual(r.snapshot().progression.battle, battle); assert.equal(r.snapshot().progression.gate.kind, 'idle');
+    assert.equal(r.snapshot().movement.cards[`leader${actor}`].rotated, true);
+  }
+});
+test('cost planning reserves enough revision headroom for replies, cancellation and effects', () => {
+  const p = { ...main(), revision: Number.MAX_SAFE_INTEGER - 389 }, r = runtime(p), before = r.snapshot();
+  assert.throws(() => r.beginCostSelection(0, revisions(r)), /revision-limit/);
+  assert.equal(r.snapshot().movement, before.movement); assert.equal(r.snapshot().progression, before.progression);
+});
