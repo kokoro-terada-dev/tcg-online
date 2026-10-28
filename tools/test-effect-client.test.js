@@ -11,6 +11,7 @@ const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, ac
 const plain = value => JSON.parse(JSON.stringify(value));
 const { testDamageChoiceCommand } = module.exports;
 const { testBlockCommand } = module.exports;
+const { testHandCounterCommand } = module.exports;
 function view() {
   const zones = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon", "attachedDon", "resolving"];
   const players = [0, 1].map(() => Object.fromEntries(zones.map(z => [z, z === "character" ? Array(5).fill(null) : z === "stage" || z === "leader" ? [null] : []])));
@@ -157,4 +158,12 @@ test("block commands use current own active character references and server cand
   assert.deepEqual(plain(testBlockCommand(v, 'a', 'request')), { kind: 'testBlock', matchId: 'm', resolutionId: 'r', requestId: 'request', expectedMovementRevision: 3, expectedProgressionRevision: 7, battleId: 'battle', blocker: { instanceId: 'a', generation: 3 } });
   for (const patch of [{ localPlayerIndex: 1 }, { testBlockCandidateIds: [] }, { battle: { ...v.battle, step: 'counter' } }, { battle: { ...v.battle, decisionComplete: true } }, { progression: { ...v.progression, gate: 'choice' } }, { progression: { ...v.progression, finished: true } }]) assert.throws(() => testBlockCommand({ ...v, ...patch }, 'a', 'request'));
   v.movement.players[0].character[0].rotated = true; assert.throws(() => testBlockCommand(v, 'a', 'request'));
+});
+
+test("hand counter commands send current own references without client counter values", () => {
+  const v = view(); v.effect.status = 'idle'; v.progression.gate = 'idle';
+  v.battle = { battleId: 'battle', defender: 0, step: 'counter', decisionComplete: false, settled: false };
+  v.testCounterCandidates = [{ ref: { instanceId: 'a', generation: 3 }, cardId: 'CARD', counter: 1000 }];
+  assert.deepEqual(plain(testHandCounterCommand(v, 'a', 'request')), { kind: 'testHandCounter', matchId: 'm', resolutionId: 'r', requestId: 'request', expectedMovementRevision: 3, expectedProgressionRevision: 7, battleId: 'battle', card: { instanceId: 'a', generation: 3 } });
+  for (const patch of [{ localPlayerIndex: 1 }, { testCounterCandidates: [] }, { battle: { ...v.battle, step: 'damage' } }, { battle: { ...v.battle, decisionComplete: true } }, { progression: { ...v.progression, gate: 'choice' } }, { progression: { ...v.progression, finished: true } }, { testCounterCandidates: [{ ...v.testCounterCandidates[0], ref: { instanceId: 'a', generation: 4 } }] }]) assert.throws(() => testHandCounterCommand({ ...v, ...patch }, 'a', 'request'));
 });

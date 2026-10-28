@@ -22,6 +22,7 @@ import type { TestBattleCommand } from "../effectProtocol";
 import { chooseLocalLifeCard, decideLocalBattle, localAttackCandidates, localBattlePower, resolveLocalBattleDamage, startLocalBattle, type LocalBattleUpdate, type LocalLifeChoice } from "../localBattle";
 import type { MasterSnapshot } from "../cardMaster";
 import { blockLocalBattle, localBlockCandidates } from "../localBattle";
+import { counterLocalHandCard, localCounterCandidates } from "../localBattle";
 
 type Mode = "legacy" | "automated" | "faulted" | "closed";
 type OwnerFailure = Readonly<{ ok: false; code: "owner_unavailable" | "legacy_conflict" }>;
@@ -44,6 +45,10 @@ export class EffectMatchOwner {
   #localBattleMaster: MasterSnapshot | null = null;
   #localBattleMasterPinned = false;
   #pendingDamage: LocalLifeChoice | null = null;
+  #battleCounter: { battleId: string; amount: number } | null = null;
+  #counterFor(progression: Progression): number {
+    return this.#battleCounter && progression.battle?.battleId === this.#battleCounter.battleId ? this.#battleCounter.amount : 0;
+  }
   constructor(match: Match, catalog: EffectCatalog | null = null, allowRegisteredActivation = false) {
     ensureMove(typeof allowRegisteredActivation === "boolean", "invalid-activation-policy");
     this.#legacy = match; this.#catalog = catalog; this.#activationEnabled = allowRegisteredActivation;
@@ -299,8 +304,8 @@ export class EffectMatchOwner {
     try {
       ensureMove(input && typeof input === "object", "invalid-test-battle-command");
       const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value;
-      ensureMove(kind === "testAttack" || kind === "testBlock" || kind === "testBattleDecision" || kind === "testResolveDamage" || kind === "testDamageChoice", "invalid-test-battle-kind");
-      dataObject(input, ["kind", "matchId", "resolutionId", "requestId", "expectedMovementRevision", "expectedProgressionRevision", ...(kind === "testAttack" ? ["source", "target"] : kind === "testBlock" ? ["battleId", "blocker"] : kind === "testBattleDecision" ? ["battleId", "decision"] : kind === "testDamageChoice" ? ["battleId", "selectionId", "token"] : ["battleId"])]);
+      ensureMove(kind === "testAttack" || kind === "testBlock" || kind === "testHandCounter" || kind === "testBattleDecision" || kind === "testResolveDamage" || kind === "testDamageChoice", "invalid-test-battle-kind");
+      dataObject(input, ["kind", "matchId", "resolutionId", "requestId", "expectedMovementRevision", "expectedProgressionRevision", ...(kind === "testAttack" ? ["source", "target"] : kind === "testBlock" ? ["battleId", "blocker"] : kind === "testHandCounter" ? ["battleId", "card"] : kind === "testBattleDecision" ? ["battleId", "decision"] : kind === "testDamageChoice" ? ["battleId", "selectionId", "token"] : ["battleId"])]);
       id(input.matchId); id(input.resolutionId, 64); id(input.requestId);
       ensureMove(Number.isSafeInteger(input.expectedMovementRevision) && (input.expectedMovementRevision as number) >= 0 &&
         Number.isSafeInteger(input.expectedProgressionRevision) && (input.expectedProgressionRevision as number) >= 0, "invalid-test-battle-revision");
@@ -310,6 +315,10 @@ export class EffectMatchOwner {
         reference(input.source as CardObjectRef); reference(input.target as CardObjectRef);
         const source = input.source as CardObjectRef, target = input.target as CardObjectRef;
         command = { kind, ...base, source: { instanceId: source.instanceId, generation: source.generation }, target: { instanceId: target.instanceId, generation: target.generation } };
+      } else if (kind === "testHandCounter") {
+        id(input.battleId); reference(input.card as CardObjectRef);
+        const card = input.card as CardObjectRef;
+        command = { kind, ...base, battleId: input.battleId, card: { instanceId: card.instanceId, generation: card.generation } };
       } else if (kind === "testBlock") {
         id(input.battleId); reference(input.blocker as CardObjectRef);
         const blocker = input.blocker as CardObjectRef;
@@ -338,14 +347,16 @@ export class EffectMatchOwner {
         let next: LocalBattleUpdate;
         if (command.kind === "testAttack") next = startLocalBattle(this.#board!, this.#progression!, actor, command.source, command.target, randomUUID(), randomUUID());
         else if (command.kind === "testBlock") next = blockLocalBattle(this.#board!, this.#progression!, actor, command.battleId, command.blocker, randomUUID());
+        else if (command.kind === "testHandCounter") next = counterLocalHandCard(this.#board!, this.#progression!, actor, command.battleId, command.card, this.#localBattleMaster, this.#counterFor(this.#progression!), randomUUID());
         else if (command.kind === "testBattleDecision") next = decideLocalBattle(this.#board!, this.#progression!, actor, command.battleId, command.decision);
         else if (command.kind === "testResolveDamage") next = resolveLocalBattleDamage(this.#board!, this.#progression!, actor, command.battleId, this.#localBattleMaster, randomUUID(),
-          { resolutionId: randomUUID(), selectionId: randomUUID(), handToken: randomUUID(), triggerToken: randomUUID() });
+          { resolutionId: randomUUID(), selectionId: randomUUID(), handToken: randomUUID(), triggerToken: randomUUID() }, this.#counterFor(this.#progression!));
         else {
           ensureMove(this.#pendingDamage !== null, "local-life-not-pending");
           next = chooseLocalLifeCard(this.#board!, this.#progression!, actor, command.battleId, command.selectionId, command.token, this.#pendingDamage, randomUUID());
         }
         const resolutionId = randomUUID(); ensureMove(this.#current(), "owner-legacy-conflict");
+        this.#battleCounter = next.progression.battle ? { battleId: next.progression.battle.battleId, amount: next.counterBonus ?? this.#counterFor(next.progression) } : null;
         this.#board = next.movement; this.#progression = next.progression; this.#pendingDamage = next.pendingLife ?? null; this.#idle = { ...this.#idle, resolutionId }; ok = true;
       } finally { this.#busy = false; }
     } catch { /* Internal references are not public diagnostics. */ }
@@ -358,18 +369,20 @@ export class EffectMatchOwner {
     if (this.#active) {
       const state = this.#active.effect.snapshot();
       return freezeMovement({ ...this.#active.host.viewFor(viewer), battle: state.progression.battle,
-        ...(this.#idle?.allowTestTurnSwitch ? { battlePower: localBattlePower(state.movement, state.progression, this.#localBattleMaster) } : {}) });
+        ...(this.#idle?.allowTestTurnSwitch ? { battlePower: localBattlePower(state.movement, state.progression, this.#localBattleMaster, this.#counterFor(state.progression)), battleCounter: this.#counterFor(state.progression) } : {}) });
     }
     if (!this.#idle || !this.#board || !this.#progression) return null;
     const progression = this.#progression;
     const attacks = this.#idle.allowTestTurnSwitch ? localAttackCandidates(this.#board, progression, viewer) : { sources: [], targets: [] };
-    const powers = this.#idle.allowTestTurnSwitch ? localBattlePower(this.#board, progression, this.#localBattleMaster) : null;
+    const powers = this.#idle.allowTestTurnSwitch ? localBattlePower(this.#board, progression, this.#localBattleMaster, this.#counterFor(progression)) : null;
     return freezeMovement({ matchId: this.#board.matchId, localPlayerIndex: viewer, movement: projectMovementState(this.#board, viewer),
       testTurnSwitchAvailable: this.#idle.allowTestTurnSwitch && process.env.NODE_ENV !== "production" && checkTiming(progression, viewer, "endMain").allowed,
       testPlayAvailable: this.#idle.allowTestTurnSwitch && process.env.NODE_ENV !== "production" && checkTiming(progression, viewer, "playCard").allowed,
       testAttackAvailable: attacks.sources.length > 0 && attacks.targets.length > 0,
       testAttackSourceIds: attacks.sources, testAttackTargetIds: attacks.targets,
       testBlockCandidateIds: this.#idle.allowTestTurnSwitch ? localBlockCandidates(this.#board, progression, viewer) : [],
+      testCounterCandidates: this.#idle.allowTestTurnSwitch ? localCounterCandidates(this.#board, progression, viewer, this.#localBattleMaster) : [],
+      battleCounter: this.#counterFor(progression),
       battle: progression.battle,
       damageChoice: this.#pendingDamage ? { battleId: this.#pendingDamage.battleId, selectionId: this.#pendingDamage.selectionId, chooser: this.#pendingDamage.defender,
         options: viewer === this.#pendingDamage.defender ? [{ token: this.#pendingDamage.handToken, label: "手札へ" as const }, { token: this.#pendingDamage.triggerToken, label: "トリガー発動" as const }] : [] } : null,
@@ -390,7 +403,7 @@ export class EffectMatchOwner {
     ensureMove(!this.#busy && this.#mode === "automated" && this.#current(), "local-outcome-unavailable");
     const state = this.snapshot(), next = localDeckOutProgression(state.movement!, state.progression!);
     if (next === state.progression) return;
-    this.#board = state.movement; this.#progression = next; this.#active = null; this.#pendingDamage = null;
+    this.#board = state.movement; this.#progression = next; this.#active = null; this.#pendingDamage = null; this.#battleCounter = null;
     this.#idle = { ...this.#idle, resolutionId: randomUUID() };
   }
   releaseRegisteredEffect(cancelPrepared = false): void {
@@ -414,6 +427,6 @@ export class EffectMatchOwner {
     if (this.#idle) this.#idle = { ...this.#idle, resolutionId: randomUUID() };
   }
   close(): void {
-    ensureMove(!this.#busy, "owner-busy"); this.#remember(); this.#active = null; this.#pendingDamage = null; this.#mode = "closed";
+    ensureMove(!this.#busy, "owner-busy"); this.#remember(); this.#active = null; this.#pendingDamage = null; this.#battleCounter = null; this.#mode = "closed";
   }
 }

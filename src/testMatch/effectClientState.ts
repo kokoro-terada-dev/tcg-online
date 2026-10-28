@@ -85,6 +85,15 @@ export function testDamageCommand(view: EffectTransportView, requestId: string):
   return { kind: "testResolveDamage", matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
     expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, battleId: view.battle.battleId };
 }
+export function testHandCounterCommand(view: EffectTransportView, instanceId: string, requestId: string): TestBattleCommand {
+  const candidate = view.testCounterCandidates?.find(candidate => candidate.ref.instanceId === instanceId);
+  const card = view.movement.players[view.localPlayerIndex].hand.find(card => card?.ref?.instanceId === instanceId);
+  if (!candidate || !card?.ref || card.ref.generation !== candidate.ref.generation || !card.faceUp || card.kind !== "character" || card.cardId !== candidate.cardId ||
+    !Number.isSafeInteger(candidate.counter) || candidate.counter <= 0 || view.effect.status !== "idle" || view.progression.finished || view.progression.gate !== "idle" ||
+    !view.battle || view.battle.defender !== view.localPlayerIndex || view.battle.step !== "counter" || view.battle.decisionComplete || view.battle.settled) throw new Error("No local hand counter");
+  return { kind: "testHandCounter", matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
+    expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, battleId: view.battle.battleId, card: { ...card.ref } };
+}
 
 export function testDamageChoiceCommand(view: EffectTransportView, token: string, requestId: string): TestBattleCommand {
   const choice = view.damageChoice;

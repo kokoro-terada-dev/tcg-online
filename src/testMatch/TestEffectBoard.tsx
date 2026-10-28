@@ -11,12 +11,13 @@ import type { CardView } from "../../server/src/test/protocol";
 type Props = { view: EffectTransportView; roomId: string; busy: boolean; error: string; needsSync: boolean;
   onAction: (kind: EffectCommandKind, tokens?: readonly string[]) => void; onSync: () => void; onEnd: () => void;
   onCatalog?: (instanceId: string) => Promise<EffectCatalogView>; onActivateCatalog?: (catalog: EffectCatalogView, effectId: string) => void; onTestTurn?: () => void; onTestPlay?: (instanceId: string) => void;
-  onTestAttack?: (sourceId: string, targetId: string) => void; onTestBattleDecision?: (decision: "passBlock" | "endCounter") => void; onTestResolveDamage?: () => void; onTestDamageChoice?: (token: string) => void; onTestBlock?: (instanceId: string) => void };
+  onTestAttack?: (sourceId: string, targetId: string) => void; onTestBattleDecision?: (decision: "passBlock" | "endCounter") => void; onTestResolveDamage?: () => void; onTestDamageChoice?: (token: string) => void; onTestBlock?: (instanceId: string) => void; onTestHandCounter?: (instanceId: string) => void };
 export default function TestEffectBoard(props: Props) {
   const { view, busy, needsSync, onAction } = props;
   const [inspected, setInspected] = useState<{ card: CardView; context: string } | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [blockContext, setBlockContext] = useState<string | null>(null);
+  const [counterContext, setCounterContext] = useState<string | null>(null);
   const [resultVisible, setResultVisible] = useState(false);
   const finished = view.progression.finished;
   const resultLabel = view.progression.winner === view.localPlayerIndex ? "WIN" :
@@ -29,6 +30,7 @@ export default function TestEffectBoard(props: Props) {
   }, [view.matchId, finished]);
   const context = `${view.matchId}:${view.localPlayerIndex}:${view.effect.resolutionId}:${view.movement.revision}:${view.progression.revision}:${view.effect.status}:${busy}:${needsSync}`;
   const choosingBlock = blockContext === context && !busy && !needsSync && view.testBattleDecision === "passBlock";
+  const choosingCounter = counterContext === context && !busy && !needsSync && view.testBattleDecision === "endCounter";
   const blockers = view.movement.players[view.localPlayerIndex].character.filter(card => card?.ref && card.faceUp && card.cardId && view.testBlockCandidateIds?.includes(card.ref.instanceId));
   useEffect(() => { setInspected(null); }, [context]);
   useEffect(() => { setCollapsed(false); }, [view.effect.resolutionId, view.effect.status, view.selection?.selectionId]);
@@ -56,6 +58,7 @@ export default function TestEffectBoard(props: Props) {
         view.effect.status === "costsReady" ? "支払いを確定してください" : "効果処理"
       }</p>}
       {view.battlePower && <p aria-label="判定用パワー">攻撃 {view.battlePower.attack ?? "?"} / 防御 {view.battlePower.defense ?? "?"}
+        {!!view.battleCounter && <small>（カウンター +{view.battleCounter} 込み）</small>}
         {(view.battlePower.attack === null || view.battlePower.defense === null) && <small>（パワー情報不足・未対応）</small>}</p>}
       <div className="test-effect-actions">
         {mine && view.effect.status === "prepared" && <button disabled={disabled} onClick={() => onAction("beginCosts")}>効果を使う</button>}
@@ -65,7 +68,8 @@ export default function TestEffectBoard(props: Props) {
         <button disabled={busy} onClick={props.onSync}>再同期</button>
         <button onClick={() => setCollapsed(true)}>盤面を見る</button>
         {view.effect.status === "idle" && view.testTurnSwitchAvailable && props.onTestTurn && <button disabled={disabled} onClick={props.onTestTurn}>テスト手番交代</button>}
-        {!choosingBlock && view.effect.status === "idle" && view.testBattleDecision && props.onTestBattleDecision && <button disabled={disabled} onClick={() => props.onTestBattleDecision!(view.testBattleDecision!)}>{view.testBattleDecision === "passBlock" ? "ブロックしない" : "カウンター終了"}</button>}
+        {!choosingBlock && !choosingCounter && view.effect.status === "idle" && view.testBattleDecision && props.onTestBattleDecision && <button disabled={disabled} onClick={() => props.onTestBattleDecision!(view.testBattleDecision!)}>{view.testBattleDecision === "passBlock" ? "ブロックしない" : "カウンター終了"}</button>}
+        {!choosingCounter && !!view.testCounterCandidates?.length && props.onTestHandCounter && <button disabled={disabled} onClick={() => setCounterContext(context)}>手札カウンター</button>}
         {!choosingBlock && blockers.length > 0 && props.onTestBlock && <button disabled={disabled} onClick={() => setBlockContext(context)}>テストブロック</button>}
         {view.effect.status === "idle" && view.testDamageAvailable && props.onTestResolveDamage && <button disabled={disabled} onClick={props.onTestResolveDamage}>テストダメージ判定</button>}
       </div>
@@ -76,6 +80,13 @@ export default function TestEffectBoard(props: Props) {
         <button onClick={() => setBlockContext(null)}>閉じる</button>
       </>}
       {needsSync && <p role="alert">応答を確認できません。再同期してください。</p>}
+      {choosingCounter && <>
+        <Selection key={`counter:${context}`} disabled={disabled} selection={{ kind: "cards", matchId: view.matchId, resolutionId: view.effect.resolutionId, selectionId: `counter:${view.battle?.battleId}`, revision: view.movement.revision,
+          chooser: view.localPlayerIndex, mode: "SELECT", min: 1, max: 1, candidates: (view.testCounterCandidates ?? []).map(card => ({ token: card.ref.instanceId, cardId: card.cardId })) }}
+          values={Object.fromEntries((view.testCounterCandidates ?? []).map(card => [card.ref.instanceId, `+${card.counter}`]))}
+          onConfirm={tokens => { if (tokens[0]) props.onTestHandCounter?.(tokens[0]); setCounterContext(null); }} />
+        <button onClick={() => setCounterContext(null)}>閉じる</button>
+      </>}
       </div>
     </section>
     {finished && resultVisible && <div className={`test-effect-result${resultLabel === "WIN" ? " test-effect-result-win" : ""}`} role="status">{resultLabel}</div>}
@@ -84,7 +95,7 @@ export default function TestEffectBoard(props: Props) {
       {...(props.onActivateCatalog ? { onActivate: props.onActivateCatalog } : {})} />}
   </>;
 }
-function Selection({ selection, disabled, onConfirm }: { selection: NonNullable<EffectTransportView["selection"]>; disabled: boolean; onConfirm: (tokens: readonly string[]) => void }) {
+function Selection({ selection, disabled, onConfirm, values }: { selection: NonNullable<EffectTransportView["selection"]>; disabled: boolean; onConfirm: (tokens: readonly string[]) => void; values?: Readonly<Record<string, string>> }) {
   const [tokens, setTokens] = useState<string[]>([]);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const min = selection.kind === "choice" ? 1 : selection.min, max = selection.kind === "choice" ? 1 : selection.max;
@@ -103,6 +114,7 @@ function Selection({ selection, disabled, onConfirm }: { selection: NonNullable<
           disabled={disabled || (!tokens.includes(card.token) && tokens.length >= max)} onClick={() => toggle(card.token)}>
           {image && !failedImages.has(card.token) ? <img src={image} alt={card.cardId ?? "裏向きカード"} draggable={false} onError={() => setFailedImages(current => new Set([...current, card.token]))} /> : <span>{card.cardId ?? "裏向きカード"}</span>}
           {tokens.includes(card.token) && <b>{tokens.indexOf(card.token) + 1}</b>}
+          {values?.[card.token] && <small className="test-counter-value">{values[card.token]}</small>}
         </button>;
       })}
     </div>

@@ -83,30 +83,60 @@ export function blockLocalBattle(board: MovementState, progression: Progression,
   return { movement, progression: next };
 }
 
-export function localBattlePower(board: MovementState, progression: Progression, master: MasterSnapshot | null) {
+export function localCounterCandidates(board: MovementState, progression: Progression, actor: Player, master: MasterSnapshot | null) {
+  try {
+    localContext(board, progression);
+    const battle = progression.battle;
+    if (!battle || !checkTiming(progression, actor, "counterEffect").allowed) return [];
+    fieldCard(board, battle.source, battle.attacker); fieldCard(board, battle.target, actor);
+    return board.players[actor].hand.flatMap(id => {
+      const card = board.cards[id!]!, entry = master && Object.hasOwn(master.cards, card.cardId) ? master.cards[card.cardId] : undefined;
+      if (card.kind !== "character" || card.owner !== actor || card.controller !== actor || !entry ||
+        (entry.type !== "unknown" && entry.type !== "character") || entry.counter === null || !Number.isSafeInteger(entry.counter) || entry.counter <= 0) return [];
+      return [{ ref: { instanceId: card.instanceId, generation: card.generation }, cardId: card.cardId, counter: entry.counter }];
+    });
+  } catch { return []; }
+}
+export function counterLocalHandCard(board: MovementState, progression: Progression, actor: Player, battleId: string, ref: Readonly<CardObjectRef>, master: MasterSnapshot | null, currentBonus: number, transactionId: string): LocalBattleUpdate {
+  localContext(board, progression);
+  ensureMove(progression.battle?.battleId === battleId, "local-counter-battle-stale");
+  const card = getCard(board, ref), at = location(board, card.instanceId);
+  const candidate = localCounterCandidates(board, progression, actor, master).find(candidate => candidate.ref.instanceId === ref.instanceId && candidate.ref.generation === ref.generation);
+  ensureMove(candidate && at.player === actor && at.zone === "hand" && Number.isSafeInteger(currentBonus) && currentBonus >= 0, "local-counter-card-unavailable");
+  const counterBonus = currentBonus + candidate.counter;
+  ensureMove(Number.isSafeInteger(counterBonus), "local-counter-overflow");
+  const movement = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
+    actor, effectController: null, source: progression.battle.source, mode: "rule", resolutionId: null,
+    operations: [{ kind: "move", card: ref, from: { player: actor, zone: "hand" }, to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "OTHER" }] }, { status: "certifiedNone" }).state;
+  return { movement, progression, counterBonus };
+}
+
+export function localBattlePower(board: MovementState, progression: Progression, master: MasterSnapshot | null, counterBonus = 0) {
   if (!progression.battle || progression.outcome) return null;
   const unknown = { attack: null, defense: null, masterVersion: master?.version ?? null };
   try {
     localContext(board, progression);
+    ensureMove(Number.isSafeInteger(counterBonus) && counterBonus >= 0, "local-counter-invalid");
     const battle = progression.battle, source = fieldCard(board, battle.source, battle.attacker), target = fieldCard(board, battle.target, battle.defender);
     const printed = (card: typeof source): number | null => {
       const entry = master && Object.hasOwn(master.cards, card.cardId) ? master.cards[card.cardId] : undefined;
       if (!entry || (entry.type !== "unknown" && entry.type !== card.kind) || entry.power === null || !Number.isSafeInteger(entry.power) || entry.power < 0) return null;
       return entry.power;
     };
-    const base = printed(source), defense = printed(target);
+    const base = printed(source), printedDefense = printed(target);
+    const defense = printedDefense === null ? null : printedDefense + counterBonus;
     const dons = board.players[battle.attacker].attachedDon.filter(id => {
       const attached = board.cards[id!]!.attachedTo;
       return attached?.instanceId === source.instanceId && attached.generation === source.generation;
     }).length;
     const attack = base === null ? null : base + dons * 1000;
-    return { attack: attack !== null && Number.isSafeInteger(attack) ? attack : null, defense, masterVersion: master?.version ?? null };
+    return { attack: attack !== null && Number.isSafeInteger(attack) ? attack : null, defense: defense !== null && Number.isSafeInteger(defense) ? defense : null, masterVersion: master?.version ?? null };
   } catch { return unknown; }
 }
 
 export type LocalLifeChoiceIds = Readonly<{ resolutionId: string; selectionId: string; handToken: string; triggerToken: string }>;
 export type LocalLifeChoice = LocalLifeChoiceIds & Readonly<{ battleId: string; defender: Player; card: Readonly<CardObjectRef> }>;
-export type LocalBattleUpdate = Readonly<{ movement: MovementState; progression: Progression; pendingLife?: LocalLifeChoice }>;
+export type LocalBattleUpdate = Readonly<{ movement: MovementState; progression: Progression; pendingLife?: LocalLifeChoice; counterBonus?: number }>;
 
 function finishLocalDamage(progression: Progression, battleId: string, participantsPresent: boolean): Progression {
   let next = applySystemEvent(progression, progression.revision, { kind: "settleBattleStep", battleId, step: "damage" });
@@ -115,10 +145,10 @@ function finishLocalDamage(progression: Progression, battleId: string, participa
   return applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId, step: "end", participantsPresent: false });
 }
 
-// Baseline fixture combat only: no counters, keywords or printed ability execution.
-export function resolveLocalBattleDamage(board: MovementState, progression: Progression, actor: Player, battleId: string, master: MasterSnapshot | null, transactionId: string, choiceIds: LocalLifeChoiceIds): LocalBattleUpdate {
+// Baseline fixture combat with printed hand counters; no keyword or ability execution.
+export function resolveLocalBattleDamage(board: MovementState, progression: Progression, actor: Player, battleId: string, master: MasterSnapshot | null, transactionId: string, choiceIds: LocalLifeChoiceIds, counterBonus = 0): LocalBattleUpdate {
   localContext(board, progression);
-  const battle = progression.battle, powers = localBattlePower(board, progression, master);
+  const battle = progression.battle, powers = localBattlePower(board, progression, master, counterBonus);
   ensureMove(!progression.outcome && progression.gate.kind === "idle" && battle?.battleId === battleId && battle.defender === actor &&
     battle.step === "damage" && battle.decisionComplete && !battle.settled, "local-damage-window-unavailable");
   ensureMove(powers !== null && powers.attack !== null && powers.defense !== null, "local-damage-power-unknown");

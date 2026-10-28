@@ -32,3 +32,4 @@
 .test-damage-actions button { overflow-wrap: anywhere; }
 .test-damage-detail { width: min(280px, 100%); margin: auto; }
 .test-damage-detail .test-catalog-image { width: 100%; }
+.test-counter-value { position: absolute; bottom: 0; left: 0; right: 0; background: #d2efe5; color: #132b24; font-size: 12px; line-height: 18px; text-align: center; }

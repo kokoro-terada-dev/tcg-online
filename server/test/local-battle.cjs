@@ -10,6 +10,7 @@ const { parseMaster } = require('../dist/test/cardMaster.js');
 const { localBattlePower } = require('../dist/test/localBattle.js');
 const { MovementStore } = require('../dist/test/movement/engine.js');
 const master = parseMaster(JSON.stringify({ schemaVersion: 2, cards: { LEADER: { type: 'leader', power: 5000 }, CARD: { type: 'character', power: 2000 } } }));
+const counterMaster = parseMaster(JSON.stringify({ cards: { LEADER: { type: 'leader', power: 5000 }, CARD: { type: 'character', power: 2000, counter: 1000 } } }));
 function setup({ actor = 0, turn = 3, targetRest = null, sourceRest = false, enabled = true, sourceChar = false, life = 5, battleMaster = master, blockerRest } = {}) {
   const recipe = { name: 'Test', leaderCardId: 'LEADER', mainDeck: Array(50).fill('CARD'), donDeck: Array(10).fill('DON'), cardTypes: { CARD: 'character' }, leaderLifeCount: 5 };
   const match = createMatch(recipe, recipe); match.players[actor].zones.leader[0].rotated = sourceRest;
@@ -37,8 +38,83 @@ function setup({ actor = 0, turn = 3, targetRest = null, sourceRest = false, ena
     const v = endpoint.viewFor(seat);
     return { kind: 'testBlock', ...base(seat, requestId), battleId: v.battle?.battleId ?? 'none', blocker: { instanceId: match.players[1 - actor].zones.character[1]?.id ?? 'missing', generation: 0 } };
   }
-  return { owner, endpoint, source, target, base, attack, decision, actor, ready, damage, choice, block };
+  function counter(seat = 1 - actor, requestId = 'counter') {
+    const v = endpoint.viewFor(seat);
+    return { kind: 'testHandCounter', ...base(seat, requestId), battleId: v.battle?.battleId ?? 'none', card: { ...v.movement.players[seat].hand[0].ref } };
+  }
+  return { owner, endpoint, source, target, base, attack, decision, actor, ready, damage, choice, block, counter };
 }
+
+test('hand counters stay private until used, accumulate on both views and prevent leader damage for either defender', () => {
+  for (const actor of [0, 1]) {
+    const s = setup({ actor, battleMaster: counterMaster }), defender = 1 - actor;
+    s.endpoint.handle(actor, s.attack()); s.endpoint.handle(defender, s.decision(defender, 'passBlock'));
+    const before = s.endpoint.viewFor(defender), c = s.counter();
+    assert.equal(before.testCounterCandidates.length, 5); assert.equal(before.testCounterCandidates[0].counter, 1000);
+    assert.deepEqual(s.endpoint.viewFor(actor).testCounterCandidates, []);
+    assert.equal(s.endpoint.viewFor(actor).movement.players[defender].hand.every(card => card.cardId === null && card.ref === null), true);
+    const r = s.endpoint.handle(defender, c); assert.equal(r.ok, true); assert.equal(r.view.battleCounter, 1000); assert.equal(r.view.battlePower.defense, 6000);
+    assert.equal(r.view.battle.step, 'counter'); assert.equal(r.view.movement.players[defender].hand.length, 4);
+    assert.equal(r.view.movement.players[defender].trash[0].ref.instanceId, c.card.instanceId);
+    assert.equal(s.endpoint.viewFor(actor).movement.players[defender].trash[0].cardId, 'CARD'); assert.equal(s.endpoint.viewFor(actor).battleCounter, 1000);
+    assert.equal(s.endpoint.handle(defender, c).replayed, true); assert.equal(s.endpoint.viewFor(defender).battleCounter, 1000);
+    assert.equal(s.endpoint.handle(defender, s.counter(defender, 'counter2')).view.battleCounter, 2000);
+    assert.equal(s.endpoint.viewFor(actor).battlePower.defense, 7000);
+    s.endpoint.handle(defender, s.decision(defender, 'endCounter'));
+    assert.equal(s.endpoint.viewFor(actor).battleCounter, 2000);
+    const result = s.endpoint.handle(defender, s.damage()); assert.equal(result.ok, true); assert.equal(result.view.battle, null);
+    assert.equal(result.view.movement.players[defender].life.length, 5); assert.equal(result.view.damageChoice, null); assert.equal(result.view.battleCounter, 0);
+    for (const seat of [actor, defender]) assert.equal(s.endpoint.handle(seat, { kind: 'testNextTurn', ...s.base(seat, `next-${seat}`) }).ok, true);
+    assert.equal(s.endpoint.handle(actor, s.attack({}, 'next-attack')).ok, true); assert.equal(s.endpoint.viewFor(defender).battleCounter, 0); assert.equal(s.endpoint.viewFor(defender).battlePower.defense, 5000);
+  }
+});
+
+test('hand counter rejects wrong players, phases, card references, values and modified retries atomically', () => {
+  const s = setup({ battleMaster: counterMaster }); s.endpoint.handle(0, s.attack());
+  assert.equal(s.endpoint.handle(1, s.counter()).ok, false);
+  s.endpoint.handle(1, s.decision(1, 'passBlock')); const c = s.counter(1, 'valid-counter'), before = s.owner.snapshot();
+  assert.equal(s.endpoint.handle(0, s.counter(0, 'wrong-player')).ok, false);
+  let n = 0;
+  for (const patch of [{ card: s.target }, { card: { ...c.card, generation: 1 } }, { battleId: 'old' }, { resolutionId: 'old' }, { expectedMovementRevision: 999 }, { expectedProgressionRevision: 999 }, { counter: 99999 }]) assert.equal(s.endpoint.handle(1, { ...c, ...patch, requestId: `bad-counter-${n++}` }).ok, false);
+  assert.equal(s.owner.snapshot().movement, before.movement); assert.equal(s.endpoint.viewFor(1).battleCounter, 0);
+  assert.equal(s.endpoint.handle(1, c).ok, true);
+  assert.equal(s.endpoint.handle(1, { ...c, card: s.target }).code, 'request_conflict');
+  assert.equal(s.endpoint.handle(1, { ...c, ...s.base(1, 'used-again') }).ok, false);
+  s.endpoint.handle(1, s.decision(1, 'endCounter')); assert.equal(s.endpoint.handle(1, s.counter(1, 'after-end')).ok, false);
+});
+
+test('missing, null, zero or conflicting counter metadata does not enable character hand counters', () => {
+  for (const battleMaster of [null, master, ...[null, 0].map(counter => parseMaster(JSON.stringify({ cards: { LEADER: { type: 'leader', power: 5000 }, CARD: { type: 'character', counter } } }))), parseMaster(JSON.stringify({ cards: { LEADER: { type: 'leader', power: 5000 }, CARD: { type: 'event', counter: 1000 } } }))]) {
+    const s = setup({ battleMaster }); s.endpoint.handle(0, s.attack()); s.endpoint.handle(1, s.decision(1, 'passBlock'));
+    assert.deepEqual(s.endpoint.viewFor(1).testCounterCandidates, []);
+    const before = s.owner.snapshot(); assert.equal(s.endpoint.handle(1, s.counter()).ok, false); assert.equal(s.owner.snapshot().movement, before.movement);
+  }
+});
+
+test('hand counter bonus survives counter effect resolution and applies to the redirected character target', () => {
+  const s = setup({ battleMaster: counterMaster, blockerRest: false }); s.endpoint.handle(0, s.attack()); s.endpoint.handle(1, s.block());
+  assert.equal(s.endpoint.handle(1, s.counter()).ok, true);
+  s.owner.openRegisteredEffect('TEST.counter', 1, s.target, { status: 'certifiedNone' });
+  assert.equal(s.endpoint.viewFor(0).battleCounter, 1000); assert.equal(s.endpoint.viewFor(0).battlePower.defense, 3000);
+  assert.equal(s.endpoint.handle(1, s.counter(1, 'during-effect')).ok, false);
+  for (const kind of ['beginCosts', 'commitCosts', 'advance']) assert.equal(s.endpoint.handle(1, { kind, ...s.base(1, `counter-effect-${kind}`) }).ok, true);
+  assert.equal(s.endpoint.viewFor(1).battleCounter, 1000); assert.equal(s.endpoint.viewFor(1).testCounterCandidates.length, 5);
+  s.endpoint.handle(1, s.decision(1, 'endCounter')); const r = s.endpoint.handle(1, s.damage());
+  assert.equal(r.ok, true); assert.equal(r.view.movement.players[1].character[1], null); assert.equal(r.view.battleCounter, 0); assert.equal(r.view.movement.players[1].life.length, 5);
+});
+
+test('counter addition never replaces unknown printed power with zero and rejects numeric overflow before moving a card', () => {
+  const missingPower = parseMaster(JSON.stringify({ cards: { LEADER: { type: 'leader' }, CARD: { type: 'character', counter: 1000 } } }));
+  const s = setup({ battleMaster: missingPower }); s.endpoint.handle(0, s.attack()); s.endpoint.handle(1, s.decision(1, 'passBlock'));
+  assert.equal(s.endpoint.handle(1, s.counter()).ok, true); assert.equal(s.endpoint.viewFor(1).battleCounter, 1000); assert.equal(s.endpoint.viewFor(1).battlePower.defense, null);
+  s.endpoint.handle(1, s.decision(1, 'endCounter')); assert.equal(s.endpoint.viewFor(1).testDamageAvailable, false);
+  assert.equal(s.endpoint.handle(1, s.damage()).ok, false);
+  const huge = setup({ battleMaster: counterMaster }); huge.endpoint.handle(0, huge.attack()); huge.endpoint.handle(1, huge.decision(1, 'passBlock'));
+  const state = huge.owner.snapshot(), card = huge.counter().card;
+  const { counterLocalHandCard } = require('../dist/test/localBattle.js');
+  assert.throws(() => counterLocalHandCard(state.movement, state.progression, 1, state.progression.battle.battleId, card, counterMaster, Number.MAX_SAFE_INTEGER, 'overflow'));
+  assert.equal(huge.owner.snapshot().movement, state.movement); assert.equal(huge.endpoint.viewFor(1).movement.players[1].hand.length, 5);
+});
 
 test('local block rests only the selected defender character and keeps the original attack source for both seats', () => {
   for (const actor of [0, 1]) {
