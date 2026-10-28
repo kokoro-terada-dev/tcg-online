@@ -14,7 +14,7 @@ import type { CardObjectRef } from "./types";
 import type { EffectCatalog } from "./effectCatalog";
 import type { EffectCatalogQuery, EffectCatalogView, RegisteredEffectCommand } from "../effectProtocol";
 import { projectMovementState } from "../movement/projection";
-import { nextLocalTurnCheckpoint, openingLocalTurnCheckpoint } from "../localTurnCheckpoint";
+import { localDeckOutProgression, nextLocalTurnCheckpoint, openingLocalTurnCheckpoint } from "../localTurnCheckpoint";
 import type { TestTurnCommand } from "../effectProtocol";
 
 type Mode = "legacy" | "automated" | "faulted" | "closed";
@@ -124,7 +124,7 @@ export class EffectMatchOwner {
       timingAvailable: entry.trigger.kind === "activate" && entry.trigger.window !== "trigger" &&
         checkTiming(progression, actor, entry.trigger.window === "main" ? "mainEffect" : "counterEffect").allowed }));
     return freezeMovement({ matchId: board.matchId, movementRevision: board.revision, progressionRevision: progression.revision,
-      catalogVersion: this.#catalog?.version ?? null, activationEnabled: this.#activationEnabled && progression.gate.kind === "idle" &&
+      catalogVersion: this.#catalog?.version ?? null, activationEnabled: this.#activationEnabled && !progression.outcome && progression.gate.kind === "idle" &&
         (this.#active ? ["prepared", "completed"].includes(this.#active.effect.view().status) : this.#idle !== null), source: { ...query.source }, effects });
   }
   activateRegistered(actor: Player, input: unknown): EffectCommandResponse {
@@ -245,7 +245,16 @@ export class EffectMatchOwner {
       effect: { resolutionId: this.#idle.resolutionId, actor: progression.activePlayer, status: "idle", completedSteps: 0, masterVersion: this.#legacy.master?.version ?? null },
       progression: { revision: progression.revision, turnNumber: progression.turnNumber, activePlayer: progression.activePlayer,
         phase: progression.phase, gate: progression.gate.kind, chooser: progression.gate.kind === "choice" ? progression.gate.chooser : null,
-        finished: progression.outcome !== null, winner: progression.outcome?.winner ?? null }, selection: null });
+        finished: progression.outcome !== null, winner: progression.outcome?.winner ?? null,
+        ...(progression.outcome?.reason === "local-deck-out" ? { defeatedPlayers: ([0, 1] as const).filter(player => this.#board!.players[player].deck.length === 0) } : {}) }, selection: null });
+  }
+  settleLocalDeckOut(): void {
+    if (!this.#idle?.allowTestTurnSwitch || process.env.NODE_ENV === "production") return;
+    ensureMove(!this.#busy && this.#mode === "automated" && this.#current(), "local-outcome-unavailable");
+    const state = this.snapshot(), next = localDeckOutProgression(state.movement!, state.progression!);
+    if (next === state.progression) return;
+    this.#board = state.movement; this.#progression = next; this.#active = null;
+    this.#idle = { ...this.#idle, resolutionId: randomUUID() };
   }
   releaseRegisteredEffect(cancelPrepared = false): void {
     if (!this.#idle || !this.#active) return;

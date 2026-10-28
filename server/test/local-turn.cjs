@@ -3,14 +3,15 @@ const assert = require('node:assert/strict');
 const { createMatch } = require('../dist/test/game.js');
 const { createProgression } = require('../dist/test/progression/state.js');
 const { applySystemEvent } = require('../dist/test/progression/transitions.js');
-const { nextLocalTurnCheckpoint, openingLocalTurnCheckpoint } = require('../dist/test/localTurnCheckpoint.js');
+const { nextLocalTurnCheckpoint, openingLocalTurnCheckpoint, localDeckOutProgression } = require('../dist/test/localTurnCheckpoint.js');
 const { MovementStore } = require('../dist/test/movement/engine.js');
 const { EffectCatalog } = require('../dist/test/effects/effectCatalog.js');
 const { EffectMatchOwner } = require('../dist/test/effects/effectMatchOwner.js');
 const { OwnedEffectEndpoint } = require('../dist/test/effects/ownedEffectEndpoint.js');
-function setup(first = 0, enabled = true) {
+function setup(first = 0, enabled = true, remaining = 40) {
   const recipe = { name: 'Test', leaderCardId: 'LEADER', mainDeck: Array(50).fill('CHAR'), donDeck: Array(10).fill('DON'), cardTypes: { CHAR: 'character' }, leaderLifeCount: 5 };
   const match = createMatch(recipe, recipe), catalog = new EffectCatalog([{ dslVersion: 1, effectId: 'TEST.draw', cardId: 'LEADER', trigger: { kind: 'activate', window: 'main' }, costs: [{ kind: 'moveCards', selector: { kind: 'cards', chooser: 'SELF', owner: 'SELF', zones: ['hand'], min: 1, max: 1, mode: 'SELECT' }, destination: { owner: 'SELF', zone: 'trash', position: 'append', visibility: 'faceUp' } }], actions: [{ kind: 'draw', player: 'SELF', amount: 1 }] }]);
+  const shortened = match.players[first].zones.deck.splice(remaining); match.players[first].zones.trash.push(...shortened.map(card => ({ ...card, faceUp: true })));
   const owner = new EffectMatchOwner(match, catalog, true); let p = createProgression(first);
   while (true) { p = applySystemEvent(p, p.revision, { kind: 'settlePhase', phaseToken: p.phaseToken }); if (p.phase === 'main') break; p = applySystemEvent(p, p.revision, { kind: 'advancePhase', phaseToken: p.phaseToken }); }
   owner.adopt(p); owner.prepareRegisteredIdle({ status: 'certifiedNone' }, undefined, enabled);
@@ -105,12 +106,37 @@ test('opening cannot apply twice and remaining DON are added without fabricating
   assert.equal(Object.keys(next.movement.cards).length, Object.keys(before.movement.cards).length);
 });
 
-test('deck-out and unresolved transient state stop the local transition without partial refresh', () => {
+test('drawing the final card ends during draw without adding DON; unsupported modifiers still reject', () => {
   const s = setup(), before = s.owner.snapshot(), altered = structuredClone(before.movement), zones = altered.players[1];
   const moved = zones.deck.splice(1); zones.trash.push(...moved);
   for (const id of moved) altered.cards[id].faceUp = true;
   const copy = structuredClone(altered);
-  assert.throws(() => nextLocalTurnCheckpoint(altered, before.progression, 0, 'deck-out'), /deck-outcome/); assert.deepEqual(altered, copy);
+  const result = nextLocalTurnCheckpoint(altered, before.progression, 0, 'deck-out'); assert.deepEqual(altered, copy);
+  assert.equal(result.progression.outcome.winner, 0); assert.equal(result.progression.phase, 'draw');
+  assert.equal(result.movement.players[1].deck.length, 0); assert.equal(result.movement.players[1].hand.length, 6);
+  assert.deepEqual(result.movement.players[1].donDeck, copy.players[1].donDeck); assert.equal(result.movement.players[1].activeDon.length, 0);
   const unsupported = structuredClone(before.movement); unsupported.cards[unsupported.players[1].leader[0]].modifierIds = ['unknown-modifier'];
   assert.throws(() => nextLocalTurnCheckpoint(unsupported, before.progression, 0, 'modifiers'), /transient-state/);
+});
+
+test('effect deck-out clears the runtime and exposes the same terminal result to both players', () => {
+  const s = setup(0, true, 1), v = s.endpoint.viewFor(0), c = { ...s.command(0, 'last-card'), kind: 'activateRegistered', source: v.movement.players[0].leader[0].ref, effectId: 'TEST.draw', catalogVersion: s.owner.snapshot().catalogVersion };
+  assert.equal(s.endpoint.handle(0, c).ok, true); s.step(0, 'answerCosts'); s.step(0, 'commitCosts');
+  const result = s.step(0, 'advance'); assert.equal(result.ok, true); assert.equal(result.view.progression.finished, true);
+  assert.equal(result.view.progression.winner, 1); assert.deepEqual(result.view.progression.defeatedPlayers, [0]);
+  assert.equal(s.owner.snapshot().activeResolutionId, null); assert.equal(result.view.selection, null); assert.equal(result.view.testTurnSwitchAvailable, false);
+  const other = s.endpoint.viewFor(1); assert.equal(other.progression.winner, 1); assert.equal(other.movement.players[0].hand.every(card => card.cardId === null), true);
+  const before = s.owner.snapshot(); assert.equal(s.endpoint.handle(0, c).replayed, true);
+  assert.equal(s.activate(0, 'after-end').ok, false); assert.equal(s.endpoint.handle(0, s.command(0, 'after-turn')).ok, false); assert.equal(s.step(0, 'advance').ok, false);
+  assert.equal(s.owner.snapshot().movement, before.movement); assert.equal(s.owner.snapshot().progression, before.progression);
+});
+
+test('already empty decks finish without a draw and simultaneous deck-out has no winner', () => {
+  const s = setup(), before = s.owner.snapshot(), altered = structuredClone(before.movement);
+  for (const zones of altered.players) {
+    const moved = zones.deck.splice(0); zones.trash.push(...moved); for (const id of moved) altered.cards[id].faceUp = true;
+  }
+  const ended = localDeckOutProgression(altered, before.progression); assert.equal(ended.outcome.winner, null); assert.equal(ended.outcome.reason, 'local-deck-out');
+  assert.equal(localDeckOutProgression(altered, ended), ended);
+  const result = nextLocalTurnCheckpoint(altered, before.progression, 0, 'empty'); assert.equal(result.movement, altered); assert.equal(result.progression.turnNumber, 1);
 });

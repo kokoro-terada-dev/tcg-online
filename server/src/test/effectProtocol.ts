@@ -11,7 +11,7 @@ export type EffectTransportView = Readonly<{
   testTurnSwitchAvailable?: boolean;
   // While idle, resolutionId reserves the next resolution; there is no running effect.
   effect: Readonly<{ resolutionId: string; actor: Player; status: "idle" | "prepared" | "resolving" | "completed" | "cancelled" | "blocked" | "waitingForSelection" | "waitingForCostSelection" | "costsReady"; completedSteps: number; masterVersion: string | null }>;
-  progression: Readonly<{ revision: number; turnNumber: number; activePlayer: Player; phase: string; gate: "idle" | "resolving" | "choice"; chooser: Player | null; finished: boolean; winner: Player | null }>;
+  progression: Readonly<{ revision: number; turnNumber: number; activePlayer: Player; phase: string; gate: "idle" | "resolving" | "choice"; chooser: Player | null; finished: boolean; winner: Player | null; defeatedPlayers?: readonly Player[] }>;
   selection: EffectSelectionView | null;
 }>;
 export type EffectCommandKind = "beginCosts" | "answerCosts" | "commitCosts" | "cancelCosts" | "start" | "advance" | "answerEffect";

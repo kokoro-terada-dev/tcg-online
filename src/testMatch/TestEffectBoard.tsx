@@ -14,10 +14,20 @@ export default function TestEffectBoard(props: Props) {
   const { view, busy, needsSync, onAction } = props;
   const [inspected, setInspected] = useState<{ card: CardView; context: string } | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [resultVisible, setResultVisible] = useState(false);
+  const finished = view.progression.finished;
+  const resultLabel = view.progression.winner === view.localPlayerIndex ? "WIN" :
+    view.progression.winner !== null || view.progression.defeatedPlayers?.includes(view.localPlayerIndex) ? "LOSE" : "対戦終了";
+  useEffect(() => {
+    setResultVisible(finished);
+    if (!finished) return;
+    const timer = window.setTimeout(() => setResultVisible(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [view.matchId, finished]);
   const context = `${view.matchId}:${view.localPlayerIndex}:${view.effect.resolutionId}:${view.movement.revision}:${view.progression.revision}:${view.effect.status}:${busy}:${needsSync}`;
   useEffect(() => { setInspected(null); }, [context]);
   useEffect(() => { setCollapsed(false); }, [view.effect.resolutionId, view.effect.status, view.selection?.selectionId]);
-  const selection = view.selection, mine = view.effect.actor === view.localPlayerIndex, disabled = busy || needsSync;
+  const selection = view.selection, mine = view.effect.actor === view.localPlayerIndex, disabled = busy || needsSync || finished;
   let board;
   try { board = effectBoardView(view); } catch { return <main><p role="alert">この盤面形式はまだ表示できません。</p><button onClick={props.onEnd}>ルームへ戻る</button></main>; }
   return <>
@@ -28,6 +38,7 @@ export default function TestEffectBoard(props: Props) {
       <div hidden={collapsed}>
       {selection ? <Selection key={selection.selectionId} selection={selection} disabled={disabled}
         onConfirm={tokens => onAction(view.effect.status === "waitingForCostSelection" ? "answerCosts" : "answerEffect", tokens)} /> : <p role="status">{
+        finished ? (view.progression.defeatedPlayers?.length === 2 ? "対戦終了・両者敗北" : `対戦終了・${resultLabel}`) :
         view.effect.status === "idle" ? <><span>{view.progression.activePlayer === view.localPlayerIndex ? "自分のターン・待機中" : "相手のターン・待機中"}</span><small> / {view.progression.turnNumber}ターン目</small></> :
         view.effect.status === "completed" ? "処理完了" : view.effect.status === "blocked" ? "処理を続行できません" :
         !mine || view.effect.status === "waitingForSelection" ? "相手の操作を待っています" :
@@ -45,6 +56,7 @@ export default function TestEffectBoard(props: Props) {
       {needsSync && <p role="alert">応答を確認できません。再同期してください。</p>}
       </div>
     </section>
+    {finished && resultVisible && <div className={`test-effect-result${resultLabel === "WIN" ? " test-effect-result-win" : ""}`} role="status">{resultLabel}</div>}
     {inspected?.context === context && props.onCatalog && <EffectCatalogDialog key={`${context}:${inspected.card.id}`} card={inspected.card} onLoad={props.onCatalog} onClose={() => setInspected(null)}
       {...(props.onActivateCatalog ? { onActivate: props.onActivateCatalog } : {})} />}
   </>;
