@@ -10,6 +10,7 @@ import type { Evaluation } from "./types";
 import { createEvaluationBudget, evaluateCondition } from "./predicates";
 import { movementSelectionSnapshot, movementSourceFacts } from "./movementSelection";
 import { visibleTo } from "../movement/engine";
+import { pinMasterFacts, type MasterFactOptions, type PinnedMasterFacts } from "./masterFacts";
 
 type Leaf = DeepReadonly<Extract<Action, { kind: "draw" | "move" | "select" | "if" | "optional" }>>;
 type Scope = { parent: Scope | null; bindings: Map<string, SelectionResult> };
@@ -30,7 +31,8 @@ export class PreparedMovementEffect {
   #branches = new Map<number, boolean>();
   #nextBranchId = 0;
   #conditionBudget = createEvaluationBudget();
-  constructor(state: MovementState, identity: ResolutionIdentity, input: unknown) {
+  #catalog: PinnedMasterFacts;
+  constructor(state: MovementState, identity: ResolutionIdentity, input: unknown, masterOptions?: MasterFactOptions) {
     const definition = validateEffectDefinition(input).definition;
     ensureMove(definition.costs.length === 0 && definition.condition === undefined, "action-runtime-cost-or-condition-not-supported");
     ensureMove(identity.source !== null, "action-runtime-source-required");
@@ -38,7 +40,8 @@ export class PreparedMovementEffect {
     ensureMove(source.cardId === definition.cardId && source.controller === identity.actor, "action-runtime-source-mismatch");
     this.#actor = identity.actor;
     this.#resolutionId = identity.resolutionId;
-    this.#sourceFacts = movementSourceFacts(state, identity.source!);
+    this.#catalog = pinMasterFacts(state, masterOptions);
+    this.#sourceFacts = movementSourceFacts(state, identity.source!, this.#catalog);
     this.#compile(definition.actions, { parent: null, bindings: new Map() });
     this.#resolution = new MovementResolution(state, identity);
   }
@@ -80,11 +83,11 @@ export class PreparedMovementEffect {
   snapshot(): MovementState { return this.#resolution.snapshot(); }
   view() {
     const view = this.#resolution.view();
-    return Object.freeze({ ...view, status: this.#pending ? "waitingForSelection" as const : view.status });
+    return Object.freeze({ ...view, masterVersion: this.#catalog.version, status: this.#pending ? "waitingForSelection" as const : view.status });
   }
   selectionViewFor(viewer: Seat): SelectionView | null { return this.#pending?.viewFor(viewer) ?? null; }
   #selectionSnapshot() {
-    const snapshot = movementSelectionSnapshot(this.snapshot(), this.#actor, this.#sourceFacts);
+    const snapshot = movementSelectionSnapshot(this.snapshot(), this.#actor, this.#sourceFacts, this.#catalog);
     const variables = new Map<string, Evaluation<FactValue>>();
     let scope: Scope | null = this.#instructions[this.#cursor]?.scope ?? null;
     while (scope) {

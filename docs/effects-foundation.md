@@ -2,6 +2,8 @@
 
 DSLの一部を独立モデルで実行する基盤は [Action実行器](action-runtime.md) を参照してください。draw/move/sequence/repeat/select/if/optionalの限定対応で、選択待ち・回答後再開・条件分岐・任意効果を追加しました。既存対戦には未接続です。
 
+Action実行器はサーバーのMasterSnapshotを版固定で参照できます。カード名・特徴などのFactsと、未補正と保証できる場合に限定した数値Factsを追加しました。実際の発動権限や全ての効果適用後の現在値計算を実装したものではありません。
+
 支払い確定と効果処理の境界を管理する独立基盤は [Resolution lifecycle](resolution-runtime.md) を参照してください。DSL実行・既存対戦への接続はまだありません。
 
 後続の独立したターン・フェーズ基盤は [進行管理の設計・対応状況](progression-foundation.md) を参照してください。DSLも進行基盤も、現行対戦への接続はまだ行っていません。

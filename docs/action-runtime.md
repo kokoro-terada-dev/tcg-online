@@ -60,10 +60,34 @@ repeatごとの分岐判断と回答IDは独立です。
 分岐選択後は選ばなかった命令を実行せず、カード移動イベントも作成しません。
 
 候補Snapshotは実行器自身の盤面から作成し、外部から別の盤面を注入しません。
-Movementが保持する種別・レスト・領域・枚数・ターン番号だけをFactsにします。
-コスト・パワー・特徴などは未接続であり、必要ならunknownとして停止します。
+Movementが保持する種別・レスト・領域・枚数・ターン番号をFactsにします。
+任意の第4引数で、サーバーが読み込んだMasterSnapshotを接続できます（下記参照）。
 選択で新しい公開権限を作らず、既存の公開状態・一時公開権限だけを利用します。
 ブラインド選択はカード名や実体IDを公開せず、隠し情報による絞り込み権限も付与しません。
+
+## カードマスター参照
+
+`new PreparedMovementEffect(state, identity, definition, { master, numericPolicy })`
+で、既存parseMaster/loadMasterのSnapshotを渡します。ファイルの再読込は行いません。
+この接続は信頼するサーバー専用であり、クライアントのカード情報を採用しません。
+解決生成時に対戦内カードだけをコピーして版を固定します。以後、外部のマスター変更は
+進行中の判定へ影響しません。表示状態のmasterVersionで使用版を識別できます。
+
+- カード名・種別・特徴・属性・色をSOURCE/TARGETのFactsに追加します。
+- effectIdsは効果定義へのリンクであり、キーワード能力abilitiesには転用しません。
+- マスターなし・IDなし・数値のnull/欠落はunknownです。0は有効な数値です。
+- 既存読込時に特徴・属性・色の項目有無も別保存します。未定義と明示的な空配列を区別します。
+- 項目有無がない旧Snapshotは、リスト値を不明として扱います。
+- Movementの種別とマスターの種別が矛盾する場合、解決開始前に拒否します。
+- SnapshotとFactsは非公開データです。選択Viewへ追加のマスター情報を混入させません。
+
+印刷パワー/コストと現在値を混同しないため、numericPolicyの既定値はunresolvedです。
+この場合、数値Factsは不明です。信頼する呼出し元が未モデル化の補正がないことを確認して
+certifiedUnmodifiedを指定した場合だけ、印刷値を数値Factsとして使用できます。
+それでもmodifierIds/grantIdsがあるカードは数値を不明とし、付与DONがあるカードの
+現在パワーも不明とします。付与DONだけではコストの参照を妨げません。
+全ての継続効果・補正・手番を含む現在値計算器はまだ実装していません。
+将来のMatch管理側で未補正と保証できない場合、certifiedUnmodifiedを指定してはいけません。
 
 古いrevision、再送、再入を拒否します。命令内の移動は一括確定します。
 後続命令で失敗した場合はblockedとなり、それ以前に確定した命令を巻き戻しません。
@@ -75,7 +99,7 @@ snapshotと実行結果は非公開サーバーデータです。送信には既
 - modify、耐性、置換の設置と誘発待機
 - 複数カードの山札上への移動順序（推測せず停止）
 - 山札不足時の部分ドローや敗北判定（推測せず停止）
-- CostPlan/Progression/カードマスターとの接続、Socket通信、保存・再接続
+- CostPlan/Progressionとの接続、完全な現在値計算、Socket通信、保存・再接続
 
 ドローは1命令最大64枚、展開後の末端命令は最大128個です。
 構造検証の既存上限とMovementの操作・イベント上限も有効です。
@@ -85,5 +109,5 @@ snapshotと実行結果は非公開サーバーデータです。送信には既
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build
-node --test test/action-control.cjs test/action-selection.cjs test/movement-actions.cjs test/resolution.cjs
+node --test test/master-facts.cjs test/action-control.cjs test/action-selection.cjs test/movement-actions.cjs test/resolution.cjs
 ```
