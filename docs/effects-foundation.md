@@ -6,6 +6,8 @@
 
 対象選択の独立基盤は [Selectorの設計・対応状況](selector-runtime.md) を参照してください。候補・選択View・回答検証までを追加し、支払い・移動・効果解決にはまだ接続していません。
 
+複数コストの独立したリソース計画は [Costの設計・対応状況](cost-runtime.md) を参照してください。独立支払いの割当と確定前再検証までを追加し、実際の支払い確定はまだ行いません。
+
 ## 適用範囲
 
 基準は [利用者提供のv2.0原文](effects-v2-source.md) です。原文は保持し、ここに補足・実装状況を記録します。
@@ -59,7 +61,7 @@ Registryは Trigger / Predicate / Cost / Selector / Action / Replacement / Modif
 | Trigger | event（onPlay/onAttack/onKo/turnStart/turnEnd）、activate（main/counter/trigger） |
 | Predicate | compare、exists、all、any、not |
 | Selector | cards、choice |
-| Cost | payDon、moveCards、restCards |
+| Cost | payDon、moveCards、restCards、revealCards |
 | Action | draw、select、move、sequence、if、optional、repeat、modify、installRestriction、installReplacement |
 | Modifier | power |
 | Duration | thisTurn、nextOpponentTurnEnd、permanent |
@@ -146,7 +148,7 @@ Selectorを拡張する場合は、カード集合/選択肢等の結果型と�
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build
-node --test test/selectors.cjs test/predicates.cjs test/progression.cjs test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
+node --test test/costs.cjs test/selectors.cjs test/predicates.cjs test/progression.cjs test/effects-schema.cjs test/effects-types.cjs test/test-game.cjs test/test-lobby.cjs
 cd ..
 node --test tools/test-card-master.test.js
 npm run build

@@ -103,6 +103,8 @@ SelectorMapの型、構造パーサー、SelectorRuntimeRegistryの実行登録�
 現在のcancelはサーバー内部で未解決セッションを閉じるだけです。支払い後のキャンセルや返金を実装したものではありません。
 今回も自動対戦には未接続です。次は複数コストの計画と二重支払い防止を進めます。
 
+後続の [Cost基盤](cost-runtime.md) で独立支払いの割当・重複防止を追加しました。実盤面への支払いと移動の確定はまだ行いません。
+
 ```powershell
 cd C:\Users\kensh\workspace_server\server
 npm run build

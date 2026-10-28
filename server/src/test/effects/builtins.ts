@@ -110,6 +110,10 @@ export function createBuiltinRegistries() {
     shape(raw, ctx, ["selector"], ["saveAs"]); const selector = cardSelector(raw.selector, ctx);
     return { kind: "restCards", selector, ...save(raw, ctx, "cards") };
   });
+  r.cost.register("revealCards", (raw, ctx) => {
+    shape(raw, ctx, ["selector"], ["saveAs"]); const selector = cardSelector(raw.selector, ctx);
+    return { kind: "revealCards", selector, ...save(raw, ctx, "cards") };
+  });
   r.action.register("draw", (raw, ctx) => {
     shape(raw, ctx, ["player", "amount"], ["saveAs"]);
     const player = oneOf(raw.player, players, ctx.path), amount = integer(raw.amount, ctx.path, 1);

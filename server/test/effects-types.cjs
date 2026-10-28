@@ -10,12 +10,14 @@ import { Registry } from "./registry";
 import { createBuiltinRegistries } from "./builtins";
 import { PredicateRuntimeRegistry } from "./predicates";
 import { SelectorRuntimeRegistry } from "./selectors";
-import type { ActionMap, PredicateMap, ReplacementMap, SelectorMap } from "./types";
+import { CostRuntimeRegistry } from "./costs";
+import type { ActionMap, PredicateMap, ReplacementMap, SelectorMap, CostMap } from "./types";
 declare module "./types" {
   interface ActionMap { probeAction: { kind: "probeAction"; amount: number } }
   interface PredicateMap { probePredicate: { kind: "probePredicate"; enabled: boolean } }
   interface ReplacementMap { probeReplacement: { kind: "probeReplacement"; token: string } }
   interface SelectorMap { probeSelector: { kind: "probeSelector"; label: string } }
+  interface CostMap { probeCost: { kind: "probeCost"; amount: number } }
 }
 const actions = new Registry<ActionMap>();
 actions.register("probeAction", () => ({ kind: "probeAction", amount: 1 }));
@@ -29,6 +31,10 @@ const selectors = new SelectorRuntimeRegistry();
 selectors.register("probeSelector", (node, context) => ({ state: "known", value: { kind: "choice", chooser: context.actor, options: [{ id: "one", label: node.label }] } }));
 // @ts-expect-error selector runtime cannot return a boolean as its plan
 selectors.register("probeSelector", () => ({ state: "known", value: true }));
+const costRegistry = new CostRuntimeRegistry();
+costRegistry.register("probeCost", node => ({ operation: "rest", selector: { kind: "cards", owner: "SELF", chooser: "SELF", zones: ["activeDon"], min: node.amount, max: node.amount, mode: "SELECT" } }));
+// @ts-expect-error only standard cost operations may be produced by this stage
+costRegistry.register("probeCost", () => ({ operation: "payMoney" }));
 const replacements = new Registry<ReplacementMap>();
 replacements.register("probeReplacement", () => ({ kind: "probeReplacement", token: "a" }));
 const builtins = createBuiltinRegistries();

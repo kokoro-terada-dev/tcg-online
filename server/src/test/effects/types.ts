@@ -36,6 +36,7 @@ export interface CostMap {
   payDon: { kind: "payDon"; amount: number };
   moveCards: { kind: "moveCards"; selector: SelectorMap["cards"]; destination: Destination; saveAs?: string };
   restCards: { kind: "restCards"; selector: SelectorMap["cards"]; saveAs?: string };
+  revealCards: { kind: "revealCards"; selector: SelectorMap["cards"]; saveAs?: string };
 }
 export interface ModifierMap { power: { kind: "power"; target: Value; amount: number } }
 export interface DurationMap {
