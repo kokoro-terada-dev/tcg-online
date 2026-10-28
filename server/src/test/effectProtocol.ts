@@ -1,4 +1,8 @@
 import type { MovementView, Player } from "./movement/types";
+import type { CardObjectRef, DeepReadonly, Trigger } from "./effects/types";
+export type EffectCatalogQuery = Readonly<{ matchId: string; expectedMovementRevision: number; expectedProgressionRevision: number; source: Readonly<CardObjectRef> }>;
+export type EffectCatalogView = Readonly<{ matchId: string; movementRevision: number; progressionRevision: number; catalogVersion: string | null; source: Readonly<CardObjectRef>;
+  effects: readonly Readonly<{ effectId: string; trigger: DeepReadonly<Trigger>; status: "schemaOnly"; timingAvailable: boolean }>[] }>;
 export type EffectSelectionView = Readonly<{ matchId: string; resolutionId: string; selectionId: string; revision: number }> & (
   { kind: "cards"; chooser: Player; mode: "SELECT" | "BLIND_SELECT" | "ORDER"; min: number; max: number; candidates: readonly Readonly<{ token: string; cardId: string | null }>[] } |
   { kind: "choice"; chooser: Player; options: readonly Readonly<{ token: string; label: string }>[] });

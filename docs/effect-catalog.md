@@ -48,8 +48,25 @@ resolutionIdはサーバーがUUIDで生成します。クライアントから�
 snapshotのcatalogVersionで使用版を識別できます。実行途中でカタログを差し替えるAPIはありません。
 
 ローカルの固定テスト効果もこの登録経路へ変更しました。通常の公開起動は有効化していません。
-利用者がカードをタップして登録済み効果一覧から選ぶ通信/UI、実カード定義、
+登録済み効果一覧の参照通信は下記を参照してください。利用者が一覧から発動を選ぶUI、実カード定義、
 ファイル配置・読込・マスターとの配布管理は今後の段階です。
+
+## 一覧参照通信
+
+`test-effect:catalog` は、自分の表向きのリーダー・キャラクター・ステージに
+登録された効果の要約だけを、要求した接続へのackで返します。盤面は変更せず、相手へ配信しません。
+
+要求は `matchId`、`expectedMovementRevision`、`expectedProgressionRevision`、
+`source: { instanceId, generation }` です。プレイヤー番号はサーバーが接続から決めます。
+古い盤面参照、相手カード、手札等の対象外エリア、不正な要求は拒否します。
+
+成功時は `{ ok: true, catalog }` を返します。catalogには両revision、使用カタログ版、
+カード参照、効果ID・trigger・`status: "schemaOnly"`・`timingAvailable` の一覧を含めます。
+コストや処理定義の本体は返しません。カタログ未設定は版null・空一覧で明示します。
+
+`timingAvailable` は起動効果のタイミングだけの判定です。コスト、回数制限などを含む
+発動可能性の保証ではありません。イベント効果や処理待ち中はfalseです。
+本番の自動効果は引き続き無効で、一覧表示UIと一覧からの発動要求は未追加です。
 
 ```powershell
 cd C:\Users\kensh\workspace_server\server

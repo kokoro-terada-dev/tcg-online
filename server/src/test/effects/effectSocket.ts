@@ -3,6 +3,7 @@ import type { Server, Socket } from "socket.io";
 import { EffectCommandHost, type EffectCommandResponse, type EffectTransportView } from "./effectCommandHost";
 import type { Player } from "../movement/types";
 import { OwnedEffectEndpoint, OwnedEffectUnavailable } from "./ownedEffectEndpoint";
+import type { EffectCatalogView } from "../effectProtocol";
 
 export const EFFECT_SOCKET_LIMITS = Object.freeze({ requests: 60, windowMs: 10000 });
 export type EffectSocketMembership = Readonly<{
@@ -12,6 +13,7 @@ export type EffectSocketResolver = (socketId: string) => EffectSocketMembership 
 export type EffectSocketFailure = Readonly<{ ok: false; code: "not_available" | "rate_limited" | "internal_error" }>;
 export type EffectSocketSyncResponse = Readonly<{ ok: true; view: EffectTransportView }> | EffectSocketFailure;
 export type EffectSocketCommandResponse = EffectCommandResponse | EffectSocketFailure;
+export type EffectSocketCatalogResponse = Readonly<{ ok: true; catalog: EffectCatalogView }> | EffectSocketFailure | Readonly<{ ok: false; code: "query_rejected" }>;
 type Checked = EffectSocketMembership & Readonly<{ peers: readonly [Socket, Socket] }>;
 const attached = new WeakSet<Socket>();
 
@@ -53,6 +55,16 @@ export function bindEffectSocket(io: Server, socket: Socket, resolve: EffectSock
     return JSON.stringify([view.effect.resolutionId, view.movement.revision, view.progression.revision, view.effect.status, view.effect.completedSteps]);
   }
   const unavailable = (): EffectSocketFailure => ({ ok: false, code: "not_available" });
+  function catalog(input: unknown, reply?: (value: EffectSocketCatalogResponse) => void): void {
+    if (disposed || typeof reply !== "function") return;
+    try {
+      if (!permitted()) { reply({ ok: false, code: "rate_limited" }); return; }
+      const context = membership();
+      if (!context || !(context.host instanceof OwnedEffectEndpoint)) { reply(unavailable()); return; }
+      const result = context.host.catalogFor(context.actor, input);
+      reply(same(context, membership()) ? { ok: true, catalog: result } : unavailable());
+    } catch { reply({ ok: false, code: "query_rejected" }); }
+  }
   function sync(reply?: (value: EffectSocketSyncResponse) => void): void {
     if (disposed || typeof reply !== "function") return;
     try {
@@ -85,9 +97,11 @@ export function bindEffectSocket(io: Server, socket: Socket, resolve: EffectSock
     if (disposed) return;
     disposed = true;
     socket.off("test-effect:sync", sync); socket.off("test-effect:command", command); socket.off("disconnect", dispose);
+    socket.off("test-effect:catalog", catalog);
     attached.delete(socket);
   }
   attached.add(socket);
   socket.on("test-effect:sync", sync); socket.on("test-effect:command", command); socket.on("disconnect", dispose);
+  socket.on("test-effect:catalog", catalog);
   return dispose;
 }

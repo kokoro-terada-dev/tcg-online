@@ -1,7 +1,7 @@
 import { applyCommand, type Match } from "../game";
-import { freezeState } from "../progression/state";
+import { checkTiming, freezeState } from "../progression/state";
 import type { Progression } from "../progression/types";
-import { ensureMove, id, player } from "../movement/state";
+import { ensureMove, freezeMovement, id, location, player } from "../movement/state";
 import type { MovementRules, MovementState, Player } from "../movement/types";
 import type { ResolutionIdentity } from "../movement/resolution";
 import { MatchMovementCapture } from "./matchMovement";
@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { getCard } from "../movement/state";
 import type { CardObjectRef } from "./types";
 import type { EffectCatalog } from "./effectCatalog";
+import type { EffectCatalogQuery, EffectCatalogView } from "../effectProtocol";
 
 type Mode = "legacy" | "automated" | "faulted" | "closed";
 type OwnerFailure = Readonly<{ ok: false; code: "owner_unavailable" | "legacy_conflict" }>;
@@ -80,6 +81,21 @@ export class EffectMatchOwner {
     const resolutionId = randomUUID();
     this.openEffect({ resolutionId, actor, source }, definition, rules, numericPolicy);
     return resolutionId;
+  }
+  registeredEffectsFor(actor: Player, query: EffectCatalogQuery): EffectCatalogView {
+    player(actor);
+    ensureMove(!this.#busy && this.#mode === "automated" && this.#current(), "owner-catalog-unavailable");
+    const state = this.snapshot(), board = state.movement!, progression = state.progression!;
+    ensureMove(query.matchId === board.matchId && query.expectedMovementRevision === board.revision &&
+      query.expectedProgressionRevision === progression.revision, "stale-effect-catalog-query");
+    const card = getCard(board, query.source), at = location(board, card.instanceId);
+    ensureMove(card.owner === actor && card.controller === actor && at.player === actor && card.faceUp &&
+      ["leader", "character", "stage"].includes(at.zone), "effect-catalog-source-not-visible-own-board");
+    const effects = (this.#catalog?.listForCard(card.cardId) ?? []).map(entry => ({ ...entry,
+      timingAvailable: entry.trigger.kind === "activate" && entry.trigger.window !== "trigger" &&
+        checkTiming(progression, actor, entry.trigger.window === "main" ? "mainEffect" : "counterEffect").allowed }));
+    return freezeMovement({ matchId: board.matchId, movementRevision: board.revision, progressionRevision: progression.revision,
+      catalogVersion: this.#catalog?.version ?? null, source: { ...query.source }, effects });
   }
   handleEffect(actor: Player, input: unknown): EffectCommandResponse | OwnerFailure {
     player(actor);
