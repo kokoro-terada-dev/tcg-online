@@ -78,6 +78,16 @@ export function testDamageCommand(view: EffectTransportView, requestId: string):
     expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, battleId: view.battle.battleId };
 }
 
+export function testDamageChoiceCommand(view: EffectTransportView, token: string, requestId: string): TestBattleCommand {
+  const choice = view.damageChoice;
+  if (!choice || choice.chooser !== view.localPlayerIndex || !choice.options.some(option => option.token === token) ||
+    view.effect.status !== "idle" || view.progression.finished || view.progression.gate !== "choice" || view.progression.chooser !== view.localPlayerIndex ||
+    view.battle?.battleId !== choice.battleId || view.battle.defender !== view.localPlayerIndex || view.battle.step !== "damage") throw new Error("No local damage choice");
+  return { kind: "testDamageChoice", matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
+    expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision,
+    battleId: choice.battleId, selectionId: choice.selectionId, token };
+}
+
 export function acceptEffectView(current: EffectTransportView | null, next: EffectTransportView): boolean {
   return !current || (current.matchId === next.matchId && current.localPlayerIndex === next.localPlayerIndex &&
     next.movement.revision >= current.movement.revision && next.progression.revision >= current.progression.revision);

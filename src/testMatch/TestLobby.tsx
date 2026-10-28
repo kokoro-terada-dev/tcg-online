@@ -7,6 +7,7 @@ import { getAllLocalDeckRecipes } from "../utils/localDeckStorage";
 import { getLocalCardImage, hasLocalCardImages } from "../utils/localCardImages";
 import TestBoard from "./TestBoard";
 import TestEffectBoard from "./TestEffectBoard";
+import { testDamageChoiceCommand } from "./effectClientState";
 import { acceptEffectView, acceptEffectCatalog, effectCatalogQuery, effectCommand, registeredEffectCommand, testTurnCommand, testPlayCardCommand, testAttackCommand, testBattleDecisionCommand, testDamageCommand, type EffectTransportView, type EffectCommandKind, type EffectCatalogView, type RegisteredEffectCommand, type TestTurnCommand, type TestPlayCardCommand, type TestBattleCommand } from "./effectClientState";
 
 type Room = RoomView;
@@ -140,7 +141,13 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
     try { effectRequest(undefined, undefined, testDamageCommand(current, crypto.randomUUID())); }
     catch { setError("パワー情報またはダメージ判定待ち状態を確認してください。"); }
   }
-  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} onCatalog={queryCatalog} onActivateCatalog={activateCatalog} onTestTurn={switchTestTurn} onTestPlay={playTestCard} onTestAttack={attackTestCard} onTestBattleDecision={decideTestBattle} onTestResolveDamage={resolveTestDamage} />;
+  function chooseTestDamage(token: string) {
+    const current = effectRef.current;
+    if (!current) return;
+    try { effectRequest(undefined, undefined, testDamageChoiceCommand(current, token, crypto.randomUUID())); }
+    catch { setError("現在のライフ選択を確認できません。再同期してください。"); }
+  }
+  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} onCatalog={queryCatalog} onActivateCatalog={activateCatalog} onTestTurn={switchTestTurn} onTestPlay={playTestCard} onTestAttack={attackTestCard} onTestBattleDecision={decideTestBattle} onTestResolveDamage={resolveTestDamage} onTestDamageChoice={chooseTestDamage} />;
   const mine = room?.host.socketId === socketRef.current?.id ? room?.host : room?.guest;
   function selectDeck(id: string) {
     const deck = decks.find((item) => item.id === id);

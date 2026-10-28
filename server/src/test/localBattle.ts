@@ -3,7 +3,7 @@ import type { MovementOperation, MovementState, Player } from "./movement/types"
 import type { MasterSnapshot } from "./cardMaster";
 import type { Progression } from "./progression/types";
 import { MovementStore } from "./movement/engine";
-import { ensureMove, getCard, location } from "./movement/state";
+import { ensureMove, freezeMovement, getCard, location } from "./movement/state";
 import { checkTiming } from "./progression/state";
 import { applyPlayerIntent, applySystemEvent } from "./progression/transitions";
 
@@ -78,8 +78,19 @@ export function localBattlePower(board: MovementState, progression: Progression,
   } catch { return unknown; }
 }
 
-// Baseline fixture combat only: no counters, triggers, keywords or printed abilities.
-export function resolveLocalBattleDamage(board: MovementState, progression: Progression, actor: Player, battleId: string, master: MasterSnapshot | null, transactionId: string) {
+export type LocalLifeChoiceIds = Readonly<{ resolutionId: string; selectionId: string; handToken: string; triggerToken: string }>;
+export type LocalLifeChoice = LocalLifeChoiceIds & Readonly<{ battleId: string; defender: Player; card: Readonly<CardObjectRef> }>;
+export type LocalBattleUpdate = Readonly<{ movement: MovementState; progression: Progression; pendingLife?: LocalLifeChoice }>;
+
+function finishLocalDamage(progression: Progression, battleId: string, participantsPresent: boolean): Progression {
+  let next = applySystemEvent(progression, progression.revision, { kind: "settleBattleStep", battleId, step: "damage" });
+  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId, step: "damage", participantsPresent });
+  next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId, step: "end" });
+  return applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId, step: "end", participantsPresent: false });
+}
+
+// Baseline fixture combat only: no counters, keywords or printed ability execution.
+export function resolveLocalBattleDamage(board: MovementState, progression: Progression, actor: Player, battleId: string, master: MasterSnapshot | null, transactionId: string, choiceIds: LocalLifeChoiceIds): LocalBattleUpdate {
   localContext(board, progression);
   const battle = progression.battle, powers = localBattlePower(board, progression, master);
   ensureMove(!progression.outcome && progression.gate.kind === "idle" && battle?.battleId === battleId && battle.defender === actor &&
@@ -95,16 +106,38 @@ export function resolveLocalBattleDamage(board: MovementState, progression: Prog
     if (topId === undefined) lethal = true;
     else {
       const top = board.cards[topId!]!;
-      operations.push({ kind: "move", card: { instanceId: top.instanceId, generation: top.generation }, from: { player: actor, zone: "life" },
-        to: { player: actor, zone: "hand", position: "append", faceUp: true, rotated: false }, cause: "DAMAGE" });
+      const pendingLife = freezeMovement({ ...choiceIds, battleId, defender: actor, card: { instanceId: top.instanceId, generation: top.generation } });
+      let next = applySystemEvent(progression, progression.revision, { kind: "beginResolution", resolutionId: pendingLife.resolutionId, controller: actor });
+      next = applySystemEvent(next, next.revision, { kind: "waitForChoice", resolutionId: pendingLife.resolutionId, selectionId: pendingLife.selectionId, chooser: actor });
+      const movement = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
+        actor, effectController: null, source: battle.source, mode: "rule", resolutionId: pendingLife.resolutionId,
+        operations: [{ kind: "reveal", card: pendingLife.card, scopeId: pendingLife.resolutionId, viewers: [actor] }] }, { status: "certifiedNone" }).state;
+      return { movement, progression: next, pendingLife };
     }
   }
   const movement = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
     actor: battle.attacker, effectController: null, source: battle.source, mode: "rule", resolutionId: null, operations }, { status: "certifiedNone" }).state;
   if (lethal) return { movement, progression: applySystemEvent(progression, progression.revision, { kind: "finishGame", winner: battle.attacker, reason: "local-leader-damage" }) };
-  let next = applySystemEvent(progression, progression.revision, { kind: "settleBattleStep", battleId, step: "damage" });
-  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId, step: "damage", participantsPresent: target.kind === "leader" || !hits });
-  next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId, step: "end" });
-  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId, step: "end", participantsPresent: false });
+  return { movement, progression: finishLocalDamage(progression, battleId, target.kind === "leader" || !hits) };
+}
+
+export function chooseLocalLifeCard(board: MovementState, progression: Progression, actor: Player, battleId: string, selectionId: string, token: string, pending: LocalLifeChoice, transactionId: string): LocalBattleUpdate {
+  localContext(board, progression);
+  const battle = progression.battle, gate = progression.gate;
+  ensureMove(!progression.outcome && battle?.battleId === battleId && battle.step === "damage" && actor === pending.defender &&
+    battle.defender === actor && pending.battleId === battleId && selectionId === pending.selectionId && gate.kind === "choice" &&
+    gate.resolutionId === pending.resolutionId && gate.selectionId === selectionId && gate.chooser === actor, "local-life-choice-unavailable");
+  ensureMove(token === pending.handToken || token === pending.triggerToken, "local-life-token-invalid");
+  fieldCard(board, battle.source, battle.attacker); const target = fieldCard(board, battle.target, actor);
+  const card = getCard(board, pending.card), at = location(board, card.instanceId);
+  ensureMove(target.kind === "leader" && at.player === actor && at.zone === "life" && board.players[actor].life[0] === card.instanceId, "local-life-top-changed");
+  let next = applySystemEvent(progression, progression.revision, { kind: "acceptChoice", resolutionId: pending.resolutionId, selectionId, chooser: actor });
+  next = applySystemEvent(next, next.revision, { kind: "finishResolution", resolutionId: pending.resolutionId });
+  next = finishLocalDamage(next, battleId, true);
+  const movement = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
+    actor: battle.attacker, effectController: null, source: battle.source, mode: "rule", resolutionId: pending.resolutionId,
+    operations: [{ kind: "move", card: pending.card, from: { player: actor, zone: "life" },
+      to: { player: actor, zone: token === pending.handToken ? "hand" : "public", position: "append", faceUp: true, rotated: false }, cause: "DAMAGE" },
+      { kind: "closeReveals", scopeId: pending.resolutionId }] }, { status: "certifiedNone" }).state;
   return { movement, progression: next };
 }

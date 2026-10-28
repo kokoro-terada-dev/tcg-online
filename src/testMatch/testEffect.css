@@ -28,3 +28,7 @@
 .test-catalog-results small { color: #b8d4c6; margin-top: 4px; }
 .test-effect-result { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 110000; width: min(240px, calc(100% - 32px)); padding: 20px 12px; box-sizing: border-box; border: 2px solid #f0a0a0; border-radius: 8px; background: #642d36; color: #fff; text-align: center; font-size: 36px; font-weight: 800; letter-spacing: 0; overflow-wrap: anywhere; pointer-events: none; }
 .test-effect-result-win { border-color: #a0e5bf; background: #235e49; }
+.test-damage-actions { display: flex; flex-direction: column; justify-content: center; gap: 16px; min-width: 0; }
+.test-damage-actions button { overflow-wrap: anywhere; }
+.test-damage-detail { width: min(280px, 100%); margin: auto; }
+.test-damage-detail .test-catalog-image { width: 100%; }

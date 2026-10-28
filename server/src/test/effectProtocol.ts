@@ -18,6 +18,7 @@ export type EffectTransportView = Readonly<{
   testDamageAvailable?: boolean;
   battlePower?: Readonly<{ attack: number | null; defense: number | null; masterVersion: string | null }> | null;
   battle?: Battle | null;
+  damageChoice?: Readonly<{ battleId: string; selectionId: string; chooser: Player; options: readonly Readonly<{ token: string; label: "手札へ" | "トリガー発動" }>[] }> | null;
   // While idle, resolutionId reserves the next resolution; there is no running effect.
   effect: Readonly<{ resolutionId: string; actor: Player; status: "idle" | "prepared" | "resolving" | "completed" | "cancelled" | "blocked" | "waitingForSelection" | "waitingForCostSelection" | "costsReady"; completedSteps: number; masterVersion: string | null }>;
   progression: Readonly<{ revision: number; turnNumber: number; activePlayer: Player; phase: string; gate: "idle" | "resolving" | "choice"; chooser: Player | null; finished: boolean; winner: Player | null; defeatedPlayers?: readonly Player[] }>;
@@ -29,5 +30,6 @@ export type RegisteredEffectCommand = Base & Readonly<{ kind: "activateRegistere
 export type TestTurnCommand = Base & Readonly<{ kind: "testNextTurn" }>;
 export type TestPlayCardCommand = Base & Readonly<{ kind: "testPlayCard"; source: Readonly<CardObjectRef> }>;
 export type TestBattleCommand = Base & (Readonly<{ kind: "testAttack"; source: Readonly<CardObjectRef>; target: Readonly<CardObjectRef> }> |
-  Readonly<{ kind: "testBattleDecision"; battleId: string; decision: "passBlock" | "endCounter" }> | Readonly<{ kind: "testResolveDamage"; battleId: string }>);
+  Readonly<{ kind: "testBattleDecision"; battleId: string; decision: "passBlock" | "endCounter" }> | Readonly<{ kind: "testResolveDamage"; battleId: string }> |
+  Readonly<{ kind: "testDamageChoice"; battleId: string; selectionId: string; token: string }>);
 export type EffectCommand = Base & (Readonly<{ kind: "answerCosts" | "answerEffect"; selectionId: string; tokens: readonly string[] }> | Readonly<{ kind: Exclude<EffectCommandKind, "answerCosts" | "answerEffect"> }>);

@@ -28,7 +28,11 @@ function setup({ actor = 0, turn = 3, targetRest = null, sourceRest = false, ena
   function decision(seat, action, requestId = action) { return { kind: 'testBattleDecision', ...base(seat, requestId), battleId: endpoint.viewFor(seat).battle.battleId, decision: action }; }
   function ready() { assert.equal(endpoint.handle(actor, attack()).ok, true); assert.equal(endpoint.handle(1 - actor, decision(1 - actor, 'passBlock')).ok, true); assert.equal(endpoint.handle(1 - actor, decision(1 - actor, 'endCounter')).ok, true); }
   function damage(seat = 1 - actor, requestId = 'resolve') { return { kind: 'testResolveDamage', ...base(seat, requestId), battleId: endpoint.viewFor(seat).battle.battleId }; }
-  return { owner, endpoint, source, target, base, attack, decision, actor, ready, damage };
+  function choice(label = '手札へ', requestId = 'choice') {
+    const seat = 1 - actor, pending = endpoint.viewFor(seat).damageChoice;
+    return { kind: 'testDamageChoice', ...base(seat, requestId), battleId: pending.battleId, selectionId: pending.selectionId, token: pending.options.find(option => option.label === label).token };
+  }
+  return { owner, endpoint, source, target, base, attack, decision, actor, ready, damage, choice };
 }
 test('test attacks rest the source and expose the same public arrow for either attacking seat', () => {
   for (const actor of [0, 1]) {
@@ -90,11 +94,18 @@ test('equal power deals one private life-to-hand move and repeated damage does n
     const s = setup({ actor }); s.ready(); const defender = 1 - actor, before = s.owner.snapshot(), c = s.damage();
     assert.equal(s.endpoint.viewFor(actor).testDamageAvailable, false); assert.equal(s.endpoint.viewFor(defender).testDamageAvailable, true);
     assert.equal(s.endpoint.viewFor(defender).battlePower.masterVersion, master.version);
-    const r = s.endpoint.handle(defender, c); assert.equal(r.ok, true); assert.equal(r.view.battle, null);
+    const pending = s.endpoint.handle(defender, c); assert.equal(pending.ok, true); assert.equal(pending.view.progression.gate, 'choice');
+    assert.equal(pending.view.movement.players[defender].life.length, 5);
+    assert.equal(pending.view.movement.players[defender].life[0].cardId, 'CARD');
+    assert.equal(s.owner.snapshot().movement.cards[before.movement.players[defender].life[0]].faceUp, false);
+    const hidden = s.endpoint.viewFor(actor); assert.equal(hidden.movement.players[defender].life[0].cardId, null); assert.equal(hidden.movement.players[defender].life[0].ref, null); assert.deepEqual(hidden.damageChoice.options, []);
+    const choice = s.choice(), r = s.endpoint.handle(defender, choice); assert.equal(r.ok, true); assert.equal(r.view.battle, null); assert.equal(r.view.damageChoice, null);
     assert.equal(r.view.movement.players[defender].life.length, 4); assert.equal(r.view.movement.players[defender].hand.length, 6);
     const top = before.movement.players[defender].life[0]; assert.equal(s.owner.snapshot().movement.cards[top].faceUp, true);
     assert.equal(s.endpoint.viewFor(actor).movement.players[defender].hand.every(card => card.cardId === null), true);
     const after = s.owner.snapshot(); assert.equal(s.endpoint.handle(defender, c).replayed, true); assert.equal(s.owner.snapshot().movement, after.movement);
+    assert.equal(s.endpoint.handle(defender, choice).replayed, true); assert.equal(s.owner.snapshot().movement, after.movement);
+    assert.equal(r.view.progression.gate, 'idle'); assert.equal(after.movement.reveals.length, 0);
   }
 });
 test('lower attack power ends without damage, while a winning attack KOs a character', () => {
@@ -105,11 +116,35 @@ test('lower attack power ends without damage, while a winning attack KOs a chara
   assert.equal(ko.owner.snapshot().movement.players[1].character[0], null); assert.equal(ko.owner.snapshot().movement.players[1].trash.includes(ko.target.instanceId), true);
 });
 test('last life is not lethal, but a leader at zero life loses and further actions are refused', () => {
-  const last = setup({ life: 1 }); last.ready(); const r = last.endpoint.handle(1, last.damage()); assert.equal(r.ok, true); assert.equal(r.view.progression.finished, false); assert.equal(r.view.movement.players[1].life.length, 0);
+  const last = setup({ life: 1 }); last.ready(); assert.equal(last.endpoint.handle(1, last.damage()).ok, true); const r = last.endpoint.handle(1, last.choice()); assert.equal(r.ok, true); assert.equal(r.view.progression.finished, false); assert.equal(r.view.movement.players[1].life.length, 0);
   const lethal = setup({ life: 0 }); lethal.ready(); const c = lethal.damage(), result = lethal.endpoint.handle(1, c);
   assert.equal(result.ok, true); assert.equal(result.view.progression.finished, true); assert.equal(result.view.progression.winner, 0); assert.equal(result.view.battle, null);
   assert.equal(lethal.endpoint.viewFor(0).progression.winner, 0); assert.equal(lethal.endpoint.viewFor(0).testAttackAvailable, false);
   assert.equal(lethal.endpoint.handle(1, c).replayed, true); assert.equal(lethal.endpoint.handle(0, lethal.attack({}, 'again')).ok, false);
+});
+
+test('life trigger choice publishes exactly one top card, locks progression and rejects forged or foreign choices', () => {
+  for (const actor of [0, 1]) {
+    const s = setup({ actor }); s.ready(); const defender = 1 - actor;
+    assert.equal(s.endpoint.handle(defender, s.damage()).ok, true);
+    const before = s.owner.snapshot(), c = s.choice('トリガー発動');
+    assert.equal(s.endpoint.handle(actor, c).ok, false);
+    for (const patch of [{ token: 'forged' }, { selectionId: 'old' }, { battleId: 'old' }, { expectedMovementRevision: 999 }, { destination: 'hand' }]) {
+      assert.equal(s.endpoint.handle(defender, { ...c, ...patch, requestId: `bad-${Object.keys(patch)[0]}` }).ok, false);
+    }
+    assert.equal(s.endpoint.handle(actor, { kind: 'testNextTurn', ...s.base(actor, 'turn') }).ok, false);
+    assert.equal(s.endpoint.handle(actor, { kind: 'testPlayCard', ...s.base(actor, 'play-wait'), source: s.endpoint.viewFor(actor).movement.players[actor].hand[0].ref }).ok, false);
+    assert.equal(s.owner.snapshot().movement, before.movement);
+    assert.throws(() => s.owner.openRegisteredEffect('TEST.counter', defender, s.target, { status: 'certifiedNone' }));
+    const r = s.endpoint.handle(defender, c); assert.equal(r.ok, true); assert.equal(r.view.battle, null); assert.equal(r.view.progression.gate, 'idle');
+    assert.equal(r.view.movement.players[defender].life.length, 4); assert.equal(r.view.movement.players[defender].hand.length, 5);
+    const card = r.view.movement.players[defender].public[0]; assert.equal(card.cardId, 'CARD'); assert.equal(card.faceUp, true);
+    assert.deepEqual(s.endpoint.viewFor(actor).movement.players[defender].public[0], card);
+    assert.equal(s.owner.snapshot().movement.reveals.length, 0);
+    const after = s.owner.snapshot(); assert.equal(s.endpoint.handle(defender, c).replayed, true); assert.equal(s.owner.snapshot().movement, after.movement);
+    assert.equal(s.endpoint.handle(defender, { ...c, token: 'changed' }).code, 'request_conflict');
+    assert.equal(s.endpoint.handle(defender, { ...c, ...s.base(defender, 'new-request-old-token') }).ok, false);
+  }
 });
 test('missing or conflicting power remains unknown; zero is valid and the master cannot be replaced', () => {
   const conflicting = parseMaster(JSON.stringify({ cards: { LEADER: { type: 'character', power: 5000 } } }));

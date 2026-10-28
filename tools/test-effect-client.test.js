@@ -9,6 +9,7 @@ const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.Modu
 vm.runInNewContext(compiled, { exports: module.exports, module });
 const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog, registeredEffectCommand, testTurnCommand, testPlayDestination, testPlayCardCommand, canTestAttackSource, canTestAttackTarget, testAttackCommand, testBattleDecisionCommand, testDamageCommand } = module.exports;
 const plain = value => JSON.parse(JSON.stringify(value));
+const { testDamageChoiceCommand } = module.exports;
 function view() {
   const zones = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon", "attachedDon", "resolving"];
   const players = [0, 1].map(() => Object.fromEntries(zones.map(z => [z, z === "character" ? Array(5).fill(null) : z === "stage" || z === "leader" ? [null] : []])));
@@ -137,4 +138,13 @@ test("damage commands require known server power and the designated defender wit
   v.battlePower = { attack: 0, defense: 0, masterVersion: 'version' };
   const c = testDamageCommand(v, 'request'); assert.equal(c.kind, 'testResolveDamage'); assert.equal(Object.hasOwn(c, 'attackPower'), false);
   v.battlePower.defense = null; assert.throws(() => testDamageCommand(v, 'request')); v.battlePower.defense = 0; v.localPlayerIndex = 0; assert.throws(() => testDamageCommand(v, 'request'));
+});
+
+test("damage choice uses only current defender tokens, battle and revisions", () => {
+  const v = view(); v.effect.status = 'idle'; v.progression.gate = 'choice'; v.progression.chooser = 0;
+  v.battle = { battleId: 'battle', defender: 0, step: 'damage' };
+  v.damageChoice = { battleId: 'battle', selectionId: 'selection', chooser: 0, options: [{ token: 'opaque', label: '手札へ' }] };
+  assert.deepEqual(plain(testDamageChoiceCommand(v, 'opaque', 'request')), { kind: 'testDamageChoice', matchId: 'm', resolutionId: 'r', requestId: 'request', expectedMovementRevision: 3, expectedProgressionRevision: 7, battleId: 'battle', selectionId: 'selection', token: 'opaque' });
+  assert.throws(() => testDamageChoiceCommand(v, 'forged', 'request'));
+  for (const patch of [{ localPlayerIndex: 1 }, { damageChoice: null }, { battle: { ...v.battle, battleId: 'other' } }, { progression: { ...v.progression, gate: 'idle' } }, { progression: { ...v.progression, chooser: 1 } }, { progression: { ...v.progression, finished: true } }]) assert.throws(() => testDamageChoiceCommand({ ...v, ...patch }, 'opaque', 'request'));
 });

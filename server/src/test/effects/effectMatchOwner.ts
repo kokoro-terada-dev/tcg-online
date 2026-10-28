@@ -19,7 +19,7 @@ import type { TestTurnCommand } from "../effectProtocol";
 import type { TestPlayCardCommand } from "../effectProtocol";
 import { playLocalHandCard } from "../localCardPlay";
 import type { TestBattleCommand } from "../effectProtocol";
-import { decideLocalBattle, localAttackCandidates, localBattlePower, resolveLocalBattleDamage, startLocalBattle } from "../localBattle";
+import { chooseLocalLifeCard, decideLocalBattle, localAttackCandidates, localBattlePower, resolveLocalBattleDamage, startLocalBattle, type LocalBattleUpdate, type LocalLifeChoice } from "../localBattle";
 import type { MasterSnapshot } from "../cardMaster";
 
 type Mode = "legacy" | "automated" | "faulted" | "closed";
@@ -42,6 +42,7 @@ export class EffectMatchOwner {
   #sessionReceipts: [Map<string, SessionReceipt>, Map<string, SessionReceipt>] = [new Map(), new Map()];
   #localBattleMaster: MasterSnapshot | null = null;
   #localBattleMasterPinned = false;
+  #pendingDamage: LocalLifeChoice | null = null;
   constructor(match: Match, catalog: EffectCatalog | null = null, allowRegisteredActivation = false) {
     ensureMove(typeof allowRegisteredActivation === "boolean", "invalid-activation-policy");
     this.#legacy = match; this.#catalog = catalog; this.#activationEnabled = allowRegisteredActivation;
@@ -101,7 +102,7 @@ export class EffectMatchOwner {
   }
   openEffect(identity: ResolutionIdentity, definition: unknown, rules: MovementRules,
     numericPolicy?: MasterFactOptions["numericPolicy"]): void {
-    ensureMove(!this.#busy && this.#mode === "automated" && this.#active === null, "owner-cannot-open-effect");
+    ensureMove(!this.#busy && this.#mode === "automated" && this.#active === null && this.#pendingDamage === null, "owner-cannot-open-effect");
     ensureMove(this.#current(), "owner-legacy-conflict");
     id(identity.resolutionId, 64);
     ensureMove(!this.#used.has(identity.resolutionId) && this.#used.size < 1024, "owner-resolution-id-used-or-limit");
@@ -297,8 +298,8 @@ export class EffectMatchOwner {
     try {
       ensureMove(input && typeof input === "object", "invalid-test-battle-command");
       const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value;
-      ensureMove(kind === "testAttack" || kind === "testBattleDecision" || kind === "testResolveDamage", "invalid-test-battle-kind");
-      dataObject(input, ["kind", "matchId", "resolutionId", "requestId", "expectedMovementRevision", "expectedProgressionRevision", ...(kind === "testAttack" ? ["source", "target"] : kind === "testBattleDecision" ? ["battleId", "decision"] : ["battleId"])]);
+      ensureMove(kind === "testAttack" || kind === "testBattleDecision" || kind === "testResolveDamage" || kind === "testDamageChoice", "invalid-test-battle-kind");
+      dataObject(input, ["kind", "matchId", "resolutionId", "requestId", "expectedMovementRevision", "expectedProgressionRevision", ...(kind === "testAttack" ? ["source", "target"] : kind === "testBattleDecision" ? ["battleId", "decision"] : kind === "testDamageChoice" ? ["battleId", "selectionId", "token"] : ["battleId"])]);
       id(input.matchId); id(input.resolutionId, 64); id(input.requestId);
       ensureMove(Number.isSafeInteger(input.expectedMovementRevision) && (input.expectedMovementRevision as number) >= 0 &&
         Number.isSafeInteger(input.expectedProgressionRevision) && (input.expectedProgressionRevision as number) >= 0, "invalid-test-battle-revision");
@@ -311,6 +312,8 @@ export class EffectMatchOwner {
       } else if (kind === "testBattleDecision") {
         id(input.battleId); ensureMove(input.decision === "passBlock" || input.decision === "endCounter", "invalid-test-battle-decision");
         command = { kind, ...base, battleId: input.battleId, decision: input.decision };
+      } else if (kind === "testDamageChoice") {
+        id(input.battleId); id(input.selectionId); id(input.token); command = { kind, ...base, battleId: input.battleId, selectionId: input.selectionId, token: input.token };
       } else {
         id(input.battleId); command = { kind, ...base, battleId: input.battleId };
       }
@@ -327,11 +330,17 @@ export class EffectMatchOwner {
         command.expectedProgressionRevision === this.#progression!.revision, "stale-local-battle");
       this.#busy = true;
       try {
-        const next = command.kind === "testAttack" ? startLocalBattle(this.#board!, this.#progression!, actor, command.source, command.target, randomUUID(), randomUUID()) :
-          command.kind === "testBattleDecision" ? decideLocalBattle(this.#board!, this.#progression!, actor, command.battleId, command.decision) :
-          resolveLocalBattleDamage(this.#board!, this.#progression!, actor, command.battleId, this.#localBattleMaster, randomUUID());
+        let next: LocalBattleUpdate;
+        if (command.kind === "testAttack") next = startLocalBattle(this.#board!, this.#progression!, actor, command.source, command.target, randomUUID(), randomUUID());
+        else if (command.kind === "testBattleDecision") next = decideLocalBattle(this.#board!, this.#progression!, actor, command.battleId, command.decision);
+        else if (command.kind === "testResolveDamage") next = resolveLocalBattleDamage(this.#board!, this.#progression!, actor, command.battleId, this.#localBattleMaster, randomUUID(),
+          { resolutionId: randomUUID(), selectionId: randomUUID(), handToken: randomUUID(), triggerToken: randomUUID() });
+        else {
+          ensureMove(this.#pendingDamage !== null, "local-life-not-pending");
+          next = chooseLocalLifeCard(this.#board!, this.#progression!, actor, command.battleId, command.selectionId, command.token, this.#pendingDamage, randomUUID());
+        }
         const resolutionId = randomUUID(); ensureMove(this.#current(), "owner-legacy-conflict");
-        this.#board = next.movement; this.#progression = next.progression; this.#idle = { ...this.#idle, resolutionId }; ok = true;
+        this.#board = next.movement; this.#progression = next.progression; this.#pendingDamage = next.pendingLife ?? null; this.#idle = { ...this.#idle, resolutionId }; ok = true;
       } finally { this.#busy = false; }
     } catch { /* Internal references are not public diagnostics. */ }
     const code = ok ? "applied" : "operation_rejected"; receipts.set(command.requestId, { fingerprint, ok, code });
@@ -355,6 +364,8 @@ export class EffectMatchOwner {
       testAttackAvailable: attacks.sources.length > 0 && attacks.targets.length > 0,
       testAttackSourceIds: attacks.sources, testAttackTargetIds: attacks.targets,
       battle: progression.battle,
+      damageChoice: this.#pendingDamage ? { battleId: this.#pendingDamage.battleId, selectionId: this.#pendingDamage.selectionId, chooser: this.#pendingDamage.defender,
+        options: viewer === this.#pendingDamage.defender ? [{ token: this.#pendingDamage.handToken, label: "手札へ" as const }, { token: this.#pendingDamage.triggerToken, label: "トリガー発動" as const }] : [] } : null,
       battlePower: powers,
       testDamageAvailable: this.#idle.allowTestTurnSwitch && process.env.NODE_ENV !== "production" && progression.battle?.defender === viewer &&
         progression.battle.step === "damage" && progression.battle.decisionComplete && !progression.battle.settled && progression.gate.kind === "idle" && !progression.outcome &&
@@ -372,7 +383,7 @@ export class EffectMatchOwner {
     ensureMove(!this.#busy && this.#mode === "automated" && this.#current(), "local-outcome-unavailable");
     const state = this.snapshot(), next = localDeckOutProgression(state.movement!, state.progression!);
     if (next === state.progression) return;
-    this.#board = state.movement; this.#progression = next; this.#active = null;
+    this.#board = state.movement; this.#progression = next; this.#active = null; this.#pendingDamage = null;
     this.#idle = { ...this.#idle, resolutionId: randomUUID() };
   }
   releaseRegisteredEffect(cancelPrepared = false): void {
@@ -396,6 +407,6 @@ export class EffectMatchOwner {
     if (this.#idle) this.#idle = { ...this.#idle, resolutionId: randomUUID() };
   }
   close(): void {
-    ensureMove(!this.#busy, "owner-busy"); this.#remember(); this.#active = null; this.#mode = "closed";
+    ensureMove(!this.#busy, "owner-busy"); this.#remember(); this.#active = null; this.#pendingDamage = null; this.#mode = "closed";
   }
 }

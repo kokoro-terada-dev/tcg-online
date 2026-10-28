@@ -4,13 +4,14 @@ import { canTestAttackSource, canTestAttackTarget, effectBoardView, testPlayDest
 import { getCardBackImageUrl, getLocalCardImage } from "../utils/localCardImages";
 import "./testEffect.css";
 import EffectCatalogDialog from "./EffectCatalogDialog";
+import DamageChoiceDialog from "./DamageChoiceDialog";
 import type { EffectCatalogView } from "./effectClientState";
 import type { CardView } from "../../server/src/test/protocol";
 
 type Props = { view: EffectTransportView; roomId: string; busy: boolean; error: string; needsSync: boolean;
   onAction: (kind: EffectCommandKind, tokens?: readonly string[]) => void; onSync: () => void; onEnd: () => void;
   onCatalog?: (instanceId: string) => Promise<EffectCatalogView>; onActivateCatalog?: (catalog: EffectCatalogView, effectId: string) => void; onTestTurn?: () => void; onTestPlay?: (instanceId: string) => void;
-  onTestAttack?: (sourceId: string, targetId: string) => void; onTestBattleDecision?: (decision: "passBlock" | "endCounter") => void; onTestResolveDamage?: () => void };
+  onTestAttack?: (sourceId: string, targetId: string) => void; onTestBattleDecision?: (decision: "passBlock" | "endCounter") => void; onTestResolveDamage?: () => void; onTestDamageChoice?: (token: string) => void };
 export default function TestEffectBoard(props: Props) {
   const { view, busy, needsSync, onAction } = props;
   const [inspected, setInspected] = useState<{ card: CardView; context: string } | null>(null);
@@ -44,6 +45,7 @@ export default function TestEffectBoard(props: Props) {
       {selection ? <Selection key={selection.selectionId} selection={selection} disabled={disabled}
         onConfirm={tokens => onAction(view.effect.status === "waitingForCostSelection" ? "answerCosts" : "answerEffect", tokens)} /> : <p role="status">{
         finished ? (view.progression.defeatedPlayers?.length === 2 ? "対戦終了・両者敗北" : `対戦終了・${resultLabel}`) :
+        view.damageChoice ? (view.damageChoice.chooser === view.localPlayerIndex ? "ライフ確認中" : "相手のライフ確認待ち") :
         view.battle && view.effect.status === "idle" ? (view.battle.step === "block" ? "ブロック判断待ち" : view.battle.step === "counter" ? "カウンター判断待ち" : "ダメージ判定待ち") :
         view.effect.status === "idle" ? <><span>{view.progression.activePlayer === view.localPlayerIndex ? "自分のターン・待機中" : "相手のターン・待機中"}</span><small> / {view.progression.turnNumber}ターン目</small></> :
         view.effect.status === "completed" ? "処理完了" : view.effect.status === "blocked" ? "処理を続行できません" :
@@ -67,6 +69,7 @@ export default function TestEffectBoard(props: Props) {
       </div>
     </section>
     {finished && resultVisible && <div className={`test-effect-result${resultLabel === "WIN" ? " test-effect-result-win" : ""}`} role="status">{resultLabel}</div>}
+    {view.damageChoice?.chooser === view.localPlayerIndex && props.onTestDamageChoice && <DamageChoiceDialog key={view.damageChoice.selectionId} view={view} busy={busy} needsSync={needsSync} error={props.error} onChoice={props.onTestDamageChoice} onSync={props.onSync} />}
     {inspected?.context === context && props.onCatalog && <EffectCatalogDialog key={`${context}:${inspected.card.id}`} card={inspected.card} onLoad={props.onCatalog} onClose={() => setInspected(null)}
       {...(props.onActivateCatalog ? { onActivate: props.onActivateCatalog } : {})} />}
   </>;
