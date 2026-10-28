@@ -1,5 +1,7 @@
 # 効果エンジン：基盤フェーズの設計と対応状況
 
+[Socket接続部品](effect-socket-boundary.md) を追加し、実Socketによる2クライアント通信・個別投影・再同期・切断時停止をテストしました。既存server.ts/Match/UIにはまだ組み込んでいません。
+
 [効果操作のサーバー受付境界](effect-command-boundary.md) を追加しました。認証済みの席を別引数で受け、厳格な入力・再送保護・プレイヤー別公開投影を行う独立部品です。既存Socket/Match/UIにはまだ登録していません。
 
 DSLの一部を独立モデルで実行する基盤は [Action実行器](action-runtime.md) を参照してください。draw/move/sequence/repeat/select/if/optionalの限定対応で、選択待ち・回答後再開・条件分岐・任意効果を追加しました。既存対戦には未接続です。
