@@ -8,7 +8,7 @@ export type V3Choice = ChoiceBase & (
 export type V3FixtureView = Readonly<{
   frame: Readonly<{ mode: "work_requests_only"; resolutionId: string; revision: number; worldRevision: number;
     status: "ready" | "waitingForChoice" | "waitingForWork" | "completed" | "blocked";
-    activationDecision: "accepted" | "declined" | null; choice: V3Choice | null }>;
+    activationDecision: "accepted" | "declined" | null; activationCommitted: boolean; choice: V3Choice | null }>;
   movement: MovementView; progression: Readonly<{ revision: number; gate: "idle" | "resolving" | "choice"; chooser: 0 | 1 | null }>;
   matchId: string; roomId: string; localPlayerIndex: 0 | 1; actor: 0 | 1; scenario: V3Scenario;
   imageAliases: Readonly<Record<string, string>>; workType: "PAY_COSTS" | "DRAW" | "MOVE_CARD" | "KO" | "REST" | "SET_ACTIVE" | null;

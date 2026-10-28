@@ -191,7 +191,7 @@ DISCARD_HANDは自分の手札のcharacter/stage/eventだけを、合計枚数�
 全コストの実行可能性を選択前と支払い要求前に確認し、不足ならblocked、unknownならそのadvanceを確定せず停止します。
 選択確定は支払計画の保存だけで、DONも手札もまだ変更しません。支払い時にも全参照を再検証します。
 同種のDISCARD_HANDは合算します。この限定fixtureの合算処理を、実カードのコスト選択順の公式裁定とは解釈しません。
-保存フレーム版はv3-frame.5で、選択済みcostCards/costReturnedと支払い済みpaidCostWorkId、候補のゾーン/表示ラベル/返却可能なアクティブDON上限、任意発動の確認結果activationDecisionを含みます。旧フレームは暗黙復元しません。
+保存フレーム版はv3-frame.6で、選択済みcostCards/costReturnedと支払い済みpaidCostWorkId、候補のゾーン/表示ラベル/返却可能なアクティブDON上限、任意発動の確認結果activationDecision、確定済みかを表すactivationCommittedを含みます。旧フレームは暗黙復元しません。
 DON_RETURNはfromで指定した自分の公開DONから、指定枚数ちょうど選びます。複数ゾーンを配列指定して混在選択できます。
 CARDSも自分のactiveDon/restDon/attachedDonをdon型限定で選択可能で、zoneは単一指定または同じDONゾーン配列を受け付けます。
 複合コストはこのfixtureでは手札→DONの順に選択し、最後にPAY_COSTSで一括確定します。JSONの配列順を公式のコスト選択順とはみなしません。
@@ -400,6 +400,26 @@ ViteのDEVかつ専用フラグが有効な場合だけ新しい画面を表示�
 当面のv3画面は合成効果の検証用であり、従来のテスト対戦とは別です。「実カードで対戦できる」報告は段階6の完了条件を満たした時点で行います。
 全カードの自動対応を段階6の前提にはしません。ただし未対応カードを効果なし扱いで参加させず、承認済みの狭い範囲から始めます。
 カードテキストの曖昧な自動変換はせず、公式裁定の根拠と確認状態を保持します。必要な例外はRegistryとRulesetPolicyで追加します。
+
+### 段階1の進捗：連続解決のサーバー内基盤
+
+matchCoordinator.tsにV3SyntheticMatchCoordinatorを追加しました。まだSocketや画面には接続していない、mode:syntheticNoAbilities専用のサーバー内基盤です。
+同一のMovementState/Progressionから複数のV3FixtureCoordinatorを順番に生成し、試合ID・盤面・既存トランザクション記録を維持します。
+解決IDは毎回新しく作り、session/frame/movement/progressionのコンテキストと要求レシートを検証します。解決中・選択待ち・blockedでは別効果やターン終了を拒否します。
+発動回数は、合成fixture用の信頼済みサーバー設定でカードID/効果IDごとにmaxPerObjectTurnを明示します。未指定を無制限扱いにはしません。
+カウント単位はターン番号・操作者・発動元instanceId/generation・効果IDです。実カードの名称単位制限や一度離れて戻ったカードへの制限を裁定する実装ではありません。
+コストなしの場合は発動条件成立後のCOSTS到達で、コストありの場合はPAY_COSTS適用成功でactivationCommittedを確定し、1回だけカウントします。
+任意確認の承認だけ、辞退、発動条件不成立、支払い失敗では消費しません。支払い後に解決条件が不成立でも、すでに確定した分を戻しません。
+このポリシーはDSLのusageLimitとは別の合成テスト設定です。JSON上のusageLimitは引き続き未対応で、実カード承認の代わりにはなりません。
+endTurnは既存phaseWork契約を使用し、次のmainまでのrefresh/draw/DON checkpointをローカル候補状態で準備してからまとめて確定します。
+リフレッシュでは次の操作者のレストカード/DONをアクティブ化し、付与DONをactiveDonへ戻します。通常ドローとDON追加はphaseWorkの枚数に従います。
+デッキが空になるドローは裁定未対応として停止し、すでに準備したリフレッシュや進行も確定しません。誘発・置換・継続能力がない合成盤面だけが対象です。
+DB復元・終了時能力・勝敗処理・実カード裁定はこの段階に含めません。次に専用プロトコルと画面へ接続します。
+
+```powershell
+npm --prefix server run build
+node --test server/test/v3-match-coordinator.cjs server/test/v3-resolution.cjs
+```
 
 Phase 2の残りでは、非公開選択や順序選択等のCompiler対応を、実行可能な範囲と分けて拡充します。既存のkind形式は別版のまま維持します。
 今後は検証結果を見て、承認済み定義の読込や対象範囲・イベント/置換処理を段階的に拡張します。正式対戦への自動切替や、未承認の実カードへの適用はしません。
