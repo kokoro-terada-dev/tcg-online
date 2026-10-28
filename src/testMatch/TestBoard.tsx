@@ -5,11 +5,11 @@ import type { CardView, MatchCommand, MatchView, Zone } from "../../server/src/t
 import { getCardBackImageUrl, getDonImageUrl, getLocalCardImage } from "../utils/localCardImages";
 import "./testMatch.css";
 
-type Props = { match: MatchView; roomId: string; busy: boolean; error: string; onCommand: (command: MatchCommand) => void; onEnd: () => void; readOnly?: boolean };
+type Props = { match: MatchView; roomId: string; busy: boolean; error: string; onCommand: (command: MatchCommand) => void; onEnd: () => void; readOnly?: boolean; onInspectEffects?: (card: CardView) => void };
 const labels: Record<Zone, string> = { hand: "手札", deck: "デッキ", life: "ライフ", trash: "トラッシュ", public: "公開", character: "キャラクター", stage: "ステージ", leader: "リーダー", donDeck: "DONデッキ", activeDon: "ACTIVE DON", restDon: "REST DON" };
 const imageUrl = (card: CardView) => !card.cardId ? getCardBackImageUrl() : getLocalCardImage(card.cardId)?.imageUrl ?? (card.kind === "don" ? getDonImageUrl() : null);
 
-export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd, readOnly = false }: Props) {
+export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd, readOnly = false, onInspectEffects }: Props) {
   const [selection, setSelection] = useState<{ id: string; from: Zone } | null>(null);
   const [preview, setPreview] = useState<CardView | null>(null);
   const [list, setList] = useState<{ zone: Zone; owner: 0 | 1 } | null>(null);
@@ -39,7 +39,8 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
           if (!mine && (zone === "leader" || zone === "character")) setAttackTarget(card);
           return;
         }
-        if (!mine || readOnly) setPreview(card);
+        if (readOnly && mine && card.faceUp && card.cardId && ["leader", "character", "stage"].includes(zone) && onInspectEffects) { setList(null); onInspectEffects(card); }
+        else if (!mine || readOnly) setPreview(card);
         else { setSelection((current) => current?.id === card.id ? null : { id: card.id, from: zone }); setList(null); }
       }}>
       {url ? <img src={url} alt={label} draggable={false} /> : <span>{label}</span>}

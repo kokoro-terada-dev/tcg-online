@@ -1,7 +1,24 @@
-import type { EffectTransportView, EffectCommand, EffectCommandKind } from "../../server/src/test/effectProtocol";
+import type { EffectTransportView, EffectCommand, EffectCommandKind, EffectCatalogQuery, EffectCatalogView } from "../../server/src/test/effectProtocol";
 import type { MatchView, Zone } from "../../server/src/test/protocol";
-export type { EffectTransportView, EffectCommandKind };
+export type { EffectTransportView, EffectCommandKind, EffectCatalogQuery, EffectCatalogView };
 const zones: readonly Zone[] = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon"];
+
+export function effectCatalogQuery(view: EffectTransportView, instanceId: string): EffectCatalogQuery {
+  const own = view.movement.players[view.localPlayerIndex];
+  const card = [...own.leader, ...own.character, ...own.stage].find(c => c?.ref?.instanceId === instanceId);
+  if (!card?.ref || !card.faceUp || !card.cardId) throw new Error("No visible local field card");
+  return { matchId: view.matchId, expectedMovementRevision: view.movement.revision,
+    expectedProgressionRevision: view.progression.revision, source: { ...card.ref } };
+}
+export function acceptEffectCatalog(view: EffectTransportView, query: EffectCatalogQuery, catalog: EffectCatalogView): boolean {
+  try {
+    const current = effectCatalogQuery(view, query.source.instanceId);
+    return current.matchId === query.matchId && catalog.matchId === current.matchId &&
+      current.expectedMovementRevision === query.expectedMovementRevision && catalog.movementRevision === current.expectedMovementRevision &&
+      current.expectedProgressionRevision === query.expectedProgressionRevision && catalog.progressionRevision === current.expectedProgressionRevision &&
+      current.source.generation === query.source.generation && catalog.source.instanceId === current.source.instanceId && catalog.source.generation === current.source.generation;
+  } catch { return false; }
+}
 
 export function acceptEffectView(current: EffectTransportView | null, next: EffectTransportView): boolean {
   return !current || (current.matchId === next.matchId && current.localPlayerIndex === next.localPlayerIndex &&

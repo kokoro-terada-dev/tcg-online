@@ -7,7 +7,7 @@ const module = { exports: {} };
 const source = fs.readFileSync(new URL("../src/testMatch/effectClientState.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 vm.runInNewContext(compiled, { exports: module.exports, module });
-const { acceptEffectView, effectCommand, effectBoardView } = module.exports;
+const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog } = module.exports;
 const plain = value => JSON.parse(JSON.stringify(value));
 function view() {
   const zones = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon", "attachedDon", "resolving"];
@@ -42,4 +42,30 @@ test("read-only board adapter preserves visible IDs and produces placeholders on
 });
 test("unsupported extra zones are refused rather than silently dropping cards", () => {
   for (const zone of ["attachedDon", "resolving"]) { const v = view(); v.movement.players[0][zone].push(v.movement.players[0].hand[0]); assert.throws(() => effectBoardView(v)); }
+});
+
+test("catalog queries preserve generation and both revisions for either seat", () => {
+  for (const seat of [0, 1]) {
+    const v = view(); v.localPlayerIndex = seat;
+    v.movement.players[seat].leader[0] = { ...v.movement.players[0].hand[0], ref: { instanceId: "leader", generation: 4 } };
+    const q = effectCatalogQuery(v, "leader");
+    assert.deepEqual(plain(q), { matchId: "m", expectedMovementRevision: 3, expectedProgressionRevision: 7, source: { instanceId: "leader", generation: 4 } });
+    q.source.generation = 99; assert.equal(v.movement.players[seat].leader[0].ref.generation, 4);
+  }
+});
+test("catalog queries exclude hidden, opposing and off-board cards", () => {
+  const v = view();
+  assert.throws(() => effectCatalogQuery(v, "a"));
+  v.movement.players[1].leader[0] = { ...v.movement.players[0].hand[0], ref: { instanceId: "other", generation: 0 } };
+  assert.throws(() => effectCatalogQuery(v, "other"));
+  v.movement.players[0].leader[0] = { ...v.movement.players[0].hand[0], faceUp: false };
+  assert.throws(() => effectCatalogQuery(v, "a"));
+});
+test("catalog responses reject stale revisions, generations, wrong cards and matches", () => {
+  const v = view(); v.movement.players[0].leader[0] = { ...v.movement.players[0].hand[0] };
+  const q = effectCatalogQuery(v, "a"), c = { matchId: "m", movementRevision: 3, progressionRevision: 7, source: { instanceId: "a", generation: 3 }, effects: [], catalogVersion: null };
+  assert.equal(acceptEffectCatalog(v, q, c), true);
+  for (const patch of [{ matchId: "old" }, { movementRevision: 2 }, { progressionRevision: 6 }, { source: { instanceId: "other", generation: 3 } }, { source: { instanceId: "a", generation: 2 } }]) assert.equal(acceptEffectCatalog(v, q, { ...c, ...patch }), false);
+  v.movement.revision++; assert.equal(acceptEffectCatalog(v, q, c), false);
+  v.movement.revision--; v.movement.players[0].leader[0] = null; assert.equal(acceptEffectCatalog(v, q, c), false);
 });

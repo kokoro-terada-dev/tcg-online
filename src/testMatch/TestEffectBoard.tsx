@@ -1,19 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import TestBoard from "./TestBoard";
 import { effectBoardView, type EffectTransportView, type EffectCommandKind } from "./effectClientState";
 import { getCardBackImageUrl, getLocalCardImage } from "../utils/localCardImages";
 import "./testEffect.css";
+import EffectCatalogDialog from "./EffectCatalogDialog";
+import type { EffectCatalogView } from "./effectClientState";
+import type { CardView } from "../../server/src/test/protocol";
 
 type Props = { view: EffectTransportView; roomId: string; busy: boolean; error: string; needsSync: boolean;
-  onAction: (kind: EffectCommandKind, tokens?: readonly string[]) => void; onSync: () => void; onEnd: () => void };
+  onAction: (kind: EffectCommandKind, tokens?: readonly string[]) => void; onSync: () => void; onEnd: () => void;
+  onCatalog?: (instanceId: string) => Promise<EffectCatalogView> };
 export default function TestEffectBoard(props: Props) {
   const { view, busy, needsSync, onAction } = props;
+  const [inspected, setInspected] = useState<{ card: CardView; context: string } | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const context = `${view.matchId}:${view.localPlayerIndex}:${view.effect.resolutionId}:${view.movement.revision}:${view.progression.revision}:${view.effect.status}:${busy}:${needsSync}`;
+  useEffect(() => { setInspected(null); }, [context]);
+  useEffect(() => { setCollapsed(false); }, [view.effect.resolutionId, view.effect.status, view.selection?.selectionId]);
   const selection = view.selection, mine = view.effect.actor === view.localPlayerIndex, disabled = busy || needsSync;
   let board;
   try { board = effectBoardView(view); } catch { return <main><p role="alert">この盤面形式はまだ表示できません。</p><button onClick={props.onEnd}>ルームへ戻る</button></main>; }
   return <>
-    <TestBoard match={board} roomId={props.roomId} busy={busy} error={props.error} readOnly onCommand={() => {}} onEnd={props.onEnd} />
-    <section className="test-effect-panel" aria-label="効果処理">
+    <TestBoard match={board} roomId={props.roomId} busy={busy} error={props.error} readOnly onCommand={() => {}} onEnd={props.onEnd}
+      onInspectEffects={props.onCatalog && !disabled ? card => setInspected({ card, context }) : undefined} />
+    <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="効果処理">
+      <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
+      <div hidden={collapsed}>
       {selection ? <Selection key={selection.selectionId} selection={selection} disabled={disabled}
         onConfirm={tokens => onAction(view.effect.status === "waitingForCostSelection" ? "answerCosts" : "answerEffect", tokens)} /> : <p role="status">{
         view.effect.status === "completed" ? "処理完了" : view.effect.status === "blocked" ? "処理を続行できません" :
@@ -26,9 +38,12 @@ export default function TestEffectBoard(props: Props) {
         {mine && view.effect.status === "resolving" && <button disabled={disabled} onClick={() => onAction("advance")}>処理を進める</button>}
         {mine && ["costsReady", "waitingForCostSelection"].includes(view.effect.status) && <button disabled={disabled} onClick={() => onAction("cancelCosts")}>キャンセル</button>}
         <button disabled={busy} onClick={props.onSync}>再同期</button>
+        <button onClick={() => setCollapsed(true)}>盤面を見る</button>
       </div>
       {needsSync && <p role="alert">応答を確認できません。再同期してください。</p>}
+      </div>
     </section>
+    {inspected?.context === context && props.onCatalog && <EffectCatalogDialog key={`${context}:${inspected.card.id}`} card={inspected.card} onLoad={props.onCatalog} onClose={() => setInspected(null)} />}
   </>;
 }
 function Selection({ selection, disabled, onConfirm }: { selection: NonNullable<EffectTransportView["selection"]>; disabled: boolean; onConfirm: (tokens: readonly string[]) => void }) {

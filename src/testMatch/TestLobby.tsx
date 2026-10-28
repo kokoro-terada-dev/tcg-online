@@ -7,7 +7,7 @@ import { getAllLocalDeckRecipes } from "../utils/localDeckStorage";
 import { getLocalCardImage, hasLocalCardImages } from "../utils/localCardImages";
 import TestBoard from "./TestBoard";
 import TestEffectBoard from "./TestEffectBoard";
-import { acceptEffectView, effectCommand, type EffectTransportView, type EffectCommandKind } from "./effectClientState";
+import { acceptEffectView, acceptEffectCatalog, effectCatalogQuery, effectCommand, type EffectTransportView, type EffectCommandKind, type EffectCatalogView } from "./effectClientState";
 
 type Room = RoomView;
 type Reply = { ok: boolean; error?: string };
@@ -93,7 +93,21 @@ export default function TestLobby({ onBack }: { onBack: () => void }) {
     if (value === undefined) socket.timeout(10000).emit("test-effect:sync", complete);
     else socket.timeout(10000).emit("test-effect:command", value, complete);
   }
-  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} />;
+  async function queryCatalog(instanceId: string): Promise<EffectCatalogView> {
+    const socket = socketRef.current, current = effectRef.current, sentEpoch = epoch.current;
+    if (!socket?.connected || !current || busy || needsSync) throw new Error("Catalog unavailable");
+    const query = effectCatalogQuery(current, instanceId);
+    return new Promise((resolve, reject) => socket.timeout(10000).emit("test-effect:catalog", query,
+      (err: Error | null, reply?: { ok: boolean; catalog?: EffectCatalogView }) => {
+        const latest = effectRef.current;
+        if (err || !reply?.ok || !reply.catalog || socketRef.current !== socket || epoch.current !== sentEpoch ||
+          !latest || latest.effect.resolutionId !== current.effect.resolutionId || !acceptEffectCatalog(latest, query, reply.catalog)) {
+          reject(new Error("Catalog unavailable")); return;
+        }
+        resolve(reply.catalog);
+      }));
+  }
+  if (effect && room) return <TestEffectBoard key={effect.matchId} view={effect} roomId={room.roomId} busy={busy} error={error} needsSync={needsSync} onAction={effectRequest} onSync={() => effectRequest()} onEnd={() => request("test-match:end")} onCatalog={queryCatalog} />;
   const mine = room?.host.socketId === socketRef.current?.id ? room?.host : room?.guest;
   function selectDeck(id: string) {
     const deck = decks.find((item) => item.id === id);
