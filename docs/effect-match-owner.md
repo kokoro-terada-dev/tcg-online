@@ -3,6 +3,19 @@
 EffectMatchOwnerは、既存Matchと自動効果用Movementの同時書込みを避けるための
 サーバー内部の所有者です。現行ルーム/server.ts/Socket/UIにはまだ登録していません。
 
+## Socket用の入口
+
+OwnedEffectEndpoint(owner)をサーバーで1個作り、bindEffectSocketのresolverが返すhostに指定できます。
+この入口は効果が切り替わっても同じオブジェクトを保ち、所有者の競合検証を通して操作します。
+内部の効果ごとのHostを取得して直接Socketへ渡してはいけません。
+実Matchから取り込んだ盤面で、連続する効果を実Socket越しに処理するテストを追加しました。
+現行ルームへの登録や画面側の送信処理は未接続です。
+
+効果間でactiveがない場合、終了済み、競合停止時はnot_availableとしてViewを返しません。
+新しい効果がopenされた後はsyncで最新resolutionIdとViewを取得します。
+現段階ではサーバー側open/finish/closeの通知を自動配信しません。
+この入口もサーバー専用で、シリアライズは禁止です。
+
 ## 移行と所有権
 
 - 最初はlegacyです。applyLegacyCommandだけが従来のapplyCommandへ操作を渡します。
