@@ -70,6 +70,14 @@ export function testBattleDecisionCommand(view: EffectTransportView, decision: "
   return { kind: "testBattleDecision", matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
     expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, battleId: view.battle.battleId, decision };
 }
+export function testBlockCommand(view: EffectTransportView, instanceId: string, requestId: string): TestBattleCommand {
+  const card = view.movement.players[view.localPlayerIndex].character.find(card => card?.ref?.instanceId === instanceId);
+  if (!view.testBlockCandidateIds?.includes(instanceId) || view.effect.status !== "idle" || view.progression.finished || view.progression.gate !== "idle" ||
+    !view.battle || view.battle.defender !== view.localPlayerIndex || view.battle.step !== "block" || view.battle.decisionComplete || view.battle.settled ||
+    !card?.ref || !card.faceUp || !card.cardId || card.kind !== "character" || card.rotated) throw new Error("No local block candidate");
+  return { kind: "testBlock", matchId: view.matchId, resolutionId: view.effect.resolutionId, requestId,
+    expectedMovementRevision: view.movement.revision, expectedProgressionRevision: view.progression.revision, battleId: view.battle.battleId, blocker: { ...card.ref } };
+}
 export function testDamageCommand(view: EffectTransportView, requestId: string): TestBattleCommand {
   if (!view.testDamageAvailable || view.effect.status !== "idle" || view.progression.finished || view.progression.gate !== "idle" ||
     !view.battle || view.battle.defender !== view.localPlayerIndex || view.battle.step !== "damage" || !view.battle.decisionComplete || view.battle.settled ||

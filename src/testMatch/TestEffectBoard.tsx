@@ -11,11 +11,12 @@ import type { CardView } from "../../server/src/test/protocol";
 type Props = { view: EffectTransportView; roomId: string; busy: boolean; error: string; needsSync: boolean;
   onAction: (kind: EffectCommandKind, tokens?: readonly string[]) => void; onSync: () => void; onEnd: () => void;
   onCatalog?: (instanceId: string) => Promise<EffectCatalogView>; onActivateCatalog?: (catalog: EffectCatalogView, effectId: string) => void; onTestTurn?: () => void; onTestPlay?: (instanceId: string) => void;
-  onTestAttack?: (sourceId: string, targetId: string) => void; onTestBattleDecision?: (decision: "passBlock" | "endCounter") => void; onTestResolveDamage?: () => void; onTestDamageChoice?: (token: string) => void };
+  onTestAttack?: (sourceId: string, targetId: string) => void; onTestBattleDecision?: (decision: "passBlock" | "endCounter") => void; onTestResolveDamage?: () => void; onTestDamageChoice?: (token: string) => void; onTestBlock?: (instanceId: string) => void };
 export default function TestEffectBoard(props: Props) {
   const { view, busy, needsSync, onAction } = props;
   const [inspected, setInspected] = useState<{ card: CardView; context: string } | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [blockContext, setBlockContext] = useState<string | null>(null);
   const [resultVisible, setResultVisible] = useState(false);
   const finished = view.progression.finished;
   const resultLabel = view.progression.winner === view.localPlayerIndex ? "WIN" :
@@ -27,6 +28,8 @@ export default function TestEffectBoard(props: Props) {
     return () => window.clearTimeout(timer);
   }, [view.matchId, finished]);
   const context = `${view.matchId}:${view.localPlayerIndex}:${view.effect.resolutionId}:${view.movement.revision}:${view.progression.revision}:${view.effect.status}:${busy}:${needsSync}`;
+  const choosingBlock = blockContext === context && !busy && !needsSync && view.testBattleDecision === "passBlock";
+  const blockers = view.movement.players[view.localPlayerIndex].character.filter(card => card?.ref && card.faceUp && card.cardId && view.testBlockCandidateIds?.includes(card.ref.instanceId));
   useEffect(() => { setInspected(null); }, [context]);
   useEffect(() => { setCollapsed(false); }, [view.effect.resolutionId, view.effect.status, view.selection?.selectionId]);
   const selection = view.selection, mine = view.effect.actor === view.localPlayerIndex, disabled = busy || needsSync || finished;
@@ -62,9 +65,16 @@ export default function TestEffectBoard(props: Props) {
         <button disabled={busy} onClick={props.onSync}>再同期</button>
         <button onClick={() => setCollapsed(true)}>盤面を見る</button>
         {view.effect.status === "idle" && view.testTurnSwitchAvailable && props.onTestTurn && <button disabled={disabled} onClick={props.onTestTurn}>テスト手番交代</button>}
-        {view.effect.status === "idle" && view.testBattleDecision && props.onTestBattleDecision && <button disabled={disabled} onClick={() => props.onTestBattleDecision!(view.testBattleDecision!)}>{view.testBattleDecision === "passBlock" ? "ブロックしない" : "カウンター終了"}</button>}
+        {!choosingBlock && view.effect.status === "idle" && view.testBattleDecision && props.onTestBattleDecision && <button disabled={disabled} onClick={() => props.onTestBattleDecision!(view.testBattleDecision!)}>{view.testBattleDecision === "passBlock" ? "ブロックしない" : "カウンター終了"}</button>}
+        {!choosingBlock && blockers.length > 0 && props.onTestBlock && <button disabled={disabled} onClick={() => setBlockContext(context)}>テストブロック</button>}
         {view.effect.status === "idle" && view.testDamageAvailable && props.onTestResolveDamage && <button disabled={disabled} onClick={props.onTestResolveDamage}>テストダメージ判定</button>}
       </div>
+      {choosingBlock && <>
+        <Selection key={`block:${context}`} disabled={disabled} selection={{ kind: "cards", matchId: view.matchId, resolutionId: view.effect.resolutionId, selectionId: `block:${view.battle?.battleId}`, revision: view.movement.revision,
+          chooser: view.localPlayerIndex, mode: "SELECT", min: 1, max: 1, candidates: blockers.map(card => ({ token: card!.ref!.instanceId, cardId: card!.cardId })) }}
+          onConfirm={tokens => { if (tokens[0]) props.onTestBlock?.(tokens[0]); setBlockContext(null); }} />
+        <button onClick={() => setBlockContext(null)}>閉じる</button>
+      </>}
       {needsSync && <p role="alert">応答を確認できません。再同期してください。</p>}
       </div>
     </section>

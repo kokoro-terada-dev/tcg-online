@@ -32,7 +32,7 @@ export function localAttackCandidates(board: MovementState, progression: Progres
   });
   return { sources, targets };
 }
-// Basic fixture declaration only. No printed abilities, blocking, power or damage adjudication.
+// Local fixture declaration; printed attack abilities are not executed here.
 export function startLocalBattle(board: MovementState, progression: Progression, actor: Player, source: Readonly<CardObjectRef>, target: Readonly<CardObjectRef>, battleId: string, transactionId: string) {
   localContext(board, progression);
   ensureMove(checkTiming(progression, actor, "attack").allowed, "local-attack-window-unavailable");
@@ -55,6 +55,32 @@ export function decideLocalBattle(board: MovementState, progression: Progression
   next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId, step: battle.step });
   next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId, step: battle.step, participantsPresent: true });
   return { movement: board, progression: next };
+}
+
+// Fixture candidates only: printed Blocker ability and prohibitions are not modeled yet.
+export function localBlockCandidates(board: MovementState, progression: Progression, actor: Player): string[] {
+  try {
+    localContext(board, progression);
+    const battle = progression.battle;
+    if (!battle || !checkTiming(progression, actor, "passBlock").allowed) return [];
+    fieldCard(board, battle.source, battle.attacker); fieldCard(board, battle.target, battle.defender);
+    return board.players[actor].character.filter((id): id is string => id !== null).filter(id => {
+      const card = board.cards[id]!;
+      return card.owner === actor && card.controller === actor && card.kind === "character" && card.faceUp && !card.rotated;
+    });
+  } catch { return []; }
+}
+export function blockLocalBattle(board: MovementState, progression: Progression, actor: Player, battleId: string, blocker: Readonly<CardObjectRef>, transactionId: string) {
+  localContext(board, progression);
+  ensureMove(progression.battle?.battleId === battleId && localBlockCandidates(board, progression, actor).includes(blocker.instanceId), "local-block-unavailable");
+  fieldCard(board, blocker, actor);
+  let next = applySystemEvent(progression, progression.revision, { kind: "redirectBattle", battleId, target: blocker });
+  next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId, step: "block" });
+  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId, step: "block", participantsPresent: true });
+  const movement = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
+    actor, effectController: null, source: blocker, mode: "rule", resolutionId: null,
+    operations: [{ kind: "setRest", card: blocker, rotated: true }] }, { status: "certifiedNone" }).state;
+  return { movement, progression: next };
 }
 
 export function localBattlePower(board: MovementState, progression: Progression, master: MasterSnapshot | null) {

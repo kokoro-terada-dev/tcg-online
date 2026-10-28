@@ -10,12 +10,13 @@ const { parseMaster } = require('../dist/test/cardMaster.js');
 const { localBattlePower } = require('../dist/test/localBattle.js');
 const { MovementStore } = require('../dist/test/movement/engine.js');
 const master = parseMaster(JSON.stringify({ schemaVersion: 2, cards: { LEADER: { type: 'leader', power: 5000 }, CARD: { type: 'character', power: 2000 } } }));
-function setup({ actor = 0, turn = 3, targetRest = null, sourceRest = false, enabled = true, sourceChar = false, life = 5, battleMaster = master } = {}) {
+function setup({ actor = 0, turn = 3, targetRest = null, sourceRest = false, enabled = true, sourceChar = false, life = 5, battleMaster = master, blockerRest } = {}) {
   const recipe = { name: 'Test', leaderCardId: 'LEADER', mainDeck: Array(50).fill('CARD'), donDeck: Array(10).fill('DON'), cardTypes: { CARD: 'character' }, leaderLifeCount: 5 };
   const match = createMatch(recipe, recipe); match.players[actor].zones.leader[0].rotated = sourceRest;
   if (sourceChar) match.players[actor].zones.character[0] = { ...match.players[actor].zones.deck.shift(), faceUp: true, rotated: sourceRest };
   const lifeCards = match.players[1 - actor].zones.life.splice(life); match.players[1 - actor].zones.hand.push(...lifeCards.map(card => ({ ...card, faceUp: true })));
   if (targetRest !== null) match.players[1 - actor].zones.character[0] = { ...match.players[1 - actor].zones.deck.shift(), faceUp: true, rotated: targetRest };
+  if (blockerRest !== undefined) match.players[1 - actor].zones.character[1] = { ...match.players[1 - actor].zones.deck.shift(), faceUp: true, rotated: blockerRest };
   const catalog = new EffectCatalog([{ dslVersion: 1, effectId: 'TEST.counter', cardId: 'LEADER', trigger: { kind: 'activate', window: 'counter' }, costs: [], actions: [{ kind: 'draw', player: 'SELF', amount: 1 }] }]);
   const owner = new EffectMatchOwner(match, catalog, true); let p = freezeState({ ...createProgression(actor), turnNumber: turn, phaseToken: phaseToken(turn, 'refresh') });
   while (true) { p = applySystemEvent(p, p.revision, { kind: 'settlePhase', phaseToken: p.phaseToken }); if (p.phase === 'main') break; p = applySystemEvent(p, p.revision, { kind: 'advancePhase', phaseToken: p.phaseToken }); }
@@ -32,8 +33,63 @@ function setup({ actor = 0, turn = 3, targetRest = null, sourceRest = false, ena
     const seat = 1 - actor, pending = endpoint.viewFor(seat).damageChoice;
     return { kind: 'testDamageChoice', ...base(seat, requestId), battleId: pending.battleId, selectionId: pending.selectionId, token: pending.options.find(option => option.label === label).token };
   }
-  return { owner, endpoint, source, target, base, attack, decision, actor, ready, damage, choice };
+  function block(seat = 1 - actor, requestId = 'block') {
+    const v = endpoint.viewFor(seat);
+    return { kind: 'testBlock', ...base(seat, requestId), battleId: v.battle?.battleId ?? 'none', blocker: { instanceId: match.players[1 - actor].zones.character[1]?.id ?? 'missing', generation: 0 } };
+  }
+  return { owner, endpoint, source, target, base, attack, decision, actor, ready, damage, choice, block };
 }
+
+test('local block rests only the selected defender character and keeps the original attack source for both seats', () => {
+  for (const actor of [0, 1]) {
+    const s = setup({ actor, blockerRest: false }), defender = 1 - actor;
+    assert.deepEqual(s.endpoint.viewFor(defender).testBlockCandidateIds, []);
+    assert.equal(s.endpoint.handle(actor, s.attack()).ok, true);
+    const c = s.block(), before = s.owner.snapshot();
+    assert.deepEqual(s.endpoint.viewFor(defender).testBlockCandidateIds, [c.blocker.instanceId]);
+    assert.deepEqual(s.endpoint.viewFor(actor).testBlockCandidateIds, []);
+    const r = s.endpoint.handle(defender, c); assert.equal(r.ok, true);
+    assert.equal(r.view.battle.step, 'counter'); assert.deepEqual(r.view.battle.source, s.source); assert.deepEqual(r.view.battle.target, c.blocker);
+    assert.deepEqual(s.endpoint.viewFor(actor).battle, r.view.battle);
+    assert.equal(s.owner.snapshot().movement.cards[c.blocker.instanceId].rotated, true);
+    assert.equal(s.owner.snapshot().movement.cards[s.target.instanceId].rotated, before.movement.cards[s.target.instanceId].rotated);
+    assert.equal(r.view.testBattleDecision, 'endCounter'); assert.deepEqual(r.view.testBlockCandidateIds, []);
+    const after = s.owner.snapshot(); assert.equal(s.endpoint.handle(defender, c).replayed, true); assert.equal(s.owner.snapshot().movement, after.movement);
+    assert.equal(s.endpoint.handle(defender, s.decision(defender, 'endCounter')).ok, true);
+    const damage = s.endpoint.handle(defender, s.damage()); assert.equal(damage.ok, true); assert.equal(damage.view.battle, null);
+    assert.equal(damage.view.movement.players[defender].character[1], null);
+    assert.equal(damage.view.movement.players[defender].trash[0].ref.instanceId, c.blocker.instanceId);
+    assert.equal(damage.view.movement.players[defender].life.length, 5);
+  }
+});
+
+test('block rejects wrong roles, rested/foreign/stale cards and extra authority fields without changing the board', () => {
+  const s = setup({ blockerRest: false }); s.endpoint.handle(0, s.attack()); const before = s.owner.snapshot();
+  assert.equal(s.endpoint.handle(0, s.block(0)).ok, false);
+  const c = s.block();
+  let invalid = 0;
+  for (const patch of [{ blocker: s.source }, { blocker: s.target }, { blocker: { ...c.blocker, generation: 1 } }, { battleId: 'old' }, { expectedMovementRevision: 999 }, { expectedProgressionRevision: 999 }, { resolutionId: 'old' }, { target: s.target }]) {
+    assert.equal(s.endpoint.handle(1, { ...c, ...patch, requestId: `invalid-${invalid++}` }).ok, false);
+  }
+  assert.equal(s.owner.snapshot().movement, before.movement); assert.equal(s.owner.snapshot().progression, before.progression);
+  assert.equal(s.endpoint.handle(1, c).ok, true);
+  assert.equal(s.endpoint.handle(1, { ...c, blocker: s.target }).code, 'request_conflict');
+  assert.equal(s.endpoint.handle(1, { ...s.block(), ...s.base(1, 'block-again') }).ok, false);
+  const rested = setup({ blockerRest: true }); rested.endpoint.handle(0, rested.attack());
+  assert.deepEqual(rested.endpoint.viewFor(1).testBlockCandidateIds, []); assert.equal(rested.endpoint.handle(1, rested.block()).ok, false);
+  const disabled = setup({ blockerRest: false, enabled: false }); assert.equal(disabled.endpoint.handle(1, disabled.block()).ok, false);
+});
+
+test('block is rejected while an effect or life choice is pending and after passing the block window', () => {
+  const s = setup({ blockerRest: false }); s.endpoint.handle(0, s.attack());
+  s.owner.openRegisteredEffect('TEST.counter', 1, s.target, { status: 'certifiedNone' });
+  assert.equal(s.endpoint.handle(1, s.block()).ok, false); assert.equal(s.endpoint.viewFor(1).testBlockCandidateIds, undefined);
+  const passed = setup({ blockerRest: false }); passed.ready();
+  assert.equal(passed.endpoint.handle(1, passed.block()).ok, false);
+  assert.equal(passed.endpoint.handle(1, passed.damage()).ok, true);
+  const before = passed.owner.snapshot(); assert.equal(passed.endpoint.handle(1, passed.block(1, 'during-choice')).ok, false);
+  assert.equal(passed.owner.snapshot().movement, before.movement); assert.equal(passed.owner.snapshot().progression, before.progression);
+});
 test('test attacks rest the source and expose the same public arrow for either attacking seat', () => {
   for (const actor of [0, 1]) {
     const s = setup({ actor }), before = s.owner.snapshot(), r = s.endpoint.handle(actor, s.attack());

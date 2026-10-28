@@ -20,7 +20,7 @@ export class OwnedEffectEndpoint {
     return view;
   }
   handle(actor: Player, input: unknown): EffectCommandResponse {
-    if (input && typeof input === "object" && ["testAttack", "testBattleDecision", "testResolveDamage", "testDamageChoice"].includes(Object.getOwnPropertyDescriptor(input, "kind")?.value)) return this.#owner.handleTestBattle(actor, input);
+    if (input && typeof input === "object" && ["testAttack", "testBlock", "testBattleDecision", "testResolveDamage", "testDamageChoice"].includes(Object.getOwnPropertyDescriptor(input, "kind")?.value)) return this.#owner.handleTestBattle(actor, input);
     if (input && typeof input === "object" && Object.getOwnPropertyDescriptor(input, "kind")?.value === "testPlayCard") return this.#owner.playTestCard(actor, input);
     if (input && typeof input === "object" && Object.getOwnPropertyDescriptor(input, "kind")?.value === "testNextTurn") return this.#owner.switchTestTurn(actor, input);
     if (input && typeof input === "object" && Object.getOwnPropertyDescriptor(input, "kind")?.value === "activateRegistered") return this.#owner.activateRegistered(actor, input);

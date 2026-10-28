@@ -14,6 +14,7 @@ export type EffectTransportView = Readonly<{
   testAttackAvailable?: boolean;
   testAttackSourceIds?: readonly string[];
   testAttackTargetIds?: readonly string[];
+  testBlockCandidateIds?: readonly string[];
   testBattleDecision?: "passBlock" | "endCounter";
   testDamageAvailable?: boolean;
   battlePower?: Readonly<{ attack: number | null; defense: number | null; masterVersion: string | null }> | null;
@@ -30,6 +31,7 @@ export type RegisteredEffectCommand = Base & Readonly<{ kind: "activateRegistere
 export type TestTurnCommand = Base & Readonly<{ kind: "testNextTurn" }>;
 export type TestPlayCardCommand = Base & Readonly<{ kind: "testPlayCard"; source: Readonly<CardObjectRef> }>;
 export type TestBattleCommand = Base & (Readonly<{ kind: "testAttack"; source: Readonly<CardObjectRef>; target: Readonly<CardObjectRef> }> |
+  Readonly<{ kind: "testBlock"; battleId: string; blocker: Readonly<CardObjectRef> }> |
   Readonly<{ kind: "testBattleDecision"; battleId: string; decision: "passBlock" | "endCounter" }> | Readonly<{ kind: "testResolveDamage"; battleId: string }> |
   Readonly<{ kind: "testDamageChoice"; battleId: string; selectionId: string; token: string }>);
 export type EffectCommand = Base & (Readonly<{ kind: "answerCosts" | "answerEffect"; selectionId: string; tokens: readonly string[] }> | Readonly<{ kind: Exclude<EffectCommandKind, "answerCosts" | "answerEffect"> }>);

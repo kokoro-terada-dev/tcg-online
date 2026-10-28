@@ -21,6 +21,7 @@ import { playLocalHandCard } from "../localCardPlay";
 import type { TestBattleCommand } from "../effectProtocol";
 import { chooseLocalLifeCard, decideLocalBattle, localAttackCandidates, localBattlePower, resolveLocalBattleDamage, startLocalBattle, type LocalBattleUpdate, type LocalLifeChoice } from "../localBattle";
 import type { MasterSnapshot } from "../cardMaster";
+import { blockLocalBattle, localBlockCandidates } from "../localBattle";
 
 type Mode = "legacy" | "automated" | "faulted" | "closed";
 type OwnerFailure = Readonly<{ ok: false; code: "owner_unavailable" | "legacy_conflict" }>;
@@ -298,8 +299,8 @@ export class EffectMatchOwner {
     try {
       ensureMove(input && typeof input === "object", "invalid-test-battle-command");
       const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value;
-      ensureMove(kind === "testAttack" || kind === "testBattleDecision" || kind === "testResolveDamage" || kind === "testDamageChoice", "invalid-test-battle-kind");
-      dataObject(input, ["kind", "matchId", "resolutionId", "requestId", "expectedMovementRevision", "expectedProgressionRevision", ...(kind === "testAttack" ? ["source", "target"] : kind === "testBattleDecision" ? ["battleId", "decision"] : kind === "testDamageChoice" ? ["battleId", "selectionId", "token"] : ["battleId"])]);
+      ensureMove(kind === "testAttack" || kind === "testBlock" || kind === "testBattleDecision" || kind === "testResolveDamage" || kind === "testDamageChoice", "invalid-test-battle-kind");
+      dataObject(input, ["kind", "matchId", "resolutionId", "requestId", "expectedMovementRevision", "expectedProgressionRevision", ...(kind === "testAttack" ? ["source", "target"] : kind === "testBlock" ? ["battleId", "blocker"] : kind === "testBattleDecision" ? ["battleId", "decision"] : kind === "testDamageChoice" ? ["battleId", "selectionId", "token"] : ["battleId"])]);
       id(input.matchId); id(input.resolutionId, 64); id(input.requestId);
       ensureMove(Number.isSafeInteger(input.expectedMovementRevision) && (input.expectedMovementRevision as number) >= 0 &&
         Number.isSafeInteger(input.expectedProgressionRevision) && (input.expectedProgressionRevision as number) >= 0, "invalid-test-battle-revision");
@@ -309,6 +310,10 @@ export class EffectMatchOwner {
         reference(input.source as CardObjectRef); reference(input.target as CardObjectRef);
         const source = input.source as CardObjectRef, target = input.target as CardObjectRef;
         command = { kind, ...base, source: { instanceId: source.instanceId, generation: source.generation }, target: { instanceId: target.instanceId, generation: target.generation } };
+      } else if (kind === "testBlock") {
+        id(input.battleId); reference(input.blocker as CardObjectRef);
+        const blocker = input.blocker as CardObjectRef;
+        command = { kind, ...base, battleId: input.battleId, blocker: { instanceId: blocker.instanceId, generation: blocker.generation } };
       } else if (kind === "testBattleDecision") {
         id(input.battleId); ensureMove(input.decision === "passBlock" || input.decision === "endCounter", "invalid-test-battle-decision");
         command = { kind, ...base, battleId: input.battleId, decision: input.decision };
@@ -332,6 +337,7 @@ export class EffectMatchOwner {
       try {
         let next: LocalBattleUpdate;
         if (command.kind === "testAttack") next = startLocalBattle(this.#board!, this.#progression!, actor, command.source, command.target, randomUUID(), randomUUID());
+        else if (command.kind === "testBlock") next = blockLocalBattle(this.#board!, this.#progression!, actor, command.battleId, command.blocker, randomUUID());
         else if (command.kind === "testBattleDecision") next = decideLocalBattle(this.#board!, this.#progression!, actor, command.battleId, command.decision);
         else if (command.kind === "testResolveDamage") next = resolveLocalBattleDamage(this.#board!, this.#progression!, actor, command.battleId, this.#localBattleMaster, randomUUID(),
           { resolutionId: randomUUID(), selectionId: randomUUID(), handToken: randomUUID(), triggerToken: randomUUID() });
@@ -363,6 +369,7 @@ export class EffectMatchOwner {
       testPlayAvailable: this.#idle.allowTestTurnSwitch && process.env.NODE_ENV !== "production" && checkTiming(progression, viewer, "playCard").allowed,
       testAttackAvailable: attacks.sources.length > 0 && attacks.targets.length > 0,
       testAttackSourceIds: attacks.sources, testAttackTargetIds: attacks.targets,
+      testBlockCandidateIds: this.#idle.allowTestTurnSwitch ? localBlockCandidates(this.#board, progression, viewer) : [],
       battle: progression.battle,
       damageChoice: this.#pendingDamage ? { battleId: this.#pendingDamage.battleId, selectionId: this.#pendingDamage.selectionId, chooser: this.#pendingDamage.defender,
         options: viewer === this.#pendingDamage.defender ? [{ token: this.#pendingDamage.handToken, label: "手札へ" as const }, { token: this.#pendingDamage.triggerToken, label: "トリガー発動" as const }] : [] } : null,

@@ -10,6 +10,7 @@ vm.runInNewContext(compiled, { exports: module.exports, module });
 const { acceptEffectView, effectCommand, effectBoardView, effectCatalogQuery, acceptEffectCatalog, registeredEffectCommand, testTurnCommand, testPlayDestination, testPlayCardCommand, canTestAttackSource, canTestAttackTarget, testAttackCommand, testBattleDecisionCommand, testDamageCommand } = module.exports;
 const plain = value => JSON.parse(JSON.stringify(value));
 const { testDamageChoiceCommand } = module.exports;
+const { testBlockCommand } = module.exports;
 function view() {
   const zones = ["hand", "deck", "life", "trash", "public", "character", "stage", "leader", "donDeck", "activeDon", "restDon", "attachedDon", "resolving"];
   const players = [0, 1].map(() => Object.fromEntries(zones.map(z => [z, z === "character" ? Array(5).fill(null) : z === "stage" || z === "leader" ? [null] : []])));
@@ -147,4 +148,13 @@ test("damage choice uses only current defender tokens, battle and revisions", ()
   assert.deepEqual(plain(testDamageChoiceCommand(v, 'opaque', 'request')), { kind: 'testDamageChoice', matchId: 'm', resolutionId: 'r', requestId: 'request', expectedMovementRevision: 3, expectedProgressionRevision: 7, battleId: 'battle', selectionId: 'selection', token: 'opaque' });
   assert.throws(() => testDamageChoiceCommand(v, 'forged', 'request'));
   for (const patch of [{ localPlayerIndex: 1 }, { damageChoice: null }, { battle: { ...v.battle, battleId: 'other' } }, { progression: { ...v.progression, gate: 'idle' } }, { progression: { ...v.progression, chooser: 1 } }, { progression: { ...v.progression, finished: true } }]) assert.throws(() => testDamageChoiceCommand({ ...v, ...patch }, 'opaque', 'request'));
+});
+
+test("block commands use current own active character references and server candidates only", () => {
+  const v = view(); v.effect.status = 'idle'; v.progression.gate = 'idle';
+  v.battle = { battleId: 'battle', defender: 0, step: 'block', decisionComplete: false, settled: false };
+  v.movement.players[0].character[0] = { ...v.movement.players[0].hand[0] }; v.testBlockCandidateIds = ['a'];
+  assert.deepEqual(plain(testBlockCommand(v, 'a', 'request')), { kind: 'testBlock', matchId: 'm', resolutionId: 'r', requestId: 'request', expectedMovementRevision: 3, expectedProgressionRevision: 7, battleId: 'battle', blocker: { instanceId: 'a', generation: 3 } });
+  for (const patch of [{ localPlayerIndex: 1 }, { testBlockCandidateIds: [] }, { battle: { ...v.battle, step: 'counter' } }, { battle: { ...v.battle, decisionComplete: true } }, { progression: { ...v.progression, gate: 'choice' } }, { progression: { ...v.progression, finished: true } }]) assert.throws(() => testBlockCommand({ ...v, ...patch }, 'a', 'request'));
+  v.movement.players[0].character[0].rotated = true; assert.throws(() => testBlockCommand(v, 'a', 'request'));
 });
