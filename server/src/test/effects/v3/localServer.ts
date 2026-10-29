@@ -53,8 +53,8 @@ function fixture(room: Room, scenario: V3Scenario, actor: 0 | 1, signingKey: Uin
       { type: fieldAction[scenario], cards: { ref: "bindings.picked" } },
     ...(privateHand ? [{ type: "DRAW", player: "SELF", count: 1 }] : []),
   ];
-  const plan = compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.13", cardId, cardVersion: `synthetic.${scenario}.1`, name: "V3 synthetic fixture leader", cardType: "leader",
-    baseStats: { cost: null, power: null, counter: null, life: null }, colors: [], traits: [], attributes: [], reviewStatus: "approved",
+  const plan = compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.14", cardId, cardVersion: `synthetic.${scenario}.1`, name: "V3 synthetic fixture leader", cardType: "leader",
+    baseStats: { cost: null, power: null, counter: null, life: null }, colors: [], traits: [], attributes: [], keywords: [], reviewStatus: "approved",
     source: { text: `Synthetic test only: ${scenario}. Not an official card ability or ruling.`, triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-synthetic-ui.1").digest("hex") },
     effects: [{ id: "main", kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: scenario === "optionalCostDraw", usageLimit: null, activationConditions: always(), resolutionConditions: always(),
       costs: scenario === "mixedReturnCostDraw" ? [{ type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }, { type: "DON_RETURN", count: 2, from: ["activeDon", "restDon", "attachedDon"] }] : scenario === "returnCostDraw" ? [{ type: "REST_SOURCE" }, { type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }, { type: "DON_RETURN", count: 1, from: "activeDon" }] : scenario === "sourceCostDraw" ? [{ type: "REST_SOURCE" }, { type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }] : scenario === "discardCostDraw" || scenario === "optionalCostDraw" ? [{ type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }] : scenario === "payDraw" ? [{ type: "REST_DON", count: 1 }] : [], actions }] }));
@@ -160,13 +160,17 @@ export async function startLocalV3Server(port = 0) {
     handle("v3-session:sync", () => { const { room, actor, session } = continuousActive(); return { sessionView: sessionView(session, room.code, actor) }; });
     handle("v3-session:command", input => {
       const { room, actor, session } = continuousActive(); ensureMove(input && typeof input === "object", "v3-session-command-object");
-      const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value; ensureMove(["activate", "trigger", "play", "advance", "work", "answer", "endTurn", "attack", "counter", "passBlock", "endCounter", "damage", "life", "attachDon"].includes(kind), "v3-session-command-kind");
-      dataObject(input, ["kind", "requestId", "matchId", "context", ...(kind === "activate" ? ["effectId"] : kind === "trigger" ? ["token"] : kind === "answer" ? ["selectionId", "tokens"] : kind === "life" ? ["selectionId", "token"] : kind === "attack" ? ["source", "target"] : kind === "counter" ? ["card", "target"] : kind === "attachDon" ? ["target", "count"] : kind === "play" ? ["card", ...(Object.hasOwn(input, "slotIndex") ? ["slotIndex"] : [])] : [])]);
+      const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value;
+      const fields: Record<string, string[]> = { activate: ["effectId"], trigger: ["token"], play: ["card"], answer: ["selectionId", "tokens"], life: ["selectionId", "token"],
+        attack: ["source", "target"], counter: ["card", "target"], attachDon: ["target", "count"], block: ["card"], advance: [], work: [], endTurn: [], passBlock: [], endCounter: [], damage: [] };
+      ensureMove(typeof kind === "string" && Object.hasOwn(fields, kind), "v3-session-command-kind");
+      dataObject(input, ["kind", "requestId", "matchId", "context", ...fields[kind]!, ...(kind === "play" && Object.hasOwn(input, "slotIndex") ? ["slotIndex"] : [])]);
       ensureMove(input.matchId === session.matchId, "v3-session-match-context"); const requestId = label(input.requestId), expected = input.context as V3SessionContext, c = session.coordinator;
       if (kind === "activate") c.activate(actor, requestId, expected, session.sources[actor]!, label(input.effectId));
       else if (kind === "trigger") c.resolveTrigger(actor, requestId, expected, label(input.token));
       else if (kind === "attack") c.attack(actor, requestId, expected, input.source as { instanceId: string; generation: number }, input.target as { instanceId: string; generation: number });
       else if (kind === "counter") c.counter(actor, requestId, expected, input.card as { instanceId: string; generation: number }, input.target as { instanceId: string; generation: number });
+      else if (kind === "block") c.block(actor, requestId, expected, input.card as { instanceId: string; generation: number });
       else if (kind === "passBlock" || kind === "endCounter") c.battleDecision(actor, requestId, expected, kind);
       else if (kind === "damage") c.resolveDamage(actor, requestId, expected);
       else if (kind === "life") c.takeDamageLife(actor, requestId, expected, label(input.selectionId), label(input.token));

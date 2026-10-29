@@ -9,7 +9,7 @@ type Props = { match: MatchView; roomId: string; busy: boolean; error: string; o
   onTestPlay?: (card: CardView) => void; canTestPlay?: (card: CardView) => boolean;
   onTestAttachDon?: (card: CardView) => void; canTestAttachDon?: (card: CardView) => boolean;
   testPlayUnavailableReason?: (card: CardView) => string; testPlayLabel?: string | ((card: CardView) => string);
-  onTestAttack?: (sourceId: string, targetId: string) => void; canTestAttackSource?: (card: CardView) => boolean; canTestAttackTarget?: (card: CardView) => boolean };
+  onTestAttack?: (sourceId: string, targetId: string) => void; canTestAttackSource?: (card: CardView) => boolean; canTestAttackTarget?: (card: CardView, sourceId?: string) => boolean };
 const labels: Record<Zone, string> = { hand: "手札", deck: "デッキ", life: "ライフ", trash: "トラッシュ", public: "公開", character: "キャラクター", stage: "ステージ", leader: "リーダー", donDeck: "DONデッキ", activeDon: "ACTIVE DON", restDon: "REST DON" };
 const imageUrl = (card: CardView) => !card.cardId ? getCardBackImageUrl() : getLocalCardImage(card.cardId)?.imageUrl ?? (card.kind === "don" ? getDonImageUrl() : null);
 
@@ -36,7 +36,7 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
     const mine = owner === match.localPlayerIndex;
     const url = imageUrl(card);
     const label = card.cardId ?? "裏向きカード";
-    const attackCandidate = !mine && (zone === "leader" || zone === "character") && (!readOnly || !!canTestAttackTarget?.(card));
+    const attackCandidate = !mine && (zone === "leader" || zone === "character") && (!readOnly || !!canTestAttackTarget?.(card, attackSource?.id));
     return <button key={card.id} data-card-id={card.id} data-player-index={owner} className={`test-match-card test-match-card-${zone}${card.rotated ? " test-match-rest" : ""}${selected?.id === card.id ? " test-match-selected" : ""}${choosingAttack && attackCandidate ? " test-attack-candidate" : ""}`} aria-label={`${labels[zone]} ${label}`} title={label} disabled={busy || (choosingAttack && !attackCandidate)}
       onClick={() => {
         if (choosingAttack) {

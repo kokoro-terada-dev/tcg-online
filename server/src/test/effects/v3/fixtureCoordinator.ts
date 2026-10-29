@@ -14,6 +14,7 @@ import { label } from "./compiler";
 import { fixtureEnvironment } from "./fixtureEnvironment";
 import { V3ResolutionMachine, type ResolutionIdentity, type WorkRequest } from "./resolution";
 import { addStatEffects, pruneStatEffects, validateStatEffects, type StatEffects } from "./statEffects";
+import { addKeywordGrants, pruneKeywordGrants, validateKeywordGrants, type KeywordGrants } from "./keywordEffects";
 
 export type FixtureContext = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number }>;
 type Receipt = { requestId: string; fingerprint: string };
@@ -25,10 +26,11 @@ export class V3FixtureCoordinator {
   #card: ApprovedV3Card; #identity: ResolutionIdentity; #key: Uint8Array; #facts: PinnedMasterFacts; #now: () => number;
   #definitions: readonly ApprovedV3Card[];
   #statEffects: StatEffects;
+  #keywordGrants: KeywordGrants;
   #checkEvents: ((events: readonly MovementEvent[]) => void) | undefined;
   #receipts: Receipt[] = []; #busy = false;
   #events: readonly MovementEvent[] = [];
-  constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; definitions?: readonly ApprovedV3Card[]; statEffects?: StatEffects; triggerEvent?: MovementEvent; checkEvents?: (events: readonly MovementEvent[]) => void }>) {
+  constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; definitions?: readonly ApprovedV3Card[]; statEffects?: StatEffects; keywordGrants?: KeywordGrants; triggerEvent?: MovementEvent; checkEvents?: (events: readonly MovementEvent[]) => void }>) {
     ensureMove(process.env.NODE_ENV !== "production" && options.mode === "syntheticNoAbilities", "v3-fixture-disabled");
     ensureMove(isApprovedV3Card(options.card), "v3-approved-server-plan-required");
     const definitions = options.definitions ?? [options.card]; dataArray(definitions, 128);
@@ -37,6 +39,7 @@ export class V3FixtureCoordinator {
     this.#definitions = [...definitions];
     validateMovementState(options.movement);
     this.#statEffects = validateStatEffects(options.movement, options.statEffects ?? []);
+    this.#keywordGrants = validateKeywordGrants(options.movement, options.keywordGrants ?? []);
     const { identity, movement, progression, card } = options;
     const trigger = options.triggerEvent;
     const triggerTiming = trigger && progression.gate.kind === "idle" && progression.phase === "main" && progression.phaseSettled && !progression.outcome;
@@ -66,7 +69,7 @@ export class V3FixtureCoordinator {
     if (view.status === "completed") return applySystemEvent(next, next.revision, { kind: "finishResolution", resolutionId: this.#identity.resolutionId });
     return next;
   }
-  #run(actor: 0 | 1, requestId: string, expected: FixtureContext, body: object, action: (machine: V3ResolutionMachine, draft: { board: MovementState; events: MovementEvent[]; statEffects: StatEffects }) => void): { replayed: boolean } {
+  #run(actor: 0 | 1, requestId: string, expected: FixtureContext, body: object, action: (machine: V3ResolutionMachine, draft: { board: MovementState; events: MovementEvent[]; statEffects: StatEffects; keywordGrants: KeywordGrants }) => void): { replayed: boolean } {
     ensureMove(process.env.NODE_ENV !== "production" && !this.#busy, "v3-fixture-disabled-or-busy"); label(requestId);
     ensureMove(actor === 0 || actor === 1, "v3-fixture-actor"); dataObject(expected, ["frameRevision", "movementRevision", "progressionRevision"]);
     const fingerprint = hash(JSON.stringify([actor, expected.frameRevision, expected.movementRevision, expected.progressionRevision, body]));
@@ -75,13 +78,13 @@ export class V3FixtureCoordinator {
     const current = this.context(); ensureMove(this.#receipts.length < 512 && current.frameRevision === expected.frameRevision && current.movementRevision === expected.movementRevision && current.progressionRevision === expected.progressionRevision, "v3-fixture-stale-or-limited");
     this.#busy = true;
     try {
-      const draft = { board: this.#board, events: [...this.#events], statEffects: this.#statEffects };
+      const draft = { board: this.#board, events: [...this.#events], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants };
       const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => draft.statEffects, this.#progression.activePlayer);
       const machine = V3ResolutionMachine.restore(this.#card, this.#identity, this.#key, environment, this.#machine.exportForStorage(), current.frameRevision);
       action(machine, draft); const progression = this.#gate(this.#progression, machine);
       this.#checkEvents?.(draft.events.slice(this.#events.length));
       // Retain all candidate changes only after frame, movement and progression succeeded.
-      this.#board = draft.board; this.#progression = progression; this.#machine = machine; this.#events = freezeMovement(draft.events); this.#statEffects = draft.statEffects;
+      this.#board = draft.board; this.#progression = progression; this.#machine = machine; this.#events = freezeMovement(draft.events); this.#statEffects = draft.statEffects; this.#keywordGrants = draft.keywordGrants;
       this.#receipts.push({ requestId, fingerprint }); return { replayed: false };
     } finally { this.#busy = false; }
   }
@@ -96,28 +99,30 @@ export class V3FixtureCoordinator {
     ensureMove(actor === this.#identity.actor, "v3-fixture-controller-only");
     return this.#run(actor, requestId, expected, { kind: "applyPendingWork" }, (machine, draft) => {
       const work = machine.workForCoordinator(); ensureMove(work, "v3-fixture-no-work");
-      let candidate: TransactionResult & { statEffects?: StatEffects };
-      try { candidate = this.#applyWork(draft.board, work, draft.statEffects); }
+      let candidate: TransactionResult & { statEffects?: StatEffects; keywordGrants?: KeywordGrants };
+      try { candidate = this.#applyWork(draft.board, work, draft.statEffects, draft.keywordGrants); }
       catch (error) {
         if (!(error instanceof MovementError)) throw error;
         machine.settleWork(requestId, expected.frameRevision, work.workId, "rejected", draft.board.revision); return;
       }
       draft.board = candidate.state; draft.events.push(...candidate.events);
       draft.statEffects = pruneStatEffects(candidate.state, candidate.statEffects ?? draft.statEffects);
+      draft.keywordGrants = pruneKeywordGrants(candidate.state, candidate.keywordGrants ?? draft.keywordGrants);
       ensureMove(draft.events.length <= 512, "v3-fixture-event-limit");
       machine.settleWork(requestId, expected.frameRevision, work.workId, "applied", candidate.state.revision);
     });
   }
-  #applyWork(board: MovementState, work: WorkRequest, statEffects: StatEffects): TransactionResult & { statEffects?: StatEffects } {
+  #applyWork(board: MovementState, work: WorkRequest, statEffects: StatEffects, keywordGrants: KeywordGrants): TransactionResult & { statEffects?: StatEffects; keywordGrants?: KeywordGrants } {
     ensureMove(work.worldRevision === board.revision, "v3-fixture-stale-work");
     const actor = this.#identity.actor, operations: MovementOperation[] = [];
     const inspected = (ref: Readonly<{ instanceId: string; generation: number }>) => board.reveals.some(grant => grant.scopeId === this.#identity.resolutionId &&
       grant.card.instanceId === ref.instanceId && grant.card.generation === ref.generation && grant.viewers.includes(actor));
-    if (work.type === "MODIFY_STAT") {
-      const next = addStatEffects(board, statEffects, work.workId, this.#identity.source, actor, work.cards, work.stat, work.amount, work.duration, this.#definitions);
+    if (work.type === "MODIFY_STAT" || work.type === "GRANT_KEYWORD") {
+      const next = work.type === "MODIFY_STAT" ? { statEffects: addStatEffects(board, statEffects, work.workId, this.#identity.source, actor, work.cards, work.stat, work.amount, work.duration, this.#definitions) } :
+        { keywordGrants: addKeywordGrants(board, keywordGrants, work.workId, this.#identity.source, actor, work.cards, work.keyword, work.duration, this.#definitions) };
       const result = new MovementStore(board).commit({ transactionId: hash(`${board.matchId}:${work.workId}`), matchId: board.matchId, expectedRevision: board.revision,
         turnNumber: board.turnNumber, actor, effectController: actor, source: this.#identity.source, mode: "effect", resolutionId: this.#identity.resolutionId, operations: [] }, { status: "certifiedNone" });
-      return { ...result, statEffects: next };
+      return { ...result, ...next };
     } else if (work.type === "PAY_COSTS") {
       let amount = 0, discardCount = 0, restSource = 0;
       const returnCosts = work.costs.filter(cost => cost.type === "DON_RETURN"), returnCost = returnCosts[0], returnCount = returnCost?.count ?? 0;
@@ -226,7 +231,7 @@ export class V3FixtureCoordinator {
       revision: this.#progression.revision, gate: this.#progression.gate.kind, chooser: this.#progression.gate.kind === "choice" ? this.#progression.gate.chooser : null } });
   }
   snapshotForCoordinator() {
-    return freezeMovement({ movement: this.#board, progression: this.#progression, frame: this.#machine.exportForStorage(), receipts: structuredClone(this.#receipts), movementEvents: this.#events, statEffects: this.#statEffects });
+    return freezeMovement({ movement: this.#board, progression: this.#progression, frame: this.#machine.exportForStorage(), receipts: structuredClone(this.#receipts), movementEvents: this.#events, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants });
   }
   toJSON(): never { throw new Error("v3-fixture-server-only"); }
 }

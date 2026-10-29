@@ -12,6 +12,10 @@ export type SessionDetails = Readonly<{ effectId?: string; token?: string; token
 export function v3SessionCommand(view: V3SessionView, kind: V3SessionCommand["kind"], requestId: string, details: SessionDetails = {}): V3SessionCommand {
   const base = { matchId: view.matchId, requestId, context: { ...view.context } }, ownTurn = view.activePlayer === view.localPlayerIndex;
   const idle = view.gate === "idle" && !view.outcome && !view.battle && (!view.frame || view.frame.status === "completed");
+  if (kind === "block") {
+    if (view.battle?.defender !== view.localPlayerIndex || view.battle?.step !== "block" || view.gate !== "idle" || !details.card || !view.blockerChoices.some(choice => choice.card.instanceId === details.card!.instanceId && choice.card.generation === details.card!.generation)) throw Error("Blocker is unavailable");
+    return { ...base, kind, card: { ...details.card } };
+  }
   if (kind === "attachDon") {
     if (!idle || !ownTurn || !details.target || !Number.isSafeInteger(details.count) || details.count! < 1 || details.count! > 10 || view.movement.players[view.localPlayerIndex].activeDon.length < details.count! ||
       !view.publicStats.some(card => card.player === view.localPlayerIndex && (card.zone === "leader" || card.zone === "character") && card.card.instanceId === details.target!.instanceId && card.card.generation === details.target!.generation)) throw Error("DON attachment is unavailable");
@@ -19,7 +23,7 @@ export function v3SessionCommand(view: V3SessionView, kind: V3SessionCommand["ki
   }
   if (kind === "attack") {
     const includes = (rows: V3SessionView["attackChoices"]["sources"], ref: SessionDetails["source"]) => ref && rows.some(row => row.card.instanceId === ref.instanceId && row.card.generation === ref.generation);
-    if (!idle || !ownTurn || !includes(view.attackChoices.sources, details.source) || !includes(view.attackChoices.targets, details.target)) throw Error("Attack is unavailable");
+    if (!idle || !ownTurn || !includes(view.attackChoices.sources, details.source) || !includes(view.attackChoices.targets, details.target) || !view.attackChoices.pairs.some(pair => pair.sourceId === details.source!.instanceId && pair.targetId === details.target!.instanceId)) throw Error("Attack is unavailable");
     return { ...base, kind, source: { ...details.source! }, target: { ...details.target! } };
   }
   if (kind === "passBlock" || kind === "endCounter" || kind === "damage" || kind === "counter") {

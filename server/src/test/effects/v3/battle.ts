@@ -8,19 +8,67 @@ import { applySystemEvent } from "../../progression/transitions";
 import type { CardObjectRef } from "../types";
 import type { ApprovedV3Card } from "./approval";
 import { statDelta, type StatEffects } from "./statEffects";
+import { effectiveKeywords, type KeywordGrants } from "./keywordEffects";
 
 type Ref = Readonly<CardObjectRef>;
 type Seat = 0 | 1;
 export type BattleCounters = readonly Readonly<{ target: Ref; amount: number }>[];
 export type LifeDecision = Readonly<{ battleId: string; resolutionId: string; selectionId: string; token: string; defender: Seat; card: Ref; expiresAt: number }>;
 export const V3_BASE_BATTLE_RULES = {
-  version: "v3-base-battle.1", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
-  reviewedAt: "2026-10-29", clauses: ["6-5-5", "6-5-6", "7-1", "7-1-3", "7-1-4", "7-1-5"],
+  version: "v3-base-battle.2", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
+  reviewedAt: "2026-10-29", clauses: ["6-5-5", "6-5-6", "7-1", "7-1-3", "7-1-4", "7-1-5", "10-1-1", "10-1-4", "10-1-6", "10-1-7"],
 } as const;
 function field(board: MovementState, ref: Ref, player: Seat) {
   const card = getCard(board, ref), at = location(board, card.instanceId);
   ensureMove(at.player === player && card.owner === player && card.controller === player && card.faceUp && (at.zone === "leader" || at.zone === "character") && at.zone === card.kind, "v3-battle-field-required");
   return card;
+}
+function fieldRows(board: MovementState, player: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>) {
+  return [...board.players[player].leader, ...board.players[player].character].flatMap(id => {
+    if (!id) return []; const card = board.cards[id]!, definition = definitions.get(card.cardId)?.definition;
+    if (!card.faceUp || card.owner !== player || card.controller !== player || !definition || definition.cardType !== card.kind || definition.baseStats.power === null) return [];
+    return [{ card: { instanceId: id, generation: card.generation }, cardId: card.cardId }];
+  });
+}
+export function attackOptions(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants) {
+  if (!checkTiming(progression, actor, "attack").allowed) return { sources: [], targets: [], pairs: [] };
+  const sources = fieldRows(board, actor, definitions).filter(row => {
+    const card = board.cards[row.card.instanceId]!, keywords = effectiveKeywords(board, definitions, grants, row.card);
+    return !card.rotated && (card.kind === "leader" || card.enteredTurn !== progression.turnNumber || keywords.includes("RUSH") || keywords.includes("RUSH_CHARACTER"));
+  });
+  const targets = fieldRows(board, (1 - actor) as Seat, definitions).filter(row => { const card = board.cards[row.card.instanceId]!; return card.kind === "leader" || card.rotated; });
+  const pairs = sources.flatMap(source => {
+    const card = board.cards[source.card.instanceId]!, keywords = effectiveKeywords(board, definitions, grants, source.card);
+    const characterOnly = card.kind === "character" && card.enteredTurn === progression.turnNumber && !keywords.includes("RUSH");
+    return targets.filter(target => !characterOnly || board.cards[target.card.instanceId]!.kind === "character").map(target => ({ sourceId: source.card.instanceId, targetId: target.card.instanceId }));
+  });
+  return { sources: sources.filter(row => pairs.some(pair => pair.sourceId === row.card.instanceId)), targets: targets.filter(row => pairs.some(pair => pair.targetId === row.card.instanceId)), pairs };
+}
+export function declareAttack(board: MovementState, progression: Progression, actor: Seat, source: Ref, target: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants, battleId: string, transactionId: string) {
+  field(board, source, actor); field(board, target, (1 - actor) as Seat);
+  const options = attackOptions(board, progression, actor, definitions, grants);
+  ensureMove(board.turnNumber === progression.turnNumber && options.pairs.some(pair => pair.sourceId === source.instanceId && pair.targetId === target.instanceId), "v3-attack-pair-unavailable");
+  let next = applySystemEvent(progression, progression.revision, { kind: "startBattle", battleId, source, target });
+  const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
+    actor, effectController: null, source, mode: "rule", resolutionId: null, operations: [{ kind: "setRest", card: source, rotated: true }] }, { status: "certifiedNone" });
+  next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId, step: "attack" });
+  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId, step: "attack", participantsPresent: true });
+  return { movement: result.state, progression: next, events: result.events };
+}
+export function blockerOptions(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants) {
+  const battle = progression.battle;
+  if (!battle || !checkTiming(progression, actor, "passBlock").allowed || effectiveKeywords(board, definitions, grants, battle.source).includes("CANNOT_BE_BLOCKED")) return [];
+  return fieldRows(board, actor, definitions).filter(row => !board.cards[row.card.instanceId]!.rotated && row.card.instanceId !== battle.target.instanceId && effectiveKeywords(board, definitions, grants, row.card).includes("BLOCKER"));
+}
+export function declareBlock(board: MovementState, progression: Progression, actor: Seat, card: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants, transactionId: string) {
+  field(board, card, actor); const battle = progression.battle!;
+  ensureMove(blockerOptions(board, progression, actor, definitions, grants).some(option => option.card.instanceId === card.instanceId && option.card.generation === card.generation), "v3-blocker-unavailable");
+  let next = applySystemEvent(progression, progression.revision, { kind: "redirectBattle", battleId: battle.battleId, target: card });
+  const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
+    actor, effectController: actor, source: card, mode: "cost", resolutionId: `block:${battle.battleId}`, operations: [{ kind: "setRest", card, rotated: true }] }, { status: "certifiedNone" });
+  next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "block" });
+  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "block", participantsPresent: true });
+  return { movement: result.state, progression: next, events: result.events };
 }
 export function battlePower(board: MovementState, progression: Progression, definitions: ReadonlyMap<string, ApprovedV3Card>, effects: StatEffects, counters: BattleCounters) {
   const battle = progression.battle; if (!battle) return null;

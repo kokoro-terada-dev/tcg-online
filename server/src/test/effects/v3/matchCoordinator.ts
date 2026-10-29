@@ -12,9 +12,10 @@ import { isApprovedV3Card, type ApprovedV3Card } from "./approval";
 import { label } from "./compiler";
 import { V3FixtureCoordinator } from "./fixtureCoordinator";
 import { endTurnStatEffects, pruneStatEffects, statDelta, type StatEffects } from "./statEffects";
-import { enqueuePlayTriggers, playTriggerCandidates, triggerChooser, SYNTHETIC_TRIGGER_POLICY, type PlayTrigger } from "./triggerScheduler";
-import { localAttackCandidates, startLocalBattle, decideLocalBattle } from "../../localBattle";
-import { battlePower, counterCandidates, useCounter, damage, takeLife, V3_BASE_BATTLE_RULES, type BattleCounters, type LifeDecision } from "./battle";
+import { availableTriggers, enqueuePlayTriggers, playTriggerCandidates, triggerChooser, SYNTHETIC_TRIGGER_POLICY, type PlayTrigger } from "./triggerScheduler";
+import { decideLocalBattle } from "../../localBattle";
+import { attackOptions, declareAttack, blockerOptions, declareBlock, battlePower, counterCandidates, useCounter, damage, takeLife, V3_BASE_BATTLE_RULES, type BattleCounters, type LifeDecision } from "./battle";
+import { effectiveKeywords, endTurnKeywordGrants, pruneKeywordGrants, type KeywordGrants } from "./keywordEffects";
 
 type Seat = 0 | 1;
 export type V3MatchContext = Readonly<{ revision: number; movementRevision: number; progressionRevision: number; resolutionId: string | null; frameRevision: number | null }>;
@@ -30,6 +31,7 @@ export class V3SyntheticMatchCoordinator {
   #active: Active | null = null; #history: History[] = []; #receipts: Receipt[] = [];
   #ruleEvents: readonly MovementEvent[] = [];
   #statEffects: StatEffects = [];
+  #keywordGrants: KeywordGrants = [];
   #triggers: readonly PlayTrigger[] = [];
   #battleCounters: BattleCounters = []; #lifeDecision: LifeDecision | null = null;
   #revision = 0; #busy = false; #key: Uint8Array; #master: MasterSnapshot | null; #now: () => number;
@@ -92,7 +94,7 @@ export class V3SyntheticMatchCoordinator {
       ensureMove(limit === null || (this.#usage.get(usageKey) ?? 0) < limit, "v3-match-usage-exhausted");
       const resolutionId = randomUUID(), coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: this.#board, progression: this.#progression,
-        signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, checkEvents: this.#checkNewEvents });
+        signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, checkEvents: this.#checkNewEvents });
       this.#archive(); this.#active = { coordinator, actor, cardId: object.cardId, effectId, source: { ...source }, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: null };
       this.#progression = coordinator.snapshotForCoordinator().progression;
     });
@@ -101,7 +103,7 @@ export class V3SyntheticMatchCoordinator {
     label(token);
     return this.#run(actor, requestId, expected, { kind: "trigger", token }, () => {
       this.#settled(true); ensureMove(this.#history.length < 256 && triggerChooser(this.#triggers, this.#progression.activePlayer) === actor, "v3-trigger-wrong-controller-or-limit");
-      const pending = this.#triggers.find(entry => entry.token === token && entry.actor === actor);
+      const pending = availableTriggers(this.#triggers, this.#progression.activePlayer).find(entry => entry.token === token && entry.actor === actor);
       ensureMove(pending && pending.event.after, "v3-trigger-not-pending");
       const card = this.#cards.get(pending.cardId)!;
       const source = { instanceId: pending.event.after.instanceId, generation: pending.event.after.generation }, effectId = pending.effectId;
@@ -110,7 +112,7 @@ export class V3SyntheticMatchCoordinator {
       ensureMove(effect.usageLimit === null || (this.#usage.get(usageKey) ?? 0) < effect.usageLimit.count, "v3-match-usage-exhausted");
       const resolutionId = randomUUID(), coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: this.#board, progression: this.#progression,
-        signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects,
+        signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
         triggerEvent: pending.event, checkEvents: this.#checkNewEvents });
       this.#archive(); this.#triggers = this.#triggers.filter(entry => entry.token !== token);
       this.#active = { coordinator, actor, cardId: pending.cardId, effectId, source, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: pending.event.eventId };
@@ -123,7 +125,7 @@ export class V3SyntheticMatchCoordinator {
       action(active.coordinator); const snapshot = active.coordinator.snapshotForCoordinator(), frame = active.coordinator.viewFor(active.actor).frame;
       const triggers = enqueuePlayTriggers(snapshot.movementEvents.slice(active.eventCount), this.#cards);
       this.#triggers = freezeMovement([...this.#triggers, ...triggers]); active.eventCount = snapshot.movementEvents.length;
-      this.#board = snapshot.movement; this.#progression = snapshot.progression; this.#statEffects = snapshot.statEffects;
+      this.#board = snapshot.movement; this.#progression = snapshot.progression; this.#statEffects = snapshot.statEffects; this.#keywordGrants = snapshot.keywordGrants;
       if (frame.activationCommitted && !active.counted) {
         this.#usage.set(active.usageKey, (this.#usage.get(active.usageKey) ?? 0) + 1); active.counted = true;
       }
@@ -163,6 +165,7 @@ export class V3SyntheticMatchCoordinator {
       events.push(...played.events); ensureMove(this.#ruleEvents.length + events.length <= 512, "v3-match-rule-event-limit");
       this.#checkNewEvents(events); const triggers = enqueuePlayTriggers(events, this.#cards);
       this.#archive(); this.#board = played.state; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...events]); this.#statEffects = pruneStatEffects(this.#board, this.#statEffects);
+      this.#keywordGrants = pruneKeywordGrants(this.#board, this.#keywordGrants);
       this.#triggers = freezeMovement([...this.#triggers, ...triggers]);
     });
   }
@@ -178,13 +181,8 @@ export class V3SyntheticMatchCoordinator {
     });
   }
   attackChoicesFor(actor: Seat) {
-    if (this.#triggers.length || this.#lifeDecision || this.#active && this.#active.coordinator.viewFor(actor).frame.status !== "completed") return { sources: [], targets: [] };
-    const choices = localAttackCandidates(this.#board, this.#progression, actor);
-    const rows = (ids: readonly string[]) => ids.flatMap(id => {
-      const object = this.#board.cards[id]!, definition = this.#cards.get(object.cardId)?.definition;
-      return definition && definition.cardType === object.kind && definition.baseStats.power !== null ? [{ card: { instanceId: id, generation: object.generation }, cardId: object.cardId }] : [];
-    });
-    return { sources: rows(choices.sources), targets: rows(choices.targets) };
+    if (this.#triggers.length || this.#lifeDecision || this.#active && this.#active.coordinator.viewFor(actor).frame.status !== "completed") return { sources: [], targets: [], pairs: [] };
+    return attackOptions(this.#board, this.#progression, actor, this.#cards, this.#keywordGrants);
   }
   attack(actor: Seat, requestId: string, expected: V3MatchContext, source: Readonly<CardObjectRef>, target: Readonly<CardObjectRef>) {
     reference(source); reference(target);
@@ -192,7 +190,8 @@ export class V3SyntheticMatchCoordinator {
       this.#settled(); ensureMove(this.#history.length < 256, "v3-match-history-limit");
       const choices = this.attackChoicesFor(actor), includes = (rows: typeof choices.sources, ref: Readonly<CardObjectRef>) => rows.some(row => row.card.instanceId === ref.instanceId && row.card.generation === ref.generation);
       ensureMove(includes(choices.sources, source) && includes(choices.targets, target), "v3-battle-attack-unavailable");
-      const result = startLocalBattle(this.#board, this.#progression, actor, source, target, randomUUID(), hash(`${this.#board.matchId}:${requestId}:attack`));
+      const result = declareAttack(this.#board, this.#progression, actor, source, target, this.#cards, this.#keywordGrants, randomUUID(), hash(`${this.#board.matchId}:${requestId}:attack`));
+      ensureMove(this.#ruleEvents.length + result.events.length <= 512, "v3-match-rule-event-limit"); this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...result.events]);
       this.#archive(); this.#board = result.movement; this.#progression = result.progression; this.#battleCounters = [];
     });
   }
@@ -219,6 +218,7 @@ export class V3SyntheticMatchCoordinator {
     const triggers = enqueuePlayTriggers(result.events, this.#cards);
     this.#board = result.movement; this.#progression = result.progression; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...result.events]);
     this.#statEffects = pruneStatEffects(this.#board, this.#statEffects); this.#triggers = freezeMovement([...this.#triggers, ...triggers]);
+    this.#keywordGrants = pruneKeywordGrants(this.#board, this.#keywordGrants);
     this.#battleCounters = result.progression.battle ? counters : []; this.#lifeDecision = pendingLife;
   }
   battleDecision(actor: Seat, requestId: string, expected: V3MatchContext, decision: "passBlock" | "endCounter") {
@@ -226,6 +226,13 @@ export class V3SyntheticMatchCoordinator {
       this.#battleIdle(); const battle = this.#progression.battle; ensureMove(battle, "v3-battle-required");
       const result = decideLocalBattle(this.#board, this.#progression, actor, battle.battleId, decision);
       this.#acceptBattle({ ...result, events: [] }, this.#battleCounters, null);
+    });
+  }
+  block(actor: Seat, requestId: string, expected: V3MatchContext, card: Readonly<CardObjectRef>) {
+    reference(card);
+    return this.#run(actor, requestId, expected, { kind: "block", card: { ...card } }, () => {
+      this.#battleIdle(); const result = declareBlock(this.#board, this.#progression, actor, card, this.#cards, this.#keywordGrants, hash(`${this.#board.matchId}:${requestId}:block`));
+      this.#acceptBattle(result, this.#battleCounters, null);
     });
   }
   counter(actor: Seat, requestId: string, expected: V3MatchContext, card: Readonly<CardObjectRef>, target: Readonly<CardObjectRef>) {
@@ -254,6 +261,7 @@ export class V3SyntheticMatchCoordinator {
       this.#settled(); ensureMove(this.#history.length < 256, "v3-match-history-limit");
       let progression = applyPlayerIntent(this.#progression, this.#progression.revision, actor, "endMain"), board = this.#board;
       const statEffects = endTurnStatEffects(this.#statEffects, this.#progression.activePlayer);
+      const keywordGrants = endTurnKeywordGrants(this.#keywordGrants, this.#progression.activePlayer);
       const ruleEvents = [...this.#ruleEvents];
       // Every checkpoint is prepared locally. A later failure retains neither phase nor movement changes.
       for (let steps = 0; steps < 12; steps++) {
@@ -275,7 +283,7 @@ export class V3SyntheticMatchCoordinator {
           board = result.state; ruleEvents.push(...result.events); ensureMove(ruleEvents.length <= 512, "v3-match-rule-event-limit");
         }
         progression = applySystemEvent(progression, progression.revision, { kind: "settlePhase", phaseToken: work.token });
-        if (work.kind === "mainEntryCheckpoint") { this.#archive(); this.#board = board; this.#progression = progression; this.#ruleEvents = freezeMovement(ruleEvents); this.#statEffects = pruneStatEffects(board, statEffects); this.#usage.clear(); return; }
+        if (work.kind === "mainEntryCheckpoint") { this.#archive(); this.#board = board; this.#progression = progression; this.#ruleEvents = freezeMovement(ruleEvents); this.#statEffects = pruneStatEffects(board, statEffects); this.#keywordGrants = pruneKeywordGrants(board, keywordGrants); this.#usage.clear(); return; }
         progression = applySystemEvent(progression, progression.revision, { kind: "advancePhase", phaseToken: work.token });
       }
       throw new Error("V3_MATCH_PHASE_LIMIT");
@@ -294,9 +302,9 @@ export class V3SyntheticMatchCoordinator {
       frame: active?.frame ?? null, turnNumber: this.#progression.turnNumber, activePlayer: this.#progression.activePlayer, phase: this.#progression.phase,
       gate: waitingTriggers ? "trigger" as const : this.#progression.gate.kind, resolutionActor: this.#active?.actor ?? null, history: [...this.#history],
       triggerPolicy: SYNTHETIC_TRIGGER_POLICY, pendingTriggerCount: this.#triggers.length, triggerChooser: chooser,
-      triggerChoices: this.#triggers.filter(entry => entry.actor === viewer && chooser === viewer).map(entry => ({ token: entry.token, cardId: entry.cardId, effectId: entry.effectId })),
+      triggerChoices: availableTriggers(this.#triggers, this.#progression.activePlayer).filter(entry => entry.actor === viewer && chooser === viewer).map(entry => ({ token: entry.token, cardId: entry.cardId, effectId: entry.effectId })),
       battle: battle ? { ...battle, powers } : null, battleRules: V3_BASE_BATTLE_RULES.version, outcome: this.#progression.outcome,
-      counterChoices: counterCandidates(this.#board, this.#progression, viewer, this.#cards), lifePending: !!life,
+      counterChoices: counterCandidates(this.#board, this.#progression, viewer, this.#cards), blockerChoices: blockerOptions(this.#board, this.#progression, viewer, this.#cards, this.#keywordGrants), lifePending: !!life,
       lifeChoice: life?.defender === viewer ? { selectionId: life.selectionId, token: life.token, expiresAt: life.expiresAt, cardId: this.#board.cards[life.card.instanceId]!.cardId } : null,
       publicReveals: revealIds.map(id => ({ cardId: this.#board.cards[id]!.cardId, owner: this.#board.cards[id]!.owner })),
       publicStats: this.#board.players.flatMap((zones, player) => (["leader", "character", "stage"] as const).flatMap(zone => zones[zone].flatMap((id, slot) => {
@@ -306,7 +314,7 @@ export class V3SyntheticMatchCoordinator {
         const dons = player === this.#progression.activePlayer ? zones.attachedDon.filter(id => { const parent = this.#board.cards[id!]!.attachedTo; return parent?.instanceId === ref.instanceId && parent.generation === ref.generation; }).length * 1000 : 0;
         const power = definition.baseStats.power === null ? null : definition.baseStats.power + powerDelta + dons;
         return [{ card: ref, cardId: object.cardId, player: player as Seat, zone, slot, power: power !== null && Number.isSafeInteger(power) ? power : null,
-          cost: definition.baseStats.cost === null ? null : Math.max(0, definition.baseStats.cost + costDelta), powerDelta, costDelta }];
+          cost: definition.baseStats.cost === null ? null : Math.max(0, definition.baseStats.cost + costDelta), powerDelta, costDelta, keywords: zone === "stage" ? [] : effectiveKeywords(this.#board, this.#cards, this.#keywordGrants, ref) }];
       }))) });
   }
   effectsFor(actor: Seat, source: Readonly<CardObjectRef>) {
@@ -322,7 +330,7 @@ export class V3SyntheticMatchCoordinator {
   }
   snapshotForCoordinator() {
     return freezeMovement({ context: this.context(), movement: this.#board, progression: this.#progression, active: this.#active?.coordinator.snapshotForCoordinator() ?? null,
-      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects, pendingTriggers: this.#triggers, battleCounters: this.#battleCounters, pendingLife: this.#lifeDecision });
+      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, pendingTriggers: this.#triggers, battleCounters: this.#battleCounters, pendingLife: this.#lifeDecision });
   }
   toJSON(): never { throw new Error("v3-match-server-only"); }
 }

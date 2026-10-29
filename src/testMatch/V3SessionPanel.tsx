@@ -5,7 +5,7 @@ import { v3BoardView } from "./v3FixtureClient";
 import V3ChoicePanel from "./V3ChoicePanel";
 import TestBoard from "./TestBoard";
 import { getLocalCardImage } from "../utils/localCardImages";
-const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用" };
+const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", GRANT_KEYWORD: "能力を付与" };
 export default function V3SessionPanel({ view, busy, needsSync, error, isHost, onAction, onSync, onEnd }: {
   view: V3SessionView; busy: boolean; needsSync: boolean; error: string; isHost: boolean;
   onAction: (kind: V3SessionCommand["kind"], details?: SessionDetails) => void; onSync: () => void; onEnd: () => void;
@@ -26,7 +26,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
       testPlayLabel={card => `登場（DON${playable(card.id)?.cost ?? "?"}）`} canTestPlay={card => !disabled && !!playable(card.id)?.enabled}
       testPlayUnavailableReason={card => { const play = playable(card.id); return disabled ? needsSync ? "再同期が必要" : "処理中" : !play ? "未対応カード" : play.cost === null ? "コスト未確認" : play.slotIndex < 0 ? "空き枠なし" : !ownTurn || !idle ? "操作待ち" : "DON不足"; }}
       canTestAttackSource={card => !disabled && view.attackChoices.sources.some(option => option.card.instanceId === card.id)}
-      canTestAttackTarget={card => !disabled && view.attackChoices.targets.some(option => option.card.instanceId === card.id)}
+      canTestAttackTarget={(card, sourceId) => !disabled && view.attackChoices.targets.some(option => option.card.instanceId === card.id) && (!sourceId || view.attackChoices.pairs.some(pair => pair.sourceId === sourceId && pair.targetId === card.id))}
       canTestAttachDon={card => !disabled && idle && ownTurn && view.movement.players[view.localPlayerIndex].activeDon.length > 0 && view.publicStats.some(option => option.card.instanceId === card.id && option.player === view.localPlayerIndex && (option.zone === "leader" || option.zone === "character"))}
       onTestAttachDon={card => { const target = view.publicStats.find(option => option.card.instanceId === card.id)?.card; if (target) onAction("attachDon", { target, count: 1 }); }}
       onInspectEffects={() => setCollapsed(false)} onTestAttack={(sourceId, targetId) => {
@@ -40,6 +40,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
         {battle && <div className="v3-battle-status"><p role="status">{battle.step === "block" ? "ブロック" : battle.step === "counter" ? "カウンター" : "ダメージ確認"}・{defending ? "自分が操作" : "相手の操作待ち"}</p>
           <p>攻撃 {battle.powers?.attack ?? "?"} → 防御 {battle.powers?.defense ?? "?"}</p>
           {defending && !view.lifePending && <div className="test-effect-actions">
+            {battle.step === "block" && view.blockerChoices.map(choice => <button key={choice.card.instanceId} disabled={disabled} onClick={() => onAction("block", { card: choice.card })}>ブロック・{view.imageAliases[choice.cardId] ?? choice.cardId}</button>)}
             {battle.step === "block" && <button disabled={disabled} onClick={() => onAction("passBlock")}>ブロックしない</button>}
             {battle.step === "counter" && <button disabled={disabled} onClick={() => onAction("endCounter")}>カウンター終了</button>}
             {battle.step === "damage" && <button disabled={disabled} onClick={() => onAction("damage")}>バトル結果を確定</button>}
@@ -67,10 +68,11 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
           return <button key={`${card.cardId}:${index}`} onClick={() => setRevealPreview(id)}>{image ? <img src={image} alt={id} draggable={false} /> : id}</button>;
         })}</div>}
         {frame && <p role="status">{frame.status === "completed" ? frame.activationDecision === "declined" ? "発動せず終了" : "処理完了" : frame.status === "blocked" ? "未対応または処理不可・停止中" : view.resolutionActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち"}</p>}
-        {view.publicStats.some(card => card.powerDelta || card.costDelta) && <div className="v3-stat-summary" aria-label="適用中の数値修正">{view.publicStats.filter(card => card.powerDelta || card.costDelta).map(card =>
+        {view.publicStats.some(card => card.powerDelta || card.costDelta || card.keywords.length) && <div className="v3-stat-summary" aria-label="数値修正と能力">{view.publicStats.filter(card => card.powerDelta || card.costDelta || card.keywords.length).map(card =>
           <p key={card.card.instanceId}>{card.player === view.localPlayerIndex ? "自分" : "相手"}・{card.zone === "leader" ? "リーダー" : card.zone === "stage" ? "ステージ" : `キャラ${card.slot + 1}`}
             {card.powerDelta !== 0 && <b> パワー {card.power ?? "?"}（{card.powerDelta > 0 ? "+" : ""}{card.powerDelta}）</b>}
             {card.costDelta !== 0 && <b> コスト {card.cost ?? "?"}（{card.costDelta > 0 ? "+" : ""}{card.costDelta}）</b>}
+            {card.keywords.length > 0 && <small> {card.keywords.map(keyword => ({ BLOCKER: "ブロッカー", RUSH: "速攻", RUSH_CHARACTER: "速攻：キャラ", CANNOT_BE_BLOCKED: "ブロック不可" }[keyword] ?? keyword)).join("・")}</small>}
           </p>)}</div>}
         {frame?.choice?.chooser === view.localPlayerIndex && <V3ChoicePanel key={frame.choice.selectionId} choice={frame.choice} imageAliases={view.imageAliases} disabled={disabled} onConfirm={tokens => onAction("answer", { tokens })} />}
         <div className="test-effect-actions">

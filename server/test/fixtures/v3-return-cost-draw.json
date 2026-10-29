@@ -1,5 +1,6 @@
 {
-  "schemaVersion": "3.0.0-subset.13", "cardId": "EXAMPLE-RETURN-COST-NOT-REAL", "cardVersion": "fixture.1",
+  "keywords": [],
+  "schemaVersion": "3.0.0-subset.14", "cardId": "EXAMPLE-RETURN-COST-NOT-REAL", "cardVersion": "fixture.1",
   "name": "合成テスト用・DON返却と複合コスト（実在しません）", "cardType": "leader",
   "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
   "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",

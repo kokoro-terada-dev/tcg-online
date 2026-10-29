@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { MovementEvent } from "../../movement/types";
 import type { ApprovedV3Card } from "./approval";
 
-export type PlayTrigger = Readonly<{ token: string; actor: 0 | 1; cardId: string; effectId: string; event: MovementEvent }>;
-export const SYNTHETIC_TRIGGER_POLICY = "synthetic-on-play.controller-choice.1";
+export type PlayTrigger = Readonly<{ token: string; batchId: string; actor: 0 | 1; cardId: string; effectId: string; event: MovementEvent }>;
+export const SYNTHETIC_TRIGGER_POLICY = "synthetic-on-play.batch-choice.2";
 
 // Self-entry events only. Watcher abilities and official simultaneous-trigger rulings are not inferred.
 export function playTriggerCandidates(events: readonly MovementEvent[], definitions: ReadonlyMap<string, ApprovedV3Card>) {
@@ -16,9 +16,15 @@ export function playTriggerCandidates(events: readonly MovementEvent[], definiti
   });
 }
 export function enqueuePlayTriggers(events: readonly MovementEvent[], definitions: ReadonlyMap<string, ApprovedV3Card>): readonly PlayTrigger[] {
-  return playTriggerCandidates(events, definitions).map(candidate => ({ ...candidate, token: randomUUID() }));
+  const batchId = randomUUID();
+  return playTriggerCandidates(events, definitions).map(candidate => ({ ...candidate, batchId, token: randomUUID() }));
 }
-// Explicit synthetic policy: turn controller first, then the other controller; each chooses its own order.
+// Preserve the earlier timing group before any derived events (CR 8-6-1).
 export function triggerChooser(queue: readonly PlayTrigger[], activePlayer: 0 | 1): 0 | 1 | null {
-  return queue.some(entry => entry.actor === activePlayer) ? activePlayer : queue.length ? (1 - activePlayer) as 0 | 1 : null;
+  const first = queue[0]; if (!first) return null;
+  return queue.some(entry => entry.batchId === first.batchId && entry.actor === activePlayer) ? activePlayer : (1 - activePlayer) as 0 | 1;
+}
+export function availableTriggers(queue: readonly PlayTrigger[], activePlayer: 0 | 1): readonly PlayTrigger[] {
+  const first = queue[0], chooser = triggerChooser(queue, activePlayer);
+  return first ? queue.filter(entry => entry.batchId === first.batchId && entry.actor === chooser) : [];
 }

@@ -14,6 +14,7 @@ export interface PredicateMap {
   compare: NodeMeta & { type: "compare"; left: Value; op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte"; right: Value };
 }
 export interface ActionMap {
+  GRANT_KEYWORD: NodeMeta & { type: "GRANT_KEYWORD"; cards: CardSetRef; keyword: Node<"keyword">; duration: Node<"duration"> };
   MODIFY_STAT: NodeMeta & { type: "MODIFY_STAT"; cards: CardSetRef; stat: "power" | "cost"; amount: number; duration: Node<"duration"> };
   LOOK_TOP: NodeMeta & { type: "LOOK_TOP"; player: "SELF"; count: number; bindAs: string; onInsufficient: "fail" | "takeAvailable" };
   REVEAL: NodeMeta & { type: "REVEAL"; cards: CardSetRef; viewers: "BOTH" };
@@ -54,7 +55,13 @@ export interface DurationMap {
   TURN_END: NodeMeta & { type: "TURN_END"; player: Player; occurrence: 1 | 2 };
 }
 export interface TimingMap { MAIN: NodeMeta & { type: "MAIN" }; ON_PLAY: NodeMeta & { type: "ON_PLAY" } }
-export interface Categories { predicate: PredicateMap; action: ActionMap; cost: CostMap; replacement: ReplacementMap; selector: SelectorMap; duration: DurationMap; timing: TimingMap }
+export interface KeywordMap {
+  BLOCKER: NodeMeta & { type: "BLOCKER" };
+  RUSH: NodeMeta & { type: "RUSH" };
+  RUSH_CHARACTER: NodeMeta & { type: "RUSH_CHARACTER" };
+  CANNOT_BE_BLOCKED: NodeMeta & { type: "CANNOT_BE_BLOCKED" };
+}
+export interface Categories { predicate: PredicateMap; action: ActionMap; cost: CostMap; replacement: ReplacementMap; selector: SelectorMap; duration: DurationMap; timing: TimingMap; keyword: KeywordMap }
 export type Category = keyof Categories;
 export type Node<C extends Category> = Categories[C][keyof Categories[C]];
 export type Predicate = Node<"predicate">;
@@ -66,10 +73,10 @@ export type Effect = {
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };
 export type CardDefinition = {
-  schemaVersion: "3.0.0-subset.13"; cardId: string; cardVersion: string;
+  schemaVersion: "3.0.0-subset.14"; cardId: string; cardVersion: string;
   name: string; cardType: "leader" | "character" | "stage";
   baseStats: { cost: number | null; power: number | null; counter: number | null; life: number | null };
-  colors: string[]; traits: string[]; attributes: string[];
+  colors: string[]; traits: string[]; attributes: string[]; keywords: Node<"keyword">[];
   reviewStatus: "needs_review" | "unsupported" | "approved";
   source: { text: string; triggerText: string; displayIds: string[]; datasetSha256: string }; effects: Effect[];
 };

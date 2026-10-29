@@ -1,17 +1,18 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:tcg:effect-v3-subset:13",
-  "title": "V3 compiler subset 13; compilation is not execution approval",
+  "$id": "urn:tcg:effect-v3-subset:14",
+  "title": "V3 compiler subset 14; compilation is not execution approval",
   "type": "object", "additionalProperties": false,
-  "required": ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "reviewStatus", "source", "effects"],
+  "required": ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"],
   "properties": {
-    "schemaVersion": { "const": "3.0.0-subset.13" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
+    "schemaVersion": { "const": "3.0.0-subset.14" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
     "name": { "$ref": "#/$defs/label" }, "cardType": { "enum": ["leader", "character", "stage"] },
     "baseStats": {
       "type": "object", "additionalProperties": false, "required": ["cost", "power", "counter", "life"],
       "properties": { "cost": { "$ref": "#/$defs/stat" }, "power": { "$ref": "#/$defs/stat" }, "counter": { "$ref": "#/$defs/stat" }, "life": { "$ref": "#/$defs/stat" } }
     },
     "colors": { "$ref": "#/$defs/stringList" }, "traits": { "$ref": "#/$defs/stringList" }, "attributes": { "$ref": "#/$defs/stringList" },
+    "keywords": { "type": "array", "maxItems": 4, "items": { "$ref": "#/$defs/keyword" } },
     "reviewStatus": { "enum": ["needs_review", "unsupported", "approved"] },
     "source": {
       "type": "object", "additionalProperties": false, "required": ["text", "triggerText", "displayIds", "datasetSha256"],
@@ -24,7 +25,7 @@
     "effects": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/effect" } }
   },
   "allOf": [
-    { "if": { "properties": { "effects": { "maxItems": 0 } } }, "then": { "properties": { "source": { "properties": { "text": { "pattern": "^\\s*$" }, "triggerText": { "pattern": "^\\s*$" } } } } }, "else": { "properties": { "source": { "properties": { "text": { "minLength": 1 } } } } } },
+    { "if": { "properties": { "effects": { "maxItems": 0 }, "keywords": { "maxItems": 0 } } }, "then": { "properties": { "source": { "properties": { "text": { "pattern": "^\\s*$" }, "triggerText": { "pattern": "^\\s*$" } } } } }, "else": { "properties": { "source": { "properties": { "text": { "minLength": 1 } } } } } },
     { "if": { "properties": { "cardType": { "const": "leader" } } }, "then": { "properties": { "effects": { "items": { "properties": { "sourceZones": { "items": { "const": "leader" } } } } } } } },
     { "if": { "properties": { "cardType": { "const": "character" } } }, "then": { "properties": { "effects": { "items": { "properties": { "sourceZones": { "items": { "const": "character" } } } } } } } },
     { "if": { "properties": { "cardType": { "const": "stage" } } }, "then": { "properties": { "effects": { "items": { "properties": { "sourceZones": { "items": { "const": "stage" } } } } } } } }
@@ -103,6 +104,7 @@
         { "properties": { "zone": { "const": "deck" }, "position": { "enum": ["top", "bottom"] }, "faceUp": { "const": false } } }
       ]
     },
+    "keyword": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "properties": { "type": { "enum": ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"] } } },
     "duration": {
       "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "required": ["player", "occurrence"],
       "properties": { "type": { "const": "TURN_END" }, "player": { "$ref": "#/$defs/player" }, "occurrence": { "enum": [1, 2] } }
@@ -111,6 +113,7 @@
       "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false,
       "oneOf": [
         { "required": ["player", "count"], "properties": { "type": { "const": "DRAW" }, "player": { "enum": ["SELF", "OPPONENT"] }, "count": { "$ref": "#/$defs/count" } } },
+        { "required": ["cards", "keyword", "duration"], "properties": { "type": { "const": "GRANT_KEYWORD" }, "cards": { "$ref": "#/$defs/cardSetRef" }, "keyword": { "$ref": "#/$defs/keyword" }, "duration": { "$ref": "#/$defs/duration" } } },
         { "required": ["cards", "stat", "amount", "duration"], "properties": { "type": { "const": "MODIFY_STAT" }, "cards": { "$ref": "#/$defs/cardSetRef" }, "stat": { "enum": ["power", "cost"] }, "amount": { "type": "integer", "minimum": -100000, "maximum": 100000, "not": { "const": 0 } }, "duration": { "$ref": "#/$defs/duration" } } },
         { "required": ["player", "count", "bindAs", "onInsufficient"], "properties": { "type": { "const": "LOOK_TOP" }, "player": { "const": "SELF" }, "count": { "$ref": "#/$defs/count" }, "bindAs": { "$ref": "#/$defs/bindingName" }, "onInsufficient": { "enum": ["fail", "takeAvailable"] } } },
         { "required": ["cards", "viewers"], "properties": { "type": { "const": "REVEAL" }, "cards": { "$ref": "#/$defs/cardSetRef" }, "viewers": { "const": "BOTH" } } },

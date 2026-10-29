@@ -30,6 +30,33 @@ async function complete(socket, v) {
   throw Error('Session resolution did not complete');
 }
 
+for (const actor of [0, 1]) test(`fresh synthetic Rush attacks and only a declared Blocker redirects the source arrow for seat ${actor}`, async t => {
+  const { clients } = await setup(t, actor), own = clients[actor], peer = clients[1 - actor];
+  async function enter(socket) {
+    let v = (await request(socket, 'v3-session:sync')).sessionView;
+    v = await send(socket, v, 'play', { card: v.playableCards[0].card });
+    v = await send(socket, v, 'trigger', { token: v.triggerChoices[0].token }); v = await send(socket, v, 'advance'); const choice = v.frame.choice;
+    return send(socket, v, 'answer', { selectionId: choice.selectionId, tokens: [choice.options[1].token] });
+  }
+  let v = await enter(own); v = await send(own, v, 'endTurn'); v = await enter(peer); v = await send(peer, v, 'endTurn');
+  v = await enter(own); const fresh = v.movement.players[actor].character[1].ref;
+  v = await send(own, v, 'activate', { effectId: 'unblockable' }); v = await complete(own, v);
+  assert.equal(v.publicStats.find(card => card.player === actor && card.zone === 'leader').keywords.includes('CANNOT_BE_BLOCKED'), true);
+  assert.equal(v.attackChoices.sources.some(choice => choice.card.instanceId === fresh.instanceId), true);
+  const target = v.attackChoices.targets[0].card; v = await send(own, v, 'attack', { source: fresh, target });
+  let other = (await request(peer, 'v3-session:sync')).sessionView; const blocker = other.blockerChoices[0].card;
+  assert.equal((await request(own, 'v3-session:command', command(v, 'block', { card: blocker }))).ok, false);
+  const blocking = command(other, 'block', { card: blocker }); other = (await request(peer, 'v3-session:command', blocking)).sessionView;
+  assert.equal((await request(peer, 'v3-session:command', blocking)).sessionView.context.revision, other.context.revision);
+  assert.equal(other.battle.source.instanceId, fresh.instanceId); assert.equal(other.battle.target.instanceId, blocker.instanceId); assert.equal(other.battle.step, 'counter');
+  assert.equal(other.movement.players[1 - actor].character[0].rotated, true);
+  assert.equal((await request(peer, 'v3-session:command', command(other, 'block', { card: blocker }))).ok, false);
+  other = await send(peer, other, 'endCounter'); other = await send(peer, other, 'damage');
+  assert.equal(other.battle, null); assert.equal(other.movement.players[1 - actor].character[0], null); assert.equal(other.movement.players[1 - actor].life.length, 5);
+  const seen = (await request(own, 'v3-session:sync')).sessionView; assert.equal(seen.movement.players[1 - actor].trash.length, 1);
+  const next = await send(own, seen, 'endTurn'); assert.equal(next.publicStats.find(card => card.player === actor && card.zone === 'leader').keywords.includes('CANNOT_BE_BLOCKED'), false);
+});
+
 for (const actor of [0, 1]) test(`basic battle for seat ${actor} handles DON, counters, private life and lethal damage`, async t => {
   const smallLife = { ...deck, leaderLifeCount: 1 };
   const { clients } = await setup(t, actor, [smallLife, smallLife]), own = clients[actor], peer = clients[1 - actor];

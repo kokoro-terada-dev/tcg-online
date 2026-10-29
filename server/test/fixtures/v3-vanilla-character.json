@@ -1,5 +1,6 @@
 {
-  "schemaVersion": "3.0.0-subset.13", "cardId": "EXAMPLE-VANILLA-NOT-REAL", "cardVersion": "fixture.1",
+  "keywords": [],
+  "schemaVersion": "3.0.0-subset.14", "cardId": "EXAMPLE-VANILLA-NOT-REAL", "cardVersion": "fixture.1",
   "name": "合成テスト用・効果なしキャラクター（実在しません）", "cardType": "character",
   "baseStats": { "cost": 2, "power": 2000, "counter": 1000, "life": null },
   "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",
