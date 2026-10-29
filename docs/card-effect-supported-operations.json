@@ -1,0 +1,1404 @@
+{
+  "basedOnCommit": "e6ba075",
+  "compilerVersion": "v3-subset-compiler.16.3",
+  "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763",
+  "registries": {
+    "predicate": [
+      "all@1",
+      "any@1",
+      "compare@3",
+      "not@1"
+    ],
+    "action": [
+      "BIND_SOURCE@2",
+      "DRAW@2",
+      "GRANT_KEYWORD@1",
+      "IF@2",
+      "KO@1",
+      "LOOK_TOP@1",
+      "MODIFY_STAT@1",
+      "MOVE_CARD@2",
+      "ORDER_CARDS@1",
+      "REST@1",
+      "RETURN_TO_DECK@1",
+      "REVEAL@1",
+      "SELECT@1",
+      "SEQUENCE@1",
+      "SET_ACTIVE@1"
+    ],
+    "cost": [
+      "DISCARD_HAND@1",
+      "DON_RETURN@2",
+      "REST_DON@1",
+      "REST_SOURCE@1"
+    ],
+    "replacement": [],
+    "selector": [
+      "BOUND_CARDS@1",
+      "CARDS@4"
+    ],
+    "duration": [
+      "BATTLE_END@1",
+      "TURN_END@1"
+    ],
+    "timing": [
+      "COUNTER@1",
+      "MAIN@1",
+      "ON_ATTACK@1",
+      "ON_KO@1",
+      "ON_OPPONENT_ATTACK@1",
+      "ON_PLAY@1",
+      "TRIGGER@1"
+    ],
+    "keyword": [
+      "BLOCKER@1",
+      "CANNOT_BE_BLOCKED@1",
+      "RUSH@1",
+      "RUSH_CHARACTER@1"
+    ]
+  },
+  "notes": [
+    "Registry names requested by consumers are not separate classes: builtinV3Registries() returns category registries.",
+    "TriggerRegistry corresponds to timing plus triggerScheduler; ModifierRegistry does not exist; MODIFY_STAT and GRANT_KEYWORD use runtime ledgers.",
+    "JSON snippets may need earlier bindings and valid board/timing; successful compiler validation is not runtime approval.",
+    "All commands accept optional id/sourceSpan. Required parameter schemas are structural; compiler imposes additional contextual rules."
+  ],
+  "absentOrEmpty": [
+    {
+      "requested": "ReplacementRegistry",
+      "actual": "replacement",
+      "status": "empty_registry_no_handlers"
+    },
+    {
+      "requested": "ModifierRegistry",
+      "actual": "action.MODIFY_STAT/action.GRANT_KEYWORD + statEffects/keywordEffects",
+      "status": "limited_ledger_not_continuous_registry"
+    }
+  ],
+  "operations": [
+    {
+      "category": "predicate",
+      "name": "all",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/predicate",
+      "requiredParameters": [
+        "conditions"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "conditions": {
+          "$ref": "#/$defs/predicates"
+        }
+      },
+      "description": "全条件AND。空配列はtrue。",
+      "runtimeConstraints": "unknownはfalseとして捨てず安全停止。",
+      "example": {
+        "type": "all",
+        "conditions": []
+      }
+    },
+    {
+      "category": "predicate",
+      "name": "any",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/predicate",
+      "requiredParameters": [
+        "conditions"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "conditions": {
+          "$ref": "#/$defs/predicates"
+        }
+      },
+      "description": "いずれかOR。空配列はfalse。",
+      "runtimeConstraints": "unknownは短絡結果が決まらない場合安全停止。",
+      "example": {
+        "type": "any",
+        "conditions": [
+          {
+            "type": "compare",
+            "left": {
+              "ref": "SELF.lifeCount"
+            },
+            "op": "lte",
+            "right": 2
+          }
+        ]
+      }
+    },
+    {
+      "category": "predicate",
+      "name": "compare",
+      "handlerVersion": "3",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/predicate",
+      "requiredParameters": [
+        "left",
+        "op",
+        "right"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "left": {
+          "$ref": "#/$defs/value"
+        },
+        "op": {
+          "enum": [
+            "eq",
+            "ne",
+            "lt",
+            "lte",
+            "gt",
+            "gte"
+          ]
+        },
+        "right": {
+          "$ref": "#/$defs/value"
+        }
+      },
+      "description": "値を比較。",
+      "runtimeConstraints": "CANDIDATEはselector.filters内のみ。型の異なる比較や未知refは拒否。",
+      "example": {
+        "type": "compare",
+        "left": {
+          "ref": "bindings.target.count"
+        },
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "category": "predicate",
+      "name": "not",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/predicate",
+      "requiredParameters": [
+        "condition"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "condition": {
+          "$ref": "#/$defs/predicate"
+        }
+      },
+      "description": "条件否定。",
+      "runtimeConstraints": "unknownはunknown。",
+      "example": {
+        "type": "not",
+        "condition": {
+          "type": "compare",
+          "left": {
+            "ref": "SELF.handCount"
+          },
+          "op": "lt",
+          "right": 5
+        }
+      }
+    },
+    {
+      "category": "action",
+      "name": "BIND_SOURCE",
+      "handlerVersion": "2",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "bindAs"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "bindAs": {
+          "$ref": "#/$defs/bindingName"
+        }
+      },
+      "description": "発生元1枚を束縛。",
+      "runtimeConstraints": "TRIGGER不可。ON_KOは移動後トラッシュ世代。",
+      "example": {
+        "type": "BIND_SOURCE",
+        "bindAs": "self"
+      }
+    },
+    {
+      "category": "action",
+      "name": "DRAW",
+      "handlerVersion": "2",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "player",
+        "count"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "player": {
+          "enum": [
+            "SELF",
+            "OPPONENT"
+          ]
+        },
+        "count": {
+          "$ref": "#/$defs/count"
+        }
+      },
+      "description": "指定側が指定枚数ドロー。",
+      "runtimeConstraints": "残り枚数だけ移動。デッキ切れで勝敗を確定し後続中断。",
+      "example": {
+        "type": "DRAW",
+        "player": "SELF",
+        "count": 2
+      }
+    },
+    {
+      "category": "action",
+      "name": "GRANT_KEYWORD",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "cards",
+        "keyword",
+        "duration"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "cards": {
+          "$ref": "#/$defs/cardSetRef"
+        },
+        "keyword": {
+          "$ref": "#/$defs/keyword"
+        },
+        "duration": {
+          "$ref": "#/$defs/duration"
+        }
+      },
+      "description": "場のカードへ期間付きキーワードを付与。",
+      "runtimeConstraints": "BLOCKER/RUSH/RUSH_CHARACTER/CANNOT_BE_BLOCKEDのみ。",
+      "example": {
+        "type": "GRANT_KEYWORD",
+        "cards": {
+          "ref": "bindings.self"
+        },
+        "keyword": {
+          "type": "RUSH"
+        },
+        "duration": {
+          "type": "TURN_END",
+          "player": "SELF",
+          "occurrence": 1
+        }
+      }
+    },
+    {
+      "category": "action",
+      "name": "IF",
+      "handlerVersion": "2",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "condition",
+        "then",
+        "else"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "condition": {
+          "$ref": "#/$defs/predicate"
+        },
+        "then": {
+          "$ref": "#/$defs/actions"
+        },
+        "else": {
+          "$ref": "#/$defs/actions"
+        }
+      },
+      "description": "解決時の条件でthen/elseを分岐。",
+      "runtimeConstraints": "枝内で作った束縛を枝の外で参照不可。",
+      "example": {
+        "type": "IF",
+        "condition": {
+          "type": "compare",
+          "left": {
+            "ref": "bindings.target.count"
+          },
+          "op": "gt",
+          "right": 0
+        },
+        "then": [
+          {
+            "type": "MODIFY_STAT",
+            "cards": {
+              "ref": "bindings.target"
+            },
+            "stat": "power",
+            "amount": -2000,
+            "duration": {
+              "type": "TURN_END",
+              "player": "SELF",
+              "occurrence": 1
+            }
+          }
+        ],
+        "else": []
+      }
+    },
+    {
+      "category": "action",
+      "name": "KO",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "cards"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "cards": {
+          "$ref": "#/$defs/cardSetRef"
+        }
+      },
+      "description": "キャラをKOとしてtrashへ移動。",
+      "runtimeConstraints": "公開characterのみ。EFFECT_KOとして記録しON_KOを誘発。",
+      "example": {
+        "type": "KO",
+        "cards": {
+          "ref": "bindings.target"
+        }
+      }
+    },
+    {
+      "category": "action",
+      "name": "LOOK_TOP",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "player",
+        "count",
+        "bindAs",
+        "onInsufficient"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "player": {
+          "const": "SELF"
+        },
+        "count": {
+          "$ref": "#/$defs/count"
+        },
+        "bindAs": {
+          "$ref": "#/$defs/bindingName"
+        },
+        "onInsufficient": {
+          "enum": [
+            "fail",
+            "takeAvailable"
+          ]
+        }
+      },
+      "description": "自分の山札上を本人だけ確認し束縛。",
+      "runtimeConstraints": "failは不足時停止、takeAvailableはある分。0枚work不可。",
+      "example": {
+        "type": "LOOK_TOP",
+        "player": "SELF",
+        "count": 5,
+        "bindAs": "looked",
+        "onInsufficient": "takeAvailable"
+      }
+    },
+    {
+      "category": "action",
+      "name": "MODIFY_STAT",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "cards",
+        "stat",
+        "amount",
+        "duration"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "cards": {
+          "$ref": "#/$defs/cardSetRef"
+        },
+        "stat": {
+          "enum": [
+            "power",
+            "cost"
+          ]
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": -100000,
+          "maximum": 100000,
+          "not": {
+            "const": 0
+          }
+        },
+        "duration": {
+          "$ref": "#/$defs/duration"
+        }
+      },
+      "description": "場のパワー/コストへ台帳増減を追加。",
+      "runtimeConstraints": "0以外の整数±100000。既知の基本値が必要。継続効果の再計算ではない。",
+      "example": {
+        "type": "MODIFY_STAT",
+        "cards": {
+          "ref": "bindings.target"
+        },
+        "stat": "power",
+        "amount": -2000,
+        "duration": {
+          "type": "TURN_END",
+          "player": "SELF",
+          "occurrence": 1
+        }
+      }
+    },
+    {
+      "category": "action",
+      "name": "MOVE_CARD",
+      "handlerVersion": "2",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "cards",
+        "destination",
+        "cause"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "cards": {
+          "$ref": "#/$defs/cardSetRef"
+        },
+        "destination": {
+          "$ref": "#/$defs/destination"
+        },
+        "cause": {
+          "const": "EFFECT"
+        }
+      },
+      "description": "束縛カードを所有者のhand/trash/deck/publicへ移動。",
+      "runtimeConstraints": "場/自分手札/自分の閲覧済みデッキからのみ。leader/DON不可。deckへ複数枚不可。登場命令ではない。",
+      "example": {
+        "type": "MOVE_CARD",
+        "cards": {
+          "ref": "bindings.target"
+        },
+        "destination": {
+          "owner": "OPPONENT",
+          "zone": "hand",
+          "position": "append",
+          "faceUp": true
+        },
+        "cause": "EFFECT"
+      }
+    },
+    {
+      "category": "action",
+      "name": "ORDER_CARDS",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "cards",
+        "excludeCards",
+        "bindAs",
+        "chooser"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "cards": {
+          "$ref": "#/$defs/cardSetRef"
+        },
+        "excludeCards": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/cardSetRef"
+            }
+          ]
+        },
+        "bindAs": {
+          "$ref": "#/$defs/bindingName"
+        },
+        "chooser": {
+          "const": "SELF"
+        }
+      },
+      "description": "閲覧したデッキカードから除外集合を引き、順番を選ぶ。",
+      "runtimeConstraints": "自分の閲覧済みデッキのみ。他領域の並べ替えではない。",
+      "example": {
+        "type": "ORDER_CARDS",
+        "cards": {
+          "ref": "bindings.looked"
+        },
+        "excludeCards": {
+          "ref": "bindings.selected"
+        },
+        "bindAs": "remaining",
+        "chooser": "SELF"
+      }
+    },
+    {
+      "category": "action",
+      "name": "REST",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "cards"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "cards": {
+          "$ref": "#/$defs/cardSetRef"
+        }
+      },
+      "description": "公開のleader/character/stageをレストにする。",
+      "runtimeConstraints": "反転操作ではない。DONに対するRESTアクションは不可。",
+      "example": {
+        "type": "REST",
+        "cards": {
+          "ref": "bindings.target"
+        }
+      }
+    },
+    {
+      "category": "action",
+      "name": "RETURN_TO_DECK",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "cards",
+        "player",
+        "position"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "cards": {
+          "$ref": "#/$defs/cardSetRef"
+        },
+        "player": {
+          "const": "SELF"
+        },
+        "position": {
+          "enum": [
+            "top",
+            "bottom"
+          ]
+        }
+      },
+      "description": "閲覧済みデッキカードを指定順で上/下へ並べ直す。",
+      "runtimeConstraints": "手札やtrashから戻す汎用命令ではない。0枚不可。",
+      "example": {
+        "type": "RETURN_TO_DECK",
+        "cards": {
+          "ref": "bindings.remaining"
+        },
+        "player": "SELF",
+        "position": "bottom"
+      }
+    },
+    {
+      "category": "action",
+      "name": "REVEAL",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "cards",
+        "viewers"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "cards": {
+          "$ref": "#/$defs/cardSetRef"
+        },
+        "viewers": {
+          "const": "BOTH"
+        }
+      },
+      "description": "自分手札/閲覧済みデッキの束縛を両者へ一時公開。",
+      "runtimeConstraints": "0枚不可。特徴フィルタは未対応。終了時に公開権限を閉じる。",
+      "example": {
+        "type": "REVEAL",
+        "cards": {
+          "ref": "bindings.selected"
+        },
+        "viewers": "BOTH"
+      }
+    },
+    {
+      "category": "action",
+      "name": "SELECT",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "selector",
+        "bindAs"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "selector": {
+          "$ref": "#/$defs/selector"
+        },
+        "bindAs": {
+          "$ref": "#/$defs/bindingName"
+        }
+      },
+      "description": "対象候補を提示し選択待ち。",
+      "runtimeConstraints": "min不足は安全停止。選択tokenのみ端末へ。",
+      "example": {
+        "type": "SELECT",
+        "selector": {
+          "type": "CARDS",
+          "owner": "OPPONENT",
+          "controller": "OPPONENT",
+          "zone": "character",
+          "cardTypes": [
+            "character"
+          ],
+          "filters": {
+            "type": "all",
+            "conditions": []
+          },
+          "excludeSource": false,
+          "faceUpOnly": true,
+          "min": 0,
+          "max": 1,
+          "visibility": "PUBLIC",
+          "selectionMode": "SELECT",
+          "chooser": "SELF",
+          "order": "UNORDERED",
+          "onInsufficient": "fail"
+        },
+        "bindAs": "target"
+      }
+    },
+    {
+      "category": "action",
+      "name": "SEQUENCE",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "actions"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "actions": {
+          "$ref": "#/$defs/actions"
+        }
+      },
+      "description": "actionsを順に実行。",
+      "runtimeConstraints": "独自スコープなし。",
+      "example": {
+        "type": "SEQUENCE",
+        "actions": [
+          {
+            "type": "DRAW",
+            "player": "SELF",
+            "count": 1
+          }
+        ]
+      }
+    },
+    {
+      "category": "action",
+      "name": "SET_ACTIVE",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/action",
+      "requiredParameters": [
+        "cards"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "cards": {
+          "$ref": "#/$defs/cardSetRef"
+        }
+      },
+      "description": "公開のleader/character/stageをアクティブにする。",
+      "runtimeConstraints": "DONのアクティブ化は未対応。",
+      "example": {
+        "type": "SET_ACTIVE",
+        "cards": {
+          "ref": "bindings.target"
+        }
+      }
+    },
+    {
+      "category": "cost",
+      "name": "DISCARD_HAND",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/cost",
+      "requiredParameters": [
+        "count"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "count": {
+          "$ref": "#/$defs/count"
+        }
+      },
+      "description": "自分の手札を指定枚数選び捨てる発動コスト。",
+      "runtimeConstraints": "特徴条件は指定不可。",
+      "example": {
+        "type": "DISCARD_HAND",
+        "count": 1
+      }
+    },
+    {
+      "category": "cost",
+      "name": "DON_RETURN",
+      "handlerVersion": "2",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/cost",
+      "requiredParameters": [
+        "count",
+        "from"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "count": {
+          "$ref": "#/$defs/count"
+        },
+        "from": {
+          "$ref": "#/$defs/donZones"
+        }
+      },
+      "description": "fromの自分DONから指定枚数を選びDONデッキへ戻す発動コスト。",
+      "runtimeConstraints": "1効果1件。active/rest/attached混在可。REST_DONとの重複支払いは不可。",
+      "example": {
+        "type": "DON_RETURN",
+        "count": 1,
+        "from": [
+          "activeDon",
+          "restDon",
+          "attachedDon"
+        ]
+      }
+    },
+    {
+      "category": "cost",
+      "name": "REST_DON",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/cost",
+      "requiredParameters": [
+        "count"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "count": {
+          "$ref": "#/$defs/count"
+        }
+      },
+      "description": "自分のアクティブDONを指定枚数レストする発動コスト。",
+      "runtimeConstraints": "効果actionsへ入れられない。",
+      "example": {
+        "type": "REST_DON",
+        "count": 1
+      }
+    },
+    {
+      "category": "cost",
+      "name": "REST_SOURCE",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/cost",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "発生元をレストする発動コスト。",
+      "runtimeConstraints": "発生元がアクティブの場のカード。最大1件。",
+      "example": {
+        "type": "REST_SOURCE"
+      }
+    },
+    {
+      "category": "selector",
+      "name": "BOUND_CARDS",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/boundSelector",
+      "requiredParameters": [
+        "cards",
+        "excludeCards",
+        "owner",
+        "controller",
+        "chooser",
+        "zone",
+        "visibility",
+        "faceUpOnly",
+        "cardTypes",
+        "filters",
+        "excludeSource",
+        "min",
+        "max",
+        "selectionMode",
+        "order",
+        "onInsufficient"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "cards": {
+          "$ref": "#/$defs/cardSetRef"
+        },
+        "excludeCards": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/cardSetRef"
+            }
+          ]
+        },
+        "owner": {
+          "const": "SELF"
+        },
+        "controller": {
+          "const": "SELF"
+        },
+        "chooser": {
+          "const": "SELF"
+        },
+        "zone": {
+          "const": "deck"
+        },
+        "visibility": {
+          "const": "OWNER_ONLY"
+        },
+        "faceUpOnly": {
+          "const": false
+        },
+        "cardTypes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "character",
+              "event",
+              "stage"
+            ]
+          }
+        },
+        "filters": {
+          "$ref": "#/$defs/predicate"
+        },
+        "excludeSource": {
+          "type": "boolean"
+        },
+        "min": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "max": {
+          "$ref": "#/$defs/count"
+        },
+        "selectionMode": {
+          "const": "SELECT"
+        },
+        "order": {
+          "const": "UNORDERED"
+        },
+        "onInsufficient": {
+          "const": "fail"
+        }
+      },
+      "description": "LOOK_TOPで束縛した自分デッキの集合から選択。",
+      "runtimeConstraints": "閲覧権限と世代検証あり。特徴/名前条件不可。",
+      "example": {
+        "type": "BOUND_CARDS",
+        "cards": {
+          "ref": "bindings.looked"
+        },
+        "excludeCards": null,
+        "owner": "SELF",
+        "controller": "SELF",
+        "chooser": "SELF",
+        "zone": "deck",
+        "visibility": "OWNER_ONLY",
+        "faceUpOnly": false,
+        "cardTypes": [
+          "character"
+        ],
+        "filters": {
+          "type": "compare",
+          "left": {
+            "ref": "CANDIDATE.cost"
+          },
+          "op": "lte",
+          "right": 3
+        },
+        "excludeSource": false,
+        "min": 0,
+        "max": 1,
+        "selectionMode": "SELECT",
+        "order": "UNORDERED",
+        "onInsufficient": "fail"
+      }
+    },
+    {
+      "category": "selector",
+      "name": "CARDS",
+      "handlerVersion": "4",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/areaSelector",
+      "requiredParameters": [
+        "owner",
+        "controller",
+        "zone",
+        "cardTypes",
+        "filters",
+        "excludeSource",
+        "faceUpOnly",
+        "min",
+        "max",
+        "visibility",
+        "selectionMode",
+        "chooser",
+        "order",
+        "onInsufficient"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "owner": {
+          "$ref": "#/$defs/player"
+        },
+        "controller": {
+          "$ref": "#/$defs/player"
+        },
+        "chooser": {
+          "$ref": "#/$defs/player"
+        },
+        "zone": {
+          "oneOf": [
+            {
+              "enum": [
+                "leader",
+                "character",
+                "stage",
+                "trash",
+                "public",
+                "hand"
+              ]
+            },
+            {
+              "$ref": "#/$defs/donZones"
+            }
+          ]
+        },
+        "cardTypes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "leader",
+              "character",
+              "event",
+              "stage",
+              "don"
+            ]
+          }
+        },
+        "filters": {
+          "$ref": "#/$defs/predicate"
+        },
+        "excludeSource": {
+          "type": "boolean"
+        },
+        "faceUpOnly": {
+          "type": "boolean"
+        },
+        "min": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "max": {
+          "$ref": "#/$defs/count"
+        },
+        "visibility": {
+          "enum": [
+            "PUBLIC",
+            "OWNER_ONLY"
+          ]
+        },
+        "selectionMode": {
+          "const": "SELECT"
+        },
+        "order": {
+          "const": "UNORDERED"
+        },
+        "onInsufficient": {
+          "const": "fail"
+        }
+      },
+      "description": "指定された公開領域/自分手札/自分DONから集合選択。",
+      "runtimeConstraints": "相手手札/非公開life/deck全体不可。DON zone配列は正規化される。",
+      "example": {
+        "type": "CARDS",
+        "owner": "OPPONENT",
+        "controller": "OPPONENT",
+        "zone": "character",
+        "cardTypes": [
+          "character"
+        ],
+        "filters": {
+          "type": "all",
+          "conditions": []
+        },
+        "excludeSource": false,
+        "faceUpOnly": true,
+        "min": 0,
+        "max": 1,
+        "visibility": "PUBLIC",
+        "selectionMode": "SELECT",
+        "chooser": "SELF",
+        "order": "UNORDERED",
+        "onInsufficient": "fail"
+      }
+    },
+    {
+      "category": "duration",
+      "name": "BATTLE_END",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/duration",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "現在のbattleIdが終了したら失効。",
+      "runtimeConstraints": "バトル外では実行拒否。",
+      "example": {
+        "type": "BATTLE_END"
+      }
+    },
+    {
+      "category": "duration",
+      "name": "TURN_END",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/duration",
+      "requiredParameters": [
+        "player",
+        "occurrence"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "player": {
+          "$ref": "#/$defs/player"
+        },
+        "occurrence": {
+          "enum": [
+            1,
+            2
+          ]
+        }
+      },
+      "description": "指定した相対プレイヤーのターン終了を1/2回数えて失効。",
+      "runtimeConstraints": "自分のターン中だけ有効という継続条件ではない。",
+      "example": {
+        "type": "TURN_END",
+        "player": "SELF",
+        "occurrence": 1
+      }
+    },
+    {
+      "category": "timing",
+      "name": "COUNTER",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/timing",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "防御側の手札イベントをカウンターステップで使用。",
+      "runtimeConstraints": "optional:false、usageLimit:null、costs:[]、activation空all。",
+      "example": {
+        "type": "COUNTER"
+      }
+    },
+    {
+      "category": "timing",
+      "name": "MAIN",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/timing",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "自分メイン中の起動効果。",
+      "runtimeConstraints": "leader/character/stageのみ。event MAIN未対応。",
+      "example": {
+        "type": "MAIN"
+      }
+    },
+    {
+      "category": "timing",
+      "name": "ON_ATTACK",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/timing",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "攻撃元自身のアタックを契機に待機。",
+      "runtimeConstraints": "leader/character。activationConditionsは空all必須。",
+      "example": {
+        "type": "ON_ATTACK"
+      }
+    },
+    {
+      "category": "timing",
+      "name": "ON_KO",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/timing",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "自身のcharacter→trashのKOを契機に待機。",
+      "runtimeConstraints": "追加コスト不可。SOURCE数値ref不可。直接trashは対象外。",
+      "example": {
+        "type": "ON_KO"
+      }
+    },
+    {
+      "category": "timing",
+      "name": "ON_OPPONENT_ATTACK",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/timing",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "相手アタック時に自分の場の定義を待機。",
+      "runtimeConstraints": "発生条件の追加は未対応。",
+      "example": {
+        "type": "ON_OPPONENT_ATTACK"
+      }
+    },
+    {
+      "category": "timing",
+      "name": "ON_PLAY",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/timing",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "自身がcharacter/stageへ登場した移動を契機に待機。",
+      "runtimeConstraints": "他カード登場監視やactivationConditions付き誘発は未対応。",
+      "example": {
+        "type": "ON_PLAY"
+      }
+    },
+    {
+      "category": "timing",
+      "name": "TRIGGER",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/timing",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "ダメージのライフ確認から選んで発動。",
+      "runtimeConstraints": "TRIGGER定義1件とtriggerText非空が1対1。SOURCE参照/追加コスト/条件付き誘発不可。",
+      "example": {
+        "type": "TRIGGER"
+      }
+    },
+    {
+      "category": "keyword",
+      "name": "BLOCKER",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/keyword",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "ブロッカー。",
+      "runtimeConstraints": "公開leader/characterに有効。自身の攻撃対象からの再ブロック不可。",
+      "example": {
+        "type": "BLOCKER"
+      }
+    },
+    {
+      "category": "keyword",
+      "name": "CANNOT_BE_BLOCKED",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/keyword",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "この攻撃元へのブロックを不可にする。",
+      "runtimeConstraints": "対象条件付きブロック不可は表現不可。",
+      "example": {
+        "type": "CANNOT_BE_BLOCKED"
+      }
+    },
+    {
+      "category": "keyword",
+      "name": "RUSH",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/keyword",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "登場ターンの攻撃制限を解除。",
+      "runtimeConstraints": "双方の最初のターンの攻撃禁止は解除しない。",
+      "example": {
+        "type": "RUSH"
+      }
+    },
+    {
+      "category": "keyword",
+      "name": "RUSH_CHARACTER",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-json-schema.json#/$defs/keyword",
+      "requiredParameters": [],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {},
+      "description": "速攻：キャラ。",
+      "runtimeConstraints": "登場ターンにリーダーを攻撃できない。",
+      "example": {
+        "type": "RUSH_CHARACTER"
+      }
+    }
+  ]
+}

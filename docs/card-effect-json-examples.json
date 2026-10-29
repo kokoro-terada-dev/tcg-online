@@ -1,0 +1,1143 @@
+{
+  "basedOnCommit": "e6ba075",
+  "schemaVersion": "3.0.0-subset.16",
+  "compilerVersion": "v3-subset-compiler.16.3",
+  "notice": "This file is an example index, not one CardDefinition. Compile only each non-null card. All cards are synthetic/unapproved; zero dataset hash is a clearly marked fixture placeholder, never a production source hash. No trusted approvals are supplied.",
+  "examples": [
+    {
+      "requestNumber": 1,
+      "title": "登場時に2枚引く",
+      "status": "compiler_supported_synthetic",
+      "notes": "",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-1",
+        "cardVersion": "draft.1",
+        "name": "合成例1（公式カードではありません）",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic example 1; not an official card or ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-GEN-1"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "on_play.1",
+            "kind": "triggered",
+            "timing": {
+              "type": "ON_PLAY"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "DRAW",
+                "player": "SELF",
+                "count": 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "requestNumber": 2,
+      "title": "起動メイン・ターン1回・DON-1で相手キャラのパワー-2000",
+      "status": "compiler_supported_synthetic",
+      "notes": "この例は最大1枚、期限は自分の次のターン終了です。実カードの対象数/期限を推測しないでください。",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-2",
+        "cardVersion": "draft.1",
+        "name": "合成例2（公式カードではありません）",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic example 2; not an official card or ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-GEN-2"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "main.1",
+            "kind": "activated",
+            "timing": {
+              "type": "MAIN"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": {
+              "type": "PER_TURN",
+              "scope": "SOURCE_OBJECT",
+              "count": 1
+            },
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [
+              {
+                "type": "DON_RETURN",
+                "count": 1,
+                "from": [
+                  "activeDon",
+                  "restDon",
+                  "attachedDon"
+                ]
+              }
+            ],
+            "actions": [
+              {
+                "type": "SELECT",
+                "selector": {
+                  "type": "CARDS",
+                  "owner": "OPPONENT",
+                  "controller": "OPPONENT",
+                  "zone": "character",
+                  "cardTypes": [
+                    "character"
+                  ],
+                  "filters": {
+                    "type": "all",
+                    "conditions": []
+                  },
+                  "excludeSource": false,
+                  "faceUpOnly": true,
+                  "min": 0,
+                  "max": 1,
+                  "visibility": "PUBLIC",
+                  "selectionMode": "SELECT",
+                  "chooser": "SELF",
+                  "order": "UNORDERED",
+                  "onInsufficient": "fail"
+                },
+                "bindAs": "target"
+              },
+              {
+                "type": "IF",
+                "condition": {
+                  "type": "compare",
+                  "left": {
+                    "ref": "bindings.target.count"
+                  },
+                  "op": "gt",
+                  "right": 0
+                },
+                "then": [
+                  {
+                    "type": "MODIFY_STAT",
+                    "cards": {
+                      "ref": "bindings.target"
+                    },
+                    "stat": "power",
+                    "amount": -2000,
+                    "duration": {
+                      "type": "TURN_END",
+                      "player": "SELF",
+                      "occurrence": 1
+                    }
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "requestNumber": 3,
+      "title": "アタック時、解決時に自分の手札5枚以上なら1枚引く",
+      "status": "compiler_supported_synthetic",
+      "notes": "誘発成立時の条件ではなく解決時IFです。発生時だけの条件をこの形式へ勝手に置き換えるのは不可。",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-3",
+        "cardVersion": "draft.1",
+        "name": "合成例3（公式カードではありません）",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic example 3; not an official card or ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-GEN-3"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "on_attack.1",
+            "kind": "triggered",
+            "timing": {
+              "type": "ON_ATTACK"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "IF",
+                "condition": {
+                  "type": "compare",
+                  "left": {
+                    "ref": "SELF.handCount"
+                  },
+                  "op": "gte",
+                  "right": 5
+                },
+                "then": [
+                  {
+                    "type": "DRAW",
+                    "player": "SELF",
+                    "count": 1
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "requestNumber": 4,
+      "title": "自分のターン中、パワー+1000",
+      "status": "unsupported",
+      "reason": "継続条件/再計算なし。MAINでTURN_END修正を与える処理とは意味が異なる。",
+      "card": null
+    },
+    {
+      "requestNumber": 5,
+      "title": "登場時にこのターン終了まで速攻付与",
+      "status": "compiler_supported_synthetic",
+      "notes": "期限を明記した合成例。印刷された無期限の速攻はkeywordsに定義する別ケース。",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-5",
+        "cardVersion": "draft.1",
+        "name": "合成例5（公式カードではありません）",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic example 5; not an official card or ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-GEN-5"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "on_play.1",
+            "kind": "triggered",
+            "timing": {
+              "type": "ON_PLAY"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "BIND_SOURCE",
+                "bindAs": "self"
+              },
+              {
+                "type": "GRANT_KEYWORD",
+                "cards": {
+                  "ref": "bindings.self"
+                },
+                "keyword": {
+                  "type": "RUSH"
+                },
+                "duration": {
+                  "type": "TURN_END",
+                  "player": "SELF",
+                  "occurrence": 1
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "requestNumber": 6,
+      "title": "イベントカードのメイン効果",
+      "status": "unsupported",
+      "reason": "eventはCOUNTERまたはTRIGGERのみ。MAINイベントの使用入口もない。",
+      "card": null
+    },
+    {
+      "requestNumber": 7,
+      "title": "イベントカウンター：自分リーダーにこのバトル中+2000",
+      "status": "compiler_supported_synthetic",
+      "notes": "印刷cost=2は使用処理が自動で支払う。costsにREST_DONを重複記載しない。追加コストは未対応。",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-7",
+        "cardVersion": "draft.1",
+        "name": "合成例7（公式カードではありません）",
+        "cardType": "event",
+        "baseStats": {
+          "cost": 2,
+          "power": null,
+          "counter": null,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic example 7; not an official card or ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-GEN-7"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "counter.1",
+            "kind": "activated",
+            "timing": {
+              "type": "COUNTER"
+            },
+            "sourceZones": [
+              "hand"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "SELECT",
+                "selector": {
+                  "type": "CARDS",
+                  "owner": "SELF",
+                  "controller": "SELF",
+                  "zone": "leader",
+                  "cardTypes": [
+                    "leader"
+                  ],
+                  "filters": {
+                    "type": "all",
+                    "conditions": []
+                  },
+                  "excludeSource": false,
+                  "faceUpOnly": true,
+                  "min": 1,
+                  "max": 1,
+                  "visibility": "PUBLIC",
+                  "selectionMode": "SELECT",
+                  "chooser": "SELF",
+                  "order": "UNORDERED",
+                  "onInsufficient": "fail"
+                },
+                "bindAs": "target"
+              },
+              {
+                "type": "MODIFY_STAT",
+                "cards": {
+                  "ref": "bindings.target"
+                },
+                "stat": "power",
+                "amount": 2000,
+                "duration": {
+                  "type": "BATTLE_END"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "requestNumber": 8,
+      "title": "ステージ登場時に1枚引く",
+      "status": "compiler_supported_synthetic",
+      "notes": "",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-8",
+        "cardVersion": "draft.1",
+        "name": "合成例8（公式カードではありません）",
+        "cardType": "stage",
+        "baseStats": {
+          "cost": 2,
+          "power": null,
+          "counter": null,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic example 8; not an official card or ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-GEN-8"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "on_play.1",
+            "kind": "triggered",
+            "timing": {
+              "type": "ON_PLAY"
+            },
+            "sourceZones": [
+              "stage"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "DRAW",
+                "player": "SELF",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "requestNumber": 9,
+      "title": "ステージ起動メイン：自身をレストし1枚引く",
+      "status": "compiler_supported_synthetic",
+      "notes": "",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-9",
+        "cardVersion": "draft.1",
+        "name": "合成例9（公式カードではありません）",
+        "cardType": "stage",
+        "baseStats": {
+          "cost": 2,
+          "power": null,
+          "counter": null,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic example 9; not an official card or ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-GEN-9"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "main.1",
+            "kind": "activated",
+            "timing": {
+              "type": "MAIN"
+            },
+            "sourceZones": [
+              "stage"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [
+              {
+                "type": "REST_SOURCE"
+              }
+            ],
+            "actions": [
+              {
+                "type": "DRAW",
+                "player": "SELF",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "requestNumber": 10,
+      "title": "相手キャラ最大1枚を所有者の手札へ",
+      "status": "compiler_supported_synthetic",
+      "notes": "カードの所有者とdestination.ownerが一致する必要があります。",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-10",
+        "cardVersion": "draft.1",
+        "name": "合成例10（公式カードではありません）",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic example 10; not an official card or ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-GEN-10"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "main.1",
+            "kind": "activated",
+            "timing": {
+              "type": "MAIN"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "SELECT",
+                "selector": {
+                  "type": "CARDS",
+                  "owner": "OPPONENT",
+                  "controller": "OPPONENT",
+                  "zone": "character",
+                  "cardTypes": [
+                    "character"
+                  ],
+                  "filters": {
+                    "type": "all",
+                    "conditions": []
+                  },
+                  "excludeSource": false,
+                  "faceUpOnly": true,
+                  "min": 0,
+                  "max": 1,
+                  "visibility": "PUBLIC",
+                  "selectionMode": "SELECT",
+                  "chooser": "SELF",
+                  "order": "UNORDERED",
+                  "onInsufficient": "fail"
+                },
+                "bindAs": "target"
+              },
+              {
+                "type": "IF",
+                "condition": {
+                  "type": "compare",
+                  "left": {
+                    "ref": "bindings.target.count"
+                  },
+                  "op": "gt",
+                  "right": 0
+                },
+                "then": [
+                  {
+                    "type": "MOVE_CARD",
+                    "cards": {
+                      "ref": "bindings.target"
+                    },
+                    "destination": {
+                      "owner": "OPPONENT",
+                      "zone": "hand",
+                      "position": "append",
+                      "faceUp": true
+                    },
+                    "cause": "EFFECT"
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "requestNumber": 11,
+      "title": "相手の手札を見ずに1枚トラッシュ",
+      "status": "unsupported",
+      "reason": "相手非公開手札のSELECT/RANDOMは未対応。相手本人に捨てさせる形式への無断置換も不可。",
+      "card": null
+    },
+    {
+      "requestNumber": 12,
+      "title": "相手効果で場を離れる代わりに別キャラをトラッシュ",
+      "status": "unsupported",
+      "reason": "replacement Registryは空。置換の候補/選択/コミット統合もない。",
+      "card": null
+    },
+    {
+      "requestNumber": 13,
+      "title": "相手効果によってKOされない",
+      "status": "unsupported",
+      "reason": "KO耐性/原因条件/継続効果は未対応。",
+      "card": null
+    },
+    {
+      "requestNumber": 14,
+      "title": "登場時、解決時にライフ2以下なら相手ターン終了までブロッカー付与",
+      "status": "compiler_supported_synthetic",
+      "notes": "解決時条件と期限を明示した合成例。継続的なライフ条件や発生時条件ではありません。",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-14",
+        "cardVersion": "draft.1",
+        "name": "合成例14（公式カードではありません）",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic example 14; not an official card or ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-GEN-14"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "on_play.1",
+            "kind": "triggered",
+            "timing": {
+              "type": "ON_PLAY"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "IF",
+                "condition": {
+                  "type": "compare",
+                  "left": {
+                    "ref": "SELF.lifeCount"
+                  },
+                  "op": "lte",
+                  "right": 2
+                },
+                "then": [
+                  {
+                    "type": "BIND_SOURCE",
+                    "bindAs": "self"
+                  },
+                  {
+                    "type": "GRANT_KEYWORD",
+                    "cards": {
+                      "ref": "bindings.self"
+                    },
+                    "keyword": {
+                      "type": "BLOCKER"
+                    },
+                    "duration": {
+                      "type": "TURN_END",
+                      "player": "OPPONENT",
+                      "occurrence": 1
+                    }
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "requestNumber": 15,
+      "title": "上から5枚、cost3以下キャラ最大1枚を公開して手札、残りを並べて下へ",
+      "status": "compiler_supported_synthetic",
+      "notes": "特徴サーチではありません。効果を始める時点でデッキが1枚以上ある必要あり。選択0枚/残り0枚のworkはIFで回避。",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-15",
+        "cardVersion": "draft.1",
+        "name": "合成例15（公式カードではありません）",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic example 15; not an official card or ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-GEN-15"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "main.1",
+            "kind": "activated",
+            "timing": {
+              "type": "MAIN"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "LOOK_TOP",
+                "player": "SELF",
+                "count": 5,
+                "bindAs": "looked",
+                "onInsufficient": "takeAvailable"
+              },
+              {
+                "type": "SELECT",
+                "selector": {
+                  "type": "BOUND_CARDS",
+                  "cards": {
+                    "ref": "bindings.looked"
+                  },
+                  "excludeCards": null,
+                  "owner": "SELF",
+                  "controller": "SELF",
+                  "chooser": "SELF",
+                  "zone": "deck",
+                  "visibility": "OWNER_ONLY",
+                  "faceUpOnly": false,
+                  "cardTypes": [
+                    "character"
+                  ],
+                  "filters": {
+                    "type": "compare",
+                    "left": {
+                      "ref": "CANDIDATE.cost"
+                    },
+                    "op": "lte",
+                    "right": 3
+                  },
+                  "excludeSource": false,
+                  "min": 0,
+                  "max": 1,
+                  "selectionMode": "SELECT",
+                  "order": "UNORDERED",
+                  "onInsufficient": "fail"
+                },
+                "bindAs": "selected"
+              },
+              {
+                "type": "IF",
+                "condition": {
+                  "type": "compare",
+                  "left": {
+                    "ref": "bindings.selected.count"
+                  },
+                  "op": "gt",
+                  "right": 0
+                },
+                "then": [
+                  {
+                    "type": "REVEAL",
+                    "cards": {
+                      "ref": "bindings.selected"
+                    },
+                    "viewers": "BOTH"
+                  },
+                  {
+                    "type": "MOVE_CARD",
+                    "cards": {
+                      "ref": "bindings.selected"
+                    },
+                    "destination": {
+                      "owner": "SELF",
+                      "zone": "hand",
+                      "position": "append",
+                      "faceUp": true
+                    },
+                    "cause": "EFFECT"
+                  }
+                ],
+                "else": []
+              },
+              {
+                "type": "ORDER_CARDS",
+                "cards": {
+                  "ref": "bindings.looked"
+                },
+                "excludeCards": {
+                  "ref": "bindings.selected"
+                },
+                "bindAs": "remaining",
+                "chooser": "SELF"
+              },
+              {
+                "type": "IF",
+                "condition": {
+                  "type": "compare",
+                  "left": {
+                    "ref": "bindings.remaining.count"
+                  },
+                  "op": "gt",
+                  "right": 0
+                },
+                "then": [
+                  {
+                    "type": "RETURN_TO_DECK",
+                    "cards": {
+                      "ref": "bindings.remaining"
+                    },
+                    "player": "SELF",
+                    "position": "bottom"
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "additionalExamples": [
+    {
+      "title": "1カードに複数効果",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-MULTI",
+        "cardVersion": "draft.1",
+        "name": "合成例MULTI（公式カードではありません）",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic example MULTI; not an official card or ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-GEN-MULTI"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "main.1",
+            "kind": "activated",
+            "timing": {
+              "type": "MAIN"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [
+              {
+                "type": "REST_DON",
+                "count": 1
+              }
+            ],
+            "actions": [
+              {
+                "type": "DRAW",
+                "player": "SELF",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "id": "on_attack.1",
+            "kind": "triggered",
+            "timing": {
+              "type": "ON_ATTACK"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": true,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "DRAW",
+                "player": "SELF",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "限定ライフトリガー",
+      "card": {
+        "schemaVersion": "3.0.0-subset.16",
+        "cardId": "EXAMPLE-GEN-TRIGGER",
+        "cardVersion": "draft.1",
+        "name": "合成例TRIGGER（公式カードではありません）",
+        "cardType": "stage",
+        "baseStats": {
+          "cost": 2,
+          "power": null,
+          "counter": null,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "",
+          "triggerText": "Synthetic trigger: draw one.",
+          "displayIds": [
+            "EXAMPLE-GEN-TRIGGER"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "trigger.1",
+            "kind": "triggered",
+            "timing": {
+              "type": "TRIGGER"
+            },
+            "sourceZones": [
+              "life"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "DRAW",
+                "player": "SELF",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
