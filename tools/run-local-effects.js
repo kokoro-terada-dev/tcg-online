@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const v3 = process.argv.includes("--v3");
 const start = v3 ? require("../server/dist/test/effects/v3/localServer.js").startLocalV3Server : require("../server/dist/test/localEffects.js").startLocalEffectServer;
 const service = await start(0);
-console.log(v3 ? "V3 LOCAL SYNTHETIC FIXTURE ONLY: not real card abilities or official rulings." : "LOCAL FIXTURE ONLY: discard one hand card, then draw one. Not real card rules.");
+console.log(v3 ? "V3 LOCAL DEVELOPMENT: synthetic fixtures and a limited reviewed real-card preset. Not production or full card coverage." : "LOCAL FIXTURE ONLY: discard one hand card, then draw one. Not real card rules.");
 console.log(`Effect backend: ${service.url}`);
 console.log("Open the Vite Local URL below in two browser windows. Choose Test Battle in both.");
 const vite = spawn(process.execPath, ["node_modules/vite/bin/vite.js", "--host", "127.0.0.1", "--port", v3 ? "5190" : "5189"], {
