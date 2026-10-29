@@ -9,6 +9,7 @@ import V3SessionPanel from "./V3SessionPanel";
 import V3SetupPanel from "./V3SetupPanel";
 import type { V3SetupView } from "../../server/src/test/effects/v3/setupProtocol";
 import { acceptV3SetupView, v3SetupCommand } from "./v3SetupClient";
+import { v3RequestId } from "./v3RequestId";
 import { acceptV3SessionView, v3SessionCommand, type SessionDetails } from "./v3SessionClient";
 import type { V3SessionView, V3SessionCommand } from "../../server/src/test/effects/v3/sessionProtocol";
 import "./testEffect.css";
@@ -40,7 +41,7 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
   }
   useEffect(() => {
     if (!url) return;
-    const client = io(url, { reconnection: false, timeout: 10000 }); socket.current = client;
+    const client = io(url, { path: import.meta.env.VITE_V3_SOCKET_PATH?.trim() || "/socket.io", reconnection: false, timeout: 10000 }); socket.current = client;
     client.on("v3-room:state", (next: V3RoomView) => {
       if (roomRef.current?.mode !== next.mode) setDeckId("");
       if (roomRef.current?.matchId !== next.matchId) { epoch.current++; viewRef.current = null; setView(null); sessionRef.current = null; setSession(null); setupRef.current = null; setSetup(null); setNeedsSync(false); flight.current = false; setBusy(false); }
@@ -70,15 +71,15 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
   }
   function action(kind: "advance" | "work" | "answer", tokens?: readonly string[]) {
     if (!viewRef.current || busy || needsSync) return;
-    try { request("v3:command", v3Command(viewRef.current, kind, crypto.randomUUID(), tokens)); } catch { setError("操作状態が変わりました。再同期してください。"); }
+    try { request("v3:command", v3Command(viewRef.current, kind, v3RequestId(), tokens)); } catch { setError("操作状態が変わりました。再同期してください。"); }
   }
   function sessionAction(kind: V3SessionCommand["kind"], details?: SessionDetails) {
     if (!sessionRef.current || busy || needsSync) return;
-    try { request("v3-session:command", v3SessionCommand(sessionRef.current, kind, crypto.randomUUID(), details)); } catch { setError("操作状態が変わりました。再同期してください。"); }
+    try { request("v3-session:command", v3SessionCommand(sessionRef.current, kind, v3RequestId(), details)); } catch { setError("操作状態が変わりました。再同期してください。"); }
   }
   function setupAction(kind: "first" | "mulligan", value: "first" | "second" | boolean) {
     if (!setupRef.current || busy || needsSync) return;
-    try { request("v3-reviewed:command", v3SetupCommand(setupRef.current, kind, value, crypto.randomUUID())); } catch { setError("選択状態が変わりました。再同期してください。"); }
+    try { request("v3-reviewed:command", v3SetupCommand(setupRef.current, kind, value, v3RequestId())); } catch { setError("選択状態が変わりました。再同期してください。"); }
   }
   const isHost = room?.host.socketId === socket.current?.id, mine = isHost ? room?.host : room?.guest;
   if (session && room) return <V3SessionPanel view={session} busy={busy} needsSync={needsSync} error={error} isHost={isHost} onAction={sessionAction}

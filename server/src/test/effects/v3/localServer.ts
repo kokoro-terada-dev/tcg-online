@@ -2,6 +2,7 @@ import express = require("express");
 import { createServer } from "node:http";
 import { randomBytes, randomInt, randomUUID, createHash } from "node:crypto";
 import { Server } from "socket.io";
+import { isIPv4 } from "node:net";
 import { createMatch, parseDeck } from "../../game";
 import type { DeckInput } from "../../protocol";
 import { MatchMovementCapture } from "../matchMovement";
@@ -78,17 +79,24 @@ function fixture(room: Room, scenario: V3Scenario, actor: 0 | 1, signingKey: Uin
   return { coordinator, matchId: match.id, actor, scenario, imageAliases };
 }
 
-export async function startLocalV3Server(port = 0) {
+export async function startLocalV3Server(port = 0, options: Readonly<{ lanOrigin?: string }> = {}) {
   ensureMove(process.env.NODE_ENV !== "production" && Number.isInteger(port) && port >= 0 && port <= 65535, "v3-local-server-disabled-or-invalid-port");
+  dataObject(options, [], ["lanOrigin"]);
+  if (options.lanOrigin !== undefined) {
+    const lan = new URL(options.lanOrigin), [a, b] = lan.hostname.split(".").map(Number);
+    ensureMove(lan.origin === options.lanOrigin && lan.protocol === "http:" && isIPv4(lan.hostname) && (a === 10 || a === 192 && b === 168 || a === 172 && b! >= 16 && b! <= 31) &&
+      Number(lan.port) >= 1024 && !lan.username && !lan.password && lan.pathname === "/" && !lan.search && !lan.hash, "v3-private-lan-origin-required");
+  }
+  const lanOrigin = options.lanOrigin;
   const app = express(), http = createServer(app), key = randomBytes(32);
   const originAllowed = (origin?: string) => {
-    let allowed = !origin; try { if (origin) { const url = new URL(origin); allowed = ["http:", "https:"].includes(url.protocol) && ["localhost", "127.0.0.1"].includes(url.hostname); } } catch { allowed = false; }
+    let allowed = !origin; try { if (origin) { const url = new URL(origin); allowed = origin === lanOrigin || ["http:", "https:"].includes(url.protocol) && ["localhost", "127.0.0.1"].includes(url.hostname); } } catch { allowed = false; }
     return allowed;
   };
   const io = new Server(http, { maxHttpBufferSize: 32768, allowRequest: (request, callback) => callback(null, originAllowed(request.headers.origin)),
     cors: { origin: (origin, callback) => callback(null, originAllowed(origin)) } });
   const rooms = new Map<string, Room>(), membership = new Map<string, string>();
-  app.get("/health", (_req, res) => res.json({ status: "ok", mode: "v3-local-synthetic-only" }));
+  app.get("/health", (_req, res) => res.json({ status: "ok", mode: "v3-local-development", lanProxyEnabled: !!lanOrigin }));
   const roomFor = (id: string) => rooms.get(membership.get(id) ?? "");
   const actorFor = (room: Room, id: string): 0 | 1 | null => room.host.socketId === id ? 0 : room.guest?.socketId === id ? 1 : null;
   function publish(room: Room) {

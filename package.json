@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:effects": "node tools/run-local-effects.js",
     "dev:effects-v3": "node tools/run-local-effects.js --v3",
+    "dev:effects-v3:lan": "node tools/run-local-effects.js --v3 --lan",
     "build:card-master": "node tools/build-card-master.js",
     "audit:effect-cards": "npm --prefix server run build && node tools/audit-effect-cards.js",
     "check:effect-v3": "npm --prefix server run build && node tools/check-effect-v3.js",
