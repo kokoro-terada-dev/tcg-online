@@ -79,7 +79,7 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ### Phase 2：限定Compilerと承認ゲート
 
-入力版は3.0.0-subset.16、Compiler版はv3-subset-compiler.16です。
+入力版は3.0.0-subset.16、Compiler版はv3-subset-compiler.16.1です。16.1では互換性のあるdurationノードBATTLE_ENDを追加し、Registryハッシュを更新しています。旧承認データを暗黙に承認し直しません。
 旧subset.1/2/3/4/5/6/7/8/9/10/11/12/13/14/15、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
 keywordsを必須化し、能力がない場合も空配列を明示します。未記載を能力なしと推測しません。
 schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
@@ -97,13 +97,13 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 - cost: DON_RETURN（count:1〜50、from:activeDon/restDon/attachedDonの単一指定または重複しない配列、効果単位で1命令）。fromはCompiler内で配列へ正規化します。
 - action: DRAW / SEQUENCE / IF / SELECT / BIND_SOURCE / MOVE_CARD / KO / REST / SET_ACTIVE / LOOK_TOP / REVEAL / ORDER_CARDS / RETURN_TO_DECK / MODIFY_STAT / GRANT_KEYWORD。
 - keyword: BLOCKER / RUSH / RUSH_CHARACTER / CANNOT_BE_BLOCKED。カード本来の能力はkeywords配列、期間付き付与はGRANT_KEYWORDで定義します。
-- duration: TURN_END（player:SELF/OPPONENT、occurrence:1/2）。指定した側のターン終了境界の何回目で失効するかを明示します。
+- duration: TURN_END（player:SELF/OPPONENT、occurrence:1/2）、BATTLE_END（現在のバトル終了時）。指定した境界で失効します。
 - selector: CARDS（表向き公開カード、本人が選ぶ自分の手札/公開DON）、BOUND_CARDS（閲覧権限のある束縛済みの自分の山札集合）。SELECT、UNORDERED。
 
 未対応：相手アタック時以外の他カード監視誘発、条件付きの誘発成立判定、イベント使用、KO前の特殊条件/発動コスト/発生元の数値参照、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL、一般ゾーンのORDER（現在は専用ORDER_CARDSのみ）、シャッフル、DISCARD_HAND/DON_RETURN以外の選択付きコスト、名称/試合単位の使用制限、効果途中の任意分岐、任意効果の付与/無効化、TURN_END以外の期間、置換、継続、CUSTOM_HANDLER等。
 未知ノードは読込時に拒否します。schemaOnlyの既存ノードが存在してもv3対応済みとは扱いません。
 predicate/action/cost/replacement/selector/duration/timing/keywordのRegistryを用意しています。
-replacementは登録なしです。durationはTURN_ENDだけを登録しています。
+replacementは登録なしです。durationはTURN_ENDとBATTLE_ENDを登録しています。
 拡張はTypeScriptのMapインターフェース拡張と、信頼されたサーバーコードによるparser登録で行います。
 新しい実行ハンドラーや意味論までJSONから注入することはできません。
 Registryはコンパイル時にsealし、重複/後付け登録を拒否します。ハンドラー実装変更時には登録versionを上げます。
@@ -600,6 +600,16 @@ battle.tsのV3_BASE_BATTLE_RULESに版、参照URL、確認日、条項IDを固�
 - 通常ドローで終了した場合、直前のリフレッシュは保持しますが、DON追加・メインフェイズには進みません。再送はreceiptで同じ結果を返し、追加ドローしません。
 - 現在の命令では両者の山札を同時に空にできません。将来の命令等で両者0枚になった場合は、引き分けの裁定を推測せず明示的に拒否します。
 - 対象は分離されたv3テスト対戦のみです。通常オンライン対戦・一人回しには変更を加えません。
+
+### 段階3/5の追加：このバトル中の修正
+
+- MODIFY_STAT/GRANT_KEYWORDのdurationに`{ "type": "BATTLE_END" }`を指定できます。追加パラメータや暗黙の次回バトル指定は受け付けません。
+- 実行時点のbattleIdに固定します。バトル外の実行、異なるバトルの修正記録を渡す操作は拒否します。
+- 既存のアタック時・相手のアタック時・限定KO時の解決で利用できます。イベントカウンターを実装済みとするものではありません。
+- ダメージ後のKO時効果の解決中は保持し、バトル終了で除去します。攻撃元/先が領域を移動してバトルが中断した場合も同様です。
+- 同じカードにあるTURN_ENDの修正はバトル終了では解除しません。対象の世代変更による除去は従来通りです。
+- 総合ルール7-1-5の終了境界を使用します。バトル終了時の誘発効果は未対応のため、その効果を必要とする実カードは引き続き許可しません。将来の終了時誘発を飛ばしてから解除する設計にはしません。
+- 既存の入力JSONはそのまま読めますが、Compiler/Registryの更新により、実行承認は新しいハッシュで改めて行う必要があります。
 段階6は未完了です。合成盤面での基本バトルが動くことと、実カードの限定構成で正式な開始手順から対戦できることは区別します。
 
 ### 段階3/5の追加：キーワードと期間付き付与

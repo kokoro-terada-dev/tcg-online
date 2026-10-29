@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
 import type { CardDefinition, CardSetRef, Category, CompiledCard, DonZone, Node, NodeMeta, Value } from "./dsl";
 
-export const COMPILER_VERSION = "v3-subset-compiler.16";
+export const COMPILER_VERSION = "v3-subset-compiler.16.1";
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 function inspectData(input: unknown): void {
@@ -102,6 +102,7 @@ export function builtinV3Registries(): V3Registries {
     ensureMove((n.player === "SELF" || n.player === "OPPONENT") && (n.occurrence === 1 || n.occurrence === 2), "unsupported-v3-turn-duration");
     return { type: "TURN_END", ...meta, player: n.player, occurrence: n.occurrence };
   });
+  r.duration.register("BATTLE_END", "1", (n, c) => ({ type: "BATTLE_END", ...c.fields(n, []) }));
   r.action.register("MODIFY_STAT", "1", (n, c) => {
     const meta = c.fields(n, ["cards", "stat", "amount", "duration"]);
     ensureMove((n.stat === "power" || n.stat === "cost") && typeof n.amount === "number" && Number.isSafeInteger(n.amount) && n.amount !== 0 && Math.abs(n.amount) <= 100000, "invalid-v3-stat-change");

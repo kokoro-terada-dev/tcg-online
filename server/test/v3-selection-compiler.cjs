@@ -9,7 +9,7 @@ const compile = value => compileV3CardJson(JSON.stringify(value));
 const predicate = (ref, op = 'gt', right = 0) => ({ type: 'compare', left: { ref }, op, right });
 test('public selection compiles typed card sets, count references, filters and effect-only movement', () => {
   const plan = compileV3CardJson(raw), actions = plan.definition.effects[0].actions;
-  assert.equal(plan.compilerVersion, 'v3-subset-compiler.16'); assert.equal(plan.status, 'compiled_not_executable');
+  assert.equal(plan.compilerVersion, 'v3-subset-compiler.16.1'); assert.equal(plan.status, 'compiled_not_executable');
   assert.equal(actions[0].selector.min, 0); assert.equal(actions[0].selector.onInsufficient, 'fail');
   assert.equal(actions[1].then[0].cards.ref, 'bindings.picked');
   assert.ok(plan.requiredHandlers.includes('selector:CARDS')); assert.ok(plan.requiredHandlers.includes('action:MOVE_CARD'));

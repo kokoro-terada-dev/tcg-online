@@ -9,8 +9,14 @@ const { createMatch } = require('../dist/test/game.js');
 const { MatchMovementCapture } = require('../dist/test/effects/matchMovement.js');
 const { createProgression } = require('../dist/test/progression/state.js');
 const { applyPlayerIntent, applySystemEvent } = require('../dist/test/progression/transitions.js');
+const { expiryFor, validateExpiry } = require('../dist/test/effects/v3/effectExpiry.js');
 const always = () => ({ type: 'all', conditions: [] });
-function setup(actor, bounce) {
+test('battle duration requires a current battle and rejects mixed expiry records', () => {
+  assert.throws(() => expiryFor({ type: 'BATTLE_END' }, 0, null));
+  assert.deepEqual(expiryFor({ type: 'BATTLE_END' }, 1, 'battle-1'), { endPlayer: null, remaining: null, battleId: 'battle-1' });
+  assert.throws(() => validateExpiry({ endPlayer: 0, remaining: 1, battleId: 'battle-1' }));
+});
+function setup(actor, bounce, battleBuff = false) {
   const plans = ['character', 'leader'].map(kind => {
     const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v3-main-draw.json'), 'utf8'));
     Object.assign(data, { cardId: kind.toUpperCase(), cardType: kind, reviewStatus: 'approved', keywords: kind === 'character' ? [{ type: 'RUSH' }] : [] }); data.baseStats.power = 5000;
@@ -19,6 +25,12 @@ function setup(actor, bounce) {
       { type: 'SELECT', bindAs: 'self', selector: { type: 'CARDS', owner: 'SELF', controller: 'SELF', chooser: 'SELF', zone: 'character', cardTypes: ['character'], filters: always(), excludeSource: false, faceUpOnly: true, visibility: 'PUBLIC', min: 1, max: 1, selectionMode: 'SELECT', order: 'UNORDERED', onInsufficient: 'fail' } },
       { type: 'MOVE_CARD', cards: { ref: 'bindings.self' }, destination: { owner: 'SELF', zone: 'hand', position: 'append', faceUp: true }, cause: 'EFFECT' },
     ] : [{ type: 'DRAW', player: 'SELF', count: 1 }];
+    if (battleBuff && kind === 'character') actions.unshift(
+      { type: 'SELECT', bindAs: 'battleTarget', selector: { type: 'CARDS', owner: 'OPPONENT', controller: 'OPPONENT', chooser: 'SELF', zone: 'leader', cardTypes: ['leader'], filters: always(), excludeSource: false, faceUpOnly: true, visibility: 'PUBLIC', min: 1, max: 1, selectionMode: 'SELECT', order: 'UNORDERED', onInsufficient: 'fail' } },
+      { type: 'MODIFY_STAT', cards: { ref: 'bindings.battleTarget' }, stat: 'power', amount: 1000, duration: { type: 'BATTLE_END' } },
+      { type: 'GRANT_KEYWORD', cards: { ref: 'bindings.battleTarget' }, keyword: { type: 'BLOCKER' }, duration: { type: 'BATTLE_END' } },
+      { type: 'MODIFY_STAT', cards: { ref: 'bindings.battleTarget' }, stat: 'power', amount: 1000, duration: { type: 'TURN_END', player: 'SELF', occurrence: 1 } },
+    );
     data.effects = [{ id: 'attack', kind: 'triggered', timing: { type: kind === 'character' ? 'ON_ATTACK' : 'ON_OPPONENT_ATTACK' }, sourceZones: [kind], optional: false, usageLimit: null, activationConditions: always(), resolutionConditions: always(), costs: [], actions }];
     return compileV3CardJson(JSON.stringify(data));
   });
@@ -63,4 +75,25 @@ for (const [actor, bounce] of [[0, false], [1, true]]) test(`attack triggers pre
   assert.equal(c.viewFor(actor).movement.players[peer].hand.every(card => card.cardId === null && card.ref === null), true);
   assert.equal(c.viewFor(actor).history.length, 2); assert.equal(c.viewFor(actor).history.every(entry => entry.triggerEventId.startsWith('attack:')), true);
   if (bounce) assert.equal(c.snapshotForCoordinator().movement.cards[source.instanceId].generation, source.generation + 1);
+});
+
+for (const actor of [0, 1]) for (const bounce of [false, true]) test(`battle durations expire on normal completion or participant departure (seat=${actor}, bounce=${bounce})`, () => {
+  const { c, source, target } = setup(actor, bounce, true), peer = 1 - actor;
+  c.attack(actor, 'attack', c.context(), source, target);
+  c.resolveTrigger(actor, 'own-trigger', c.context(), c.viewFor(actor).triggerChoices[0].token); complete(c, actor);
+  const during = c.snapshotForCoordinator();
+  assert.equal(during.statEffects.filter(effect => effect.battleId).length, 1);
+  assert.equal(during.keywordGrants.length, 1);
+  assert.equal(during.statEffects.find(effect => effect.battleId).battleId, c.viewFor(actor).battle.battleId);
+  c.resolveTrigger(peer, 'other-trigger', c.context(), c.viewFor(peer).triggerChoices[0].token); complete(c, peer);
+  if (!bounce) {
+    assert.equal(c.viewFor(actor).battle.powers.defense, 7000);
+    c.battleDecision(peer, 'pass', c.context(), 'passBlock');
+    c.battleDecision(peer, 'counter-end', c.context(), 'endCounter');
+    c.resolveDamage(peer, 'damage', c.context());
+  }
+  const after = c.snapshotForCoordinator(); assert.equal(c.viewFor(actor).battle, null);
+  assert.equal(after.statEffects.length, 1); assert.equal(after.statEffects[0].stat, 'power'); assert.equal(after.statEffects[0].battleId, undefined);
+  assert.deepEqual(after.keywordGrants, []);
+  c.endTurn(actor, 'next-turn', c.context()); assert.deepEqual(c.snapshotForCoordinator().statEffects, []);
 });

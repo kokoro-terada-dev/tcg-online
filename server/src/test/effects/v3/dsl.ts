@@ -54,6 +54,7 @@ export interface SelectorMap {
 }
 export interface DurationMap {
   TURN_END: NodeMeta & { type: "TURN_END"; player: Player; occurrence: 1 | 2 };
+  BATTLE_END: NodeMeta & { type: "BATTLE_END" };
 }
 export interface TimingMap {
   MAIN: NodeMeta & { type: "MAIN" }; ON_PLAY: NodeMeta & { type: "ON_PLAY" };

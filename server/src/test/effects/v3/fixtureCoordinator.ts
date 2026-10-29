@@ -44,6 +44,7 @@ export class V3FixtureCoordinator {
     this.#keywordGrants = validateKeywordGrants(options.movement, options.keywordGrants ?? []);
     const { identity, movement, progression, card } = options;
     const trigger = options.triggerCause, battle = progression.battle;
+    ensureMove([...this.#statEffects, ...this.#keywordGrants].every(effect => effect.battleId === undefined || effect.battleId === battle?.battleId), "v3-stale-battle-duration");
     const triggerTiming = trigger && progression.gate.kind === "idle" && progression.phase === "main" && progression.phaseSettled && !progression.outcome && (!battle || battle.step === "attack" || battle.step === "damage");
     ensureMove(identity.matchId === movement.matchId && movement.turnNumber === progression.turnNumber && (triggerTiming || checkTiming(progression, identity.actor, "mainEffect").allowed), "v3-fixture-timing");
     ensureMove(Object.values(movement.cards).every(card => !card.modifierIds.length && !card.grantIds.length) && movement.players.every(zones => zones.deck.length > 0) && movement.reveals.length === 0, "v3-fixture-unmodeled-board");
@@ -136,8 +137,9 @@ export class V3FixtureCoordinator {
     const inspected = (ref: Readonly<{ instanceId: string; generation: number }>) => board.reveals.some(grant => grant.scopeId === this.#identity.resolutionId &&
       grant.card.instanceId === ref.instanceId && grant.card.generation === ref.generation && grant.viewers.includes(actor));
     if (work.type === "MODIFY_STAT" || work.type === "GRANT_KEYWORD") {
-      const next = work.type === "MODIFY_STAT" ? { statEffects: addStatEffects(board, statEffects, work.workId, this.#identity.source, actor, work.cards, work.stat, work.amount, work.duration, this.#definitions) } :
-        { keywordGrants: addKeywordGrants(board, keywordGrants, work.workId, this.#identity.source, actor, work.cards, work.keyword, work.duration, this.#definitions) };
+      const battleId = this.#progression.battle?.battleId ?? null;
+      const next = work.type === "MODIFY_STAT" ? { statEffects: addStatEffects(board, statEffects, work.workId, this.#identity.source, actor, work.cards, work.stat, work.amount, work.duration, this.#definitions, battleId) } :
+        { keywordGrants: addKeywordGrants(board, keywordGrants, work.workId, this.#identity.source, actor, work.cards, work.keyword, work.duration, this.#definitions, battleId) };
       const result = new MovementStore(board).commit({ transactionId: hash(`${board.matchId}:${work.workId}`), matchId: board.matchId, expectedRevision: board.revision,
         turnNumber: board.turnNumber, actor, effectController: actor, source: this.#identity.source, mode: "effect", resolutionId: this.#identity.resolutionId, operations: [] }, { status: "certifiedNone" });
       return { ...result, ...next };

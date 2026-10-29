@@ -11,11 +11,11 @@ import { applyPlayerIntent, applySystemEvent } from "../../progression/transitio
 import { isApprovedV3Card, type ApprovedV3Card } from "./approval";
 import { label } from "./compiler";
 import { V3FixtureCoordinator } from "./fixtureCoordinator";
-import { endTurnStatEffects, pruneStatEffects, statDelta, type StatEffects } from "./statEffects";
+import { endTurnStatEffects, pruneStatEffects, retainBattleStatEffects, statDelta, type StatEffects } from "./statEffects";
 import { availableTriggers, enqueueAttackTriggers, enqueueMovementTriggers, movementTriggerCandidates, triggerChooser, SYNTHETIC_TRIGGER_POLICY, type ScheduledTrigger } from "./triggerScheduler";
 import { decideLocalBattle } from "../../localBattle";
 import { attackOptions, declareAttack, finishAttackStep, finishDamageStep, blockerOptions, declareBlock, battlePower, counterCandidates, useCounter, damage, takeLife, V3_BASE_BATTLE_RULES, type BattleCounters, type LifeDecision } from "./battle";
-import { effectiveKeywords, endTurnKeywordGrants, pruneKeywordGrants, type KeywordGrants } from "./keywordEffects";
+import { effectiveKeywords, endTurnKeywordGrants, pruneKeywordGrants, retainBattleKeywordGrants, type KeywordGrants } from "./keywordEffects";
 import { deckOutOutcome, DECK_OUT_POLICY } from "./ruleOutcomes";
 
 type Seat = 0 | 1;
@@ -68,7 +68,13 @@ export class V3SyntheticMatchCoordinator {
     const current = this.context();
     ensureMove(this.#receipts.length < 2048 && this.#revision < Number.MAX_SAFE_INTEGER && (Object.keys(current) as (keyof V3MatchContext)[]).every(key => current[key] === expected[key]), "v3-match-stale-or-limited");
     this.#busy = true;
-    try { apply(); this.#revision++; this.#receipts.push({ requestId, fingerprint }); return { replayed: false }; }
+    try {
+      apply();
+      const battleId = this.#progression.outcome ? null : this.#progression.battle?.battleId ?? null;
+      this.#statEffects = retainBattleStatEffects(this.#statEffects, battleId);
+      this.#keywordGrants = retainBattleKeywordGrants(this.#keywordGrants, battleId);
+      this.#revision++; this.#receipts.push({ requestId, fingerprint }); return { replayed: false };
+    }
     finally { this.#busy = false; }
   }
   #settled(allowTriggers = false, allowBattleTriggers = false): void {
