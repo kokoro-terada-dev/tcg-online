@@ -5,6 +5,10 @@
     {
       "file": "sources/st02-subset-20261029.json",
       "sha256": "34d695137fa8c8986ff1a641cf01232c8f5eda498f01db201b90c980808b01eb"
+    },
+    {
+      "file": "sources/op01-op02-subset-20261029.json",
+      "sha256": "616a430cb297378c2b96845d9d793046aace4ec32432da24ffe6e7873b48a3be"
     }
   ],
   "cards": [
@@ -119,6 +123,158 @@
         "approvedAt": "2026-10-29T00:00:00.000Z",
         "ruleEvidence": [
           "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550002",
+          "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828="
+        ]
+      }
+    },
+    {
+      "file": "cards/OP01-033.json",
+      "approval": {
+        "status": "approved",
+        "cardId": "OP01-033",
+        "cardVersion": "reviewed.20261029.1",
+        "definitionHash": "035c7bc8f28afcddc0b2d7d3d89781ff200354027eeb8c505e26182e5a640494",
+        "sourceHash": "e7764fbf2b6baac91b7fc768113de0cbad62d1957533f201fdfad71968191562",
+        "compilerVersion": "v3-subset-compiler.16.3",
+        "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763",
+        "rulesetVersion": "reviewed-limited.20261029.1",
+        "reviewer": "Codex: primary card list and rule review",
+        "approvedAt": "2026-10-29T00:00:00.000Z",
+        "ruleEvidence": [
+          "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550101",
+          "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828="
+        ]
+      }
+    },
+    {
+      "file": "cards/OP01-036.json",
+      "approval": {
+        "status": "approved",
+        "cardId": "OP01-036",
+        "cardVersion": "reviewed.20261029.1",
+        "definitionHash": "11e3f2286e20c325c4eccdd753218d7ca981a6967ae98ccc06ff57de1fe2f3d3",
+        "sourceHash": "893ed78e83645fb338c21bb65bd32d5e3133e1d661ffb9ec5ad66fef99ed67ce",
+        "compilerVersion": "v3-subset-compiler.16.3",
+        "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763",
+        "rulesetVersion": "reviewed-limited.20261029.1",
+        "reviewer": "Codex: primary card list and rule review",
+        "approvedAt": "2026-10-29T00:00:00.000Z",
+        "ruleEvidence": [
+          "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550101",
+          "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828="
+        ]
+      }
+    },
+    {
+      "file": "cards/OP01-043.json",
+      "approval": {
+        "status": "approved",
+        "cardId": "OP01-043",
+        "cardVersion": "reviewed.20261029.1",
+        "definitionHash": "9f6f88472cc8b179d6445e18bd656c9b7d2f012102f17fe33ecfab6c50597bf6",
+        "sourceHash": "a1e4418e2d898f062ea64b8131e8a328294c18b7c05b57fc81d98f2a4e6fe58b",
+        "compilerVersion": "v3-subset-compiler.16.3",
+        "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763",
+        "rulesetVersion": "reviewed-limited.20261029.1",
+        "reviewer": "Codex: primary card list and rule review",
+        "approvedAt": "2026-10-29T00:00:00.000Z",
+        "ruleEvidence": [
+          "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550101",
+          "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828="
+        ]
+      }
+    },
+    {
+      "file": "cards/OP01-045.json",
+      "approval": {
+        "status": "approved",
+        "cardId": "OP01-045",
+        "cardVersion": "reviewed.20261029.1",
+        "definitionHash": "fe932921612e8fd2fb450ddab3f6675ef13644fadee1150417a16c46bb0e64f0",
+        "sourceHash": "d883387b96f992ae7de44d9a18a5f761a1fef73b3d57c4afb78985813a10a990",
+        "compilerVersion": "v3-subset-compiler.16.3",
+        "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763",
+        "rulesetVersion": "reviewed-limited.20261029.1",
+        "reviewer": "Codex: primary card list and rule review",
+        "approvedAt": "2026-10-29T00:00:00.000Z",
+        "ruleEvidence": [
+          "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550101",
+          "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828="
+        ]
+      }
+    },
+    {
+      "file": "cards/OP01-048.json",
+      "approval": {
+        "status": "approved",
+        "cardId": "OP01-048",
+        "cardVersion": "reviewed.20261029.1",
+        "definitionHash": "4efa2ffdfbf243794a6ac59ecdb95dfc6c4b91c9777a0bc849b35984e6552d3c",
+        "sourceHash": "08bd06e9c3e3d1082ae2418f8567ba152d86f3edb838f0459eba19cabc536ea6",
+        "compilerVersion": "v3-subset-compiler.16.3",
+        "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763",
+        "rulesetVersion": "reviewed-limited.20261029.1",
+        "reviewer": "Codex: primary card list and rule review",
+        "approvedAt": "2026-10-29T00:00:00.000Z",
+        "ruleEvidence": [
+          "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550101",
+          "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828="
+        ]
+      }
+    },
+    {
+      "file": "cards/OP01-053.json",
+      "approval": {
+        "status": "approved",
+        "cardId": "OP01-053",
+        "cardVersion": "reviewed.20261029.1",
+        "definitionHash": "a7d66627851cd1146fe9686d7a2abbe60827765e6b96ec9e7e697398b570d1b8",
+        "sourceHash": "ddd72cc11c8f85028290f495eefd77679c08937f581e03811fd6da6b611b734f",
+        "compilerVersion": "v3-subset-compiler.16.3",
+        "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763",
+        "rulesetVersion": "reviewed-limited.20261029.1",
+        "reviewer": "Codex: primary card list and rule review",
+        "approvedAt": "2026-10-29T00:00:00.000Z",
+        "ruleEvidence": [
+          "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550101",
+          "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828="
+        ]
+      }
+    },
+    {
+      "file": "cards/OP01-054.json",
+      "approval": {
+        "status": "approved",
+        "cardId": "OP01-054",
+        "cardVersion": "reviewed.20261029.1",
+        "definitionHash": "7eb0e6bb7a997590b208b7c48ceae0cde495f7072a021e4d9d8fbb7a619a35e3",
+        "sourceHash": "f0828945f64b30b86d41a8ae0af7ee010b6b17593ebbe44f0b36054bf642249c",
+        "compilerVersion": "v3-subset-compiler.16.3",
+        "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763",
+        "rulesetVersion": "reviewed-limited.20261029.1",
+        "reviewer": "Codex: primary card list and rule review",
+        "approvedAt": "2026-10-29T00:00:00.000Z",
+        "ruleEvidence": [
+          "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550101",
+          "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828="
+        ]
+      }
+    },
+    {
+      "file": "cards/OP02-039.json",
+      "approval": {
+        "status": "approved",
+        "cardId": "OP02-039",
+        "cardVersion": "reviewed.20261029.1",
+        "definitionHash": "0e21a533d15809b0a860edc7a251faafb22f9fe637200b7ff42cb9033d46b599",
+        "sourceHash": "81ba658cbb25c170cc03823b1554a363a6f7f8aca46788b143e7de3d88aaec69",
+        "compilerVersion": "v3-subset-compiler.16.3",
+        "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763",
+        "rulesetVersion": "reviewed-limited.20261029.1",
+        "reviewer": "Codex: primary card list and rule review",
+        "approvedAt": "2026-10-29T00:00:00.000Z",
+        "ruleEvidence": [
+          "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550102",
           "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828="
         ]
       }

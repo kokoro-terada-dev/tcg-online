@@ -1,0 +1,182 @@
+{
+  "version": "official-op01-op02-subset.20261029.1",
+  "reviewedAt": "2026-10-29",
+  "cardLists": [
+    "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550101",
+    "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550102"
+  ],
+  "qa": "https://www.onepiece-cardgame.com/pdf/qa_op01.pdf?20220930=",
+  "normalization": {
+    "absentNumeric": "null",
+    "absentEffect": "empty string",
+    "traits": "split printed '/' separators"
+  },
+  "cards": [
+    {
+      "cardId": "OP01-033",
+      "name": "イゾウ",
+      "cardType": "character",
+      "cost": 3,
+      "power": 3000,
+      "counter": 2000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "射"
+      ],
+      "traits": [
+        "ワノ国",
+        "元白ひげ海賊団"
+      ],
+      "text": "【登場時】相手のコスト4以下のキャラ1枚までを、レストにする。",
+      "triggerText": ""
+    },
+    {
+      "cardId": "OP01-036",
+      "name": "お鶴",
+      "cardType": "character",
+      "cost": 1,
+      "power": 3000,
+      "counter": 1000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "知"
+      ],
+      "traits": [
+        "ワノ国"
+      ],
+      "text": "",
+      "triggerText": ""
+    },
+    {
+      "cardId": "OP01-043",
+      "name": "しのぶ",
+      "cardType": "character",
+      "cost": 3,
+      "power": 5000,
+      "counter": 1000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "特"
+      ],
+      "traits": [
+        "ワノ国"
+      ],
+      "text": "",
+      "triggerText": ""
+    },
+    {
+      "cardId": "OP01-045",
+      "name": "ジャンバール",
+      "cardType": "character",
+      "cost": 4,
+      "power": 6000,
+      "counter": 1000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "打"
+      ],
+      "traits": [
+        "ハートの海賊団"
+      ],
+      "text": "",
+      "triggerText": ""
+    },
+    {
+      "cardId": "OP01-048",
+      "name": "ネコマムシ",
+      "cardType": "character",
+      "cost": 2,
+      "power": 3000,
+      "counter": 1000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "斬"
+      ],
+      "traits": [
+        "ミンク族",
+        "ワノ国",
+        "赤鞘九人男"
+      ],
+      "text": "【登場時】相手のコスト3以下のキャラ1枚までを、レストにする。",
+      "triggerText": ""
+    },
+    {
+      "cardId": "OP01-053",
+      "name": "ワイヤー",
+      "cardType": "character",
+      "cost": 2,
+      "power": 4000,
+      "counter": 1000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "斬"
+      ],
+      "traits": [
+        "キッド海賊団"
+      ],
+      "text": "",
+      "triggerText": ""
+    },
+    {
+      "cardId": "OP01-054",
+      "name": "X・ドレーク",
+      "cardType": "character",
+      "cost": 5,
+      "power": 6000,
+      "counter": 1000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "斬"
+      ],
+      "traits": [
+        "超新星",
+        "海軍",
+        "ドレーク海賊団"
+      ],
+      "text": "【登場時】相手のレストのコスト4以下のキャラ1枚までを、KOする。",
+      "triggerText": ""
+    },
+    {
+      "cardId": "OP02-039",
+      "name": "フランキー",
+      "cardType": "character",
+      "cost": 5,
+      "power": 7000,
+      "counter": 1000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "特"
+      ],
+      "traits": [
+        "FILM",
+        "麦わらの一味"
+      ],
+      "text": "",
+      "triggerText": ""
+    }
+  ]
+}

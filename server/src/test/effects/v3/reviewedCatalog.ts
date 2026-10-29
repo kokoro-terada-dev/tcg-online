@@ -3,10 +3,15 @@ import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { dataArray, dataObject, ensureMove } from "../../movement/state";
-import { ApprovedV3Catalog, type TrustedV3Approval } from "./approval";
+import { ApprovedV3Catalog, type ApprovedV3Card, type TrustedV3Approval } from "./approval";
 import { compileV3CardJson } from "./compiler";
 
 const defaultRoot = resolve(__dirname, "../../../../data/effects-v3-reviewed");
+export type ReviewedV3Catalog = Readonly<{ rulesetVersion: string; catalog: ApprovedV3Catalog; cards: readonly ApprovedV3Card[] }>;
+const reviewedCatalogs = new WeakSet<object>();
+export function isReviewedV3Catalog(value: unknown): value is ReviewedV3Catalog {
+  return value !== null && typeof value === "object" && reviewedCatalogs.has(value);
+}
 function read(root: string, file: string): string {
   ensureMove(file === "manifest.json" || /^(cards|sources)\/[A-Za-z0-9_.-]+\.json$/.test(file), "v3-reviewed-file-name");
   const path = resolve(root, file), stat = lstatSync(path);
@@ -42,5 +47,6 @@ export function loadReviewedV3Catalog(root = defaultRoot) {
   });
   ensureMove(plans.length > 0, "v3-reviewed-empty-catalog");
   const catalog = new ApprovedV3Catalog(plans, approvals, manifest.rulesetVersion);
-  return Object.freeze({ rulesetVersion: manifest.rulesetVersion, catalog, cards: Object.freeze(plans.map(plan => catalog.get(plan.definition.cardId)!)) });
+  const result = Object.freeze({ rulesetVersion: manifest.rulesetVersion, catalog, cards: Object.freeze(plans.map(plan => catalog.get(plan.definition.cardId)!)) });
+  reviewedCatalogs.add(result); return result;
 }

@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "3.0.0-subset.16",
+  "cardId": "OP01-054",
+  "cardVersion": "reviewed.20261029.1",
+  "name": "X・ドレーク",
+  "cardType": "character",
+  "baseStats": {
+    "cost": 5,
+    "power": 6000,
+    "counter": 1000,
+    "life": null
+  },
+  "colors": [
+    "緑"
+  ],
+  "traits": [
+    "超新星",
+    "海軍",
+    "ドレーク海賊団"
+  ],
+  "attributes": [
+    "斬"
+  ],
+  "keywords": [],
+  "reviewStatus": "approved",
+  "source": {
+    "text": "【登場時】相手のレストのコスト4以下のキャラ1枚までを、KOする。",
+    "triggerText": "",
+    "displayIds": [
+      "OP01-054"
+    ],
+    "datasetSha256": "616a430cb297378c2b96845d9d793046aace4ec32432da24ffe6e7873b48a3be"
+  },
+  "effects": [
+    {
+      "id": "entryKo",
+      "kind": "triggered",
+      "timing": {
+        "type": "ON_PLAY"
+      },
+      "sourceZones": [
+        "character"
+      ],
+      "optional": false,
+      "usageLimit": null,
+      "activationConditions": {
+        "type": "all",
+        "conditions": []
+      },
+      "resolutionConditions": {
+        "type": "all",
+        "conditions": []
+      },
+      "costs": [],
+      "actions": [
+        {
+          "type": "SELECT",
+          "bindAs": "target",
+          "selector": {
+            "type": "CARDS",
+            "owner": "OPPONENT",
+            "controller": "OPPONENT",
+            "chooser": "SELF",
+            "zone": "character",
+            "cardTypes": [
+              "character"
+            ],
+            "filters": {
+              "type": "all",
+              "conditions": [
+                {
+                  "type": "compare",
+                  "left": {
+                    "ref": "CANDIDATE.cost"
+                  },
+                  "op": "lte",
+                  "right": 4
+                },
+                {
+                  "type": "compare",
+                  "left": {
+                    "ref": "CANDIDATE.rotated"
+                  },
+                  "op": "eq",
+                  "right": true
+                }
+              ]
+            },
+            "excludeSource": false,
+            "faceUpOnly": true,
+            "visibility": "PUBLIC",
+            "min": 0,
+            "max": 1,
+            "selectionMode": "SELECT",
+            "order": "UNORDERED",
+            "onInsufficient": "fail"
+          }
+        },
+        {
+          "type": "IF",
+          "condition": {
+            "type": "compare",
+            "left": {
+              "ref": "bindings.target.count"
+            },
+            "op": "gt",
+            "right": 0
+          },
+          "then": [
+            {
+              "type": "KO",
+              "cards": {
+                "ref": "bindings.target"
+              }
+            }
+          ],
+          "else": []
+        }
+      ]
+    }
+  ]
+}

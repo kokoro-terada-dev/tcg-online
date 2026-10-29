@@ -1,9 +1,9 @@
 import type { V3SessionView, V3SessionCommand } from "../../server/src/test/effects/v3/sessionProtocol";
 export function acceptV3SessionView(current: V3SessionView | null, next: V3SessionView, matchId: string | null): boolean {
-  if (next.mode !== "v3-synthetic-session" || next.matchId !== matchId || next.context.movementRevision !== next.movement.revision ||
+  if ((next.mode !== "v3-synthetic-session" && next.mode !== "v3-reviewed-session") || next.matchId !== matchId || next.context.movementRevision !== next.movement.revision ||
     next.context.resolutionId !== (next.frame?.resolutionId ?? null) || next.context.frameRevision !== (next.frame?.revision ?? null)) return false;
   if (!current) return true;
-  if (next.matchId !== current.matchId || next.localPlayerIndex !== current.localPlayerIndex || next.context.revision < current.context.revision ||
+  if (next.mode !== current.mode || next.matchId !== current.matchId || next.localPlayerIndex !== current.localPlayerIndex || next.context.revision < current.context.revision ||
     next.context.movementRevision < current.context.movementRevision || next.context.progressionRevision < current.context.progressionRevision || next.turnNumber < current.turnNumber) return false;
   return next.context.revision !== current.context.revision || next.context.resolutionId === current.context.resolutionId && next.context.frameRevision === current.context.frameRevision &&
     next.context.movementRevision === current.context.movementRevision && next.context.progressionRevision === current.context.progressionRevision;

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "3.0.0-subset.16",
+  "cardId": "OP02-039",
+  "cardVersion": "reviewed.20261029.1",
+  "name": "フランキー",
+  "cardType": "character",
+  "baseStats": {
+    "cost": 5,
+    "power": 7000,
+    "counter": 1000,
+    "life": null
+  },
+  "colors": [
+    "緑"
+  ],
+  "traits": [
+    "FILM",
+    "麦わらの一味"
+  ],
+  "attributes": [
+    "特"
+  ],
+  "keywords": [],
+  "reviewStatus": "approved",
+  "source": {
+    "text": "",
+    "triggerText": "",
+    "displayIds": [
+      "OP02-039"
+    ],
+    "datasetSha256": "616a430cb297378c2b96845d9d793046aace4ec32432da24ffe6e7873b48a3be"
+  },
+  "effects": []
+}

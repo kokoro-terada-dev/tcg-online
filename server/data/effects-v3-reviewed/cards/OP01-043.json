@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "3.0.0-subset.16",
+  "cardId": "OP01-043",
+  "cardVersion": "reviewed.20261029.1",
+  "name": "しのぶ",
+  "cardType": "character",
+  "baseStats": {
+    "cost": 3,
+    "power": 5000,
+    "counter": 1000,
+    "life": null
+  },
+  "colors": [
+    "緑"
+  ],
+  "traits": [
+    "ワノ国"
+  ],
+  "attributes": [
+    "特"
+  ],
+  "keywords": [],
+  "reviewStatus": "approved",
+  "source": {
+    "text": "",
+    "triggerText": "",
+    "displayIds": [
+      "OP01-043"
+    ],
+    "datasetSha256": "616a430cb297378c2b96845d9d793046aace4ec32432da24ffe6e7873b48a3be"
+  },
+  "effects": []
+}

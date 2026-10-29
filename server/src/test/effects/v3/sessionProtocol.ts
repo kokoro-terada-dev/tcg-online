@@ -1,7 +1,7 @@
 import type { V3FixtureView } from "./fixtureProtocol";
 export type V3SessionContext = Readonly<{ revision: number; movementRevision: number; progressionRevision: number; resolutionId: string | null; frameRevision: number | null }>;
 export type V3SessionView = Readonly<{
-  mode: "v3-synthetic-session"; matchId: string; roomId: string; localPlayerIndex: 0 | 1; context: V3SessionContext;
+  mode: "v3-synthetic-session" | "v3-reviewed-session"; matchId: string; roomId: string; localPlayerIndex: 0 | 1; context: V3SessionContext;
   movement: V3FixtureView["movement"]; frame: V3FixtureView["frame"] | null; imageAliases: Readonly<Record<string, string>>;
   turnNumber: number; activePlayer: 0 | 1; phase: "refresh" | "draw" | "don" | "main" | "end"; gate: "idle" | "resolving" | "choice" | "trigger";
   triggerPolicy: string; pendingTriggerCount: number; triggerChooser: 0 | 1 | null;

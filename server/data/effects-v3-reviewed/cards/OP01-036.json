@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "3.0.0-subset.16",
+  "cardId": "OP01-036",
+  "cardVersion": "reviewed.20261029.1",
+  "name": "お鶴",
+  "cardType": "character",
+  "baseStats": {
+    "cost": 1,
+    "power": 3000,
+    "counter": 1000,
+    "life": null
+  },
+  "colors": [
+    "緑"
+  ],
+  "traits": [
+    "ワノ国"
+  ],
+  "attributes": [
+    "知"
+  ],
+  "keywords": [],
+  "reviewStatus": "approved",
+  "source": {
+    "text": "",
+    "triggerText": "",
+    "displayIds": [
+      "OP01-036"
+    ],
+    "datasetSha256": "616a430cb297378c2b96845d9d793046aace4ec32432da24ffe6e7873b48a3be"
+  },
+  "effects": []
+}

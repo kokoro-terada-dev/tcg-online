@@ -19,6 +19,9 @@ import { effectiveKeywords, endTurnKeywordGrants, pruneKeywordGrants, retainBatt
 import { deckOutOutcome, DECK_OUT_POLICY } from "./ruleOutcomes";
 import { counterEventChoices, prepareCounterEvent } from "./counterEvents";
 import { prepareLifeTrigger } from "./lifeTriggers";
+import { isReviewedV3Catalog, type ReviewedV3Catalog } from "./reviewedCatalog";
+import { pinMasterFacts } from "../masterFacts";
+import { fixtureEnvironment } from "./fixtureEnvironment";
 
 type Seat = 0 | 1;
 export type V3MatchContext = Readonly<{ revision: number; movementRevision: number; progressionRevision: number; resolutionId: string | null; frameRevision: number | null }>;
@@ -27,7 +30,7 @@ type History = Readonly<{ turnNumber: number; actor: Seat; cardId: string; effec
 type Receipt = { requestId: string; fingerprint: string };
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 
-// A synthetic-only session boundary. It is not a production match or a card-ruling engine.
+// Isolated development kernel. Reviewed mode also requires a server-loaded catalog brand.
 export class V3SyntheticMatchCoordinator {
   #board: MovementState; #progression: Progression; #cards = new Map<string, ApprovedV3Card>();
   #usage = new Map<string, number>();
@@ -38,11 +41,14 @@ export class V3SyntheticMatchCoordinator {
   #triggers: readonly ScheduledTrigger[] = [];
   #battleCounters: BattleCounters = []; #lifeDecision: LifeDecision | null = null;
   #damageSettling = false;
+  #reviewed: boolean;
   #revision = 0; #busy = false; #key: Uint8Array; #master: MasterSnapshot | null; #now: () => number;
-  constructor(options: Readonly<{ mode: "syntheticNoAbilities"; movement: MovementState; progression: Progression; cards: readonly ApprovedV3Card[];
-    signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number }>) {
-    ensureMove(process.env.NODE_ENV !== "production" && options.mode === "syntheticNoAbilities", "v3-match-disabled");
-    dataObject(options, ["mode", "movement", "progression", "cards", "signingKey", "master", ...(Object.hasOwn(options, "now") ? ["now"] : [])]);
+  constructor(options: Readonly<{ mode: "syntheticNoAbilities" | "reviewedLimited"; movement: MovementState; progression: Progression; cards: readonly ApprovedV3Card[];
+    signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; reviewed?: ReviewedV3Catalog }>) {
+    ensureMove(process.env.NODE_ENV !== "production" && (options.mode === "syntheticNoAbilities" || options.mode === "reviewedLimited"), "v3-match-disabled");
+    dataObject(options, ["mode", "movement", "progression", "cards", "signingKey", "master"], ["now", "reviewed"]);
+    this.#reviewed = options.mode === "reviewedLimited";
+    ensureMove(this.#reviewed ? isReviewedV3Catalog(options.reviewed) : options.reviewed === undefined, "v3-match-reviewed-catalog-required");
     ensureMove(!Object.hasOwn(options, "now") || typeof options.now === "function", "v3-match-invalid-clock");
     validateMovementState(options.movement); dataArray(options.cards, 128);
     ensureMove(options.signingKey instanceof Uint8Array && options.signingKey.length >= 32 && options.signingKey.length <= 128, "v3-signing-key-required");
@@ -51,7 +57,9 @@ export class V3SyntheticMatchCoordinator {
     ensureMove(Object.values(options.movement.cards).every(card => !card.modifierIds.length && !card.grantIds.length) && options.movement.reveals.length === 0 && options.movement.players.every(zones => zones.resolving.length === 0), "v3-match-unmodeled-board");
     for (const card of options.cards) {
       ensureMove(isApprovedV3Card(card) && !this.#cards.has(card.definition.cardId), "v3-match-approved-card-required"); this.#cards.set(card.definition.cardId, card);
+      if (this.#reviewed) ensureMove(options.reviewed!.catalog.get(card.definition.cardId) === card, "v3-match-reviewed-card-mismatch");
     }
+    if (this.#reviewed) ensureMove(Object.values(options.movement.cards).every(card => card.kind === "don" || this.#cards.get(card.cardId)?.definition.cardType === card.kind), "v3-match-unreviewed-board-card");
     this.#board = freezeMovement(structuredClone(options.movement)); this.#progression = freezeMovement(structuredClone(options.progression));
     this.#key = Uint8Array.from(options.signingKey); this.#master = options.master; this.#now = options.now ?? Date.now;
   }
@@ -100,6 +108,7 @@ export class V3SyntheticMatchCoordinator {
       this.#settled(); ensureMove(this.#history.length < 256 && checkTiming(this.#progression, actor, "mainEffect").allowed, "v3-match-cannot-activate");
       const object = getCard(this.#board, source), card = this.#cards.get(object.cardId), effect = card?.definition.effects.find(effect => effect.id === effectId);
       ensureMove(card && effect && effect.kind === "activated" && effect.timing.type === "MAIN", "v3-match-unregistered-effect"); const limit = effect.usageLimit?.count ?? null;
+      if (this.#reviewed) ensureMove(this.#canStartReviewedEffect(actor, source, card, effectId), "v3-reviewed-activation-unavailable");
       const usageKey = JSON.stringify([this.#board.turnNumber, actor, source.instanceId, source.generation, effectId]);
       ensureMove(limit === null || (this.#usage.get(usageKey) ?? 0) < limit, "v3-match-usage-exhausted");
       const resolutionId = randomUUID(), coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
@@ -359,7 +368,7 @@ export class V3SyntheticMatchCoordinator {
     try { powers = battlePower(this.#board, this.#progression, this.#cards, this.#statEffects, this.#battleCounters); } catch { /* Unknown facts must not be displayed as zero. */ }
     const revealIds = [...new Set(this.#board.reveals.filter(grant => grant.viewers.includes(0) && grant.viewers.includes(1)).map(grant => grant.card.instanceId))];
     const heldId = this.#board.players.flatMap(zones => zones.resolving)[0], held = heldId ? this.#board.cards[heldId]! : null;
-    return freezeMovement({ mode: "v3-synthetic-session" as const, context: this.context(), movement: active?.movement ?? projectV3Movement(this.#board, viewer),
+    return freezeMovement({ mode: this.#reviewed ? "v3-reviewed-session" as const : "v3-synthetic-session" as const, context: this.context(), movement: active?.movement ?? projectV3Movement(this.#board, viewer),
       frame: active?.frame ?? null, turnNumber: this.#progression.turnNumber, activePlayer: this.#progression.activePlayer, phase: this.#progression.phase,
       gate: waitingTriggers ? "trigger" as const : this.#progression.gate.kind, resolutionActor: this.#active?.actor ?? null, history: [...this.#history],
       triggerPolicy: SYNTHETIC_TRIGGER_POLICY, pendingTriggerCount: this.#triggers.length, triggerChooser: chooser,
@@ -388,8 +397,15 @@ export class V3SyntheticMatchCoordinator {
     return card.definition.effects.filter(effect => effect.kind === "activated" && effect.timing.type === "MAIN").map(effect => {
       const limit = effect.usageLimit?.count ?? null, usageKey = JSON.stringify([this.#board.turnNumber, actor, source.instanceId, source.generation, effect.id]);
       const used = this.#usage.get(usageKey) ?? 0;
-      return { effectId: effect.id, used, limit, enabled: ready && effect.sourceZones.some(zone => zone === at.zone) && (limit === null || used < limit) };
+      return { effectId: effect.id, used, limit, enabled: ready && effect.sourceZones.some(zone => zone === at.zone) && (limit === null || used < limit) && (!this.#reviewed || this.#canStartReviewedEffect(actor, source, card, effect.id)) };
     });
+  }
+  #canStartReviewedEffect(actor: Seat, source: Readonly<CardObjectRef>, card: ApprovedV3Card, effectId: string): boolean {
+    const effect = card.definition.effects.find(effect => effect.id === effectId)!;
+    const facts = pinMasterFacts(this.#board, { master: this.#master, numericPolicy: "certifiedUnmodified" });
+    const environment = fixtureEnvironment(() => this.#board, { matchId: this.#board.matchId, resolutionId: "activation-preflight", actor, source, effectId },
+      card, facts, this.#now, [...this.#cards.values()], () => this.#statEffects, this.#progression.activePlayer);
+    return environment.evaluate(effect.activationConditions, {}) === true && environment.canPayCosts?.(effect.costs, null, null) === true;
   }
   snapshotForCoordinator() {
     return freezeMovement({ context: this.context(), movement: this.#board, progression: this.#progression, active: this.#active?.coordinator.snapshotForCoordinator() ?? null,

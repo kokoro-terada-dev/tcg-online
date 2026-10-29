@@ -14,7 +14,7 @@ const root = path.join(__dirname, '../data/effects-v3-reviewed');
 const recipe = { name: 'Unit fixture; not a legal deck', leaderCardId: 'ST02-001', mainDeck: Array(50).fill('ST02-002'), donDeck: Array(10).fill('DON'), cardTypes: { 'ST02-002': 'character' }, leaderLifeCount: 5 };
 
 test('reviewed ST02 definitions load with primary-source hashes and preserve absent counters', () => {
-  const loaded = loadReviewedV3Catalog(); assert.equal(loaded.cards.length, 6);
+  const loaded = loadReviewedV3Catalog(); assert.equal(loaded.cards.length, 14);
   const leader = loaded.catalog.get('ST02-001'), blocker = loaded.catalog.get('ST02-004');
   assert.equal(leader.definition.baseStats.life, 5); assert.equal(leader.definition.baseStats.power, 5000);
   assert.deepEqual(leader.definition.traits, ['超新星', 'キッド海賊団']);

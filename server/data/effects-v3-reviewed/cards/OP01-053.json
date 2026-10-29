@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "3.0.0-subset.16",
+  "cardId": "OP01-053",
+  "cardVersion": "reviewed.20261029.1",
+  "name": "ワイヤー",
+  "cardType": "character",
+  "baseStats": {
+    "cost": 2,
+    "power": 4000,
+    "counter": 1000,
+    "life": null
+  },
+  "colors": [
+    "緑"
+  ],
+  "traits": [
+    "キッド海賊団"
+  ],
+  "attributes": [
+    "斬"
+  ],
+  "keywords": [],
+  "reviewStatus": "approved",
+  "source": {
+    "text": "",
+    "triggerText": "",
+    "displayIds": [
+      "OP01-053"
+    ],
+    "datasetSha256": "616a430cb297378c2b96845d9d793046aace4ec32432da24ffe6e7873b48a3be"
+  },
+  "effects": []
+}

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "3.0.0-subset.16",
+  "cardId": "OP01-045",
+  "cardVersion": "reviewed.20261029.1",
+  "name": "ジャンバール",
+  "cardType": "character",
+  "baseStats": {
+    "cost": 4,
+    "power": 6000,
+    "counter": 1000,
+    "life": null
+  },
+  "colors": [
+    "緑"
+  ],
+  "traits": [
+    "ハートの海賊団"
+  ],
+  "attributes": [
+    "打"
+  ],
+  "keywords": [],
+  "reviewStatus": "approved",
+  "source": {
+    "text": "",
+    "triggerText": "",
+    "displayIds": [
+      "OP01-045"
+    ],
+    "datasetSha256": "616a430cb297378c2b96845d9d793046aace4ec32432da24ffe6e7873b48a3be"
+  },
+  "effects": []
+}
