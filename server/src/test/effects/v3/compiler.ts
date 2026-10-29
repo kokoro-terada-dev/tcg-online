@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
 import type { CardDefinition, CardSetRef, Category, CompiledCard, DonZone, Node, NodeMeta, Value } from "./dsl";
 
-export const COMPILER_VERSION = "v3-subset-compiler.16.2";
+export const COMPILER_VERSION = "v3-subset-compiler.16.3";
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 function inspectData(input: unknown): void {
@@ -51,6 +51,7 @@ export interface CompileContext {
   value(input: unknown): Value;
   cards(input: unknown): CardSetRef;
   bind(input: unknown, maxCards: number): string;
+  bindSource(input: unknown): string;
   maxCards(input: CardSetRef): number;
   branch(input: unknown): Node<"action">[];
   candidate(input: unknown): Node<"predicate">;
@@ -96,7 +97,7 @@ export function builtinV3Registries(): V3Registries {
   const r: V3Registries = { predicate: new V3Registry(), action: new V3Registry(), cost: new V3Registry(), replacement: new V3Registry(), selector: new V3Registry(), duration: new V3Registry(), timing: new V3Registry(), keyword: new V3Registry() };
   for (const type of ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"] as const) r.keyword.register(type, "1", (n, c) => ({ type, ...c.fields(n, []) }));
   r.action.register("GRANT_KEYWORD", "1", (n, c) => ({ type: "GRANT_KEYWORD", ...c.fields(n, ["cards", "keyword", "duration"]), cards: c.cards(n.cards), keyword: c.read("keyword", n.keyword), duration: c.read("duration", n.duration) }));
-  r.action.register("BIND_SOURCE", "1", (n, c) => ({ type: "BIND_SOURCE", ...c.fields(n, ["bindAs"]), bindAs: c.bind(n.bindAs, 1) }));
+  r.action.register("BIND_SOURCE", "2", (n, c) => ({ type: "BIND_SOURCE", ...c.fields(n, ["bindAs"]), bindAs: c.bindSource(n.bindAs) }));
   r.duration.register("TURN_END", "1", (n, c) => {
     const meta = c.fields(n, ["player", "occurrence"]);
     ensureMove((n.player === "SELF" || n.player === "OPPONENT") && (n.occurrence === 1 || n.occurrence === 2), "unsupported-v3-turn-duration");
@@ -110,6 +111,7 @@ export function builtinV3Registries(): V3Registries {
   });
   r.timing.register("MAIN", "1", (n, c) => ({ type: "MAIN", ...c.fields(n, []) }));
   r.timing.register("COUNTER", "1", (n, c) => ({ type: "COUNTER", ...c.fields(n, []) }));
+  r.timing.register("TRIGGER", "1", (n, c) => ({ type: "TRIGGER", ...c.fields(n, []) }));
   r.timing.register("ON_PLAY", "1", (n, c) => ({ type: "ON_PLAY", ...c.fields(n, []) }));
   for (const type of ["ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_KO"] as const) r.timing.register(type, "1", (n, c) => ({ type, ...c.fields(n, []) }));
   for (const type of ["all", "any"] as const) r.predicate.register(type, "1", (n, c) => ({ type, ...c.fields(n, ["conditions"]), conditions: c.list("predicate", n.conditions) }));
@@ -235,6 +237,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
     value(input) {
       const parsed = value(input, bindings, candidateAllowed);
       ensureMove(currentTiming !== "ON_KO" || parsed === null || typeof parsed !== "object" || !parsed.ref.startsWith("SOURCE."), "v3-ko-source-facts-unresolved");
+      ensureMove(currentTiming !== "TRIGGER" || parsed === null || typeof parsed !== "object" || !parsed.ref.startsWith("SOURCE."), "v3-trigger-source-facts-unresolved");
       return parsed;
     },
     cards(input) {
@@ -246,6 +249,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
       ensureMove(typeof input === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(input) && !["constructor", "prototype"].includes(input) && !bindings.has(input), "v3-invalid-or-duplicate-binding");
       count(maxCards); bindings.set(input, maxCards); return input;
     },
+    bindSource(input) { ensureMove(currentTiming !== "TRIGGER", "v3-trigger-source-movement-unresolved"); return context.bind(input, 1); },
     maxCards(input) { const max = bindings.get(input.ref.slice("bindings.".length)); ensureMove(max !== undefined, "v3-undefined-card-binding"); return max; },
     branch(input) {
       const parent = bindings; bindings = new Map(parent);
@@ -260,7 +264,8 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
       if (Object.hasOwn(node, "id")) { meta.id = label(node.id); ensureMove(!ids.has(meta.id), "duplicate-v3-node-id"); ids.add(meta.id); }
       if (Object.hasOwn(node, "sourceSpan")) {
         dataObject(node.sourceSpan, ["start", "end"]); const { start, end } = node.sourceSpan;
-        ensureMove(typeof start === "number" && typeof end === "number" && Number.isSafeInteger(start) && Number.isSafeInteger(end) && start >= 0 && end > start && end <= source.text.length, "invalid-v3-source-span");
+        const text = currentTiming === "TRIGGER" || node.type === "TRIGGER" ? source.triggerText : source.text;
+        ensureMove(typeof start === "number" && typeof end === "number" && Number.isSafeInteger(start) && Number.isSafeInteger(end) && start >= 0 && end > start && end <= text.length, "invalid-v3-source-span");
         meta.sourceSpan = { start, end };
       }
       return meta;
@@ -269,9 +274,9 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   const keywords = context.list("keyword", input.keywords);
   ensureMove(keywords.length <= 4 && new Set(keywords.map(keyword => keyword.type)).size === keywords.length && keywords.every(keyword => input.cardType === "character" || input.cardType === "leader" && keyword.type !== "RUSH" && keyword.type !== "RUSH_CHARACTER"), "v3-invalid-printed-keywords");
   dataArray(input.effects, 32);
-  ensureMove(input.effects.length > 0 || keywords.length > 0 ? source.text.length > 0 : source.text.trim() === "" && source.triggerText.trim() === "", "v3-unmapped-card-text");
+  ensureMove(input.effects.length > 0 || keywords.length > 0 ? source.text.length > 0 || source.triggerText.length > 0 : source.text.trim() === "" && source.triggerText.trim() === "", "v3-unmapped-card-text");
   const effects: CardDefinition["effects"] = input.effects.map(effect => {
-    bindings = new Map(); candidateAllowed = false;
+    bindings = new Map(); candidateAllowed = false; currentTiming = null;
     dataObject(effect, ["id", "kind", "timing", "sourceZones", "optional", "usageLimit", "activationConditions", "resolutionConditions", "costs", "actions"]);
     const id = label(effect.id); ensureMove(!ids.has(id), "duplicate-v3-effect-id"); ids.add(id);
     ensureMove((effect.kind === "activated" || effect.kind === "triggered") && typeof effect.optional === "boolean", "unsupported-v3-effect-kind-or-optionality");
@@ -281,12 +286,14 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
       ensureMove(effect.usageLimit.type === "PER_TURN" && effect.usageLimit.scope === "SOURCE_OBJECT", "unsupported-v3-usage-limit");
       usageLimit = { type: "PER_TURN", scope: "SOURCE_OBJECT", count: count(effect.usageLimit.count) };
     }
-    dataArray(effect.sourceZones, 3); ensureMove(effect.sourceZones.length === 1 && effect.sourceZones[0] === (input.cardType === "event" ? "hand" : input.cardType), "unsupported-v3-source-zones");
     const timing = context.read("timing", effect.timing); currentTiming = timing.type;
+    ensureMove((timing.type === "TRIGGER" ? source.triggerText : source.text).trim().length > 0, "v3-missing-effect-source-text");
+    dataArray(effect.sourceZones, 3); ensureMove(effect.sourceZones.length === 1 && effect.sourceZones[0] === (timing.type === "TRIGGER" ? "life" : input.cardType === "event" ? "hand" : input.cardType), "unsupported-v3-source-zones");
     const activationConditions = context.read("predicate", effect.activationConditions),
       resolutionConditions = context.read("predicate", effect.resolutionConditions), costs = context.list("cost", effect.costs);
-    ensureMove(input.cardType === "event" ? effect.kind === "activated" && timing.type === "COUNTER" : effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_PLAY" && input.cardType !== "leader" || timing.type === "ON_ATTACK" && input.cardType !== "stage" || timing.type === "ON_OPPONENT_ATTACK" || timing.type === "ON_KO" && input.cardType === "character", "v3-kind-timing-mismatch");
+    ensureMove(timing.type === "TRIGGER" ? input.cardType !== "leader" && effect.kind === "triggered" : input.cardType === "event" ? effect.kind === "activated" && timing.type === "COUNTER" : effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_PLAY" && input.cardType !== "leader" || timing.type === "ON_ATTACK" && input.cardType !== "stage" || timing.type === "ON_OPPONENT_ATTACK" || timing.type === "ON_KO" && input.cardType === "character", "v3-kind-timing-mismatch");
     if (input.cardType === "event") ensureMove(!effect.optional && usageLimit === null && costs.length === 0 && activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-event-additional-activation-unresolved");
+    if (timing.type === "TRIGGER") ensureMove(!effect.optional && usageLimit === null && costs.length === 0 && activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-trigger-additional-activation-unresolved");
     ensureMove(timing.type !== "ON_KO" || costs.length === 0, "v3-ko-activation-cost-unresolved");
     ensureMove(effect.kind !== "triggered" || activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-trigger-event-conditions-unresolved");
     ensureMove(costs.reduce((sum, cost) => sum + (cost.type === "DISCARD_HAND" ? cost.count : 0), 0) <= 50, "v3-discard-cost-limit");
@@ -296,6 +303,8 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
     return { id, kind: effect.kind, optional: effect.optional, usageLimit, sourceZones: effect.sourceZones as CardDefinition["effects"][number]["sourceZones"], timing,
       activationConditions, resolutionConditions, costs, actions };
   });
+  const triggers = effects.filter(effect => effect.timing.type === "TRIGGER");
+  ensureMove(triggers.length <= 1 && (triggers.length === 1) === (source.triggerText.trim().length > 0), "v3-trigger-text-definition-mismatch");
   const definition: CardDefinition = { schemaVersion: "3.0.0-subset.16", cardId, cardVersion, name: input.name, cardType: input.cardType,
     baseStats: input.baseStats as CardDefinition["baseStats"], colors, traits, attributes, keywords, reviewStatus: input.reviewStatus as CardDefinition["reviewStatus"], source, effects };
   inspectData(definition);

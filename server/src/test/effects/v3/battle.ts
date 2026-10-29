@@ -15,8 +15,8 @@ type Seat = 0 | 1;
 export type BattleCounters = readonly Readonly<{ target: Ref; amount: number }>[];
 export type LifeDecision = Readonly<{ battleId: string; resolutionId: string; selectionId: string; token: string; defender: Seat; card: Ref; expiresAt: number }>;
 export const V3_BASE_BATTLE_RULES = {
-  version: "v3-base-battle.5", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
-  reviewedAt: "2026-10-29", clauses: ["6-5-5", "6-5-6", "7-1", "7-1-1-3", "7-1-1-4", "7-1-3", "7-1-4", "7-1-5", "8-4-5", "8-6-1", "10-1-1", "10-1-4", "10-1-6", "10-1-7", "10-2-1", "10-2-5", "10-2-16", "10-2-17"],
+  version: "v3-base-battle.6", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
+  reviewedAt: "2026-10-29", clauses: ["6-5-5", "6-5-6", "7-1", "7-1-1-3", "7-1-1-4", "7-1-3", "7-1-4", "7-1-5", "8-4-5", "8-6-1", "10-1-1", "10-1-4", "10-1-5", "10-1-6", "10-1-7", "10-2-1", "10-2-5", "10-2-16", "10-2-17"],
 } as const;
 function field(board: MovementState, ref: Ref, player: Seat) {
   const card = getCard(board, ref), at = location(board, card.instanceId);
@@ -151,7 +151,7 @@ export function damage(board: MovementState, progression: Progression, actor: Se
     next = applySystemEvent(next, next.revision, { kind: "finishGame", winner: battle.attacker, reason: "leader-damage-at-zero-life" });
   } else if (hits && target.kind === "leader") {
     const id = board.players[actor].life[0]!, card = board.cards[id]!, known = definitions.get(card.cardId)?.definition;
-    ensureMove(known && known.cardType === card.kind && known.source.triggerText.trim() === "", "v3-life-trigger-definition-unresolved");
+    ensureMove(known && known.cardType === card.kind && (known.source.triggerText.trim() === "" || known.effects.some(effect => effect.timing.type === "TRIGGER")), "v3-life-trigger-definition-unresolved");
     ensureMove(Number.isSafeInteger(now) && now >= 0 && Number.isSafeInteger(now + 120000), "v3-life-clock-invalid");
     pendingLife = { battleId: battle.battleId, resolutionId: randomUUID(), selectionId: randomUUID(), token: randomUUID(), defender: actor,
       card: { instanceId: id, generation: card.generation }, expiresAt: now + 120000 };
@@ -173,16 +173,19 @@ export function damage(board: MovementState, progression: Progression, actor: Se
   }
   return { movement, progression: next, events, pendingLife, deferredKO };
 }
-export function takeLife(board: MovementState, progression: Progression, actor: Seat, pending: LifeDecision, selectionId: string, token: string, transactionId: string, now: number) {
+export function acceptLifeDecision(board: MovementState, progression: Progression, actor: Seat, pending: LifeDecision, selectionId: string, token: string, now: number): Progression {
   const gate = progression.gate, battle = progression.battle;
   ensureMove(actor === pending.defender && pending.token === token && pending.selectionId === selectionId && Number.isSafeInteger(now) && now < pending.expiresAt &&
     battle?.battleId === pending.battleId && battle.step === "damage" && gate.kind === "choice" && gate.chooser === actor && gate.selectionId === selectionId && gate.resolutionId === pending.resolutionId &&
     board.players[actor].life[0] === pending.card.instanceId, "v3-life-choice-unavailable");
   getCard(board, pending.card); field(board, battle.source, battle.attacker); field(board, battle.target, actor);
   let next = applySystemEvent(progression, progression.revision, { kind: "acceptChoice", resolutionId: pending.resolutionId, selectionId, chooser: actor });
-  next = applySystemEvent(next, next.revision, { kind: "finishResolution", resolutionId: pending.resolutionId }); next = finishDamageStep(next);
+  return applySystemEvent(next, next.revision, { kind: "finishResolution", resolutionId: pending.resolutionId });
+}
+export function takeLife(board: MovementState, progression: Progression, actor: Seat, pending: LifeDecision, selectionId: string, token: string, transactionId: string, now: number) {
+  const next = finishDamageStep(acceptLifeDecision(board, progression, actor, pending, selectionId, token, now));
   const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
-    actor, effectController: null, source: battle.source, mode: "rule", resolutionId: pending.resolutionId,
+    actor, effectController: null, source: progression.battle!.source, mode: "rule", resolutionId: pending.resolutionId,
     operations: [{ kind: "move", card: pending.card, from: { player: actor, zone: "life" }, to: { player: actor, zone: "hand", position: "append", faceUp: true, rotated: false }, cause: "DAMAGE" },
       { kind: "closeReveals", scopeId: pending.resolutionId }] }, { status: "certifiedNone" });
   return { movement: result.state, progression: next, events: result.events };

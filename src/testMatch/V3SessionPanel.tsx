@@ -5,7 +5,7 @@ import { v3BoardView } from "./v3FixtureClient";
 import V3ChoicePanel from "./V3ChoicePanel";
 import TestBoard from "./TestBoard";
 import { getLocalCardImage } from "../utils/localCardImages";
-const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", GRANT_KEYWORD: "能力を付与" };
+const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", GRANT_KEYWORD: "能力を付与", FINISH_LIFE_TRIGGER: "トリガー処理を終了" };
 export default function V3SessionPanel({ view, busy, needsSync, error, isHost, onAction, onSync, onEnd }: {
   view: V3SessionView; busy: boolean; needsSync: boolean; error: string; isHost: boolean;
   onAction: (kind: V3SessionCommand["kind"], details?: SessionDetails) => void; onSync: () => void; onEnd: () => void;
@@ -38,7 +38,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="v3連続操作検証">
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
       <div hidden={collapsed}><strong>v3検証・連続操作</strong><p>{view.turnNumber}ターン目・{ownTurn ? "自分" : "相手"}のターン</p>
-        {battle && <div className="v3-battle-status"><p role="status">{view.damageEffectsPending ? "KO時の効果処理" : battle.step === "attack" ? "アタック時の効果処理" : battle.step === "block" ? "ブロック" : battle.step === "counter" ? "カウンター" : "ダメージ確認"}・{battle.step === "attack" || view.damageEffectsPending ? attackEffectActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち" : defending ? "自分が操作" : "相手の操作待ち"}</p>
+        {battle && <div className="v3-battle-status"><p role="status">{view.damageEffectsPending ? "ダメージ時の効果処理" : battle.step === "attack" ? "アタック時の効果処理" : battle.step === "block" ? "ブロック" : battle.step === "counter" ? "カウンター" : "ダメージ確認"}・{battle.step === "attack" || view.damageEffectsPending ? attackEffectActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち" : defending ? "自分が操作" : "相手の操作待ち"}</p>
           {!view.damageEffectsPending && <p>攻撃 {battle.powers?.attack ?? "?"} → 防御 {battle.powers?.defense ?? "?"}</p>}
           {defending && !view.lifePending && !view.damageEffectsPending && view.gate === "idle" && <div className="test-effect-actions">
             {battle.step === "block" && view.blockerChoices.map(choice => <button key={choice.card.instanceId} disabled={disabled} onClick={() => onAction("block", { card: choice.card })}>ブロック・{view.imageAliases[choice.cardId] ?? choice.cardId}</button>)}
@@ -64,7 +64,10 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
           </>}
           {view.lifePending && <p role="status">{view.lifeChoice ? "ライフを確認" : "相手がライフを確認中"}</p>}
           {view.lifeChoice && <div className="v3-life-choice"><button onClick={() => setRevealPreview(view.imageAliases[view.lifeChoice!.cardId] ?? view.lifeChoice!.cardId)}>カード詳細</button>
-            <button disabled={disabled} onClick={() => onAction("life", { token: view.lifeChoice!.token })}>手札へ</button></div>}
+            <button disabled={disabled} onClick={() => onAction("life", { token: view.lifeChoice!.token })}>手札へ</button>
+            {view.lifeChoice.canTrigger && <button disabled={disabled} onClick={() => onAction("lifeTrigger", { token: view.lifeChoice!.token })}>トリガー発動</button>}</div>}
+          {view.lifeTrigger && <div className="v3-public-reveals"><button onClick={() => setRevealPreview(view.imageAliases[view.lifeTrigger!.cardId] ?? view.lifeTrigger!.cardId)}>
+            トリガー・カード詳細</button></div>}
         </div>}
         {view.gate === "trigger" && <div><p role="status">{view.triggerChooser === view.localPlayerIndex ? "解決する効果を選択" : "相手の効果を待っています"}（{view.pendingTriggerCount}件）</p>
           <div className="test-effect-actions">{view.triggerChoices.map(choice => <button key={choice.token} disabled={disabled} onClick={() => onAction("trigger", { token: choice.token })}>

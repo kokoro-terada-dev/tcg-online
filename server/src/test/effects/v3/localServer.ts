@@ -161,7 +161,7 @@ export async function startLocalV3Server(port = 0) {
     handle("v3-session:command", input => {
       const { room, actor, session } = continuousActive(); ensureMove(input && typeof input === "object", "v3-session-command-object");
       const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value;
-      const fields: Record<string, string[]> = { activate: ["effectId"], trigger: ["token"], play: ["card"], answer: ["selectionId", "tokens"], life: ["selectionId", "token"],
+      const fields: Record<string, string[]> = { activate: ["effectId"], trigger: ["token"], play: ["card"], answer: ["selectionId", "tokens"], life: ["selectionId", "token"], lifeTrigger: ["selectionId", "token"],
         attack: ["source", "target"], counter: ["card", "target"], counterEvent: ["card", "effectId"], attachDon: ["target", "count"], block: ["card"], advance: [], work: [], endTurn: [], passBlock: [], endCounter: [], damage: [] };
       ensureMove(typeof kind === "string" && Object.hasOwn(fields, kind), "v3-session-command-kind");
       dataObject(input, ["kind", "requestId", "matchId", "context", ...fields[kind]!, ...(kind === "play" && Object.hasOwn(input, "slotIndex") ? ["slotIndex"] : [])]);
@@ -175,6 +175,7 @@ export async function startLocalV3Server(port = 0) {
       else if (kind === "passBlock" || kind === "endCounter") c.battleDecision(actor, requestId, expected, kind);
       else if (kind === "damage") c.resolveDamage(actor, requestId, expected);
       else if (kind === "life") c.takeDamageLife(actor, requestId, expected, label(input.selectionId), label(input.token));
+      else if (kind === "lifeTrigger") c.useLifeTrigger(actor, requestId, expected, label(input.selectionId), label(input.token));
       else if (kind === "attachDon") c.attachDon(actor, requestId, expected, input.target as { instanceId: string; generation: number }, input.count as number);
       else if (kind === "play") { ensureMove(input.slotIndex === undefined || Number.isSafeInteger(input.slotIndex), "v3-session-play-slot"); c.playCard(actor, requestId, expected, input.card as { instanceId: string; generation: number }, input.slotIndex as number | undefined); }
       else if (kind === "answer") { const selectionId = label(input.selectionId); dataArray(input.tokens, 50); input.tokens.forEach(token => label(token)); c.answer(actor, requestId, expected, selectionId, input.tokens as string[]); }

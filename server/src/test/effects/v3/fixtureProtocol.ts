@@ -12,7 +12,7 @@ export type V3FixtureView = Readonly<{
   outcome: Readonly<{ winner: 0 | 1 | null; reason: string }> | null;
   movement: MovementView; progression: Readonly<{ revision: number; gate: "idle" | "resolving" | "choice"; chooser: 0 | 1 | null }>;
   matchId: string; roomId: string; localPlayerIndex: 0 | 1; actor: 0 | 1; scenario: V3Scenario;
-  imageAliases: Readonly<Record<string, string>>; workType: "PAY_COSTS" | "DRAW" | "MOVE_CARD" | "KO" | "REST" | "SET_ACTIVE" | "LOOK_TOP" | "REVEAL" | "RETURN_TO_DECK" | "CLOSE_REVEALS" | "MODIFY_STAT" | "GRANT_KEYWORD" | null;
+  imageAliases: Readonly<Record<string, string>>; workType: "PAY_COSTS" | "DRAW" | "MOVE_CARD" | "KO" | "REST" | "SET_ACTIVE" | "LOOK_TOP" | "REVEAL" | "RETURN_TO_DECK" | "CLOSE_REVEALS" | "MODIFY_STAT" | "GRANT_KEYWORD" | "FINISH_LIFE_TRIGGER" | null;
 }>;
 export type V3FixtureCommand = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number; requestId: string; matchId: string; resolutionId: string }> & (
   { kind: "advance" | "work" } | { kind: "answer"; selectionId: string; tokens: readonly string[] });

@@ -29,6 +29,19 @@ function setup(mutate = () => {}, actor = 0) {
   const machine = new V3ResolutionMachine(card, identity, key, env);
   return { machine, card, identity, env, row, setWorld: value => world = value, setNow: value => now = value, setRows: value => rows = value, setUnknown: value => unknown = value };
 }
+
+test('a life trigger still finalizes its source when its resolution condition is false', () => {
+  const s = setup(d => {
+    d.source.text = ''; d.source.triggerText = 'Synthetic conditional trigger';
+    Object.assign(d.effects[0], { kind: 'triggered', timing: { type: 'TRIGGER' }, sourceZones: ['life'], optional: false, usageLimit: null,
+      activationConditions: { type: 'all', conditions: [] }, resolutionConditions: { type: 'any', conditions: [] }, costs: [], actions: [{ type: 'DRAW', player: 'SELF', count: 1 }] });
+  });
+  s.env.evaluate = predicate => predicate.type === 'all'; s.machine.advance('start', 0);
+  const work = s.machine.workForCoordinator(); assert.equal(work.type, 'FINISH_LIFE_TRIGGER');
+  const restored = V3ResolutionMachine.restore(s.card, s.identity, key, s.env, s.machine.exportForStorage(), 1);
+  s.setWorld(1); restored.settleWork('cleanup', 1, work.workId, 'applied', 1); restored.advance('done', 2);
+  assert.equal(restored.viewFor(0).status, 'completed');
+});
 test('selection frames survive storage and resume with unchanged tokens for both controlling seats', () => {
   for (const actor of [0, 1]) {
     const s = setup(undefined, actor), m = s.machine; m.advance('advance', 0); const view = m.viewFor(actor);

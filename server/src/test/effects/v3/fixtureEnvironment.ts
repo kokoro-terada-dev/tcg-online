@@ -24,6 +24,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     const ref = parts[0] === "SOURCE" ? identity.source : candidate; if (!ref) return UNKNOWN;
     try {
       const card = getCard(state, ref), field = parts[1];
+      if (location(state, card.instanceId).zone === "resolving") return UNKNOWN;
       if (field === "rotated") return card.rotated;
       if (field === "cardType") return card.kind === "unknown" ? UNKNOWN : card.kind;
       if (field !== "cost" && field !== "power") return UNKNOWN;

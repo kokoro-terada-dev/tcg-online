@@ -61,6 +61,7 @@ export interface TimingMap {
   ON_ATTACK: NodeMeta & { type: "ON_ATTACK" }; ON_OPPONENT_ATTACK: NodeMeta & { type: "ON_OPPONENT_ATTACK" };
   ON_KO: NodeMeta & { type: "ON_KO" };
   COUNTER: NodeMeta & { type: "COUNTER" };
+  TRIGGER: NodeMeta & { type: "TRIGGER" };
 }
 export interface KeywordMap {
   BLOCKER: NodeMeta & { type: "BLOCKER" };
@@ -75,7 +76,7 @@ export type Predicate = Node<"predicate">;
 export type Action = Node<"action">;
 export type Effect = {
   id: string; kind: "activated" | "triggered"; timing: Node<"timing">;
-  sourceZones: ("leader" | "character" | "stage" | "hand")[]; optional: boolean;
+  sourceZones: ("leader" | "character" | "stage" | "hand" | "life")[]; optional: boolean;
   usageLimit: { type: "PER_TURN"; scope: "SOURCE_OBJECT"; count: number } | null;
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };

@@ -37,8 +37,8 @@ export function v3SessionCommand(view: V3SessionView, kind: V3SessionCommand["ki
     if (!details.card || !details.target || !view.counterChoices.some(choice => choice.card.instanceId === details.card!.instanceId && choice.card.generation === details.card!.generation)) throw Error("Counter is unavailable");
     return { ...base, kind, card: { ...details.card }, target: { ...details.target } };
   }
-  if (kind === "life") {
-    if (!view.lifeChoice || view.lifeChoice.token !== details.token) throw Error("Life decision is unavailable");
+  if (kind === "life" || kind === "lifeTrigger") {
+    if (!view.lifeChoice || view.lifeChoice.token !== details.token || kind === "lifeTrigger" && !view.lifeChoice.canTrigger) throw Error("Life decision is unavailable");
     return { ...base, kind, selectionId: view.lifeChoice.selectionId, token: view.lifeChoice.token };
   }
   if (kind === "trigger") {

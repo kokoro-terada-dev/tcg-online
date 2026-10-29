@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { MovementStore, visibleTo } from "../../movement/engine";
-import { projectMovementState } from "../../movement/projection";
+import { projectV3Movement } from "./projection";
 import { dataArray, dataObject, ensureMove, freezeMovement, getCard, location, MovementError, reference, validateMovementState } from "../../movement/state";
 import type { MovementEvent, MovementOperation, MovementState, TransactionResult } from "../../movement/types";
 import type { Progression } from "../../progression/types";
@@ -19,6 +19,7 @@ import type { TriggerCause } from "./triggerScheduler";
 import { deckOutOutcome } from "./ruleOutcomes";
 import type { CounterEventCause } from "./counterEvents";
 import type { BattleCounters } from "./battle";
+import type { LifeTriggerCause } from "./lifeTriggers";
 
 export type FixtureContext = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number }>;
 type Receipt = { requestId: string; fingerprint: string };
@@ -35,8 +36,9 @@ export class V3FixtureCoordinator {
   #receipts: Receipt[] = []; #busy = false;
   #events: readonly MovementEvent[] = [];
   #battleCounters: BattleCounters;
+  #lifeTrigger: boolean;
   #counterPower = (ref: Readonly<{ instanceId: string; generation: number }>) => this.#battleCounters.filter(entry => entry.target.instanceId === ref.instanceId && entry.target.generation === ref.generation).reduce((sum, entry) => sum + entry.amount, 0);
-  constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; definitions?: readonly ApprovedV3Card[]; statEffects?: StatEffects; keywordGrants?: KeywordGrants; triggerCause?: TriggerCause; counterEventCause?: CounterEventCause; battleCounters?: BattleCounters; checkEvents?: (events: readonly MovementEvent[]) => void }>) {
+  constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; definitions?: readonly ApprovedV3Card[]; statEffects?: StatEffects; keywordGrants?: KeywordGrants; triggerCause?: TriggerCause; counterEventCause?: CounterEventCause; lifeTriggerCause?: LifeTriggerCause; battleCounters?: BattleCounters; checkEvents?: (events: readonly MovementEvent[]) => void }>) {
     ensureMove(process.env.NODE_ENV !== "production" && options.mode === "syntheticNoAbilities", "v3-fixture-disabled");
     ensureMove(isApprovedV3Card(options.card), "v3-approved-server-plan-required");
     const definitions = options.definitions ?? [options.card]; dataArray(definitions, 128);
@@ -57,14 +59,24 @@ export class V3FixtureCoordinator {
     const trigger = options.triggerCause, battle = progression.battle;
     ensureMove([...this.#statEffects, ...this.#keywordGrants].every(effect => effect.battleId === undefined || effect.battleId === battle?.battleId), "v3-stale-battle-duration");
     const eventUse = options.counterEventCause;
-    ensureMove(!trigger || !eventUse, "v3-mixed-source-authorization");
+    const lifeUse = options.lifeTriggerCause; this.#lifeTrigger = !!lifeUse;
+    ensureMove([trigger, eventUse, lifeUse].filter(Boolean).length <= 1, "v3-mixed-source-authorization");
     const triggerTiming = trigger && progression.gate.kind === "idle" && progression.phase === "main" && progression.phaseSettled && !progression.outcome && (!battle || battle.step === "attack" || battle.step === "damage" || battle.step === "counter");
-    ensureMove(identity.matchId === movement.matchId && movement.turnNumber === progression.turnNumber && (triggerTiming || eventUse && checkTiming(progression, identity.actor, "counterEffect").allowed || checkTiming(progression, identity.actor, "mainEffect").allowed), "v3-fixture-timing");
+    const lifeTiming = lifeUse && battle?.step === "damage" && battle.defender === identity.actor && progression.gate.kind === "idle" && !progression.outcome;
+    ensureMove(identity.matchId === movement.matchId && movement.turnNumber === progression.turnNumber && (triggerTiming || lifeTiming || eventUse && checkTiming(progression, identity.actor, "counterEffect").allowed || checkTiming(progression, identity.actor, "mainEffect").allowed), "v3-fixture-timing");
     ensureMove(Object.values(movement.cards).every(card => !card.modifierIds.length && !card.grantIds.length) && movement.players.every(zones => zones.deck.length > 0) && movement.reveals.length === 0, "v3-fixture-unmodeled-board");
     const source = getCard(movement, identity.source), at = location(movement, source.instanceId), effect = card.definition.effects.find(effect => effect.id === identity.effectId);
-    const sourceZone = eventUse ? "hand" : trigger?.type === "ON_KO" ? trigger.event.from?.zone : at.zone;
+    const sourceZone = lifeUse ? "life" : eventUse ? "hand" : trigger?.type === "ON_KO" ? trigger.event.from?.zone : at.zone;
+    const held = movement.players.flatMap(zones => zones.resolving);
+    ensureMove(lifeUse ? held.length === 1 && held[0] === source.instanceId : held.length === 0, "v3-unmodeled-no-area-source");
     ensureMove(effect && source.cardId === card.definition.cardId && source.kind === card.definition.cardType && source.owner === identity.actor && source.controller === identity.actor && source.faceUp && at.player === identity.actor && effect.sourceZones.some(zone => zone === sourceZone), "v3-fixture-source");
-    if (eventUse) {
+    if (lifeUse) {
+      const event = lifeUse.event;
+      ensureMove(effect.kind === "triggered" && effect.timing.type === "TRIGGER" && battle?.battleId === lifeUse.battleId && at.zone === "resolving" &&
+        event.kind === "moved" && event.cause.kind === "DAMAGE" && event.from?.player === identity.actor && event.from.zone === "life" && event.to?.player === identity.actor && event.to.zone === "resolving" &&
+        event.before?.instanceId === source.instanceId && event.before.cardId === source.cardId && event.before.owner === identity.actor && event.before.controller === identity.actor &&
+        event.after?.instanceId === source.instanceId && event.after.cardId === source.cardId && event.after.generation === source.generation && event.before.generation + 1 === source.generation, "v3-life-trigger-authorization");
+    } else if (eventUse) {
       const event = eventUse.event;
       ensureMove(effect.kind === "activated" && effect.timing.type === "COUNTER" && source.kind === "event" && battle?.step === "counter" && battle.battleId === eventUse.battleId && battle.defender === identity.actor &&
         at.zone === "trash" && event.kind === "moved" && event.from?.player === identity.actor && event.from.zone === "hand" && event.to?.player === identity.actor && event.to.zone === "trash" &&
@@ -225,6 +237,10 @@ export class V3FixtureCoordinator {
       const selected = new Set(work.cards.map(ref => ref.instanceId)), rest = board.players[actor].deck.filter(id => !selected.has(id!));
       const ordered = work.cards.map(ref => ref.instanceId), all = work.position === "top" ? [...ordered, ...rest] : [...rest, ...ordered];
       operations.push({ kind: "reorder", location: { player: actor, zone: "deck" }, cards: all.map(id => ({ instanceId: id!, generation: board.cards[id!]!.generation })), conceal: false });
+    } else if (work.type === "FINISH_LIFE_TRIGGER") {
+      const source = getCard(board, this.#identity.source), at = location(board, source.instanceId);
+      ensureMove(this.#lifeTrigger && at.player === actor && at.zone === "resolving" && source.owner === actor && source.controller === actor, "v3-life-trigger-cleanup-source");
+      operations.push({ kind: "move", card: this.#identity.source, from: at, to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "OTHER" });
     } else if (work.type === "CLOSE_REVEALS") {
       operations.push({ kind: "closeReveals", scopeId: this.#identity.resolutionId });
     } else if (work.type === "DRAW") {
@@ -268,7 +284,7 @@ export class V3FixtureCoordinator {
       turnNumber: board.turnNumber, actor, effectController: actor, source: this.#identity.source, mode: work.type === "PAY_COSTS" ? "cost" : "effect", resolutionId: this.#identity.resolutionId, operations }, { status: "certifiedNone" });
   }
   viewFor(viewer: 0 | 1) {
-    return freezeMovement({ frame: this.#machine.viewFor(viewer), movement: projectMovementState(this.#board, viewer), outcome: this.#progression.outcome, progression: {
+    return freezeMovement({ frame: this.#machine.viewFor(viewer), movement: projectV3Movement(this.#board, viewer), outcome: this.#progression.outcome, progression: {
       revision: this.#progression.revision, gate: this.#progression.gate.kind, chooser: this.#progression.gate.kind === "choice" ? this.#progression.gate.chooser : null } });
   }
   snapshotForCoordinator() {

@@ -13,7 +13,8 @@ export type V3SessionView = Readonly<{
   blockerChoices: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string }>[];
   counterChoices: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string; amount: number }>[];
   counterEventChoices: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string; effectId: string; cost: number | null; enabled: boolean }>[];
-  lifePending: boolean; lifeChoice: Readonly<{ selectionId: string; token: string; expiresAt: number; cardId: string }> | null;
+  lifePending: boolean; lifeChoice: Readonly<{ selectionId: string; token: string; expiresAt: number; cardId: string; canTrigger: boolean }> | null;
+  lifeTrigger: Readonly<{ cardId: string; owner: 0 | 1 }> | null;
   resolutionActor: 0 | 1 | null; workType: V3FixtureView["workType"];
   effects: readonly Readonly<{ effectId: string; label: string; enabled: boolean; used: number; limit: number | null }>[];
   playableCards: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string; cost: number | null; zone: "character" | "stage"; slotIndex: number; enabled: boolean }>[];
@@ -26,7 +27,7 @@ export type V3SessionCommand = Readonly<{ matchId: string; requestId: string; co
   { kind: "attack"; source: Readonly<{ instanceId: string; generation: number }>; target: Readonly<{ instanceId: string; generation: number }> } |
   { kind: "counter"; card: Readonly<{ instanceId: string; generation: number }>; target: Readonly<{ instanceId: string; generation: number }> } |
   { kind: "counterEvent"; card: Readonly<{ instanceId: string; generation: number }>; effectId: string } |
-  { kind: "life"; selectionId: string; token: string } | { kind: "passBlock" | "endCounter" | "damage" } |
+  { kind: "life" | "lifeTrigger"; selectionId: string; token: string } | { kind: "passBlock" | "endCounter" | "damage" } |
   { kind: "attachDon"; target: Readonly<{ instanceId: string; generation: number }>; count: number } |
   { kind: "block"; card: Readonly<{ instanceId: string; generation: number }> } |
   { kind: "advance" | "work" | "endTurn" } | { kind: "answer"; selectionId: string; tokens: readonly string[] }

@@ -30,6 +30,38 @@ async function complete(socket, v) {
   throw Error('Session resolution did not complete');
 }
 
+for (const actor of [0, 1]) for (const useTrigger of [false, true]) test(`life trigger choice stays private until activation and releases its no-area source (seat=${actor}, trigger=${useTrigger})`, async t => {
+  const stages = { ...deck, mainDeck: Array(50).fill('STAGE'), cardTypes: { STAGE: 'stage' } }, attacker = 1 - actor;
+  const { clients } = await setup(t, attacker, [stages, stages]), own = clients[actor], peer = clients[attacker];
+  let v = (await request(peer, 'v3-session:sync')).sessionView; v = await send(peer, v, 'endTurn');
+  v = (await request(own, 'v3-session:sync')).sessionView; v = await send(own, v, 'endTurn');
+  v = (await request(peer, 'v3-session:sync')).sessionView;
+  v = await send(peer, v, 'attack', { source: v.attackChoices.sources[0].card, target: v.attackChoices.targets[0].card });
+  let defended = (await request(own, 'v3-session:sync')).sessionView; defended = await send(own, defended, 'passBlock');
+  defended = await send(own, defended, 'endCounter'); defended = await send(own, defended, 'damage');
+  const beforeHand = defended.movement.players[actor].hand.length, beforeLife = defended.movement.players[actor].life.length;
+  assert.equal(defended.lifeChoice.canTrigger, true);
+  let seen = (await request(peer, 'v3-session:sync')).sessionView; assert.equal(seen.lifeChoice, null);
+  assert.equal(seen.movement.players[actor].life[0].cardId, null); assert.equal(seen.movement.players[actor].life[0].ref, null);
+  const choice = defended.lifeChoice, input = command(defended, useTrigger ? 'lifeTrigger' : 'life', { selectionId: choice.selectionId, token: choice.token });
+  assert.equal((await request(peer, 'v3-session:command', input)).ok, false);
+  const picked = await request(own, 'v3-session:command', input); assert.equal(picked.ok, true); defended = picked.sessionView;
+  assert.equal((await request(own, 'v3-session:command', input)).sessionView.context.revision, defended.context.revision);
+  if (useTrigger) {
+    assert.deepEqual(defended.movement.players[actor].resolving, []); assert.equal(defended.lifeTrigger.cardId, choice.cardId);
+    assert.equal(defended.movement.players[actor].hand.length, beforeHand); assert.equal(defended.movement.players[actor].trash.length, 0);
+    seen = (await request(peer, 'v3-session:sync')).sessionView; assert.deepEqual(seen.lifeTrigger, defended.lifeTrigger);
+    assert.deepEqual(seen.movement.players[actor].resolving, []); assert.ok(seen.imageAliases[choice.cardId]);
+    defended = await complete(own, defended);
+    assert.equal(defended.movement.players[actor].trash[0].cardId, choice.cardId);
+  }
+  assert.equal(defended.lifeTrigger, null); assert.equal(defended.battle, null);
+  assert.equal(defended.movement.players[actor].life.length, beforeLife - 1); assert.equal(defended.movement.players[actor].hand.length, beforeHand + 1);
+  seen = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.equal(seen.movement.players[actor].hand.every(card => card.cardId === null && card.ref === null), true);
+  assert.equal(seen.battle, null); assert.deepEqual(seen.movement.players[actor].trash, defended.movement.players[actor].trash);
+});
+
 test('counter events synchronize payment and selection without exposing the other hand', async t => {
   const events = { ...deck, mainDeck: Array(50).fill('EVENT'), cardTypes: { EVENT: 'event' } };
   const { host, guest } = await setup(t, 0, [events, events]);
