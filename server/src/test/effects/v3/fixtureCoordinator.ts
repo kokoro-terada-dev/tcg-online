@@ -20,6 +20,7 @@ import { deckOutOutcome } from "./ruleOutcomes";
 import type { CounterEventCause } from "./counterEvents";
 import type { BattleCounters } from "./battle";
 import type { LifeTriggerCause } from "./lifeTriggers";
+import { readEventContext, withEventChooser, type EventOrigin, type EventContext } from "./readContext";
 
 export type FixtureContext = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number }>;
 type Receipt = { requestId: string; fingerprint: string };
@@ -37,6 +38,7 @@ export class V3FixtureCoordinator {
   #events: readonly MovementEvent[] = [];
   #battleCounters: BattleCounters;
   #lifeTrigger: boolean;
+  #readContext: EventContext;
   #counterPower = (ref: Readonly<{ instanceId: string; generation: number }>) => this.#battleCounters.filter(entry => entry.target.instanceId === ref.instanceId && entry.target.generation === ref.generation).reduce((sum, entry) => sum + entry.amount, 0);
   constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; definitions?: readonly ApprovedV3Card[]; statEffects?: StatEffects; keywordGrants?: KeywordGrants; triggerCause?: TriggerCause; counterEventCause?: CounterEventCause; lifeTriggerCause?: LifeTriggerCause; battleCounters?: BattleCounters; checkEvents?: (events: readonly MovementEvent[]) => void }>) {
     ensureMove(process.env.NODE_ENV !== "production" && options.mode === "syntheticNoAbilities", "v3-fixture-disabled");
@@ -101,10 +103,17 @@ export class V3FixtureCoordinator {
     this.#board = freezeMovement(structuredClone(movement)); this.#progression = freezeMovement(structuredClone(progression));
     this.#identity = freezeMovement(structuredClone(identity)); this.#card = card; this.#key = Uint8Array.from(options.signingKey); this.#now = options.now ?? Date.now;
     this.#facts = pinMasterFacts(movement, { master: options.master, numericPolicy: "certifiedUnmodified" });
-    this.#machine = new V3ResolutionMachine(card, this.#identity, this.#key, fixtureEnvironment(() => this.#board, this.#identity, card, this.#facts, this.#now, this.#definitions, () => this.#statEffects, this.#progression.activePlayer, this.#counterPower));
+    const sourceEvent = trigger && "event" in trigger ? trigger.event : eventUse?.event ?? lifeUse?.event;
+    const origin: EventOrigin | undefined = sourceEvent ? { type: "movement", event: sourceEvent } : trigger && "battleId" in trigger ?
+      { type: "attack", eventId: trigger.eventId, battleId: trigger.battleId, attacker: trigger.attacker } : undefined;
+    this.#readContext = readEventContext(this.#board, this.#identity, null, origin);
+    this.#machine = new V3ResolutionMachine(card, this.#identity, this.#key, fixtureEnvironment(() => this.#board, this.#identity, card, this.#facts, this.#now, this.#definitions, () => this.#statEffects, this.#progression.activePlayer, this.#counterPower, this.#readContext));
     this.#progression = applySystemEvent(this.#progression, this.#progression.revision, { kind: "beginResolution", resolutionId: identity.resolutionId, controller: identity.actor });
   }
   context(): FixtureContext { return { frameRevision: this.#machine.viewFor(this.#identity.actor).revision, movementRevision: this.#board.revision, progressionRevision: this.#progression.revision }; }
+  readContextForCoordinator(): EventContext {
+    return withEventChooser(this.#readContext, this.#machine.viewFor(this.#identity.actor).choice?.chooser ?? null);
+  }
   pendingWorkKind(): WorkRequest["type"] | null { return this.#machine.workForCoordinator()?.type ?? null; }
   #gate(progression: Progression, machine: V3ResolutionMachine): Progression {
     const view = machine.viewFor(this.#identity.actor); let next = progression;
@@ -126,7 +135,7 @@ export class V3FixtureCoordinator {
     this.#busy = true;
     try {
       const draft = { board: this.#board, events: [...this.#events], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants };
-      const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => draft.statEffects, this.#progression.activePlayer, this.#counterPower);
+      const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => draft.statEffects, this.#progression.activePlayer, this.#counterPower, this.#readContext);
       const machine = V3ResolutionMachine.restore(this.#card, this.#identity, this.#key, environment, this.#machine.exportForStorage(), current.frameRevision);
       action(machine, draft); let progression = this.#gate(this.#progression, machine);
       const outcome = deckOutOutcome(draft.board);

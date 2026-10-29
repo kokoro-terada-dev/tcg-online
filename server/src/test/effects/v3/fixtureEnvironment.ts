@@ -3,17 +3,19 @@ import { ensureMove, getCard, location } from "../../movement/state";
 import type { MovementState } from "../../movement/types";
 import type { CardObjectRef, DeepReadonly } from "../types";
 import type { PinnedMasterFacts } from "../masterFacts";
-import { masterCardFacts } from "../masterFacts";
 import type { Value } from "./dsl";
 import type { ApprovedV3Card } from "./approval";
 import type { ResolutionEnvironment, ResolutionIdentity } from "./resolution";
-import { statDelta, type StatEffects } from "./statEffects";
+import type { StatEffects } from "./statEffects";
+import { UNKNOWN, createDerivedCardFactsReader, readEventContext, type EventContext } from "./readContext";
 
-const UNKNOWN = Symbol("unknown");
 type Scalar = string | number | boolean | null | typeof UNKNOWN;
-export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0): ResolutionEnvironment {
+export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext): ResolutionEnvironment {
   const knownDefinitions = new Map(definitions.map(card => [card.definition.cardId, card]));
-  const seat = (side: string): 0 | 1 => side === "SELF" ? identity.actor : (1 - identity.actor) as 0 | 1;
+  const context = eventContext ?? readEventContext(board(), identity);
+  ensureMove(context.effectController === identity.actor && context.source.instanceId === identity.source.instanceId && context.source.generation === identity.source.generation, "v3-read-context-source-mismatch");
+  const seat = (side: string): 0 | 1 => side === "SELF" ? context.effectController : (1 - context.effectController) as 0 | 1;
+  const cardFacts = createDerivedCardFactsReader({ board, definitions: knownDefinitions, master: facts, statEffects, activePlayer, counterPower });
   const read = (value: DeepReadonly<Value>, bindings: Readonly<Record<string, readonly Readonly<CardObjectRef>[]>>, candidate?: Readonly<CardObjectRef>): Scalar => {
     if (value === null || typeof value !== "object") return value;
     const state = board(), parts = value.ref.split(".");
@@ -22,25 +24,11 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       const zones = state.players[seat(parts[0])]; return parts[1] === "lifeCount" ? zones.life.length : parts[1] === "handCount" ? zones.hand.length : UNKNOWN;
     }
     const ref = parts[0] === "SOURCE" ? identity.source : candidate; if (!ref) return UNKNOWN;
-    try {
-      const card = getCard(state, ref), field = parts[1];
-      if (location(state, card.instanceId).zone === "resolving") return UNKNOWN;
-      if (field === "rotated") return card.rotated;
-      if (field === "cardType") return card.kind === "unknown" ? UNKNOWN : card.kind;
-      if (field !== "cost" && field !== "power") return UNKNOWN;
-      let number: unknown;
-      const known = knownDefinitions.get(card.cardId);
-      if (known) {
-        if (card.kind !== known.definition.cardType || card.modifierIds.length || card.grantIds.length) return UNKNOWN;
-        number = known.definition.baseStats[field];
-      } else number = masterCardFacts(state, card, facts)[field];
-      if (typeof number !== "number" || !Number.isSafeInteger(number)) return UNKNOWN;
-      const don = field === "power" && card.controller === activePlayer ? state.players[activePlayer].attachedDon.filter(id => {
-        const attached = state.cards[id!]!.attachedTo; return attached?.instanceId === ref.instanceId && attached.generation === ref.generation;
-      }).length * 1000 : 0;
-      const result = number + statDelta(statEffects(), ref, field) + don + (field === "power" ? counterPower(ref) : 0);
-      return Number.isSafeInteger(result) ? field === "cost" ? Math.max(0, result) : result : UNKNOWN;
-    } catch { return UNKNOWN; }
+    const derived = cardFacts(ref, context.effectController), field = parts[1];
+    if (derived === UNKNOWN) return UNKNOWN;
+    if (field === "rotated") return derived.rotated;
+    if (field === "cardType") return derived.cardType;
+    return field === "cost" || field === "power" ? derived.current[field] : UNKNOWN;
   };
   const evaluate: ResolutionEnvironment["evaluate"] = (predicate, bindings, candidate) => {
     if (predicate.type === "all" || predicate.type === "any") {
