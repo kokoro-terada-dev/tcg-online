@@ -115,5 +115,6 @@ export class ReviewedV3Setup {
       mulligans: [...this.#decisions], movement: projectV3Movement(this.#board, actor) });
   }
   gameForServer(): V3SyntheticMatchCoordinator { ensureMove(this.#game, "v3-setup-not-ready"); return this.#game; }
+  get matchId(): string { return this.#board.matchId; }
   toJSON(): never { throw new Error("v3-setup-private-state"); }
 }

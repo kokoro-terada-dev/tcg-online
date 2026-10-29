@@ -6,6 +6,9 @@ import { getAllLocalDeckRecipes } from "../utils/localDeckStorage";
 import TestBoard from "./TestBoard";
 import V3ChoicePanel from "./V3ChoicePanel";
 import V3SessionPanel from "./V3SessionPanel";
+import V3SetupPanel from "./V3SetupPanel";
+import type { V3SetupView } from "../../server/src/test/effects/v3/setupProtocol";
+import { acceptV3SetupView, v3SetupCommand } from "./v3SetupClient";
 import { acceptV3SessionView, v3SessionCommand, type SessionDetails } from "./v3SessionClient";
 import type { V3SessionView, V3SessionCommand } from "../../server/src/test/effects/v3/sessionProtocol";
 import "./testEffect.css";
@@ -17,6 +20,7 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
   const socket = useRef<Socket | null>(null), roomRef = useRef<V3RoomView | null>(null), viewRef = useRef<V3FixtureView | null>(null), epoch = useRef(0), flight = useRef(false);
   const [room, setRoom] = useState<V3RoomView | null>(null), [view, setView] = useState<V3FixtureView | null>(null), [busy, setBusy] = useState(false), [needsSync, setNeedsSync] = useState(false);
   const [session, setSession] = useState<V3SessionView | null>(null), sessionRef = useRef<V3SessionView | null>(null);
+  const [setup, setSetup] = useState<V3SetupView | null>(null), setupRef = useRef<V3SetupView | null>(null);
   const [error, setError] = useState(""), [code, setCode] = useState(""), [scenario, setScenario] = useState<V3Scenario>("bounce"), [actor, setActor] = useState<0 | 1>(0), [deckId, setDeckId] = useState("");
   const [decks] = useState(getAllLocalDeckRecipes);
   const [collapsed, setCollapsed] = useState(false);
@@ -28,16 +32,23 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
   function receiveSession(next: V3SessionView) {
     if (!acceptV3SessionView(sessionRef.current, next, roomRef.current?.matchId ?? null)) return;
     sessionRef.current = next; setSession(next);
+    setupRef.current = null; setSetup(null);
+  }
+  function receiveSetup(next: V3SetupView) {
+    if (sessionRef.current || !acceptV3SetupView(setupRef.current, next, roomRef.current?.matchId ?? null)) return;
+    setupRef.current = next; setSetup(next);
   }
   useEffect(() => {
     if (!url) return;
     const client = io(url, { reconnection: false, timeout: 10000 }); socket.current = client;
     client.on("v3-room:state", (next: V3RoomView) => {
-      if (roomRef.current?.matchId !== next.matchId) { epoch.current++; viewRef.current = null; setView(null); sessionRef.current = null; setSession(null); setNeedsSync(false); flight.current = false; setBusy(false); }
+      if (roomRef.current?.mode !== next.mode) setDeckId("");
+      if (roomRef.current?.matchId !== next.matchId) { epoch.current++; viewRef.current = null; setView(null); sessionRef.current = null; setSession(null); setupRef.current = null; setSetup(null); setNeedsSync(false); flight.current = false; setBusy(false); }
       roomRef.current = next; setRoom(next);
     });
-    const reset = (text: string) => { epoch.current++; roomRef.current = null; viewRef.current = null; sessionRef.current = null; setRoom(null); setView(null); setSession(null); setDeckId(""); flight.current = false; setBusy(false); setNeedsSync(false); setError(text); };
+    const reset = (text: string) => { epoch.current++; roomRef.current = null; viewRef.current = null; sessionRef.current = null; setupRef.current = null; setRoom(null); setView(null); setSession(null); setSetup(null); setDeckId(""); flight.current = false; setBusy(false); setNeedsSync(false); setError(text); };
     client.on("v3:state", receive); client.on("v3-session:state", receiveSession); client.on("v3-room:closed", reset);
+    client.on("v3-reviewed:state", receiveSetup);
     client.on("disconnect", () => reset("接続が切れました。ルームを作成・入室し直してください。"));
     client.on("connect_error", () => { flight.current = false; setBusy(false); setError("v3検証サーバーに接続できません。"); });
     return () => { epoch.current++; client.removeAllListeners(); client.disconnect(); socket.current = null; };
@@ -46,12 +57,13 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
     const client = socket.current; if (!client || flight.current) return false;
     if (!client.connected) { client.connect(); setError("接続中です。接続後にもう一度操作してください。"); return false; }
     flight.current = true; setBusy(true); setError(""); const sentEpoch = epoch.current;
-    client.timeout(10000).emit(event, payload, (err: Error | null, reply?: { ok: boolean; error?: string; view?: V3FixtureView; sessionView?: V3SessionView }) => {
+    client.timeout(10000).emit(event, payload, (err: Error | null, reply?: { ok: boolean; error?: string; view?: V3FixtureView; sessionView?: V3SessionView; setupView?: V3SetupView }) => {
       if (socket.current !== client || epoch.current !== sentEpoch) return;
       flight.current = false; setBusy(false);
-      if (err || !reply) { setNeedsSync(!!viewRef.current || !!sessionRef.current); setError("応答を確認できません。再同期してください。"); return; }
+      if (err || !reply) { setNeedsSync(!!viewRef.current || !!sessionRef.current || !!setupRef.current); setError("応答を確認できません。再同期してください。"); return; }
       if (reply.view) { receive(reply.view); setNeedsSync(false); }
       if (reply.sessionView) { receiveSession(reply.sessionView); setNeedsSync(false); }
+      if (reply.setupView) { receiveSetup(reply.setupView); setNeedsSync(false); }
       if (!reply.ok) setError(reply.error ?? "操作できませんでした。");
     });
     return true;
@@ -64,9 +76,15 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
     if (!sessionRef.current || busy || needsSync) return;
     try { request("v3-session:command", v3SessionCommand(sessionRef.current, kind, crypto.randomUUID(), details)); } catch { setError("操作状態が変わりました。再同期してください。"); }
   }
+  function setupAction(kind: "first" | "mulligan", value: "first" | "second" | boolean) {
+    if (!setupRef.current || busy || needsSync) return;
+    try { request("v3-reviewed:command", v3SetupCommand(setupRef.current, kind, value, crypto.randomUUID())); } catch { setError("選択状態が変わりました。再同期してください。"); }
+  }
   const isHost = room?.host.socketId === socket.current?.id, mine = isHost ? room?.host : room?.guest;
   if (session && room) return <V3SessionPanel view={session} busy={busy} needsSync={needsSync} error={error} isHost={isHost} onAction={sessionAction}
     onSync={() => request("v3-session:sync")} onEnd={() => { if (isHost) request("v3-session:end"); else setError("ホスト側でルームへ戻してください。"); }} />;
+  if (setup && room) return <V3SetupPanel view={setup} busy={busy} needsSync={needsSync} error={error} isHost={isHost} onAction={setupAction}
+    onSync={() => request("v3-reviewed:sync")} onEnd={() => request("v3-reviewed:end")} />;
   if (view && room) return <>
     <TestBoard key={`${view.matchId}:${view.movement.revision}`} match={v3BoardView(view)} roomId={room.roomId} readOnly busy={busy} error={error} onCommand={() => {}} onEnd={() => { if (isHost) request("v3:end"); else setError("ホスト側でルームへ戻してください。"); }} />
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="v3合成効果検証">
@@ -92,15 +110,19 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
     {!room ? <><button disabled={busy || !url} onClick={() => request("v3-room:create")}>ルーム作成</button>
       <form onSubmit={event => { event.preventDefault(); request("v3-room:join", code); }}><input aria-label="ルームコード" placeholder="4桁のコード" inputMode="numeric" maxLength={4} value={code} onChange={event => setCode(event.target.value.replace(/\D/g, "").slice(0, 4))} /><button disabled={busy || code.length !== 4}>入室</button></form></> : <>
       <strong>ルームコード：{room.roomId}</strong>
+      <fieldset className="v3-room-modes" disabled={busy || !isHost}><label><input type="radio" name="v3-mode" checked={room.mode === "synthetic"} onChange={() => request("v3-room:mode", "synthetic")} />合成検証</label>
+        <label><input type="radio" name="v3-mode" checked={room.mode === "reviewed"} onChange={() => request("v3-room:mode", "reviewed")} />限定実カード</label></fieldset>
       <p>ホスト：{room.host.ready ? "READY" : "準備中"}・{room.host.deckName ?? "デッキ未選択"}</p>
       <p>ゲスト：{room.guest ? `${room.guest.ready ? "READY" : "準備中"}・${room.guest.deckName ?? "デッキ未選択"}` : "入室待ち"}</p>
-      <label>デッキ<select value={deckId} disabled={busy} onChange={event => {
+      {room.mode === "reviewed" ? <label>限定デッキ<select value={mine?.deckName ? "kid-basic" : ""} disabled={busy} onChange={event => event.target.value && request("v3-room:preset", event.target.value)}>
+        <option value="">選択してください</option><option value="kid-basic">限定検証・緑キッド</option></select></label> : <label>デッキ<select value={deckId} disabled={busy} onChange={event => {
         const deck = decks.find(deck => deck.id === event.target.value); if (!deck) return;
         if (request("v3-room:deck", { name: deck.name, leaderCardId: deck.leaderCardId, mainDeck: deck.mainDeck, donDeck: deck.donDeck, leaderLifeCount: deck.leaderLifeCount ?? 5,
           cardTypes: Object.fromEntries(deck.mainDeck.map(id => [id, deck.cardTypes[id] ?? "character"])) })) setDeckId(deck.id);
-      }}><option value="">選択してください</option>{decks.map(deck => <option key={deck.id} value={deck.id}>{deck.name}</option>)}</select></label>
+      }}><option value="">選択してください</option>{decks.map(deck => <option key={deck.id} value={deck.id}>{deck.name}</option>)}</select></label>}
       <button disabled={busy || !mine?.deckName} onClick={() => request("v3-room:ready", !mine?.ready)}>{mine?.ready ? "READY解除" : "READY"}</button>
-      {isHost && <><label>合成効果<select value={scenario} disabled={busy} onChange={e => setScenario(e.target.value as V3Scenario)}>{Object.entries(scenarios).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      {isHost && room.mode === "reviewed" && <button disabled={busy || !room.host.ready || !room.guest?.ready} onClick={() => request("v3-reviewed:start", {})}>限定実カード対戦を開始</button>}
+      {isHost && room.mode === "synthetic" && <><label>合成効果<select value={scenario} disabled={busy} onChange={e => setScenario(e.target.value as V3Scenario)}>{Object.entries(scenarios).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>操作者<select value={actor} disabled={busy} onChange={e => setActor(Number(e.target.value) as 0 | 1)}><option value={0}>ホスト</option><option value={1}>ゲスト</option></select></label>
         <button disabled={busy || !room.host.ready || !room.guest?.ready} onClick={() => request("v3:start", { scenario, actor })}>単発効果の検証開始</button>
         <button disabled={busy || !room.host.ready || !room.guest?.ready} onClick={() => request("v3-session:start", { firstPlayer: actor })}>連続操作の検証開始</button></>}

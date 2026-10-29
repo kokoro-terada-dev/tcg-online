@@ -16,7 +16,7 @@ export type V3FixtureView = Readonly<{
 }>;
 export type V3FixtureCommand = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number; requestId: string; matchId: string; resolutionId: string }> & (
   { kind: "advance" | "work" } | { kind: "answer"; selectionId: string; tokens: readonly string[] });
-export type V3RoomView = Readonly<{ roomId: string; matchId: string | null;
+export type V3RoomView = Readonly<{ roomId: string; matchId: string | null; mode: "synthetic" | "reviewed";
   host: Readonly<{ socketId: string; ready: boolean; deckName: string | null }>;
   guest: Readonly<{ socketId: string; ready: boolean; deckName: string | null }> | null;
 }>;

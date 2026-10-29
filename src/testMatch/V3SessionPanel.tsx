@@ -37,7 +37,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
       onTestPlay={card => { const play = playable(card.id); if (play?.enabled) onAction("play", { card: play.card }); }} />
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="v3連続操作検証">
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
-      <div hidden={collapsed}><strong>v3検証・連続操作</strong><p>{view.turnNumber}ターン目・{ownTurn ? "自分" : "相手"}のターン</p>
+      <div hidden={collapsed}><strong>{view.mode === "v3-reviewed-session" ? "v3検証・限定実カード" : "v3検証・連続操作"}</strong><p>{view.turnNumber}ターン目・{ownTurn ? "自分" : "相手"}のターン</p>
         {battle && <div className="v3-battle-status"><p role="status">{view.damageEffectsPending ? "ダメージ時の効果処理" : battle.step === "attack" ? "アタック時の効果処理" : battle.step === "block" ? "ブロック" : battle.step === "counter" ? "カウンター" : "ダメージ確認"}・{battle.step === "attack" || view.damageEffectsPending ? attackEffectActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち" : defending ? "自分が操作" : "相手の操作待ち"}</p>
           {!view.damageEffectsPending && <p>攻撃 {battle.powers?.attack ?? "?"} → 防御 {battle.powers?.defense ?? "?"}</p>}
           {defending && !view.lifePending && !view.damageEffectsPending && view.gate === "idle" && <div className="test-effect-actions">

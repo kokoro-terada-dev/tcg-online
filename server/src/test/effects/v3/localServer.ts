@@ -15,12 +15,15 @@ import { V3FixtureCoordinator } from "./fixtureCoordinator";
 import type { V3FixtureView, V3RoomView, V3Scenario } from "./fixtureProtocol";
 import { createSyntheticSession, sessionView, type SyntheticSession } from "./sessionFixtures";
 import type { V3SessionView, V3SessionContext } from "./sessionProtocol";
+import { ReviewedV3Setup } from "./reviewedSetup";
+import { loadReviewedV3Preset } from "./reviewedPresets";
+import type { V3SetupView } from "./setupProtocol";
 
 type Seat = { socketId: string; ready: boolean; deck: DeckInput | null };
 type Session = { coordinator: V3FixtureCoordinator; matchId: string; actor: 0 | 1; scenario: V3Scenario; imageAliases: Record<string, string> };
-type Room = { code: string; host: Seat; guest: Seat | null; session: Session | null; continuous: SyntheticSession | null };
-type Reply = (value: { ok: boolean; error?: string; view?: V3FixtureView; sessionView?: V3SessionView }) => void;
-const running = (room: Room) => !!(room.session || room.continuous);
+type Room = { code: string; host: Seat; guest: Seat | null; session: Session | null; continuous: SyntheticSession | null; mode: "synthetic" | "reviewed"; setup: ReviewedV3Setup | null };
+type Reply = (value: { ok: boolean; error?: string; view?: V3FixtureView; sessionView?: V3SessionView; setupView?: V3SetupView }) => void;
+const running = (room: Room) => !!(room.session || room.continuous || room.setup);
 
 function fixture(room: Room, scenario: V3Scenario, actor: 0 | 1, signingKey: Uint8Array): Session {
   ensureMove(room.host.deck && room.guest?.deck, "v3-decks-required");
@@ -90,7 +93,7 @@ export async function startLocalV3Server(port = 0) {
   const actorFor = (room: Room, id: string): 0 | 1 | null => room.host.socketId === id ? 0 : room.guest?.socketId === id ? 1 : null;
   function publish(room: Room) {
     const seat = (s: Seat) => ({ socketId: s.socketId, ready: s.ready, deckName: s.deck?.name ?? null });
-    const view: V3RoomView = { roomId: room.code, matchId: room.session?.matchId ?? room.continuous?.matchId ?? null, host: seat(room.host), guest: room.guest ? seat(room.guest) : null };
+    const view: V3RoomView = { roomId: room.code, matchId: room.session?.matchId ?? room.continuous?.matchId ?? room.setup?.matchId ?? null, mode: room.mode, host: seat(room.host), guest: room.guest ? seat(room.guest) : null };
     for (const id of [room.host.socketId, room.guest?.socketId]) if (id) io.sockets.sockets.get(id)?.emit("v3-room:state", view);
   }
   function view(room: Room, actor: 0 | 1): V3FixtureView {
@@ -100,16 +103,18 @@ export async function startLocalV3Server(port = 0) {
   }
   function publishGame(room: Room) { if (room.session && room.guest) for (const actor of [0, 1] as const) io.sockets.sockets.get(actor === 0 ? room.host.socketId : room.guest.socketId)?.emit("v3:state", view(room, actor)); }
   function publishSession(room: Room) { if (room.continuous && room.guest) for (const actor of [0, 1] as const) io.sockets.sockets.get(actor === 0 ? room.host.socketId : room.guest.socketId)?.emit("v3-session:state", sessionView(room.continuous, room.code, actor)); }
+  function setupView(room: Room, actor: 0 | 1): V3SetupView { return { ...room.setup!.viewFor(actor), roomId: room.code, localPlayerIndex: actor }; }
+  function publishSetup(room: Room) { if (room.setup && room.guest && !room.continuous) for (const actor of [0, 1] as const) io.sockets.sockets.get(actor === 0 ? room.host.socketId : room.guest.socketId)?.emit("v3-reviewed:state", setupView(room, actor)); }
   function leave(id: string) {
     const room = roomFor(id); membership.delete(id); if (!room) return;
     if (room.host.socketId === id) {
       if (room.guest) { membership.delete(room.guest.socketId); io.sockets.sockets.get(room.guest.socketId)?.emit("v3-room:closed", "ホストがルームを解散しました"); }
       rooms.delete(room.code);
-    } else { room.guest = null; room.session = null; room.continuous = null; room.host.ready = false; publish(room); }
+    } else { room.guest = null; room.session = null; room.continuous = null; room.setup = null; room.host.ready = false; publish(room); }
   }
   io.on("connection", socket => {
     let start = Date.now(), requests = 0;
-    const handle = (event: string, callback: (input: unknown) => { view?: V3FixtureView; sessionView?: V3SessionView } | void) => socket.on(event, (input: unknown, reply?: Reply) => {
+    const handle = (event: string, callback: (input: unknown) => { view?: V3FixtureView; sessionView?: V3SessionView; setupView?: V3SetupView } | void) => socket.on(event, (input: unknown, reply?: Reply) => {
       if (typeof reply !== "function") return;
       try {
         ensureMove(process.env.NODE_ENV !== "production", "v3-local-disabled");
@@ -117,12 +122,13 @@ export async function startLocalV3Server(port = 0) {
         const result = callback(input); reply({ ok: true, ...result });
       } catch { const room = roomFor(socket.id), actor = room ? actorFor(room, socket.id) : null;
         reply({ ok: false, error: "操作できません。接続・準備状態・対象・最新の状態を確認してください。", ...(room?.session && actor !== null ? { view: view(room, actor) } : {}),
-          ...(room?.continuous && actor !== null ? { sessionView: sessionView(room.continuous, room.code, actor) } : {}) }); }
+          ...(room?.continuous && actor !== null ? { sessionView: sessionView(room.continuous, room.code, actor) } : {}),
+          ...(room?.setup && !room.continuous && actor !== null ? { setupView: setupView(room, actor) } : {}) }); }
     });
     handle("v3-room:create", () => {
       const current = roomFor(socket.id); if (current) { publish(current); return; } ensureMove(rooms.size < 100, "v3-room-limit");
       let code: string; do { code = String(randomInt(10000)).padStart(4, "0"); } while (rooms.has(code));
-      const room: Room = { code, host: { socketId: socket.id, ready: false, deck: null }, guest: null, session: null, continuous: null }; rooms.set(code, room); membership.set(socket.id, code); publish(room);
+      const room: Room = { code, host: { socketId: socket.id, ready: false, deck: null }, guest: null, session: null, continuous: null, mode: "synthetic", setup: null }; rooms.set(code, room); membership.set(socket.id, code); publish(room);
     });
     handle("v3-room:join", input => {
       ensureMove(typeof input === "string" && /^\d{4}$/.test(input), "v3-room-code"); const room = rooms.get(input); ensureMove(room && !running(room), "v3-room-unavailable");
@@ -131,13 +137,26 @@ export async function startLocalV3Server(port = 0) {
     });
     handle("v3-room:deck", input => {
       const room = roomFor(socket.id); ensureMove(room && !running(room), "v3-no-editable-room"); const actor = actorFor(room, socket.id); ensureMove(actor !== null, "v3-membership");
+      ensureMove(room.mode === "synthetic", "v3-reviewed-preset-only");
       const deck = parseDeck(input); ensureMove(deck, "v3-invalid-deck");
       const seat = actor === 0 ? room.host : room.guest!; seat.deck = deck; seat.ready = false; publish(room);
+    });
+    handle("v3-room:mode", input => {
+      const room = roomFor(socket.id); ensureMove(room && room.host.socketId === socket.id && !running(room) && (input === "synthetic" || input === "reviewed"), "v3-room-mode-unavailable");
+      if (room.mode !== input) { room.mode = input; for (const seat of [room.host, room.guest]) if (seat) { seat.deck = null; seat.ready = false; } }
+      publish(room);
+    });
+    handle("v3-room:preset", input => {
+      const room = roomFor(socket.id); ensureMove(room && !running(room) && room.mode === "reviewed" && typeof input === "string", "v3-preset-unavailable");
+      const actor = actorFor(room, socket.id); ensureMove(actor !== null, "v3-membership");
+      const preset = loadReviewedV3Preset(input), seat = actor === 0 ? room.host : room.guest!;
+      seat.deck = preset.deck; seat.ready = false; publish(room);
     });
     handle("v3-room:ready", input => { const room = roomFor(socket.id); ensureMove(room && !running(room) && typeof input === "boolean", "v3-ready-state"); const actor = actorFor(room, socket.id); ensureMove(actor !== null, "v3-membership");
       const seat = actor === 0 ? room.host : room.guest!; ensureMove(seat.deck, "v3-deck-required"); seat.ready = input; publish(room); });
     handle("v3:start", input => {
       const room = roomFor(socket.id); ensureMove(room && room.host.socketId === socket.id && !running(room) && room.guest && room.host.ready && room.guest.ready && io.sockets.sockets.get(room.guest.socketId)?.connected, "v3-cannot-start");
+      ensureMove(room.mode === "synthetic", "v3-reviewed-start-required");
       dataObject(input, ["scenario", "actor"]); ensureMove((input.scenario === "bounce" || input.scenario === "payDraw" || input.scenario === "ko" || input.scenario === "rest" || input.scenario === "active" || input.scenario === "discardDraw" || input.scenario === "discardCostDraw" || input.scenario === "sourceCostDraw" || input.scenario === "returnCostDraw" || input.scenario === "mixedReturnCostDraw" || input.scenario === "optionalCostDraw") && (input.actor === 0 || input.actor === 1), "v3-fixture-options");
       room.session = fixture(room, input.scenario, input.actor, key); publish(room); publishGame(room);
     });
@@ -148,9 +167,40 @@ export async function startLocalV3Server(port = 0) {
     handle("v3-session:start", input => {
       const room = roomFor(socket.id); ensureMove(room && room.host.socketId === socket.id && !running(room) && room.guest && room.host.ready && room.guest.ready &&
         room.host.deck && room.guest.deck && io.sockets.sockets.get(room.guest.socketId)?.connected, "v3-session-cannot-start");
+      ensureMove(room.mode === "synthetic", "v3-reviewed-start-required");
       dataObject(input, ["firstPlayer"]); ensureMove(input.firstPlayer === 0 || input.firstPlayer === 1, "v3-session-first-player");
       room.continuous = createSyntheticSession([room.host.deck, room.guest.deck], input.firstPlayer, key); publish(room); publishSession(room);
     });
+    const reviewedActive = () => {
+      const room = roomFor(socket.id), actor = room ? actorFor(room, socket.id) : null;
+      ensureMove(room?.setup && room.guest && actor !== null && membership.get(room.host.socketId) === room.code && membership.get(room.guest.socketId) === room.code &&
+        io.sockets.sockets.get(room.host.socketId)?.connected && io.sockets.sockets.get(room.guest.socketId)?.connected, "v3-no-live-setup");
+      return { room, actor, setup: room.setup };
+    };
+    handle("v3-reviewed:start", input => {
+      dataObject(input, []); const room = roomFor(socket.id);
+      ensureMove(room && room.mode === "reviewed" && room.host.socketId === socket.id && !running(room) && room.guest && room.host.ready && room.guest.ready &&
+        room.host.deck && room.guest.deck && io.sockets.sockets.get(room.guest.socketId)?.connected, "v3-reviewed-start-unavailable");
+      const preset = loadReviewedV3Preset("kid-basic"); room.setup = new ReviewedV3Setup([room.host.deck, room.guest.deck], preset.reviewed, key);
+      publish(room); publishSetup(room);
+    });
+    handle("v3-reviewed:sync", () => { const { room, actor } = reviewedActive(); return room.continuous ? { sessionView: sessionView(room.continuous, room.code, actor) } : { setupView: setupView(room, actor) }; });
+    handle("v3-reviewed:command", input => {
+      const { room, actor, setup } = reviewedActive(); dataObject(input, ["matchId", "revision", "requestId", "kind", "value"]);
+      ensureMove(input.matchId === setup.matchId && Number.isSafeInteger(input.revision), "v3-setup-context");
+      const requestId = label(input.requestId);
+      if (input.kind === "first") { ensureMove(input.value === "first" || input.value === "second", "v3-first-choice"); setup.chooseFirst(actor, requestId, input.revision as number, input.value); }
+      else { ensureMove(input.kind === "mulligan" && typeof input.value === "boolean", "v3-mulligan-choice"); setup.mulligan(actor, requestId, input.revision as number, input.value); }
+      if (setup.viewFor(actor).status === "ready") {
+        if (!room.continuous) {
+          const coordinator = setup.gameForServer(), board = coordinator.snapshotForCoordinator().movement;
+          room.continuous = { matchId: setup.matchId, coordinator, imageAliases: { DON: "don" }, sources: ([0, 1] as const).map(player => ({ instanceId: board.players[player].leader[0]!, generation: 0 })) };
+        }
+        publishSession(room); return { sessionView: sessionView(room.continuous, room.code, actor) };
+      }
+      publishSetup(room); return { setupView: setupView(room, actor) };
+    });
+    handle("v3-reviewed:end", () => { const { room, actor } = reviewedActive(); ensureMove(actor === 0, "v3-host-only"); room.setup = null; room.continuous = null; room.host.ready = false; room.guest!.ready = false; publish(room); });
     const continuousActive = () => {
       const room = roomFor(socket.id), actor = room ? actorFor(room, socket.id) : null;
       ensureMove(room?.continuous && room.guest && actor !== null && membership.get(room.host.socketId) === room.code && membership.get(room.guest.socketId) === room.code &&
@@ -184,7 +234,7 @@ export async function startLocalV3Server(port = 0) {
       else c.endTurn(actor, requestId, expected);
       publishSession(room); return { sessionView: sessionView(session, room.code, actor) };
     });
-    handle("v3-session:end", () => { const { room, actor } = continuousActive(); ensureMove(actor === 0, "v3-host-only"); room.continuous = null; room.host.ready = false; room.guest!.ready = false; publish(room); });
+    handle("v3-session:end", () => { const { room, actor } = continuousActive(); ensureMove(actor === 0, "v3-host-only"); room.continuous = null; room.setup = null; room.host.ready = false; room.guest!.ready = false; publish(room); });
     handle("v3:command", input => {
       const { room, actor, session } = active(); ensureMove(input && typeof input === "object", "v3-command-object");
       const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value; ensureMove(["advance", "work", "answer"].includes(kind), "v3-command-kind");
