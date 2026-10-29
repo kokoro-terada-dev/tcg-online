@@ -6,7 +6,7 @@
   "required": ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"],
   "properties": {
     "schemaVersion": { "const": "3.0.0-subset.16" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
-    "name": { "$ref": "#/$defs/label" }, "cardType": { "enum": ["leader", "character", "stage"] },
+    "name": { "$ref": "#/$defs/label" }, "cardType": { "enum": ["leader", "character", "stage", "event"] },
     "baseStats": {
       "type": "object", "additionalProperties": false, "required": ["cost", "power", "counter", "life"],
       "properties": { "cost": { "$ref": "#/$defs/stat" }, "power": { "$ref": "#/$defs/stat" }, "counter": { "$ref": "#/$defs/stat" }, "life": { "$ref": "#/$defs/stat" } }
@@ -28,7 +28,12 @@
     { "if": { "properties": { "effects": { "maxItems": 0 }, "keywords": { "maxItems": 0 } } }, "then": { "properties": { "source": { "properties": { "text": { "pattern": "^\\s*$" }, "triggerText": { "pattern": "^\\s*$" } } } } }, "else": { "properties": { "source": { "properties": { "text": { "minLength": 1 } } } } } },
     { "if": { "properties": { "cardType": { "const": "leader" } } }, "then": { "properties": { "effects": { "items": { "properties": { "sourceZones": { "items": { "const": "leader" } } } } } } } },
     { "if": { "properties": { "cardType": { "const": "character" } } }, "then": { "properties": { "effects": { "items": { "properties": { "sourceZones": { "items": { "const": "character" } } } } } } } },
-    { "if": { "properties": { "cardType": { "const": "stage" } } }, "then": { "properties": { "effects": { "items": { "properties": { "sourceZones": { "items": { "const": "stage" } } } } } } } }
+    { "if": { "properties": { "cardType": { "const": "stage" } } }, "then": { "properties": { "effects": { "items": { "properties": { "sourceZones": { "items": { "const": "stage" } } } } } } } },
+    { "if": { "properties": { "cardType": { "const": "event" } } }, "then": { "properties": { "keywords": { "maxItems": 0 }, "effects": { "items": { "properties": {
+      "sourceZones": { "const": ["hand"] }, "kind": { "const": "activated" }, "timing": { "properties": { "type": { "const": "COUNTER" } } },
+      "optional": { "const": false }, "usageLimit": { "type": "null" }, "costs": { "maxItems": 0 },
+      "activationConditions": { "properties": { "type": { "const": "all" }, "conditions": { "maxItems": 0 } }, "required": ["conditions"] }
+    } } } } }, "else": { "properties": { "effects": { "items": { "properties": { "timing": { "properties": { "type": { "not": { "const": "COUNTER" } } } } } } } } } }
   ],
   "$defs": {
     "id": { "type": "string", "maxLength": 100, "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$", "not": { "enum": ["constructor", "prototype"] } },
@@ -106,8 +111,11 @@
     },
     "keyword": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "properties": { "type": { "enum": ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"] } } },
     "duration": {
-      "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "required": ["player", "occurrence"],
-      "properties": { "type": { "const": "TURN_END" }, "player": { "$ref": "#/$defs/player" }, "occurrence": { "enum": [1, 2] } }
+      "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false,
+      "oneOf": [
+        { "required": ["player", "occurrence"], "properties": { "type": { "const": "TURN_END" }, "player": { "$ref": "#/$defs/player" }, "occurrence": { "enum": [1, 2] } } },
+        { "properties": { "type": { "const": "BATTLE_END" } } }
+      ]
     },
     "action": {
       "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false,
@@ -132,19 +140,19 @@
       { "required": ["count", "from"], "properties": { "type": { "const": "DON_RETURN" }, "count": { "$ref": "#/$defs/count" }, "from": { "$ref": "#/$defs/donZones" } } },
       { "properties": { "type": { "const": "REST_SOURCE" } } }
     ] },
-    "timing": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "properties": { "type": { "enum": ["MAIN", "ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_KO"] } } },
+    "timing": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "properties": { "type": { "enum": ["MAIN", "COUNTER", "ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_KO"] } } },
     "effect": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "kind", "timing", "sourceZones", "optional", "usageLimit", "activationConditions", "resolutionConditions", "costs", "actions"],
       "properties": {
         "id": { "$ref": "#/$defs/id" }, "kind": { "enum": ["activated", "triggered"] }, "timing": { "$ref": "#/$defs/timing" }, "optional": { "type": "boolean" },
-        "sourceZones": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "enum": ["leader", "character", "stage"] } },
+        "sourceZones": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "enum": ["leader", "character", "stage", "hand"] } },
         "usageLimit": { "oneOf": [{ "type": "null" }, { "type": "object", "additionalProperties": false, "required": ["type", "scope", "count"], "properties": { "type": { "const": "PER_TURN" }, "scope": { "const": "SOURCE_OBJECT" }, "count": { "$ref": "#/$defs/count" } } }] },
         "activationConditions": { "$ref": "#/$defs/predicate" }, "resolutionConditions": { "$ref": "#/$defs/predicate" },
         "costs": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/cost" } }, "actions": { "allOf": [{ "$ref": "#/$defs/actions" }], "minItems": 1 }
       },
       "allOf": [
-        { "if": { "properties": { "kind": { "const": "triggered" } } }, "then": { "properties": { "timing": { "properties": { "type": { "enum": ["ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_KO"] } } }, "activationConditions": { "properties": { "type": { "const": "all" }, "conditions": { "maxItems": 0 } }, "required": ["conditions"] } } }, "else": { "properties": { "timing": { "properties": { "type": { "const": "MAIN" } } } } } },
+        { "if": { "properties": { "kind": { "const": "triggered" } } }, "then": { "properties": { "timing": { "properties": { "type": { "enum": ["ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_KO"] } } }, "activationConditions": { "properties": { "type": { "const": "all" }, "conditions": { "maxItems": 0 } }, "required": ["conditions"] } } }, "else": { "properties": { "timing": { "properties": { "type": { "enum": ["MAIN", "COUNTER"] } } } } } },
         { "if": { "properties": { "timing": { "properties": { "type": { "const": "ON_PLAY" } } } } }, "then": { "properties": { "sourceZones": { "items": { "enum": ["character", "stage"] } } } } },
         { "if": { "properties": { "timing": { "properties": { "type": { "const": "ON_ATTACK" } } } } }, "then": { "properties": { "sourceZones": { "items": { "enum": ["leader", "character"] } } } } },
         { "if": { "properties": { "timing": { "properties": { "type": { "const": "ON_KO" } } } } }, "then": { "properties": { "sourceZones": { "items": { "const": "character" } }, "costs": { "maxItems": 0 } } } }

@@ -11,7 +11,7 @@ import { statDelta, type StatEffects } from "./statEffects";
 
 const UNKNOWN = Symbol("unknown");
 type Scalar = string | number | boolean | null | typeof UNKNOWN;
-export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor): ResolutionEnvironment {
+export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0): ResolutionEnvironment {
   const knownDefinitions = new Map(definitions.map(card => [card.definition.cardId, card]));
   const seat = (side: string): 0 | 1 => side === "SELF" ? identity.actor : (1 - identity.actor) as 0 | 1;
   const read = (value: DeepReadonly<Value>, bindings: Readonly<Record<string, readonly Readonly<CardObjectRef>[]>>, candidate?: Readonly<CardObjectRef>): Scalar => {
@@ -37,7 +37,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       const don = field === "power" && card.controller === activePlayer ? state.players[activePlayer].attachedDon.filter(id => {
         const attached = state.cards[id!]!.attachedTo; return attached?.instanceId === ref.instanceId && attached.generation === ref.generation;
       }).length * 1000 : 0;
-      const result = number + statDelta(statEffects(), ref, field) + don;
+      const result = number + statDelta(statEffects(), ref, field) + don + (field === "power" ? counterPower(ref) : 0);
       return Number.isSafeInteger(result) ? field === "cost" ? Math.max(0, result) : result : UNKNOWN;
     } catch { return UNKNOWN; }
   };

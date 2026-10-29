@@ -4,7 +4,7 @@ import { ensureMove, freezeMovement, getCard, location } from "../../movement/st
 import type { MovementEvent, MovementState } from "../../movement/types";
 import type { Progression } from "../../progression/types";
 import { checkTiming } from "../../progression/state";
-import { applySystemEvent } from "../../progression/transitions";
+import { applyPlayerIntent, applySystemEvent } from "../../progression/transitions";
 import type { CardObjectRef } from "../types";
 import type { ApprovedV3Card } from "./approval";
 import { statDelta, type StatEffects } from "./statEffects";
@@ -15,7 +15,7 @@ type Seat = 0 | 1;
 export type BattleCounters = readonly Readonly<{ target: Ref; amount: number }>[];
 export type LifeDecision = Readonly<{ battleId: string; resolutionId: string; selectionId: string; token: string; defender: Seat; card: Ref; expiresAt: number }>;
 export const V3_BASE_BATTLE_RULES = {
-  version: "v3-base-battle.4", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
+  version: "v3-base-battle.5", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
   reviewedAt: "2026-10-29", clauses: ["6-5-5", "6-5-6", "7-1", "7-1-1-3", "7-1-1-4", "7-1-3", "7-1-4", "7-1-5", "8-4-5", "8-6-1", "10-1-1", "10-1-4", "10-1-6", "10-1-7", "10-2-1", "10-2-5", "10-2-16", "10-2-17"],
 } as const;
 function field(board: MovementState, ref: Ref, player: Seat) {
@@ -56,13 +56,29 @@ export function declareAttack(board: MovementState, progression: Progression, ac
 }
 export function finishAttackStep(board: MovementState, progression: Progression): Progression {
   const battle = progression.battle; ensureMove(battle?.step === "attack" && progression.gate.kind === "idle", "v3-attack-effects-pending");
-  const present = [{ ref: battle.source, player: battle.attacker }, { ref: battle.target, player: battle.defender }].every(({ ref, player }) => {
+  const present = battleParticipantsPresent(board, progression);
+  let next = applySystemEvent(progression, progression.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "attack" });
+  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "attack", participantsPresent: present });
+  if (!present) {
+    next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "end" });
+    next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "end", participantsPresent: false });
+  }
+  return next;
+}
+function battleParticipantsPresent(board: MovementState, progression: Progression): boolean {
+  const battle = progression.battle!;
+  return [{ ref: battle.source, player: battle.attacker }, { ref: battle.target, player: battle.defender }].every(({ ref, player }) => {
     const card = board.cards[ref.instanceId]; if (!card || card.generation !== ref.generation) return false;
     const at = location(board, card.instanceId);
     return card.owner === player && card.controller === player && card.faceUp && at.player === player && card.kind === at.zone && (at.zone === "leader" || at.zone === "character");
   });
-  let next = applySystemEvent(progression, progression.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "attack" });
-  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "attack", participantsPresent: present });
+}
+export function finishCounterStep(board: MovementState, progression: Progression, actor: Seat): Progression {
+  ensureMove(checkTiming(progression, actor, "endCounter").allowed, "v3-counter-end-window");
+  const battle = progression.battle!, present = battleParticipantsPresent(board, progression);
+  let next = applyPlayerIntent(progression, progression.revision, actor, "endCounter");
+  next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "counter" });
+  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "counter", participantsPresent: present });
   if (!present) {
     next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "end" });
     next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "end", participantsPresent: false });

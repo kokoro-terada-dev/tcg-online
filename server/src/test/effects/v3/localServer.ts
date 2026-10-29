@@ -162,7 +162,7 @@ export async function startLocalV3Server(port = 0) {
       const { room, actor, session } = continuousActive(); ensureMove(input && typeof input === "object", "v3-session-command-object");
       const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value;
       const fields: Record<string, string[]> = { activate: ["effectId"], trigger: ["token"], play: ["card"], answer: ["selectionId", "tokens"], life: ["selectionId", "token"],
-        attack: ["source", "target"], counter: ["card", "target"], attachDon: ["target", "count"], block: ["card"], advance: [], work: [], endTurn: [], passBlock: [], endCounter: [], damage: [] };
+        attack: ["source", "target"], counter: ["card", "target"], counterEvent: ["card", "effectId"], attachDon: ["target", "count"], block: ["card"], advance: [], work: [], endTurn: [], passBlock: [], endCounter: [], damage: [] };
       ensureMove(typeof kind === "string" && Object.hasOwn(fields, kind), "v3-session-command-kind");
       dataObject(input, ["kind", "requestId", "matchId", "context", ...fields[kind]!, ...(kind === "play" && Object.hasOwn(input, "slotIndex") ? ["slotIndex"] : [])]);
       ensureMove(input.matchId === session.matchId, "v3-session-match-context"); const requestId = label(input.requestId), expected = input.context as V3SessionContext, c = session.coordinator;
@@ -170,6 +170,7 @@ export async function startLocalV3Server(port = 0) {
       else if (kind === "trigger") c.resolveTrigger(actor, requestId, expected, label(input.token));
       else if (kind === "attack") c.attack(actor, requestId, expected, input.source as { instanceId: string; generation: number }, input.target as { instanceId: string; generation: number });
       else if (kind === "counter") c.counter(actor, requestId, expected, input.card as { instanceId: string; generation: number }, input.target as { instanceId: string; generation: number });
+      else if (kind === "counterEvent") c.useCounterEvent(actor, requestId, expected, input.card as { instanceId: string; generation: number }, label(input.effectId));
       else if (kind === "block") c.block(actor, requestId, expected, input.card as { instanceId: string; generation: number });
       else if (kind === "passBlock" || kind === "endCounter") c.battleDecision(actor, requestId, expected, kind);
       else if (kind === "damage") c.resolveDamage(actor, requestId, expected);

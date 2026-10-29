@@ -46,13 +46,19 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
             {battle.step === "counter" && <button disabled={disabled} onClick={() => onAction("endCounter")}>カウンター終了</button>}
             {battle.step === "damage" && <button disabled={disabled} onClick={() => onAction("damage")}>バトル結果を確定</button>}
           </div>}
-          {defending && battle.step === "counter" && <>
+          {defending && battle.step === "counter" && view.gate === "idle" && <>
             <select aria-label="カウンターの対象" value={counterTarget?.instanceId ?? ""} onChange={event => setCounterTargetId(event.target.value)}>{counterTargets.map(card =>
               <option key={card.card.instanceId} value={card.card.instanceId}>{card.zone === "leader" ? "リーダー" : `キャラ${card.slot + 1}`}</option>)}</select>
             <div className="v3-counter-cards">{view.counterChoices.map(choice => {
               const id = view.imageAliases[choice.cardId] ?? choice.cardId, image = getLocalCardImage(id)?.imageUrl;
               return <button key={choice.card.instanceId} disabled={disabled || !counterTarget} onClick={() => counterTarget && onAction("counter", { card: choice.card, target: counterTarget })}>
                 {image ? <img src={image} alt={id} draggable={false} /> : <span>{id}</span>}<b>+{choice.amount}</b>
+              </button>;
+            })}</div>
+            <div className="v3-counter-cards">{view.counterEventChoices.map(choice => {
+              const id = view.imageAliases[choice.cardId] ?? choice.cardId, image = getLocalCardImage(id)?.imageUrl;
+              return <button key={`${choice.card.instanceId}:${choice.effectId}`} disabled={disabled || !choice.enabled} onClick={() => onAction("counterEvent", { card: choice.card, effectId: choice.effectId })}>
+                {image ? <img src={image} alt={id} draggable={false} /> : <span>{id}</span>}<b>イベント（DON{choice.cost ?? "?"}）</b>
               </button>;
             })}</div>
           </>}

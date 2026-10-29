@@ -12,6 +12,7 @@ export type V3SessionView = Readonly<{
   attackChoices: Readonly<{ sources: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string }>[]; targets: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string }>[]; pairs: readonly Readonly<{ sourceId: string; targetId: string }>[] }>;
   blockerChoices: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string }>[];
   counterChoices: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string; amount: number }>[];
+  counterEventChoices: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string; effectId: string; cost: number | null; enabled: boolean }>[];
   lifePending: boolean; lifeChoice: Readonly<{ selectionId: string; token: string; expiresAt: number; cardId: string }> | null;
   resolutionActor: 0 | 1 | null; workType: V3FixtureView["workType"];
   effects: readonly Readonly<{ effectId: string; label: string; enabled: boolean; used: number; limit: number | null }>[];
@@ -24,6 +25,7 @@ export type V3SessionCommand = Readonly<{ matchId: string; requestId: string; co
   { kind: "activate"; effectId: string } | { kind: "trigger"; token: string } | { kind: "play"; card: Readonly<{ instanceId: string; generation: number }>; slotIndex?: number } |
   { kind: "attack"; source: Readonly<{ instanceId: string; generation: number }>; target: Readonly<{ instanceId: string; generation: number }> } |
   { kind: "counter"; card: Readonly<{ instanceId: string; generation: number }>; target: Readonly<{ instanceId: string; generation: number }> } |
+  { kind: "counterEvent"; card: Readonly<{ instanceId: string; generation: number }>; effectId: string } |
   { kind: "life"; selectionId: string; token: string } | { kind: "passBlock" | "endCounter" | "damage" } |
   { kind: "attachDon"; target: Readonly<{ instanceId: string; generation: number }>; count: number } |
   { kind: "block"; card: Readonly<{ instanceId: string; generation: number }> } |

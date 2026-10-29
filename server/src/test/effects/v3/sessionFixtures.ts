@@ -46,20 +46,25 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
   });
   const mainIds = new Set<string>();
   for (const actor of [0, 1] as const) for (const zone of ["deck", "hand", "life"] as const) for (const object of match.players[actor].zones[zone]) {
-    if (!object || object.kind !== "character" && object.kind !== "stage") continue;
+    if (!object || object.kind !== "character" && object.kind !== "stage" && object.kind !== "event") continue;
     const originalId = object.cardId, kind = object.kind, cardId = `V3-SESSION-MAIN-${createHash("sha256").update(JSON.stringify([kind, originalId])).digest("hex")}`;
     ensureMove(!imageAliases[cardId] || imageAliases[cardId] === originalId, "v3-session-image-alias-conflict"); imageAliases[cardId] = originalId; object.cardId = cardId;
     if (mainIds.has(cardId)) continue; mainIds.add(cardId);
-    plans.push(compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.16", cardId, cardVersion: "session-entry.4", name: `Synthetic ${kind}`, cardType: kind,
+    plans.push(compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.16", cardId, cardVersion: "session-entry.5", name: `Synthetic ${kind}`, cardType: kind,
       baseStats: { cost: kind === "character" ? 2 : 1, power: kind === "character" ? 2000 : null, counter: kind === "character" ? 1000 : 0, life: null },
       colors: [], traits: [], attributes: [], keywords: kind === "character" ? [{ type: "BLOCKER" }, { type: "RUSH" }] : [], reviewStatus: "approved",
-      effects: [{ id: "enterDraw", kind: "triggered", timing: { type: "ON_PLAY" }, sourceZones: [kind], optional: true, usageLimit: null,
+      effects: kind === "event" ? [{ id: "counterPower", kind: "activated", timing: { type: "COUNTER" }, sourceZones: ["hand"], optional: false, usageLimit: null,
+        activationConditions: always(), resolutionConditions: always(), costs: [], actions: [
+          { type: "SELECT", bindAs: "target", selector: { type: "CARDS", owner: "SELF", controller: "SELF", chooser: "SELF", zone: "leader", cardTypes: ["leader"], filters: always(), excludeSource: false,
+            faceUpOnly: true, min: 1, max: 1, visibility: "PUBLIC", selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } },
+          { type: "MODIFY_STAT", cards: { ref: "bindings.target" }, stat: "power", amount: 2000, duration: { type: "BATTLE_END" } },
+        ] }] : [{ id: "enterDraw", kind: "triggered", timing: { type: "ON_PLAY" }, sourceZones: [kind], optional: true, usageLimit: null,
         activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] },
         ...(kind === "character" ? [{ id: "attackDraw", kind: "triggered", timing: { type: "ON_ATTACK" }, sourceZones: [kind], optional: true, usageLimit: null,
           activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] },
           { id: "koDraw", kind: "triggered", timing: { type: "ON_KO" }, sourceZones: [kind], optional: true, usageLimit: null,
             activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] }] : [])],
-      source: { text: kind === "character" ? "Synthetic character: BLOCKER, RUSH. On play, when attacking and on KO, optionally draw one card. Not an official ability." : "Synthetic stage: when this card enters its field zone, optionally draw one card. Not an official ability.", triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-entry.4").digest("hex") } })));
+      source: { text: kind === "event" ? "Synthetic counter event: pay one DON and give your leader +2000 power during this battle. Not an official ability." : kind === "character" ? "Synthetic character: BLOCKER, RUSH. On play, when attacking and on KO, optionally draw one card. Not an official ability." : "Synthetic stage: when this card enters its field zone, optionally draw one card. Not an official ability.", triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-entry.5").digest("hex") } })));
   }
   const rulesetVersion = "synthetic-session.1", catalog = new ApprovedV3Catalog(plans, plans.map(plan => ({ status: "approved", cardId: plan.definition.cardId, cardVersion: plan.definition.cardVersion,
     definitionHash: plan.definitionHash, sourceHash: plan.sourceHash, compilerVersion: plan.compilerVersion, registryHash: plan.registryHash, rulesetVersion,

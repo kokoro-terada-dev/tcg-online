@@ -60,6 +60,7 @@ export interface TimingMap {
   MAIN: NodeMeta & { type: "MAIN" }; ON_PLAY: NodeMeta & { type: "ON_PLAY" };
   ON_ATTACK: NodeMeta & { type: "ON_ATTACK" }; ON_OPPONENT_ATTACK: NodeMeta & { type: "ON_OPPONENT_ATTACK" };
   ON_KO: NodeMeta & { type: "ON_KO" };
+  COUNTER: NodeMeta & { type: "COUNTER" };
 }
 export interface KeywordMap {
   BLOCKER: NodeMeta & { type: "BLOCKER" };
@@ -74,13 +75,13 @@ export type Predicate = Node<"predicate">;
 export type Action = Node<"action">;
 export type Effect = {
   id: string; kind: "activated" | "triggered"; timing: Node<"timing">;
-  sourceZones: ("leader" | "character" | "stage")[]; optional: boolean;
+  sourceZones: ("leader" | "character" | "stage" | "hand")[]; optional: boolean;
   usageLimit: { type: "PER_TURN"; scope: "SOURCE_OBJECT"; count: number } | null;
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };
 export type CardDefinition = {
   schemaVersion: "3.0.0-subset.16"; cardId: string; cardVersion: string;
-  name: string; cardType: "leader" | "character" | "stage";
+  name: string; cardType: "leader" | "character" | "stage" | "event";
   baseStats: { cost: number | null; power: number | null; counter: number | null; life: number | null };
   colors: string[]; traits: string[]; attributes: string[]; keywords: Node<"keyword">[];
   reviewStatus: "needs_review" | "unsupported" | "approved";

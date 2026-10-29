@@ -30,6 +30,31 @@ async function complete(socket, v) {
   throw Error('Session resolution did not complete');
 }
 
+test('counter events synchronize payment and selection without exposing the other hand', async t => {
+  const events = { ...deck, mainDeck: Array(50).fill('EVENT'), cardTypes: { EVENT: 'event' } };
+  const { host, guest } = await setup(t, 0, [events, events]);
+  let v = (await request(host, 'v3-session:sync')).sessionView; v = await send(host, v, 'endTurn');
+  v = (await request(guest, 'v3-session:sync')).sessionView; v = await send(guest, v, 'endTurn');
+  v = (await request(host, 'v3-session:sync')).sessionView;
+  v = await send(host, v, 'attack', { source: v.attackChoices.sources[0].card, target: v.attackChoices.targets[0].card });
+  let defended = (await request(guest, 'v3-session:sync')).sessionView; defended = await send(guest, defended, 'passBlock');
+  const choice = defended.counterEventChoices[0], beforeHand = defended.movement.players[1].hand.length, beforeDon = defended.movement.players[1].activeDon.length;
+  const use = command(defended, 'counterEvent', { card: choice.card, effectId: choice.effectId });
+  const used = await request(guest, 'v3-session:command', use); assert.equal(used.ok, true); defended = used.sessionView;
+  assert.equal((await request(guest, 'v3-session:command', use)).sessionView.context.revision, defended.context.revision);
+  defended = await send(guest, defended, 'advance');
+  const peer = (await request(host, 'v3-session:sync')).sessionView;
+  assert.deepEqual(peer.frame.choice.options, []); assert.deepEqual(peer.counterEventChoices, []);
+  assert.equal(peer.movement.players[1].hand.every(card => card.cardId === null && card.ref === null), true);
+  assert.equal(peer.movement.players[1].trash[0].cardId, choice.cardId);
+  defended = await complete(guest, defended);
+  assert.equal(defended.movement.players[1].hand.length, beforeHand - 1); assert.equal(defended.movement.players[1].activeDon.length, beforeDon - 1);
+  assert.equal(defended.battle.powers.defense, 7000);
+  const seen = (await request(host, 'v3-session:sync')).sessionView; assert.deepEqual(seen.battle, defended.battle);
+  defended = await send(guest, defended, 'endCounter'); defended = await send(guest, defended, 'damage');
+  assert.equal(defended.battle, null); assert.equal(defended.publicStats.find(card => card.player === 1 && card.zone === 'leader').powerDelta, 0);
+});
+
 for (const actor of [0, 1]) test(`fresh synthetic Rush attacks and only a declared Blocker redirects the source arrow for seat ${actor}`, async t => {
   const { clients } = await setup(t, actor), own = clients[actor], peer = clients[1 - actor];
   async function enter(socket) {

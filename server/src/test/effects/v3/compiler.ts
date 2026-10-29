@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
 import type { CardDefinition, CardSetRef, Category, CompiledCard, DonZone, Node, NodeMeta, Value } from "./dsl";
 
-export const COMPILER_VERSION = "v3-subset-compiler.16.1";
+export const COMPILER_VERSION = "v3-subset-compiler.16.2";
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 function inspectData(input: unknown): void {
@@ -109,6 +109,7 @@ export function builtinV3Registries(): V3Registries {
     return { type: "MODIFY_STAT", ...meta, cards: c.cards(n.cards), stat: n.stat, amount: n.amount, duration: c.read("duration", n.duration) };
   });
   r.timing.register("MAIN", "1", (n, c) => ({ type: "MAIN", ...c.fields(n, []) }));
+  r.timing.register("COUNTER", "1", (n, c) => ({ type: "COUNTER", ...c.fields(n, []) }));
   r.timing.register("ON_PLAY", "1", (n, c) => ({ type: "ON_PLAY", ...c.fields(n, []) }));
   for (const type of ["ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_KO"] as const) r.timing.register(type, "1", (n, c) => ({ type, ...c.fields(n, []) }));
   for (const type of ["all", "any"] as const) r.predicate.register(type, "1", (n, c) => ({ type, ...c.fields(n, ["conditions"]), conditions: c.list("predicate", n.conditions) }));
@@ -206,7 +207,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   ensureMove(input.schemaVersion === "3.0.0-subset.16", "unsupported-v3-schema-version");
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
   ensureMove(typeof input.name === "string" && input.name.trim().length > 0 && input.name.length <= 300, "invalid-v3-card-name");
-  ensureMove(input.cardType === "leader" || input.cardType === "character" || input.cardType === "stage", "unsupported-v3-card-type");
+  ensureMove(input.cardType === "leader" || input.cardType === "character" || input.cardType === "stage" || input.cardType === "event", "unsupported-v3-card-type");
   dataObject(input.baseStats, ["cost", "power", "counter", "life"]);
   for (const number of Object.values(input.baseStats)) ensureMove(number === null || typeof number === "number" && Number.isSafeInteger(number) && number >= 0, "invalid-v3-base-stat");
   const stringList = (value: unknown): string[] => {
@@ -280,18 +281,19 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
       ensureMove(effect.usageLimit.type === "PER_TURN" && effect.usageLimit.scope === "SOURCE_OBJECT", "unsupported-v3-usage-limit");
       usageLimit = { type: "PER_TURN", scope: "SOURCE_OBJECT", count: count(effect.usageLimit.count) };
     }
-    dataArray(effect.sourceZones, 3); ensureMove(effect.sourceZones.length === 1 && effect.sourceZones[0] === input.cardType, "unsupported-v3-source-zones");
+    dataArray(effect.sourceZones, 3); ensureMove(effect.sourceZones.length === 1 && effect.sourceZones[0] === (input.cardType === "event" ? "hand" : input.cardType), "unsupported-v3-source-zones");
     const timing = context.read("timing", effect.timing); currentTiming = timing.type;
     const activationConditions = context.read("predicate", effect.activationConditions),
       resolutionConditions = context.read("predicate", effect.resolutionConditions), costs = context.list("cost", effect.costs);
-    ensureMove(effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_PLAY" && input.cardType !== "leader" || timing.type === "ON_ATTACK" && input.cardType !== "stage" || timing.type === "ON_OPPONENT_ATTACK" || timing.type === "ON_KO" && input.cardType === "character", "v3-kind-timing-mismatch");
+    ensureMove(input.cardType === "event" ? effect.kind === "activated" && timing.type === "COUNTER" : effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_PLAY" && input.cardType !== "leader" || timing.type === "ON_ATTACK" && input.cardType !== "stage" || timing.type === "ON_OPPONENT_ATTACK" || timing.type === "ON_KO" && input.cardType === "character", "v3-kind-timing-mismatch");
+    if (input.cardType === "event") ensureMove(!effect.optional && usageLimit === null && costs.length === 0 && activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-event-additional-activation-unresolved");
     ensureMove(timing.type !== "ON_KO" || costs.length === 0, "v3-ko-activation-cost-unresolved");
     ensureMove(effect.kind !== "triggered" || activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-trigger-event-conditions-unresolved");
     ensureMove(costs.reduce((sum, cost) => sum + (cost.type === "DISCARD_HAND" ? cost.count : 0), 0) <= 50, "v3-discard-cost-limit");
     ensureMove(costs.filter(cost => cost.type === "REST_SOURCE").length <= 1, "v3-duplicate-rest-source-cost");
     ensureMove(costs.filter(cost => cost.type === "DON_RETURN").length <= 1, "v3-multiple-don-return-costs-unsupported");
     const actions = context.list("action", effect.actions); ensureMove(actions.length > 0, "v3-action-required");
-    return { id, kind: effect.kind, optional: effect.optional, usageLimit, sourceZones: effect.sourceZones as ("leader" | "character" | "stage")[], timing,
+    return { id, kind: effect.kind, optional: effect.optional, usageLimit, sourceZones: effect.sourceZones as CardDefinition["effects"][number]["sourceZones"], timing,
       activationConditions, resolutionConditions, costs, actions };
   });
   const definition: CardDefinition = { schemaVersion: "3.0.0-subset.16", cardId, cardVersion, name: input.name, cardType: input.cardType,

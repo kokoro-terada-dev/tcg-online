@@ -12,6 +12,10 @@ export type SessionDetails = Readonly<{ effectId?: string; token?: string; token
 export function v3SessionCommand(view: V3SessionView, kind: V3SessionCommand["kind"], requestId: string, details: SessionDetails = {}): V3SessionCommand {
   const base = { matchId: view.matchId, requestId, context: { ...view.context } }, ownTurn = view.activePlayer === view.localPlayerIndex;
   const idle = view.gate === "idle" && !view.outcome && !view.battle && (!view.frame || view.frame.status === "completed");
+  if (kind === "counterEvent") {
+    if (!details.card || !view.counterEventChoices.some(choice => choice.enabled && choice.card.instanceId === details.card!.instanceId && choice.card.generation === details.card!.generation && choice.effectId === details.effectId)) throw Error("Counter event is unavailable");
+    return { ...base, kind, card: { ...details.card }, effectId: details.effectId! };
+  }
   if (kind === "block") {
     if (view.battle?.defender !== view.localPlayerIndex || view.battle?.step !== "block" || view.gate !== "idle" || !details.card || !view.blockerChoices.some(choice => choice.card.instanceId === details.card!.instanceId && choice.card.generation === details.card!.generation)) throw Error("Blocker is unavailable");
     return { ...base, kind, card: { ...details.card } };
