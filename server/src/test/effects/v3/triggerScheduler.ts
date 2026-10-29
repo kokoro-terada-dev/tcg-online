@@ -6,26 +6,30 @@ import type { MovementState } from "../../movement/types";
 import type { CardObjectRef } from "../types";
 
 export type TriggerCause = Readonly<{ type: "ON_PLAY"; eventId: string; event: MovementEvent }> |
+  Readonly<{ type: "ON_KO"; eventId: string; event: MovementEvent }> |
   Readonly<{ type: "ON_ATTACK" | "ON_OPPONENT_ATTACK"; eventId: string; battleId: string; attacker: 0 | 1; attackSource: Readonly<CardObjectRef>; turnNumber: number }>;
-export type PlayTrigger = Readonly<{ token: string; batchId: string; actor: 0 | 1; cardId: string; effectId: string; source: Readonly<CardObjectRef>; cause: TriggerCause }>;
-export const SYNTHETIC_TRIGGER_POLICY = "synthetic-triggers.attack-entry.3";
+export type ScheduledTrigger = Readonly<{ token: string; batchId: string; actor: 0 | 1; cardId: string; effectId: string; source: Readonly<CardObjectRef>; cause: TriggerCause }>;
+export const SYNTHETIC_TRIGGER_POLICY = "synthetic-triggers.attack-entry-ko.4";
 
 // Self-entry events only. Watcher abilities and official simultaneous-trigger rulings are not inferred.
-export function playTriggerCandidates(events: readonly MovementEvent[], definitions: ReadonlyMap<string, ApprovedV3Card>) {
+export function movementTriggerCandidates(events: readonly MovementEvent[], definitions: ReadonlyMap<string, ApprovedV3Card>) {
   return events.flatMap(event => {
-    if (event.kind !== "moved" || !event.after || !event.to || !event.from || event.from.zone === event.to.zone || !event.after.faceUp ||
-      !["character", "stage"].includes(event.to.zone) || event.after.kind !== event.to.zone || event.after.owner !== event.to.player || event.after.controller !== event.to.player) return [];
+    if (event.kind !== "moved" || !event.after || !event.to || !event.from || !event.after.faceUp || event.after.owner !== event.to.player || event.after.controller !== event.to.player) return [];
+    const onKo = event.isKO && ["BATTLE_KO", "EFFECT_KO"].includes(event.cause.kind) && event.from.zone === "character" && event.to.zone === "trash" && event.before?.kind === "character" && event.after.kind === "character";
+    const onPlay = event.from.zone !== event.to.zone && ["character", "stage"].includes(event.to.zone) && event.after.kind === event.to.zone;
+    if (!onKo && !onPlay) return [];
+    const timing = onKo ? "ON_KO" as const : "ON_PLAY" as const, sourceZone = onKo ? event.from.zone : event.to.zone;
     const definition = definitions.get(event.after.cardId);
-    return definition?.definition.effects.filter(effect => effect.kind === "triggered" && effect.timing.type === "ON_PLAY" && effect.sourceZones.some(zone => zone === event.to!.zone))
-      .map(effect => ({ actor: event.after!.controller, cardId: event.after!.cardId, effectId: effect.id, event })) ?? [];
+    return definition?.definition.effects.filter(effect => effect.kind === "triggered" && effect.timing.type === timing && effect.sourceZones.some(zone => zone === sourceZone))
+      .map(effect => ({ actor: event.after!.controller, cardId: event.after!.cardId, effectId: effect.id, timing, event })) ?? [];
   });
 }
-export function enqueuePlayTriggers(events: readonly MovementEvent[], definitions: ReadonlyMap<string, ApprovedV3Card>): readonly PlayTrigger[] {
+export function enqueueMovementTriggers(events: readonly MovementEvent[], definitions: ReadonlyMap<string, ApprovedV3Card>): readonly ScheduledTrigger[] {
   const batchId = randomUUID();
-  return playTriggerCandidates(events, definitions).map(({ event, ...candidate }) => ({ ...candidate, batchId, token: randomUUID(),
-    source: { instanceId: event.after!.instanceId, generation: event.after!.generation }, cause: { type: "ON_PLAY", eventId: event.eventId, event } }));
+  return movementTriggerCandidates(events, definitions).map(({ event, timing, ...candidate }) => ({ ...candidate, batchId, token: randomUUID(),
+    source: { instanceId: event.after!.instanceId, generation: event.after!.generation }, cause: { type: timing, eventId: event.eventId, event } }));
 }
-export function enqueueAttackTriggers(board: MovementState, progression: Progression, definitions: ReadonlyMap<string, ApprovedV3Card>): readonly PlayTrigger[] {
+export function enqueueAttackTriggers(board: MovementState, progression: Progression, definitions: ReadonlyMap<string, ApprovedV3Card>): readonly ScheduledTrigger[] {
   const battle = progression.battle; if (!battle || battle.step !== "attack") return [];
   const batchId = randomUUID(), eventId = `attack:${battle.battleId}`;
   return ([battle.attacker, battle.defender] as const).flatMap(actor => {
@@ -41,11 +45,11 @@ export function enqueueAttackTriggers(board: MovementState, progression: Progres
   });
 }
 // Preserve the earlier timing group before any derived events (CR 8-6-1).
-export function triggerChooser(queue: readonly PlayTrigger[], activePlayer: 0 | 1): 0 | 1 | null {
+export function triggerChooser(queue: readonly ScheduledTrigger[], activePlayer: 0 | 1): 0 | 1 | null {
   const first = queue[0]; if (!first) return null;
   return queue.some(entry => entry.batchId === first.batchId && entry.actor === activePlayer) ? activePlayer : (1 - activePlayer) as 0 | 1;
 }
-export function availableTriggers(queue: readonly PlayTrigger[], activePlayer: 0 | 1): readonly PlayTrigger[] {
+export function availableTriggers(queue: readonly ScheduledTrigger[], activePlayer: 0 | 1): readonly ScheduledTrigger[] {
   const first = queue[0], chooser = triggerChooser(queue, activePlayer);
   return first ? queue.filter(entry => entry.batchId === first.batchId && entry.actor === chooser) : [];
 }

@@ -15,8 +15,8 @@ type Seat = 0 | 1;
 export type BattleCounters = readonly Readonly<{ target: Ref; amount: number }>[];
 export type LifeDecision = Readonly<{ battleId: string; resolutionId: string; selectionId: string; token: string; defender: Seat; card: Ref; expiresAt: number }>;
 export const V3_BASE_BATTLE_RULES = {
-  version: "v3-base-battle.3", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
-  reviewedAt: "2026-10-29", clauses: ["6-5-5", "6-5-6", "7-1", "7-1-1-3", "7-1-1-4", "7-1-3", "7-1-4", "7-1-5", "8-6-1", "10-1-1", "10-1-4", "10-1-6", "10-1-7", "10-2-5", "10-2-16"],
+  version: "v3-base-battle.4", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
+  reviewedAt: "2026-10-29", clauses: ["6-5-5", "6-5-6", "7-1", "7-1-1-3", "7-1-1-4", "7-1-3", "7-1-4", "7-1-5", "8-4-5", "8-6-1", "10-1-1", "10-1-4", "10-1-6", "10-1-7", "10-2-1", "10-2-5", "10-2-16", "10-2-17"],
 } as const;
 function field(board: MovementState, ref: Ref, player: Seat) {
   const card = getCard(board, ref), at = location(board, card.instanceId);
@@ -116,20 +116,21 @@ export function useCounter(board: MovementState, progression: Progression, actor
       to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "OTHER" }] }, { status: "certifiedNone" });
   return { ...result, counters: freezeMovement([...counters, { target: { ...target }, amount: option.amount }]) };
 }
-function finishDamage(progression: Progression): Progression {
+export function finishDamageStep(progression: Progression): Progression {
   const battle = progression.battle!;
   let next = applySystemEvent(progression, progression.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "damage" });
   next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "damage", participantsPresent: false });
   next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "end" });
   return applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "end", participantsPresent: false });
 }
-export function damage(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, effects: StatEffects, counters: BattleCounters, transactionId: string, now: number) {
+export function damage(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, effects: StatEffects, counters: BattleCounters, transactionId: string, now: number, deferKoEffects = false) {
   const battle = progression.battle;
   ensureMove(battle && actor === battle.defender && battle.step === "damage" && battle.decisionComplete && !battle.settled && progression.gate.kind === "idle" && !progression.outcome, "v3-battle-damage-window");
   const powers = battlePower(board, progression, definitions, effects, counters)!;
   const target = field(board, battle.target, actor), hits = powers.attack >= powers.defense;
   let next = progression; let movement = board; let events: readonly MovementEvent[] = [];
   let pendingLife: LifeDecision | null = null;
+  let deferredKO = false;
   if (hits && target.kind === "leader" && board.players[actor].life.length === 0) {
     next = applySystemEvent(next, next.revision, { kind: "finishGame", winner: battle.attacker, reason: "leader-damage-at-zero-life" });
   } else if (hits && target.kind === "leader") {
@@ -150,10 +151,11 @@ export function damage(board: MovementState, progression: Progression, actor: Se
         actor: battle.attacker, effectController: null, source: battle.source, mode: "rule", resolutionId: null,
         operations: [{ kind: "move", card: battle.target, from: { player: actor, zone: "character" }, to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "BATTLE_KO" }] }, { status: "certifiedNone" });
       movement = result.state; events = result.events;
+      deferredKO = deferKoEffects;
     }
-    next = finishDamage(next);
+    if (!deferredKO) next = finishDamageStep(next);
   }
-  return { movement, progression: next, events, pendingLife };
+  return { movement, progression: next, events, pendingLife, deferredKO };
 }
 export function takeLife(board: MovementState, progression: Progression, actor: Seat, pending: LifeDecision, selectionId: string, token: string, transactionId: string, now: number) {
   const gate = progression.gate, battle = progression.battle;
@@ -162,7 +164,7 @@ export function takeLife(board: MovementState, progression: Progression, actor: 
     board.players[actor].life[0] === pending.card.instanceId, "v3-life-choice-unavailable");
   getCard(board, pending.card); field(board, battle.source, battle.attacker); field(board, battle.target, actor);
   let next = applySystemEvent(progression, progression.revision, { kind: "acceptChoice", resolutionId: pending.resolutionId, selectionId, chooser: actor });
-  next = applySystemEvent(next, next.revision, { kind: "finishResolution", resolutionId: pending.resolutionId }); next = finishDamage(next);
+  next = applySystemEvent(next, next.revision, { kind: "finishResolution", resolutionId: pending.resolutionId }); next = finishDamageStep(next);
   const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
     actor, effectController: null, source: battle.source, mode: "rule", resolutionId: pending.resolutionId,
     operations: [{ kind: "move", card: pending.card, from: { player: actor, zone: "life" }, to: { player: actor, zone: "hand", position: "append", faceUp: true, rotated: false }, cause: "DAMAGE" },

@@ -1,6 +1,6 @@
 {
   "keywords": [],
-  "schemaVersion": "3.0.0-subset.15", "cardId": "EXAMPLE-SOURCE-COST-NOT-REAL", "cardVersion": "fixture.1",
+  "schemaVersion": "3.0.0-subset.16", "cardId": "EXAMPLE-SOURCE-COST-NOT-REAL", "cardVersion": "fixture.1",
   "name": "合成テスト用・発動元レストと複合コスト（実在しません）", "cardType": "leader",
   "baseStats": { "cost": null, "power": null, "counter": null, "life": null },
   "colors": [], "traits": [], "attributes": [], "reviewStatus": "needs_review",

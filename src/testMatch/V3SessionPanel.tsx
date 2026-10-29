@@ -38,9 +38,9 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="v3連続操作検証">
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
       <div hidden={collapsed}><strong>v3検証・連続操作</strong><p>{view.turnNumber}ターン目・{ownTurn ? "自分" : "相手"}のターン</p>
-        {battle && <div className="v3-battle-status"><p role="status">{battle.step === "attack" ? "アタック時の効果処理" : battle.step === "block" ? "ブロック" : battle.step === "counter" ? "カウンター" : "ダメージ確認"}・{battle.step === "attack" ? attackEffectActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち" : defending ? "自分が操作" : "相手の操作待ち"}</p>
-          <p>攻撃 {battle.powers?.attack ?? "?"} → 防御 {battle.powers?.defense ?? "?"}</p>
-          {defending && !view.lifePending && <div className="test-effect-actions">
+        {battle && <div className="v3-battle-status"><p role="status">{view.damageEffectsPending ? "KO時の効果処理" : battle.step === "attack" ? "アタック時の効果処理" : battle.step === "block" ? "ブロック" : battle.step === "counter" ? "カウンター" : "ダメージ確認"}・{battle.step === "attack" || view.damageEffectsPending ? attackEffectActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち" : defending ? "自分が操作" : "相手の操作待ち"}</p>
+          {!view.damageEffectsPending && <p>攻撃 {battle.powers?.attack ?? "?"} → 防御 {battle.powers?.defense ?? "?"}</p>}
+          {defending && !view.lifePending && !view.damageEffectsPending && view.gate === "idle" && <div className="test-effect-actions">
             {battle.step === "block" && view.blockerChoices.map(choice => <button key={choice.card.instanceId} disabled={disabled} onClick={() => onAction("block", { card: choice.card })}>ブロック・{view.imageAliases[choice.cardId] ?? choice.cardId}</button>)}
             {battle.step === "block" && <button disabled={disabled} onClick={() => onAction("passBlock")}>ブロックしない</button>}
             {battle.step === "counter" && <button disabled={disabled} onClick={() => onAction("endCounter")}>カウンター終了</button>}
@@ -62,7 +62,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
         </div>}
         {view.gate === "trigger" && <div><p role="status">{view.triggerChooser === view.localPlayerIndex ? "解決する効果を選択" : "相手の効果を待っています"}（{view.pendingTriggerCount}件）</p>
           <div className="test-effect-actions">{view.triggerChoices.map(choice => <button key={choice.token} disabled={disabled} onClick={() => onAction("trigger", { token: choice.token })}>
-            {choice.timing === "ON_PLAY" ? "登場時" : choice.timing === "ON_ATTACK" ? "アタック時" : "相手のアタック時"}・{view.imageAliases[choice.cardId] ?? choice.cardId}
+            {choice.timing === "ON_KO" ? "KO時" : choice.timing === "ON_PLAY" ? "登場時" : choice.timing === "ON_ATTACK" ? "アタック時" : "相手のアタック時"}・{view.imageAliases[choice.cardId] ?? choice.cardId}
           </button>)}</div></div>}
         {view.publicReveals.length > 0 && <div className="v3-public-reveals" aria-label="公開中のカード">{view.publicReveals.map((card, index) => {
           const id = view.imageAliases[card.cardId] ?? card.cardId, image = getLocalCardImage(id)?.imageUrl;

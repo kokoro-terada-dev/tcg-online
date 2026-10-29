@@ -43,17 +43,23 @@ export class V3FixtureCoordinator {
     this.#keywordGrants = validateKeywordGrants(options.movement, options.keywordGrants ?? []);
     const { identity, movement, progression, card } = options;
     const trigger = options.triggerCause, battle = progression.battle;
-    const triggerTiming = trigger && progression.gate.kind === "idle" && progression.phase === "main" && progression.phaseSettled && !progression.outcome && (!battle || battle.step === "attack");
+    const triggerTiming = trigger && progression.gate.kind === "idle" && progression.phase === "main" && progression.phaseSettled && !progression.outcome && (!battle || battle.step === "attack" || battle.step === "damage");
     ensureMove(identity.matchId === movement.matchId && movement.turnNumber === progression.turnNumber && (triggerTiming || checkTiming(progression, identity.actor, "mainEffect").allowed), "v3-fixture-timing");
     ensureMove(Object.values(movement.cards).every(card => !card.modifierIds.length && !card.grantIds.length) && movement.players.every(zones => zones.deck.length > 0) && movement.reveals.length === 0, "v3-fixture-unmodeled-board");
     const source = getCard(movement, identity.source), at = location(movement, source.instanceId), effect = card.definition.effects.find(effect => effect.id === identity.effectId);
-    ensureMove(effect && source.cardId === card.definition.cardId && source.kind === card.definition.cardType && source.owner === identity.actor && source.controller === identity.actor && source.faceUp && at.player === identity.actor && effect.sourceZones.some(zone => zone === at.zone), "v3-fixture-source");
+    const sourceZone = trigger?.type === "ON_KO" ? trigger.event.from?.zone : at.zone;
+    ensureMove(effect && source.cardId === card.definition.cardId && source.kind === card.definition.cardType && source.owner === identity.actor && source.controller === identity.actor && source.faceUp && at.player === identity.actor && effect.sourceZones.some(zone => zone === sourceZone), "v3-fixture-source");
     if (trigger) {
       ensureMove(effect.kind === "triggered" && effect.timing.type === trigger.type, "v3-fixture-trigger-type");
       if (trigger.type === "ON_PLAY") {
         const event = trigger.event;
         ensureMove(event.kind === "moved" && event.eventId === trigger.eventId && event.from && event.to && event.from.zone !== event.to.zone &&
           event.to.player === identity.actor && event.to.zone === at.zone && event.after?.instanceId === source.instanceId && event.after.generation === source.generation && event.after.cardId === source.cardId, "v3-fixture-entry-authorization");
+      } else if (trigger.type === "ON_KO") {
+        const event = trigger.event;
+        ensureMove(event.kind === "moved" && event.eventId === trigger.eventId && event.isKO && ["BATTLE_KO", "EFFECT_KO"].includes(event.cause.kind) && event.from?.zone === "character" && event.to?.zone === "trash" &&
+          at.zone === "trash" && event.to.player === identity.actor && event.before?.kind === "character" && event.before.faceUp && event.before.owner === identity.actor && event.before.controller === identity.actor &&
+          event.after?.instanceId === source.instanceId && event.after.generation === source.generation && event.before.generation + 1 === source.generation && event.after.cardId === source.cardId && event.before.cardId === source.cardId, "v3-fixture-ko-authorization");
       } else ensureMove(battle?.step === "attack" && battle.battleId === trigger.battleId && battle.attacker === trigger.attacker && progression.turnNumber === trigger.turnNumber &&
         battle.source.instanceId === trigger.attackSource.instanceId && battle.source.generation === trigger.attackSource.generation &&
         (trigger.type === "ON_ATTACK" ? identity.actor === battle.attacker && source.instanceId === battle.source.instanceId && source.generation === battle.source.generation : identity.actor === battle.defender), "v3-fixture-attack-authorization");

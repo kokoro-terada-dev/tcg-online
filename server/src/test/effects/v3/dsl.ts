@@ -14,6 +14,7 @@ export interface PredicateMap {
   compare: NodeMeta & { type: "compare"; left: Value; op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte"; right: Value };
 }
 export interface ActionMap {
+  BIND_SOURCE: NodeMeta & { type: "BIND_SOURCE"; bindAs: string };
   GRANT_KEYWORD: NodeMeta & { type: "GRANT_KEYWORD"; cards: CardSetRef; keyword: Node<"keyword">; duration: Node<"duration"> };
   MODIFY_STAT: NodeMeta & { type: "MODIFY_STAT"; cards: CardSetRef; stat: "power" | "cost"; amount: number; duration: Node<"duration"> };
   LOOK_TOP: NodeMeta & { type: "LOOK_TOP"; player: "SELF"; count: number; bindAs: string; onInsufficient: "fail" | "takeAvailable" };
@@ -57,6 +58,7 @@ export interface DurationMap {
 export interface TimingMap {
   MAIN: NodeMeta & { type: "MAIN" }; ON_PLAY: NodeMeta & { type: "ON_PLAY" };
   ON_ATTACK: NodeMeta & { type: "ON_ATTACK" }; ON_OPPONENT_ATTACK: NodeMeta & { type: "ON_OPPONENT_ATTACK" };
+  ON_KO: NodeMeta & { type: "ON_KO" };
 }
 export interface KeywordMap {
   BLOCKER: NodeMeta & { type: "BLOCKER" };
@@ -76,7 +78,7 @@ export type Effect = {
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };
 export type CardDefinition = {
-  schemaVersion: "3.0.0-subset.15"; cardId: string; cardVersion: string;
+  schemaVersion: "3.0.0-subset.16"; cardId: string; cardVersion: string;
   name: string; cardType: "leader" | "character" | "stage";
   baseStats: { cost: number | null; power: number | null; counter: number | null; life: number | null };
   colors: string[]; traits: string[]; attributes: string[]; keywords: Node<"keyword">[];

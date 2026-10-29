@@ -12,9 +12,9 @@ import { isApprovedV3Card, type ApprovedV3Card } from "./approval";
 import { label } from "./compiler";
 import { V3FixtureCoordinator } from "./fixtureCoordinator";
 import { endTurnStatEffects, pruneStatEffects, statDelta, type StatEffects } from "./statEffects";
-import { availableTriggers, enqueueAttackTriggers, enqueuePlayTriggers, playTriggerCandidates, triggerChooser, SYNTHETIC_TRIGGER_POLICY, type PlayTrigger } from "./triggerScheduler";
+import { availableTriggers, enqueueAttackTriggers, enqueueMovementTriggers, movementTriggerCandidates, triggerChooser, SYNTHETIC_TRIGGER_POLICY, type ScheduledTrigger } from "./triggerScheduler";
 import { decideLocalBattle } from "../../localBattle";
-import { attackOptions, declareAttack, finishAttackStep, blockerOptions, declareBlock, battlePower, counterCandidates, useCounter, damage, takeLife, V3_BASE_BATTLE_RULES, type BattleCounters, type LifeDecision } from "./battle";
+import { attackOptions, declareAttack, finishAttackStep, finishDamageStep, blockerOptions, declareBlock, battlePower, counterCandidates, useCounter, damage, takeLife, V3_BASE_BATTLE_RULES, type BattleCounters, type LifeDecision } from "./battle";
 import { effectiveKeywords, endTurnKeywordGrants, pruneKeywordGrants, type KeywordGrants } from "./keywordEffects";
 
 type Seat = 0 | 1;
@@ -32,8 +32,9 @@ export class V3SyntheticMatchCoordinator {
   #ruleEvents: readonly MovementEvent[] = [];
   #statEffects: StatEffects = [];
   #keywordGrants: KeywordGrants = [];
-  #triggers: readonly PlayTrigger[] = [];
+  #triggers: readonly ScheduledTrigger[] = [];
   #battleCounters: BattleCounters = []; #lifeDecision: LifeDecision | null = null;
+  #damageSettling = false;
   #revision = 0; #busy = false; #key: Uint8Array; #master: MasterSnapshot | null; #now: () => number;
   constructor(options: Readonly<{ mode: "syntheticNoAbilities"; movement: MovementState; progression: Progression; cards: readonly ApprovedV3Card[];
     signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number }>) {
@@ -69,13 +70,13 @@ export class V3SyntheticMatchCoordinator {
     try { apply(); this.#revision++; this.#receipts.push({ requestId, fingerprint }); return { replayed: false }; }
     finally { this.#busy = false; }
   }
-  #settled(allowTriggers = false, allowAttackStep = false): void {
+  #settled(allowTriggers = false, allowBattleTriggers = false): void {
     ensureMove(!this.#active || this.#active.coordinator.viewFor(this.#active.actor).frame.status === "completed", "v3-match-resolution-pending");
-    ensureMove(this.#progression.gate.kind === "idle" && (!this.#progression.battle || allowAttackStep && this.#progression.battle.step === "attack") && !this.#progression.outcome, "v3-match-not-idle");
+    ensureMove(this.#progression.gate.kind === "idle" && (!this.#progression.battle || allowBattleTriggers && (this.#progression.battle.step === "attack" || this.#damageSettling && this.#progression.battle.step === "damage")) && !this.#progression.outcome, "v3-match-not-idle");
     ensureMove(allowTriggers || !this.#triggers.length, "v3-match-triggers-pending");
   }
   #checkNewEvents = (events: readonly MovementEvent[]): void => {
-    ensureMove(this.#triggers.length + playTriggerCandidates(events, this.#cards).length <= 128, "v3-trigger-queue-limit");
+    ensureMove(this.#triggers.length + movementTriggerCandidates(events, this.#cards).length <= 128, "v3-trigger-queue-limit");
   };
   #archive(): void {
     if (!this.#active) return;
@@ -123,15 +124,15 @@ export class V3SyntheticMatchCoordinator {
     return this.#run(actor, requestId, expected, body, () => {
       ensureMove(this.#active, "v3-match-no-resolution"); const active = this.#active;
       action(active.coordinator); const snapshot = active.coordinator.snapshotForCoordinator(), frame = active.coordinator.viewFor(active.actor).frame;
-      const triggers = enqueuePlayTriggers(snapshot.movementEvents.slice(active.eventCount), this.#cards);
+      const triggers = enqueueMovementTriggers(snapshot.movementEvents.slice(active.eventCount), this.#cards);
       this.#triggers = freezeMovement([...this.#triggers, ...triggers]); active.eventCount = snapshot.movementEvents.length;
       this.#board = snapshot.movement; this.#progression = snapshot.progression; this.#statEffects = snapshot.statEffects; this.#keywordGrants = snapshot.keywordGrants;
       if (frame.activationCommitted && !active.counted) {
         this.#usage.set(active.usageKey, (this.#usage.get(active.usageKey) ?? 0) + 1); active.counted = true;
       }
-      if (frame.status === "completed" && !this.#triggers.length && this.#progression.battle?.step === "attack") {
-        const progression = finishAttackStep(this.#board, this.#progression);
-        this.#archive(); this.#progression = progression; if (!progression.battle) this.#battleCounters = [];
+      if (frame.status === "completed" && !this.#triggers.length && (this.#progression.battle?.step === "attack" || this.#damageSettling)) {
+        const progression = this.#damageSettling ? finishDamageStep(this.#progression) : finishAttackStep(this.#board, this.#progression);
+        this.#archive(); this.#progression = progression; this.#damageSettling = false; if (!progression.battle) this.#battleCounters = [];
       }
     });
   }
@@ -167,7 +168,7 @@ export class V3SyntheticMatchCoordinator {
         actor, effectController: null, source: cardRef, mode: "rule", resolutionId: null, operations: [{ kind: "move", card: cardRef, from: at,
           to: { player: actor, zone, position: "slot", slotIndex: slot, faceUp: true, rotated: false }, cause: "RULE_PROCESSING" }] }, { status: "certifiedNone" });
       events.push(...played.events); ensureMove(this.#ruleEvents.length + events.length <= 512, "v3-match-rule-event-limit");
-      this.#checkNewEvents(events); const triggers = enqueuePlayTriggers(events, this.#cards);
+      this.#checkNewEvents(events); const triggers = enqueueMovementTriggers(events, this.#cards);
       this.#archive(); this.#board = played.state; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...events]); this.#statEffects = pruneStatEffects(this.#board, this.#statEffects);
       this.#keywordGrants = pruneKeywordGrants(this.#board, this.#keywordGrants);
       this.#triggers = freezeMovement([...this.#triggers, ...triggers]);
@@ -218,13 +219,14 @@ export class V3SyntheticMatchCoordinator {
   #battleIdle(): void {
     ensureMove(!this.#triggers.length && !this.#active && !this.#lifeDecision && this.#progression.gate.kind === "idle" && !this.#progression.outcome, "v3-battle-operation-pending");
   }
-  #acceptBattle(result: { movement: MovementState; progression: Progression; events: readonly MovementEvent[] }, counters: BattleCounters, pendingLife: LifeDecision | null) {
+  #acceptBattle(result: { movement: MovementState; progression: Progression; events: readonly MovementEvent[]; deferredKO?: boolean }, counters: BattleCounters, pendingLife: LifeDecision | null) {
     ensureMove(this.#ruleEvents.length + result.events.length <= 512, "v3-match-rule-event-limit"); this.#checkNewEvents(result.events);
-    const triggers = enqueuePlayTriggers(result.events, this.#cards);
-    this.#board = result.movement; this.#progression = result.progression; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...result.events]);
+    const triggers = enqueueMovementTriggers(result.events, this.#cards);
+    const progression = result.deferredKO && !triggers.length ? finishDamageStep(result.progression) : result.progression;
+    this.#board = result.movement; this.#progression = progression; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...result.events]);
     this.#statEffects = pruneStatEffects(this.#board, this.#statEffects); this.#triggers = freezeMovement([...this.#triggers, ...triggers]);
     this.#keywordGrants = pruneKeywordGrants(this.#board, this.#keywordGrants);
-    this.#battleCounters = result.progression.battle ? counters : []; this.#lifeDecision = pendingLife;
+    this.#battleCounters = progression.battle ? counters : []; this.#lifeDecision = pendingLife; this.#damageSettling = !!result.deferredKO && triggers.length > 0;
   }
   battleDecision(actor: Seat, requestId: string, expected: V3MatchContext, decision: "passBlock" | "endCounter") {
     return this.#run(actor, requestId, expected, { kind: decision }, () => {
@@ -249,7 +251,7 @@ export class V3SyntheticMatchCoordinator {
   }
   resolveDamage(actor: Seat, requestId: string, expected: V3MatchContext) {
     return this.#run(actor, requestId, expected, { kind: "damage" }, () => {
-      this.#battleIdle(); const result = damage(this.#board, this.#progression, actor, this.#cards, this.#statEffects, this.#battleCounters, hash(`${this.#board.matchId}:${requestId}:damage`), this.#now());
+      this.#battleIdle(); const result = damage(this.#board, this.#progression, actor, this.#cards, this.#statEffects, this.#battleCounters, hash(`${this.#board.matchId}:${requestId}:damage`), this.#now(), true);
       this.#acceptBattle(result, this.#battleCounters, result.pendingLife);
     });
   }
@@ -308,7 +310,7 @@ export class V3SyntheticMatchCoordinator {
       gate: waitingTriggers ? "trigger" as const : this.#progression.gate.kind, resolutionActor: this.#active?.actor ?? null, history: [...this.#history],
       triggerPolicy: SYNTHETIC_TRIGGER_POLICY, pendingTriggerCount: this.#triggers.length, triggerChooser: chooser,
       triggerChoices: availableTriggers(this.#triggers, this.#progression.activePlayer).filter(entry => entry.actor === viewer && chooser === viewer).map(entry => ({ token: entry.token, cardId: entry.cardId, effectId: entry.effectId, timing: entry.cause.type })),
-      battle: battle ? { ...battle, powers } : null, battleRules: V3_BASE_BATTLE_RULES.version, outcome: this.#progression.outcome,
+      battle: battle ? { ...battle, powers } : null, battleRules: V3_BASE_BATTLE_RULES.version, outcome: this.#progression.outcome, damageEffectsPending: this.#damageSettling,
       counterChoices: counterCandidates(this.#board, this.#progression, viewer, this.#cards), blockerChoices: blockerOptions(this.#board, this.#progression, viewer, this.#cards, this.#keywordGrants), lifePending: !!life,
       lifeChoice: life?.defender === viewer ? { selectionId: life.selectionId, token: life.token, expiresAt: life.expiresAt, cardId: this.#board.cards[life.card.instanceId]!.cardId } : null,
       publicReveals: revealIds.map(id => ({ cardId: this.#board.cards[id]!.cardId, owner: this.#board.cards[id]!.owner })),
@@ -335,7 +337,7 @@ export class V3SyntheticMatchCoordinator {
   }
   snapshotForCoordinator() {
     return freezeMovement({ context: this.context(), movement: this.#board, progression: this.#progression, active: this.#active?.coordinator.snapshotForCoordinator() ?? null,
-      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, pendingTriggers: this.#triggers, battleCounters: this.#battleCounters, pendingLife: this.#lifeDecision });
+      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, pendingTriggers: this.#triggers, battleCounters: this.#battleCounters, pendingLife: this.#lifeDecision, damageEffectsPending: this.#damageSettling });
   }
   toJSON(): never { throw new Error("v3-match-server-only"); }
 }

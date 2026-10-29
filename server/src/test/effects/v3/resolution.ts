@@ -21,9 +21,9 @@ export interface ResolutionEnvironment {
   canPayCosts?(costs: readonly DeepReadonly<Node<"cost">>[], discarded: readonly Ref[] | null, returned: readonly Ref[] | null): boolean | "unknown";
 }
 export type ResolutionIdentity = Readonly<{ matchId: string; resolutionId: string; effectId: string; actor: Seat; source: Ref }>;
-type WorkAction = Exclude<A, { type: "SEQUENCE" | "IF" | "SELECT" | "ORDER_CARDS" }>;
+type WorkAction = Exclude<A, { type: "SEQUENCE" | "IF" | "SELECT" | "ORDER_CARDS" | "BIND_SOURCE" }>;
 type Instruction = { type: "CHECK"; predicate: DeepReadonly<Predicate> } | { type: "COSTS" } | { type: "OPTIONAL" } |
-  { type: "SELECT"; action: Extract<A, { type: "SELECT" }> } | { type: "ORDER"; action: Extract<A, { type: "ORDER_CARDS" }> } | { type: "WORK"; action: WorkAction } |
+  { type: "SELECT"; action: Extract<A, { type: "SELECT" }> } | { type: "BIND_SOURCE"; bindAs: string } | { type: "ORDER"; action: Extract<A, { type: "ORDER_CARDS" }> } | { type: "WORK"; action: WorkAction } |
   { type: "BRANCH"; predicate: DeepReadonly<Predicate>; otherwise: number } | { type: "ENTER" } | { type: "EXIT" } | { type: "JUMP"; to: number } | { type: "END" };
 type ChoiceBase = { kind: "choice"; selectionId: string; chooser: Seat; expiresAt: number };
 type CardChoice = ChoiceBase & { purpose: "action" | "cost" | "returnCost" | "order"; min: number; max: number; maxActiveReturn: number | null; bindAs: string | null; candidates: { token: string; cardId: string; zone: string; label: string | null; ref: CardObjectRef }[] };
@@ -62,6 +62,7 @@ function program(card: ApprovedV3Card, effectId: string): Instruction[] {
       const jump = { type: "JUMP" as const, to: 0 }; code.push(jump); branch.otherwise = code.length;
       code.push({ type: "ENTER" }); append(action.else); code.push({ type: "EXIT" }); jump.to = code.length;
     } else if (action.type === "SELECT") code.push({ type: "SELECT", action });
+    else if (action.type === "BIND_SOURCE") code.push({ type: "BIND_SOURCE", bindAs: action.bindAs });
     else if (action.type === "ORDER_CARDS") code.push({ type: "ORDER", action });
     else if (["DRAW", "MOVE_CARD", "KO", "REST", "SET_ACTIVE", "LOOK_TOP", "REVEAL", "RETURN_TO_DECK", "MODIFY_STAT", "GRANT_KEYWORD"].includes(action.type)) code.push({ type: "WORK", action: action as WorkAction });
     else throw new Error("V3_RUNTIME_HANDLER_UNSUPPORTED");
@@ -143,6 +144,7 @@ export class V3ResolutionMachine {
         else if (instruction.type === "ENTER") { state.scopes.push({}); state.pc++; }
         else if (instruction.type === "EXIT") { ensureMove(state.scopes.length > 1, "v3-invalid-scope-pop"); state.scopes.pop(); state.pc++; }
         else if (instruction.type === "JUMP") state.pc = instruction.to;
+        else if (instruction.type === "BIND_SOURCE") { state.scopes.at(-1)![instruction.bindAs] = [{ ...state.identity.source }]; state.pc++; }
         else if (instruction.type === "END") {
           if (state.revealsOpen) { state.pending = { kind: "work", type: "CLOSE_REVEALS", workId: `${workId}:cleanup`, worldRevision: state.worldRevision }; state.status = "waitingForWork"; }
           else state.status = "completed";

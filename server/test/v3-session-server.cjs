@@ -56,6 +56,10 @@ for (const actor of [0, 1]) test(`fresh synthetic Rush attacks and only a declar
   assert.equal(other.movement.players[1 - actor].character[0].rotated, true);
   assert.equal((await request(peer, 'v3-session:command', command(other, 'block', { card: blocker }))).ok, false);
   other = await send(peer, other, 'endCounter'); other = await send(peer, other, 'damage');
+  if (other.gate === 'trigger') {
+    other = await send(peer, other, 'trigger', { token: other.triggerChoices[0].token }); other = await send(peer, other, 'advance'); const choice = other.frame.choice;
+    other = await send(peer, other, 'answer', { selectionId: choice.selectionId, tokens: [choice.options[1].token] });
+  }
   assert.equal(other.battle, null); assert.equal(other.movement.players[1 - actor].character[0], null); assert.equal(other.movement.players[1 - actor].life.length, 5);
   const seen = (await request(own, 'v3-session:sync')).sessionView; assert.equal(seen.movement.players[1 - actor].trash.length, 1);
   const next = await send(own, seen, 'endTurn'); assert.equal(next.publicStats.find(card => card.player === actor && card.zone === 'leader').keywords.includes('CANNOT_BE_BLOCKED'), false);

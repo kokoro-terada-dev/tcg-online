@@ -79,8 +79,8 @@ needs_review 2,884、unsupported 1、parsed 0、approved 0。意味的なカー�
 
 ### Phase 2：限定Compilerと承認ゲート
 
-入力版は3.0.0-subset.15、Compiler版はv3-subset-compiler.15です。
-旧subset.1/2/3/4/5/6/7/8/9/10/11/12/13/14、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
+入力版は3.0.0-subset.16、Compiler版はv3-subset-compiler.16です。
+旧subset.1/2/3/4/5/6/7/8/9/10/11/12/13/14/15、添付3.0-draft、既存dslVersion:1を暗黙変換しません。旧版の定義は明示更新と再レビューが必要です。
 keywordsを必須化し、能力がない場合も空配列を明示します。未記載を能力なしと推測しません。
 schemas/effect-v3-subset.schema.jsonは標準組み込み命令の編集用Schemaです。
 Compilerは型・未知フィールド・参照先・比較の値型・ID重複・原文範囲・複雑度も検証します。
@@ -88,19 +88,19 @@ sourceSpanのstart/endはsource.textのUTF-16コード単位で、endは範囲�
 
 対応するコンパイル命令：
 
-- timing: MAIN/kind:activated、またはON_PLAY/ON_ATTACK/ON_OPPONENT_ATTACK/kind:triggered。自身のゾーンのみ。ON_PLAYはcharacter/stage、ON_ATTACKはleader/character、ON_OPPONENT_ATTACKはleader/character/stageです。
+- timing: MAIN/kind:activated、またはON_PLAY/ON_ATTACK/ON_OPPONENT_ATTACK/ON_KO/kind:triggered。ON_PLAYはcharacter/stage、ON_ATTACKはleader/character、ON_OPPONENT_ATTACKはleader/character/stage、ON_KOはcharacterです。
 - optional: true/falseを明示。trueは発動条件確認後、コスト選択前に操作者へ確認を出し、辞退なら何も支払わず終了します。
 - usageLimit: null（制限なし）またはPER_TURN/SOURCE_OBJECT/countを必ず明示。countは1〜50。名称単位・試合単位の制限は未対応です。
 - predicate: all / any / not / compare（eq / ne / lt / lte / gt / gte）。
 - value ref: SELF/OPPONENTのlifeCount/handCount、SOURCE/CANDIDATEのcost/power/cardType/rotated、選択済みbindingsのcount。自由なJS式や任意プロパティ参照は不可。
 - cost: REST_DON / DISCARD_HAND（各1〜50、DISCARD_HANDは効果単位の合計も50以下）、REST_SOURCE（引数なし、効果単位で1回のみ）。
 - cost: DON_RETURN（count:1〜50、from:activeDon/restDon/attachedDonの単一指定または重複しない配列、効果単位で1命令）。fromはCompiler内で配列へ正規化します。
-- action: DRAW / SEQUENCE / IF / SELECT / MOVE_CARD / KO / REST / SET_ACTIVE / LOOK_TOP / REVEAL / ORDER_CARDS / RETURN_TO_DECK / MODIFY_STAT / GRANT_KEYWORD。
+- action: DRAW / SEQUENCE / IF / SELECT / BIND_SOURCE / MOVE_CARD / KO / REST / SET_ACTIVE / LOOK_TOP / REVEAL / ORDER_CARDS / RETURN_TO_DECK / MODIFY_STAT / GRANT_KEYWORD。
 - keyword: BLOCKER / RUSH / RUSH_CHARACTER / CANNOT_BE_BLOCKED。カード本来の能力はkeywords配列、期間付き付与はGRANT_KEYWORDで定義します。
 - duration: TURN_END（player:SELF/OPPONENT、occurrence:1/2）。指定した側のターン終了境界の何回目で失効するかを明示します。
 - selector: CARDS（表向き公開カード、本人が選ぶ自分の手札/公開DON）、BOUND_CARDS（閲覧権限のある束縛済みの自分の山札集合）。SELECT、UNORDERED。
 
-未対応：他カードのイベントを監視する誘発、条件付きの誘発成立判定、イベント使用、KO時効果の派生実行、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL、一般ゾーンのORDER（現在は専用ORDER_CARDSのみ）、シャッフル、DISCARD_HAND/DON_RETURN以外の選択付きコスト、名称/試合単位の使用制限、効果途中の任意分岐、任意効果の付与/無効化、TURN_END以外の期間、置換、継続、CUSTOM_HANDLER等。
+未対応：相手アタック時以外の他カード監視誘発、条件付きの誘発成立判定、イベント使用、KO前の特殊条件/発動コスト/発生元の数値参照、相手の手札/デッキ/ライフの選択、BLIND_SELECT/RANDOM/ALL、一般ゾーンのORDER（現在は専用ORDER_CARDSのみ）、シャッフル、DISCARD_HAND/DON_RETURN以外の選択付きコスト、名称/試合単位の使用制限、効果途中の任意分岐、任意効果の付与/無効化、TURN_END以外の期間、置換、継続、CUSTOM_HANDLER等。
 未知ノードは読込時に拒否します。schemaOnlyの既存ノードが存在してもv3対応済みとは扱いません。
 predicate/action/cost/replacement/selector/duration/timing/keywordのRegistryを用意しています。
 replacementは登録なしです。durationはTURN_ENDだけを登録しています。
@@ -270,7 +270,7 @@ fixtureEnvironment.tsは実際のMovementStateから候補を列挙し、双方�
 MovementEventは原因・isKO・付与DONの自動戻しを含めてサーバー内部に保持し、上限512件で停止します。
 イベント順序を公式の効果解決順とは解釈せず、まだ誘発をスケジュールしません。直接バウンスをKO扱いにすることもありません。
 KO後の古いgenerationの束縛は、次の操作で別オブジェクトとして再利用せず拒否します。
-KOされない耐性・置換・KO時能力等のある実カードへの適用は未対応です。このfixtureはそれらが存在しない前提だけで検証します。
+KOされない耐性・置換等のある実カードへの適用は未対応です。この単発fixtureは誘発キューへ接続せず、それらが存在しない前提です。下記の連続検証では限定ON_KOを接続しています。
 
 viewForは公開投影のみです。snapshotForCoordinatorは原盤面・進行・署名付きフレーム・レシート・内部イベントを含むサーバー専用APIで、クライアントへ送信してはいけません。
 DB保存、Coordinator全体の再起動時復元、署名鍵の運用構成、分散ロック、既存Matchへの反映は未実装です。
@@ -395,7 +395,7 @@ ViteのDEVかつ専用フラグが有効な場合だけ新しい画面を表示�
 | 1（合成検証まで実装済み） | 単発fixtureから連続操作できるv3試合進行基盤へ。ターン/プレイヤー/発動回数の管理 | 同じ盤面で複数効果を処理し、JSONの個体・ターン単位制限をサーバーで検証。辞退や再送で回数を誤消費しない |
 | 2（着手中） | 通常の手札からの使用・登場、対象条件、サーチ/一時公開/並べ替え | 空き枠・支払い・隠し情報・移動先を検証し、選択待ちから正しく再開。相手へ不要な情報を送らない |
 | 3（数値修正・4種キーワード付与・ターン終了期間を接続） | パワー/コスト修正、能力付与、期間管理 | 元の値を壊さず増減を合算し、指定したターン/イベント境界で失効。汎用能力付与・バトル終了期間は後続 |
-| 4（自身の登場時・アタック時・相手アタック時を接続） | 登場時/アタック時/KO時等の誘発キューと裁定ポリシー | 発生原因を保持し、同時誘発を順序選択可能。未確認の順序は止まり、無限ループを防ぐ |
+| 4（登場時・アタック時・相手アタック時・限定KO時を接続） | 登場時/アタック時/KO時等の誘発キューと裁定ポリシー | 発生原因を保持し、同時誘発を順序選択可能。未確認の順序は止まり、無限ループを防ぐ |
 | 5（基本バトル・手札カウンター・ライフ/勝敗を接続） | バトル全体のv3接続 | アタック→効果→ブロック→カウンター→ダメージ/トリガー→終了をサーバー主導で進める。能力の割込み/ブロッカー/トリガーは後続 |
 | 6 | 少数のレビュー済み実カードをJSON登録し、制限付きテスト対戦へ | 必要な能力/条件/裁定が確認済みのカードだけを許可。両端末で開始から勝敗まで対戦できる |
 | 7 | 置換・耐性・継続効果と対応カードの拡充 | 対象不可/効果を受けない/KO不可等を区別し、未対応を無視して進めない。必要なカードは段階6へ先行実装 |
@@ -552,7 +552,7 @@ resolutionConditions、optional、costs、usageLimitは既存の解決機械を�
 登場に伴うキュー追加は、支払い/登場の候補状態とともに保持します。効果中に発生した追加イベントも、既存効果が完了してから解決する待機候補になります。
 128件のキュー上限はFixtureCoordinatorの保持前フックで検査し、上限到達で盤面だけ先に保持しません。解決履歴256件/要求2048件等の既存上限も維持します。
 
-順序ポリシーはtriggerScheduler.tsのsynthetic-triggers.attack-entry.3として分離しました。
+順序ポリシーはtriggerScheduler.tsのsynthetic-triggers.attack-entry-ko.4として分離しました。
 公式総合ルール8-6-1の前後関係に基づき、1回の確定移動からの候補を発生群として保持し、先の群の候補を後からの派生候補が追い越さないようにしています。
 同一群では手番側、その後もう一方が自分の候補の順番を選びます。別群のtokenを直接指定して飛び越すことも拒否します。
 これは現在の自身の登場時と下記のアタック宣言候補の範囲です。すべての同時誘発・割込み境界を解決済みとは扱わず、正式対戦や実カードの承認ポリシーに自動採用しません。
@@ -561,7 +561,7 @@ resolutionConditions、optional、costs、usageLimitは既存の解決機械を�
 解決の指定はその操作者へ渡した不透明tokenだけです。相手には候補tokenを送らず、actor/source/eventのクライアント上書きは拒否します。
 最小化中に登場しても処理パネルを開き直します。候補選択後は任意確認→必要な選択/支払い→効果→完了という既存の再開経路へ入ります。
 登場要求や解決要求の再送でキュー/発動を重複させません。解決後の履歴には元のtriggerEventIdを残します。
-解決前に発生元が別世代になった場合は安全停止します。最後の情報で続行する裁定を推測せず、KO時/場を離れた後の誘発は未対応です。
+通常の候補は解決前に発生元が別世代になると安全停止します。下記の限定ON_KOだけは、元のKOイベントとトラッシュの新世代を照合して開始します。任意の最後の情報の参照は推測しません。
 
 連続操作の合成キャラ/ステージは「登場時、任意で1枚ドロー」です。登場後の「登場時効果」ボタンから開始し、発動しない場合は何も引かず通常操作へ戻ります。
 キャラ/ステージの元画像の能力とは異なり、実カード承認ではありません。従来の効果なしJSON例は引き続き受理します。
@@ -589,7 +589,7 @@ battle.tsのV3_BASE_BATTLE_RULESに版、参照URL、確認日、条項IDを固�
 自分の場のカード操作モーダルにDON1枚付与も追加しました。アクティブDON不足や他人のカードには使えず、従来TestBoardの未指定時の挙動は変えません。
 テストはビルド中心で、両操作者について「DON込み攻撃→手札2枚カウンターで防御→相手ターンの付与DONは防御加算しない→非公開ライフ追加→0ライフへの追加ダメージで勝敗」の最小2ケースだけを確認しました。
 
-未接続：条件付き誘発成立・キーワード、イベントカウンター、ライフトリガー、カウンターステップ中の効果選択、KO時の最後の情報、デッキ切れ判定等。これらを必要とする実カードはまだ許可しません。
+未接続：条件付き誘発成立・キーワード、イベントカウンター、ライフトリガー、カウンターステップ中の効果選択、KO前の条件/コスト/数値参照、デッキ切れ判定等。これらを必要とする実カードはまだ許可しません。
 段階6は未完了です。合成盤面での基本バトルが動くことと、実カードの限定構成で正式な開始手順から対戦できることは区別します。
 
 ### 段階3/5の追加：キーワードと期間付き付与
@@ -645,8 +645,37 @@ ON_ATTACKは攻撃元自身、ON_OPPONENT_ATTACKは防御側の場のカード�
 完了した解決フレームは履歴へ退避し、進行がブロックへ再開したときに古い解決フレームで状態を巻き戻しません。
 
 合成キャラに「アタック時、任意で1枚ドロー」を追加しました。パネルでは登場時/アタック時/相手のアタック時を区別します。
-実カードの能力を推定・承認したものではありません。KO時、場を離れた発生元の最後の情報、ブロック時、イベントカウンター、トリガーは別対応です。
+実カードの能力を推定・承認したものではありません。任意の最後の情報の参照、ブロック時、イベントカウンター、トリガーは別対応です。限定KO時は次節に接続しました。
 軽い確認はビルドと最小2ケースのみです。先攻側の通常再開、逆側の攻撃元バウンス後の終了、相手側の候補への順序・権限、手札の非公開、元イベントの履歴保持を確認しました。
+
+### 段階4/5の追加：限定KO時とカード自身の参照
+
+ON_KO/kind:triggeredを追加しました。根拠は[公式総合ルール](https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=)の8-4-5、10-2-1、10-2-17です。
+現在はKO前の特殊条件・発動コストがない定義だけです。activationConditionsは空のall、costsは空配列、sourceZonesはcharacterを明示します。
+KO前に条件判定/支払いが必要な定義を、トラッシュへ移動してから誤実行しないため、未対応としてCompilerで拒否します。
+同様にON_KO内のSOURCEの値参照は拒否し、KO前のパワー等を0やトラッシュの初期値で代用しません。自己のカード参照は下記BIND_SOURCEを使います。
+
+移動イベントのisKO、原因EFFECT_KO/BATTLE_KO、character→trash、公開状態、所有者/操作者、before/afterのカードIDと世代を照合します。
+通常の手札移動や直接トラッシュ送りはKO扱いせず、ON_KOを起動しません。元のbefore/afterを残し、単にトラッシュに同名カードがあるだけでは発動できません。
+解決は対応するトラッシュの新世代のカードから行います。解決前にそのカードがさらに移動した場合は、安全停止します。
+KOされたカードが別のカードへ置き換わっていたり、未知のコントロール変更がある場合も、この限定経路では承認しません。
+
+BIND_SOURCEはクライアントの選択を出さず、効果発生元の参照を1枚集合として束縛する共通命令です。
+
+```json
+{ "type": "BIND_SOURCE", "bindAs": "self" }
+```
+
+後続の命令でcards:{"ref":"bindings.self"}を使えます。KO時は対応するトラッシュの世代で束縛され、古い場の参照や同名の別カードを誤って動かしません。
+勝手に物理IDを追跡し続ける命令ではありません。その参照をさらに移動後に再利用する場合、既存の世代検証を受けます。
+
+バトルKOではダメージ確定後にバトル終了を保留し、待機するKO時効果とその派生を解決してから終了します。
+KO時の待機中にダメージ確定を二重実行したり、次の通常操作へ進んだりできません。KO時能力がなければ従来どおりすぐ終了します。
+効果KOの場合は現在解決中の効果を完了した後、既存の発生群順序でKO時の候補を解決します。攻撃時効果からのKOにも同じ経路を使います。
+画面にdamageEffectsPendingと「KO時の効果処理」を表示し、元のターゲットが既に場を離れた後の不明パワーを0扱いで表示しません。
+
+合成キャラには「KO時、任意で1枚ドロー」を追加しました。実カードの能力とは異なります。
+確認はビルドと最小2ケースです。バトルKO/効果KO、直接トラッシュ送りとの区別、自己回収時の世代、非公開手札、未対応のKO条件・コスト拒否を確認しました。
 
 ```powershell
 npm --prefix server run build
