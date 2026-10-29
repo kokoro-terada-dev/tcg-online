@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
 import type { CardDefinition, CardSetRef, Category, CompiledCard, DonZone, Node, NodeMeta, Value } from "./dsl";
 
-export const COMPILER_VERSION = "v3-subset-compiler.14";
+export const COMPILER_VERSION = "v3-subset-compiler.15";
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 function inspectData(input: unknown): void {
@@ -108,6 +108,7 @@ export function builtinV3Registries(): V3Registries {
   });
   r.timing.register("MAIN", "1", (n, c) => ({ type: "MAIN", ...c.fields(n, []) }));
   r.timing.register("ON_PLAY", "1", (n, c) => ({ type: "ON_PLAY", ...c.fields(n, []) }));
+  for (const type of ["ON_ATTACK", "ON_OPPONENT_ATTACK"] as const) r.timing.register(type, "1", (n, c) => ({ type, ...c.fields(n, []) }));
   for (const type of ["all", "any"] as const) r.predicate.register(type, "1", (n, c) => ({ type, ...c.fields(n, ["conditions"]), conditions: c.list("predicate", n.conditions) }));
   r.predicate.register("not", "1", (n, c) => ({ type: "not", ...c.fields(n, ["condition"]), condition: c.read("predicate", n.condition) }));
   r.predicate.register("compare", "3", (n, c) => {
@@ -200,7 +201,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.14", "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.15", "unsupported-v3-schema-version");
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
   ensureMove(typeof input.name === "string" && input.name.trim().length > 0 && input.name.length <= 300, "invalid-v3-card-name");
   ensureMove(input.cardType === "leader" || input.cardType === "character" || input.cardType === "stage", "unsupported-v3-card-type");
@@ -276,8 +277,8 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
     dataArray(effect.sourceZones, 3); ensureMove(effect.sourceZones.length === 1 && effect.sourceZones[0] === input.cardType, "unsupported-v3-source-zones");
     const timing = context.read("timing", effect.timing), activationConditions = context.read("predicate", effect.activationConditions),
       resolutionConditions = context.read("predicate", effect.resolutionConditions), costs = context.list("cost", effect.costs);
-    ensureMove(effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_PLAY" && input.cardType !== "leader", "v3-kind-timing-mismatch");
-    ensureMove(effect.kind !== "triggered" || activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-on-play-event-conditions-unresolved");
+    ensureMove(effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_PLAY" && input.cardType !== "leader" || timing.type === "ON_ATTACK" && input.cardType !== "stage" || timing.type === "ON_OPPONENT_ATTACK", "v3-kind-timing-mismatch");
+    ensureMove(effect.kind !== "triggered" || activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-trigger-event-conditions-unresolved");
     ensureMove(costs.reduce((sum, cost) => sum + (cost.type === "DISCARD_HAND" ? cost.count : 0), 0) <= 50, "v3-discard-cost-limit");
     ensureMove(costs.filter(cost => cost.type === "REST_SOURCE").length <= 1, "v3-duplicate-rest-source-cost");
     ensureMove(costs.filter(cost => cost.type === "DON_RETURN").length <= 1, "v3-multiple-don-return-costs-unsupported");
@@ -285,7 +286,7 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
     return { id, kind: effect.kind, optional: effect.optional, usageLimit, sourceZones: effect.sourceZones as ("leader" | "character" | "stage")[], timing,
       activationConditions, resolutionConditions, costs, actions };
   });
-  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.14", cardId, cardVersion, name: input.name, cardType: input.cardType,
+  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.15", cardId, cardVersion, name: input.name, cardType: input.cardType,
     baseStats: input.baseStats as CardDefinition["baseStats"], colors, traits, attributes, keywords, reviewStatus: input.reviewStatus as CardDefinition["reviewStatus"], source, effects };
   inspectData(definition);
   const plan = freezeMovement({ status: "compiled_not_executable" as const, compilerVersion: COMPILER_VERSION, registryHash, definitionHash: digest(canonical(definition)), sourceHash: digest(canonical(source)), definition, requiredHandlers: [...used].sort() });

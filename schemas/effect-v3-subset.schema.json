@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:tcg:effect-v3-subset:14",
-  "title": "V3 compiler subset 14; compilation is not execution approval",
+  "$id": "urn:tcg:effect-v3-subset:15",
+  "title": "V3 compiler subset 15; compilation is not execution approval",
   "type": "object", "additionalProperties": false,
   "required": ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"],
   "properties": {
-    "schemaVersion": { "const": "3.0.0-subset.14" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
+    "schemaVersion": { "const": "3.0.0-subset.15" }, "cardId": { "$ref": "#/$defs/id" }, "cardVersion": { "$ref": "#/$defs/id" },
     "name": { "$ref": "#/$defs/label" }, "cardType": { "enum": ["leader", "character", "stage"] },
     "baseStats": {
       "type": "object", "additionalProperties": false, "required": ["cost", "power", "counter", "life"],
@@ -131,7 +131,7 @@
       { "required": ["count", "from"], "properties": { "type": { "const": "DON_RETURN" }, "count": { "$ref": "#/$defs/count" }, "from": { "$ref": "#/$defs/donZones" } } },
       { "properties": { "type": { "const": "REST_SOURCE" } } }
     ] },
-    "timing": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "properties": { "type": { "enum": ["MAIN", "ON_PLAY"] } } },
+    "timing": { "allOf": [{ "$ref": "#/$defs/meta" }], "unevaluatedProperties": false, "properties": { "type": { "enum": ["MAIN", "ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK"] } } },
     "effect": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "kind", "timing", "sourceZones", "optional", "usageLimit", "activationConditions", "resolutionConditions", "costs", "actions"],
@@ -142,7 +142,11 @@
         "activationConditions": { "$ref": "#/$defs/predicate" }, "resolutionConditions": { "$ref": "#/$defs/predicate" },
         "costs": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/cost" } }, "actions": { "allOf": [{ "$ref": "#/$defs/actions" }], "minItems": 1 }
       },
-      "allOf": [{ "if": { "properties": { "kind": { "const": "triggered" } } }, "then": { "properties": { "timing": { "properties": { "type": { "const": "ON_PLAY" } } }, "sourceZones": { "items": { "enum": ["character", "stage"] } } } }, "else": { "properties": { "timing": { "properties": { "type": { "const": "MAIN" } } } } } }]
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "triggered" } } }, "then": { "properties": { "timing": { "properties": { "type": { "enum": ["ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK"] } } }, "activationConditions": { "properties": { "type": { "const": "all" }, "conditions": { "maxItems": 0 } }, "required": ["conditions"] } } }, "else": { "properties": { "timing": { "properties": { "type": { "const": "MAIN" } } } } } },
+        { "if": { "properties": { "timing": { "properties": { "type": { "const": "ON_PLAY" } } } } }, "then": { "properties": { "sourceZones": { "items": { "enum": ["character", "stage"] } } } } },
+        { "if": { "properties": { "timing": { "properties": { "type": { "const": "ON_ATTACK" } } } } }, "then": { "properties": { "sourceZones": { "items": { "enum": ["leader", "character"] } } } } }
+      ]
     }
   }
 }

@@ -22,7 +22,7 @@ async function setup(t, firstPlayer = 0, decks = [deck, deck]) {
 }
 async function complete(socket, v) {
   for (let i = 0; i < 16; i++) {
-    if (v.frame.status === 'completed') return v;
+    if (!v.frame || v.frame.status === 'completed') return v;
     if (v.frame.status === 'ready') v = await send(socket, v, 'advance');
     else if (v.frame.status === 'waitingForWork') v = await send(socket, v, 'work');
     else { const c = v.frame.choice; v = await send(socket, v, 'answer', { selectionId: c.selectionId, tokens: c.options.slice(0, c.min).map(option => option.token) }); }
@@ -44,6 +44,10 @@ for (const actor of [0, 1]) test(`fresh synthetic Rush attacks and only a declar
   assert.equal(v.publicStats.find(card => card.player === actor && card.zone === 'leader').keywords.includes('CANNOT_BE_BLOCKED'), true);
   assert.equal(v.attackChoices.sources.some(choice => choice.card.instanceId === fresh.instanceId), true);
   const target = v.attackChoices.targets[0].card; v = await send(own, v, 'attack', { source: fresh, target });
+  if (v.gate === 'trigger') {
+    v = await send(own, v, 'trigger', { token: v.triggerChoices[0].token }); v = await send(own, v, 'advance'); const choice = v.frame.choice;
+    v = await send(own, v, 'answer', { selectionId: choice.selectionId, tokens: [choice.options[1].token] });
+  }
   let other = (await request(peer, 'v3-session:sync')).sessionView; const blocker = other.blockerChoices[0].card;
   assert.equal((await request(own, 'v3-session:command', command(v, 'block', { card: blocker }))).ok, false);
   const blocking = command(other, 'block', { card: blocker }); other = (await request(peer, 'v3-session:command', blocking)).sessionView;

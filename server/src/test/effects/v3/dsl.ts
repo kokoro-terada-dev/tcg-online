@@ -54,7 +54,10 @@ export interface SelectorMap {
 export interface DurationMap {
   TURN_END: NodeMeta & { type: "TURN_END"; player: Player; occurrence: 1 | 2 };
 }
-export interface TimingMap { MAIN: NodeMeta & { type: "MAIN" }; ON_PLAY: NodeMeta & { type: "ON_PLAY" } }
+export interface TimingMap {
+  MAIN: NodeMeta & { type: "MAIN" }; ON_PLAY: NodeMeta & { type: "ON_PLAY" };
+  ON_ATTACK: NodeMeta & { type: "ON_ATTACK" }; ON_OPPONENT_ATTACK: NodeMeta & { type: "ON_OPPONENT_ATTACK" };
+}
 export interface KeywordMap {
   BLOCKER: NodeMeta & { type: "BLOCKER" };
   RUSH: NodeMeta & { type: "RUSH" };
@@ -73,7 +76,7 @@ export type Effect = {
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };
 export type CardDefinition = {
-  schemaVersion: "3.0.0-subset.14"; cardId: string; cardVersion: string;
+  schemaVersion: "3.0.0-subset.15"; cardId: string; cardVersion: string;
   name: string; cardType: "leader" | "character" | "stage";
   baseStats: { cost: number | null; power: number | null; counter: number | null; life: number | null };
   colors: string[]; traits: string[]; attributes: string[]; keywords: Node<"keyword">[];

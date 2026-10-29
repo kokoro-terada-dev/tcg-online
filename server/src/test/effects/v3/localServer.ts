@@ -53,7 +53,7 @@ function fixture(room: Room, scenario: V3Scenario, actor: 0 | 1, signingKey: Uin
       { type: fieldAction[scenario], cards: { ref: "bindings.picked" } },
     ...(privateHand ? [{ type: "DRAW", player: "SELF", count: 1 }] : []),
   ];
-  const plan = compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.14", cardId, cardVersion: `synthetic.${scenario}.1`, name: "V3 synthetic fixture leader", cardType: "leader",
+  const plan = compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.15", cardId, cardVersion: `synthetic.${scenario}.1`, name: "V3 synthetic fixture leader", cardType: "leader",
     baseStats: { cost: null, power: null, counter: null, life: null }, colors: [], traits: [], attributes: [], keywords: [], reviewStatus: "approved",
     source: { text: `Synthetic test only: ${scenario}. Not an official card ability or ruling.`, triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-synthetic-ui.1").digest("hex") },
     effects: [{ id: "main", kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: scenario === "optionalCostDraw", usageLimit: null, activationConditions: always(), resolutionConditions: always(),

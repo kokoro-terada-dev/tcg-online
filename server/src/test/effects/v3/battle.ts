@@ -15,8 +15,8 @@ type Seat = 0 | 1;
 export type BattleCounters = readonly Readonly<{ target: Ref; amount: number }>[];
 export type LifeDecision = Readonly<{ battleId: string; resolutionId: string; selectionId: string; token: string; defender: Seat; card: Ref; expiresAt: number }>;
 export const V3_BASE_BATTLE_RULES = {
-  version: "v3-base-battle.2", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
-  reviewedAt: "2026-10-29", clauses: ["6-5-5", "6-5-6", "7-1", "7-1-3", "7-1-4", "7-1-5", "10-1-1", "10-1-4", "10-1-6", "10-1-7"],
+  version: "v3-base-battle.3", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
+  reviewedAt: "2026-10-29", clauses: ["6-5-5", "6-5-6", "7-1", "7-1-1-3", "7-1-1-4", "7-1-3", "7-1-4", "7-1-5", "8-6-1", "10-1-1", "10-1-4", "10-1-6", "10-1-7", "10-2-5", "10-2-16"],
 } as const;
 function field(board: MovementState, ref: Ref, player: Seat) {
   const card = getCard(board, ref), at = location(board, card.instanceId);
@@ -44,16 +44,30 @@ export function attackOptions(board: MovementState, progression: Progression, ac
   });
   return { sources: sources.filter(row => pairs.some(pair => pair.sourceId === row.card.instanceId)), targets: targets.filter(row => pairs.some(pair => pair.targetId === row.card.instanceId)), pairs };
 }
-export function declareAttack(board: MovementState, progression: Progression, actor: Seat, source: Ref, target: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants, battleId: string, transactionId: string) {
+export function declareAttack(board: MovementState, progression: Progression, actor: Seat, source: Ref, target: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants, battleId: string, transactionId: string, deferEffects = false) {
   field(board, source, actor); field(board, target, (1 - actor) as Seat);
   const options = attackOptions(board, progression, actor, definitions, grants);
   ensureMove(board.turnNumber === progression.turnNumber && options.pairs.some(pair => pair.sourceId === source.instanceId && pair.targetId === target.instanceId), "v3-attack-pair-unavailable");
   let next = applySystemEvent(progression, progression.revision, { kind: "startBattle", battleId, source, target });
   const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
     actor, effectController: null, source, mode: "rule", resolutionId: null, operations: [{ kind: "setRest", card: source, rotated: true }] }, { status: "certifiedNone" });
-  next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId, step: "attack" });
-  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId, step: "attack", participantsPresent: true });
+  if (!deferEffects) next = finishAttackStep(result.state, next);
   return { movement: result.state, progression: next, events: result.events };
+}
+export function finishAttackStep(board: MovementState, progression: Progression): Progression {
+  const battle = progression.battle; ensureMove(battle?.step === "attack" && progression.gate.kind === "idle", "v3-attack-effects-pending");
+  const present = [{ ref: battle.source, player: battle.attacker }, { ref: battle.target, player: battle.defender }].every(({ ref, player }) => {
+    const card = board.cards[ref.instanceId]; if (!card || card.generation !== ref.generation) return false;
+    const at = location(board, card.instanceId);
+    return card.owner === player && card.controller === player && card.faceUp && at.player === player && card.kind === at.zone && (at.zone === "leader" || at.zone === "character");
+  });
+  let next = applySystemEvent(progression, progression.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "attack" });
+  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "attack", participantsPresent: present });
+  if (!present) {
+    next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "end" });
+    next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "end", participantsPresent: false });
+  }
+  return next;
 }
 export function blockerOptions(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants) {
   const battle = progression.battle;
