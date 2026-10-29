@@ -16,6 +16,7 @@ import { availableTriggers, enqueueAttackTriggers, enqueueMovementTriggers, move
 import { decideLocalBattle } from "../../localBattle";
 import { attackOptions, declareAttack, finishAttackStep, finishDamageStep, blockerOptions, declareBlock, battlePower, counterCandidates, useCounter, damage, takeLife, V3_BASE_BATTLE_RULES, type BattleCounters, type LifeDecision } from "./battle";
 import { effectiveKeywords, endTurnKeywordGrants, pruneKeywordGrants, type KeywordGrants } from "./keywordEffects";
+import { deckOutOutcome, DECK_OUT_POLICY } from "./ruleOutcomes";
 
 type Seat = 0 | 1;
 export type V3MatchContext = Readonly<{ revision: number; movementRevision: number; progressionRevision: number; resolutionId: string | null; frameRevision: number | null }>;
@@ -129,6 +130,9 @@ export class V3SyntheticMatchCoordinator {
       this.#board = snapshot.movement; this.#progression = snapshot.progression; this.#statEffects = snapshot.statEffects; this.#keywordGrants = snapshot.keywordGrants;
       if (frame.activationCommitted && !active.counted) {
         this.#usage.set(active.usageKey, (this.#usage.get(active.usageKey) ?? 0) + 1); active.counted = true;
+      }
+      if (this.#progression.outcome) {
+        this.#triggers = []; this.#battleCounters = []; this.#lifeDecision = null; this.#damageSettling = false; return;
       }
       if (frame.status === "completed" && !this.#triggers.length && (this.#progression.battle?.step === "attack" || this.#damageSettling)) {
         const progression = this.#damageSettling ? finishDamageStep(this.#progression) : finishAttackStep(this.#board, this.#progression);
@@ -279,7 +283,6 @@ export class V3SyntheticMatchCoordinator {
           for (const zone of ["leader", "character", "stage", "restDon"] as const) for (const id of board.players[player][zone]) if (id && board.cards[id]!.rotated) operations.push({ kind: "setRest", card: ref(id), rotated: false });
           for (const id of board.players[player].attachedDon) if (id) operations.push({ kind: "move", card: ref(id), from: { player, zone: "attachedDon" }, to: { player, zone: "activeDon", position: "append", faceUp: true, rotated: false }, cause: "RULE_PROCESSING" });
         } else if (work.kind === "drawCheckpoint") {
-          ensureMove(board.players[player].deck.length > work.normalCount, "v3-match-deck-out-policy-unresolved");
           for (const id of board.players[player].deck.slice(0, work.normalCount)) if (id) operations.push({ kind: "move", card: ref(id), from: { player, zone: "deck" }, to: { player, zone: "hand", position: "append", faceUp: true, rotated: false }, cause: "RULE_PROCESSING" });
         } else if (work.kind === "donCheckpoint") {
           for (const id of board.players[player].donDeck.slice(0, work.normalMaximum)) if (id) operations.push({ kind: "move", card: ref(id), from: { player, zone: "donDeck" }, to: { player, zone: "activeDon", position: "append", faceUp: true, rotated: false }, cause: "RULE_PROCESSING" });
@@ -288,6 +291,12 @@ export class V3SyntheticMatchCoordinator {
           const result = new MovementStore(board).commit({ transactionId: hash(`${board.matchId}:${requestId}:${work.token}`), matchId: board.matchId,
             expectedRevision: board.revision, turnNumber: progression.turnNumber, actor: player, effectController: null, source: null, mode: "rule", resolutionId: null, operations }, { status: "certifiedNone" });
           board = result.state; ruleEvents.push(...result.events); ensureMove(ruleEvents.length <= 512, "v3-match-rule-event-limit");
+        }
+        const outcome = deckOutOutcome(board);
+        if (outcome) {
+          progression = applySystemEvent(progression, progression.revision, { kind: "finishGame", winner: outcome.winner, reason: outcome.reason });
+          this.#archive(); this.#board = board; this.#progression = progression; this.#ruleEvents = freezeMovement(ruleEvents);
+          this.#statEffects = pruneStatEffects(board, statEffects); this.#keywordGrants = pruneKeywordGrants(board, keywordGrants); this.#usage.clear(); return;
         }
         progression = applySystemEvent(progression, progression.revision, { kind: "settlePhase", phaseToken: work.token });
         if (work.kind === "mainEntryCheckpoint") { this.#archive(); this.#board = board; this.#progression = progression; this.#ruleEvents = freezeMovement(ruleEvents); this.#statEffects = pruneStatEffects(board, statEffects); this.#keywordGrants = pruneKeywordGrants(board, keywordGrants); this.#usage.clear(); return; }
@@ -310,7 +319,7 @@ export class V3SyntheticMatchCoordinator {
       gate: waitingTriggers ? "trigger" as const : this.#progression.gate.kind, resolutionActor: this.#active?.actor ?? null, history: [...this.#history],
       triggerPolicy: SYNTHETIC_TRIGGER_POLICY, pendingTriggerCount: this.#triggers.length, triggerChooser: chooser,
       triggerChoices: availableTriggers(this.#triggers, this.#progression.activePlayer).filter(entry => entry.actor === viewer && chooser === viewer).map(entry => ({ token: entry.token, cardId: entry.cardId, effectId: entry.effectId, timing: entry.cause.type })),
-      battle: battle ? { ...battle, powers } : null, battleRules: V3_BASE_BATTLE_RULES.version, outcome: this.#progression.outcome, damageEffectsPending: this.#damageSettling,
+      battle: battle ? { ...battle, powers } : null, battleRules: V3_BASE_BATTLE_RULES.version, deckOutPolicy: DECK_OUT_POLICY.version, outcome: this.#progression.outcome, damageEffectsPending: this.#damageSettling,
       counterChoices: counterCandidates(this.#board, this.#progression, viewer, this.#cards), blockerChoices: blockerOptions(this.#board, this.#progression, viewer, this.#cards, this.#keywordGrants), lifePending: !!life,
       lifeChoice: life?.defender === viewer ? { selectionId: life.selectionId, token: life.token, expiresAt: life.expiresAt, cardId: this.#board.cards[life.card.instanceId]!.cardId } : null,
       publicReveals: revealIds.map(id => ({ cardId: this.#board.cards[id]!.cardId, owner: this.#board.cards[id]!.owner })),

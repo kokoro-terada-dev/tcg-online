@@ -68,7 +68,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
           const id = view.imageAliases[card.cardId] ?? card.cardId, image = getLocalCardImage(id)?.imageUrl;
           return <button key={`${card.cardId}:${index}`} onClick={() => setRevealPreview(id)}>{image ? <img src={image} alt={id} draggable={false} /> : id}</button>;
         })}</div>}
-        {frame && <p role="status">{frame.status === "completed" ? frame.activationDecision === "declined" ? "発動せず終了" : "処理完了" : frame.status === "blocked" ? "未対応または処理不可・停止中" : view.resolutionActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち"}</p>}
+        {frame && <p role="status">{frame.status === "completed" ? frame.interruptedByGameEnd ? "勝敗確定により処理終了" : frame.activationDecision === "declined" ? "発動せず終了" : "処理完了" : frame.status === "blocked" ? "未対応または処理不可・停止中" : view.resolutionActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち"}</p>}
         {view.publicStats.some(card => card.powerDelta || card.costDelta || card.keywords.length) && <div className="v3-stat-summary" aria-label="数値修正と能力">{view.publicStats.filter(card => card.powerDelta || card.costDelta || card.keywords.length).map(card =>
           <p key={card.card.instanceId}>{card.player === view.localPlayerIndex ? "自分" : "相手"}・{card.zone === "leader" ? "リーダー" : card.zone === "stage" ? "ステージ" : `キャラ${card.slot + 1}`}
             {card.powerDelta !== 0 && <b> パワー {card.power ?? "?"}（{card.powerDelta > 0 ? "+" : ""}{card.powerDelta}）</b>}

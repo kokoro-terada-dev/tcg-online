@@ -8,7 +8,7 @@ export type V3SessionView = Readonly<{
   triggerChoices: readonly Readonly<{ token: string; cardId: string; effectId: string; timing: "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" }>[];
   damageEffectsPending: boolean;
   battle: (NonNullable<import("../../progression/types").Progression["battle"]> & { powers: Readonly<{ attack: number; defense: number }> | null }) | null;
-  battleRules: string; outcome: Readonly<{ winner: 0 | 1 | null; reason: string }> | null;
+  battleRules: string; deckOutPolicy: string; outcome: Readonly<{ winner: 0 | 1 | null; reason: string }> | null;
   attackChoices: Readonly<{ sources: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string }>[]; targets: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string }>[]; pairs: readonly Readonly<{ sourceId: string; targetId: string }>[] }>;
   blockerChoices: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string }>[];
   counterChoices: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string; amount: number }>[];

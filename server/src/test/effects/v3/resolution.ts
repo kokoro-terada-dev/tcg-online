@@ -39,12 +39,13 @@ export type WorkRequest = DeepReadonly<{ kind: "work"; workId: string; worldRevi
   { type: "KO" | "REST" | "SET_ACTIVE"; cards: CardObjectRef[] }
 )>;
 type State = {
-  version: "v3-frame.7"; identity: ResolutionIdentity; definitionHash: string; compilerVersion: string; registryHash: string; rulesetVersion: string;
+  version: "v3-frame.8"; identity: ResolutionIdentity; definitionHash: string; compilerVersion: string; registryHash: string; rulesetVersion: string;
   revision: number; worldRevision: number; pc: number; status: "ready" | "waitingForChoice" | "waitingForWork" | "completed" | "blocked";
   scopes: Record<string, CardObjectRef[]>[]; pending: Choice | WorkRequest | null;
   costCards: CardObjectRef[] | null; costReturned: CardObjectRef[] | null; paidCostWorkId: string | null;
   activationDecision: "accepted" | "declined" | null;
   activationCommitted: boolean;
+  interruptedByGameEnd: boolean;
   revealsOpen: boolean;
   receipts: { requestId: string; fingerprint: string }[];
 };
@@ -86,8 +87,8 @@ export class V3ResolutionMachine {
     ensureMove(v3RegistryHash(builtinV3Registries()) === card.registryHash, "v3-runtime-registry-mismatch");
     this.#key = Buffer.from(signingKey); this.#environment = environment; this.#card = card; this.#code = program(card, identity.effectId);
     const worldRevision = environment.revision(); ensureMove(Number.isSafeInteger(worldRevision) && worldRevision >= 0, "v3-invalid-world-revision");
-    this.#state = { version: "v3-frame.7", identity: structuredClone(identity), definitionHash: card.definitionHash, compilerVersion: card.compilerVersion, registryHash: card.registryHash, rulesetVersion: card.rulesetVersion,
-      revision: 0, worldRevision, pc: 0, status: "ready", scopes: [{}], pending: null, costCards: null, costReturned: null, paidCostWorkId: null, activationDecision: null, activationCommitted: false, revealsOpen: false, receipts: [] };
+    this.#state = { version: "v3-frame.8", identity: structuredClone(identity), definitionHash: card.definitionHash, compilerVersion: card.compilerVersion, registryHash: card.registryHash, rulesetVersion: card.rulesetVersion,
+      revision: 0, worldRevision, pc: 0, status: "ready", scopes: [{}], pending: null, costCards: null, costReturned: null, paidCostWorkId: null, activationDecision: null, activationCommitted: false, interruptedByGameEnd: false, revealsOpen: false, receipts: [] };
   }
   #bindings(state: State): Bindings { return freezeMovement(structuredClone(Object.assign({}, ...state.scopes))); }
   #evaluate(predicate: DeepReadonly<Predicate>, state: State, candidate?: Ref): boolean {
@@ -254,6 +255,11 @@ export class V3ResolutionMachine {
       }
     });
   }
+  finishForGameOutcome(expectedRevision: number, worldRevision: number): void {
+    ensureMove(this.#state.revision === expectedRevision && this.#state.status === "ready" && this.#state.pending === null && this.#state.worldRevision === worldRevision &&
+      this.#environment.revision() === worldRevision && this.#state.revision < Number.MAX_SAFE_INTEGER, "v3-game-end-context-mismatch");
+    this.#state = { ...this.#state, revision: this.#state.revision + 1, status: "completed", interruptedByGameEnd: true, revealsOpen: false };
+  }
   workForCoordinator(): WorkRequest | null { return this.#state.pending?.kind === "work" ? freezeMovement(structuredClone(this.#state.pending)) : null; }
   viewFor(viewer: Seat) {
     ensureMove(viewer === 0 || viewer === 1, "v3-invalid-viewer"); const choice = this.#state.pending?.kind === "choice" ? this.#state.pending : null;
@@ -262,7 +268,7 @@ export class V3ResolutionMachine {
       options: viewer === choice.chooser ? choice.candidates.map(candidate => ({ token: candidate.token, label: candidate.label })) : [] } : choice ? { ...common!, purpose: choice.purpose,
       options: viewer === choice.chooser ? choice.candidates.map(candidate => ({ token: candidate.token, cardId: candidate.cardId, zone: candidate.zone, label: candidate.label })) : [] } : null;
     return freezeMovement({ mode: "work_requests_only" as const, resolutionId: this.#state.identity.resolutionId, revision: this.#state.revision, worldRevision: this.#state.worldRevision, status: this.#state.status,
-      activationDecision: this.#state.activationDecision, activationCommitted: this.#state.activationCommitted, choice: projected });
+      activationDecision: this.#state.activationDecision, activationCommitted: this.#state.activationCommitted, interruptedByGameEnd: this.#state.interruptedByGameEnd, choice: projected });
   }
   exportForStorage(): string {
     const payload = JSON.stringify(this.#state); return JSON.stringify({ payload, signature: createHmac("sha256", this.#key).update(payload).digest("hex") });
@@ -274,7 +280,7 @@ export class V3ResolutionMachine {
     const expected = createHmac("sha256", machine.#key).update(envelope.payload).digest();
     ensureMove(timingSafeEqual(expected, Buffer.from(envelope.signature, "hex")), "v3-saved-signature-mismatch");
     const state = JSON.parse(envelope.payload) as State;
-    ensureMove(Number.isSafeInteger(expectedFrameRevision) && expectedFrameRevision >= 0 && state.revision === expectedFrameRevision && state.version === "v3-frame.7" && state.definitionHash === card.definitionHash && state.compilerVersion === card.compilerVersion && state.registryHash === card.registryHash && state.rulesetVersion === card.rulesetVersion &&
+    ensureMove(Number.isSafeInteger(expectedFrameRevision) && expectedFrameRevision >= 0 && state.revision === expectedFrameRevision && state.version === "v3-frame.8" && typeof state.interruptedByGameEnd === "boolean" && (!state.interruptedByGameEnd || state.status === "completed") && state.definitionHash === card.definitionHash && state.compilerVersion === card.compilerVersion && state.registryHash === card.registryHash && state.rulesetVersion === card.rulesetVersion &&
       state.identity.matchId === identity.matchId && state.identity.resolutionId === identity.resolutionId && state.identity.effectId === identity.effectId && state.identity.actor === identity.actor && state.identity.source.instanceId === identity.source.instanceId && state.identity.source.generation === identity.source.generation && state.worldRevision === environment.revision(), "v3-saved-context-mismatch");
     machine.#state = state; return machine;
   }

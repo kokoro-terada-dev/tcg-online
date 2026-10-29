@@ -120,7 +120,7 @@ export function builtinV3Registries(): V3Registries {
     ensureMove(n.op !== "eq" && n.op !== "ne" || left === null || right === null || valueType(left) === valueType(right), "v3-comparison-type-mismatch");
     return { type: "compare", ...meta, left, op: n.op as Extract<Node<"predicate">, { type: "compare" }>["op"], right };
   });
-  r.action.register("DRAW", "1", (n, c) => {
+  r.action.register("DRAW", "2", (n, c) => {
     const meta = c.fields(n, ["player", "count"]); ensureMove(n.player === "SELF" || n.player === "OPPONENT", "invalid-v3-player");
     return { type: "DRAW", ...meta, player: n.player, count: count(n.count) };
   });
@@ -176,7 +176,7 @@ export function builtinV3Registries(): V3Registries {
     return { type: "BOUND_CARDS", ...meta, cards, excludeCards, owner: "SELF", controller: "SELF", chooser: "SELF", zone: "deck", visibility: "OWNER_ONLY", faceUpOnly: false,
       cardTypes: [...n.cardTypes] as ("character" | "event" | "stage")[], filters: c.candidate(n.filters), excludeSource: n.excludeSource, min: n.min, max, selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" };
   });
-  r.action.register("MOVE_CARD", "1", (n, c) => {
+  r.action.register("MOVE_CARD", "2", (n, c) => {
     const meta = c.fields(n, ["cards", "destination", "cause"]), cards = c.cards(n.cards);
     dataObject(n.destination, ["owner", "zone", "position", "faceUp"]); const destination = n.destination;
     ensureMove((destination.owner === "SELF" || destination.owner === "OPPONENT") && n.cause === "EFFECT", "unsupported-v3-move-cause-or-owner");

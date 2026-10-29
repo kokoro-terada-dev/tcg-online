@@ -126,15 +126,20 @@ test('hand reveal can move to the public area, and looking again never conceals 
   assert.equal(again.viewFor(1).movement.players[0].deck.filter(card => card.cardId !== null).length, 1);
 });
 
-test('look shortage is explicit, a one-card remainder can be ordered, and a last-card move stops without partial movement', () => {
+test('look shortage is explicit, a one-card remainder can be ordered, and a last-card move ends the game', () => {
   const strict = setup({ deckCount: 2, mutate: d => { searchDeck(d); d.effects[0].actions[0].onInsufficient = 'fail'; } }).coordinator;
   const initial = strict.snapshotForCoordinator(); assert.throws(() => strict.advance(0, 'short-look', strict.context())); assert.deepEqual(strict.snapshotForCoordinator(), initial);
   const c = setup({ deckCount: 1, mutate: searchDeck }).coordinator;
   c.advance(0, 'look-request', c.context()); c.applyPendingWork(0, 'look', c.context()); c.advance(0, 'select', c.context()); const choice = c.viewFor(0).frame.choice;
   assert.equal(choice.options.length, 1); c.answer(0, 'pick', c.context(), choice.selectionId, [choice.options[0].token]);
   c.advance(0, 'reveal-request', c.context()); c.applyPendingWork(0, 'reveal', c.context()); c.advance(0, 'move-request', c.context());
-  const before = c.snapshotForCoordinator().movement; c.applyPendingWork(0, 'blocked-last-card', c.context());
-  assert.equal(c.viewFor(0).frame.status, 'blocked'); assert.equal(c.snapshotForCoordinator().movement, before);
+  const before = c.snapshotForCoordinator().movement, context = c.context(); c.applyPendingWork(0, 'last-card', context);
+  assert.equal(c.applyPendingWork(0, 'last-card', context).replayed, true);
+  assert.equal(c.viewFor(0).frame.status, 'completed'); assert.equal(c.viewFor(0).frame.interruptedByGameEnd, true);
+  assert.equal(c.snapshotForCoordinator().movement.players[0].deck.length, 0);
+  assert.equal(c.snapshotForCoordinator().movement.players[0].hand.length, before.players[0].hand.length + 1);
+  assert.deepEqual(c.snapshotForCoordinator().movement.reveals, []);
+  assert.deepEqual(c.viewFor(0).outcome, { winner: 1, reason: 'deck-empty' }); assert.deepEqual(c.viewFor(1).outcome, c.viewFor(0).outcome);
   const one = setup({ deckCount: 1, mutate: searchDeck }).coordinator;
   one.advance(0, 'look-request', one.context()); one.applyPendingWork(0, 'look', one.context()); one.advance(0, 'select', one.context());
   one.answer(0, 'skip', one.context(), one.viewFor(0).frame.choice.selectionId, []); one.advance(0, 'order-request', one.context());
@@ -468,10 +473,20 @@ test('bouncing a character returns attached DON through existing automatic movem
   c.answer(0, 'choose', choice.context, choice.id, choice.tokens); c.advance(0, 'work', c.context()); c.applyPendingWork(0, 'move', c.context());
   assert.equal(c.viewFor(0).movement.players[0].attachedDon.length, 0); assert.equal(c.viewFor(0).movement.players[0].restDon.length, 1);
 });
-test('deck-out and wrong ownership destinations are explicitly blocked without partial moves', () => {
-  const empty = setup({ deckCount: 1, mutate: d => d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 1 }] }).coordinator;
-  empty.advance(0, 'start', empty.context()); const before = empty.snapshotForCoordinator(); empty.applyPendingWork(0, 'draw', empty.context());
-  assert.equal(empty.snapshotForCoordinator().movement, before.movement); assert.equal(empty.viewFor(0).frame.status, 'blocked');
+test('deck-out draws available cards and interrupts later work; wrong ownership remains blocked', () => {
+  for (const actor of [0, 1]) {
+    const empty = setup({ actor, deckCount: 1, mutate: d => d.effects[0].actions = [{ type: 'DRAW', player: 'SELF', count: 3 }, { type: 'DRAW', player: 'OPPONENT', count: 1 }] }).coordinator;
+    empty.advance(actor, 'start', empty.context()); const before = empty.snapshotForCoordinator(), context = empty.context(); empty.applyPendingWork(actor, 'draw', context);
+    assert.equal(empty.applyPendingWork(actor, 'draw', context).replayed, true);
+    const after = empty.snapshotForCoordinator(); assert.equal(after.movement.players[actor].deck.length, 0);
+    assert.equal(after.movement.players[actor].hand.length, before.movement.players[actor].hand.length + 1);
+    assert.deepEqual(after.movement.players[1 - actor], before.movement.players[1 - actor]);
+    assert.equal(empty.viewFor(actor).frame.status, 'completed'); assert.equal(empty.viewFor(actor).frame.interruptedByGameEnd, true);
+    assert.deepEqual(empty.viewFor(actor).outcome, { winner: 1 - actor, reason: 'deck-empty' });
+    assert.deepEqual(empty.viewFor(1 - actor).outcome, empty.viewFor(actor).outcome);
+    assert.equal(empty.viewFor(1 - actor).movement.players[actor].hand.every(card => card.cardId === null), true);
+    assert.throws(() => empty.advance(actor, 'after-end', empty.context())); assert.deepEqual(empty.snapshotForCoordinator(), after);
+  }
   const s = setup({ mutate: d => d.effects[0].actions[1].then[0].destination.owner = 'OPPONENT' }), c = s.coordinator;
   c.advance(0, 'start', c.context()); const choice = choose(s); c.answer(0, 'choose', choice.context, choice.id, choice.tokens); c.advance(0, 'work', c.context());
   const state = c.snapshotForCoordinator().movement; c.applyPendingWork(0, 'illegal', c.context()); assert.equal(c.snapshotForCoordinator().movement, state); assert.equal(c.viewFor(0).frame.status, 'blocked');

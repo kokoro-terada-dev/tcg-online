@@ -73,7 +73,7 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
       <div hidden={collapsed}>
       <strong>v3検証・合成効果</strong><p>{scenarios[view.scenario]}</p>
-      <p role="status">{view.frame.status === "completed" ? view.frame.activationDecision === "declined" ? "発動せず終了" : "処理完了" : view.frame.status === "blocked" ? "未対応または処理不可・停止中" : view.actor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち"}</p>
+      <p role="status">{view.frame.status === "completed" ? view.frame.interruptedByGameEnd ? "勝敗確定により処理終了" : view.frame.activationDecision === "declined" ? "発動せず終了" : "処理完了" : view.frame.status === "blocked" ? "未対応または処理不可・停止中" : view.actor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち"}</p>
       {view.frame.choice?.chooser === view.localPlayerIndex && <V3ChoicePanel key={view.frame.choice.selectionId} choice={view.frame.choice} imageAliases={view.imageAliases} disabled={busy || needsSync} onConfirm={tokens => action("answer", tokens)} />}
       <div className="test-effect-actions">
         {view.actor === view.localPlayerIndex && view.frame.status === "ready" && <button disabled={busy || needsSync} onClick={() => action("advance")}>処理を進める</button>}

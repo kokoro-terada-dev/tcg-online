@@ -16,6 +16,7 @@ import { V3ResolutionMachine, type ResolutionIdentity, type WorkRequest } from "
 import { addStatEffects, pruneStatEffects, validateStatEffects, type StatEffects } from "./statEffects";
 import { addKeywordGrants, pruneKeywordGrants, validateKeywordGrants, type KeywordGrants } from "./keywordEffects";
 import type { TriggerCause } from "./triggerScheduler";
+import { deckOutOutcome } from "./ruleOutcomes";
 
 export type FixtureContext = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number }>;
 type Receipt = { requestId: string; fingerprint: string };
@@ -95,7 +96,9 @@ export class V3FixtureCoordinator {
       const draft = { board: this.#board, events: [...this.#events], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants };
       const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => draft.statEffects, this.#progression.activePlayer);
       const machine = V3ResolutionMachine.restore(this.#card, this.#identity, this.#key, environment, this.#machine.exportForStorage(), current.frameRevision);
-      action(machine, draft); const progression = this.#gate(this.#progression, machine);
+      action(machine, draft); let progression = this.#gate(this.#progression, machine);
+      const outcome = deckOutOutcome(draft.board);
+      if (outcome) progression = applySystemEvent(progression, progression.revision, { kind: "finishGame", winner: outcome.winner, reason: outcome.reason });
       this.#checkEvents?.(draft.events.slice(this.#events.length));
       // Retain all candidate changes only after frame, movement and progression succeeded.
       this.#board = draft.board; this.#progression = progression; this.#machine = machine; this.#events = freezeMovement(draft.events); this.#statEffects = draft.statEffects; this.#keywordGrants = draft.keywordGrants;
@@ -124,6 +127,7 @@ export class V3FixtureCoordinator {
       draft.keywordGrants = pruneKeywordGrants(candidate.state, candidate.keywordGrants ?? draft.keywordGrants);
       ensureMove(draft.events.length <= 512, "v3-fixture-event-limit");
       machine.settleWork(requestId, expected.frameRevision, work.workId, "applied", candidate.state.revision);
+      if (deckOutOutcome(candidate.state)) machine.finishForGameOutcome(machine.viewFor(actor).revision, candidate.state.revision);
     });
   }
   #applyWork(board: MovementState, work: WorkRequest, statEffects: StatEffects, keywordGrants: KeywordGrants): TransactionResult & { statEffects?: StatEffects; keywordGrants?: KeywordGrants } {
@@ -203,8 +207,6 @@ export class V3FixtureCoordinator {
     } else if (work.type === "CLOSE_REVEALS") {
       operations.push({ kind: "closeReveals", scopeId: this.#identity.resolutionId });
     } else if (work.type === "DRAW") {
-      // Deck-out timing is deliberately unimplemented in this isolated fixture.
-      ensureMove(board.players[work.player].deck.length > work.count, "v3-fixture-deck-out-policy-unresolved");
       for (const id of board.players[work.player].deck.slice(0, work.count)) {
         const card = board.cards[id!]!;
         operations.push({ kind: "move", card: { instanceId: card.instanceId, generation: card.generation }, from: { player: work.player, zone: "deck" }, to: { player: work.player, zone: "hand", position: "append", faceUp: true, rotated: false }, cause: "EFFECT_MOVE" });
@@ -212,8 +214,6 @@ export class V3FixtureCoordinator {
     } else if (work.type === "MOVE_CARD") {
       const destination = work.destination, player = destination.owner === "SELF" ? actor : (1 - actor) as 0 | 1;
       ensureMove(work.cards.length > 0 && work.cards.length <= 50 && (destination.zone !== "deck" || work.cards.length === 1), "v3-fixture-move-count-or-order");
-      const fromDeck = work.cards.filter(ref => { const at = location(board, getCard(board, ref).instanceId); return at.player === actor && at.zone === "deck"; }).length;
-      ensureMove(fromDeck === 0 || board.players[actor].deck.length > fromDeck, "v3-fixture-deck-out-policy-unresolved");
       for (const ref of work.cards) {
         const card = getCard(board, ref), from = location(board, card.instanceId);
         const publicSource = ["character", "stage", "trash", "public"].includes(from.zone) && card.faceUp && visibleTo(board, card, from, 0) && visibleTo(board, card, from, 1);
@@ -237,11 +237,17 @@ export class V3FixtureCoordinator {
         }
       }
     }
+    const endsGame = ([0, 1] as const).some(player => {
+      const leaving = operations.filter(operation => operation.kind === "move" && operation.from.player === player && operation.from.zone === "deck" && (operation.to.player !== player || operation.to.zone !== "deck")).length;
+      const entering = operations.filter(operation => operation.kind === "move" && operation.to.player === player && operation.to.zone === "deck" && (operation.from.player !== player || operation.from.zone !== "deck")).length;
+      return board.players[player].deck.length - leaving + entering === 0;
+    });
+    if (endsGame) operations.push({ kind: "closeReveals", scopeId: this.#identity.resolutionId });
     return new MovementStore(board).commit({ transactionId: hash(`${board.matchId}:${work.workId}`), matchId: board.matchId, expectedRevision: board.revision,
       turnNumber: board.turnNumber, actor, effectController: actor, source: this.#identity.source, mode: work.type === "PAY_COSTS" ? "cost" : "effect", resolutionId: this.#identity.resolutionId, operations }, { status: "certifiedNone" });
   }
   viewFor(viewer: 0 | 1) {
-    return freezeMovement({ frame: this.#machine.viewFor(viewer), movement: projectMovementState(this.#board, viewer), progression: {
+    return freezeMovement({ frame: this.#machine.viewFor(viewer), movement: projectMovementState(this.#board, viewer), outcome: this.#progression.outcome, progression: {
       revision: this.#progression.revision, gate: this.#progression.gate.kind, chooser: this.#progression.gate.kind === "choice" ? this.#progression.gate.chooser : null } });
   }
   snapshotForCoordinator() {

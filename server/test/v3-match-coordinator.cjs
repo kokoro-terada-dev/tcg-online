@@ -138,10 +138,16 @@ test('end turn atomically prepares refresh, private draw and DON addition, then 
   }
 });
 
-test('a later phase failure rolls back the entire turn, including refresh and session receipts', () => {
-  const { c } = setup({ nextDeckCount: 1, refreshSeed: true }), before = c.snapshotForCoordinator();
-  assert.throws(() => c.endTurn(0, 'cannot-draw', c.context())); assert.deepEqual(c.snapshotForCoordinator(), before);
-  assert.equal(c.viewFor(0).turnNumber, 1); assert.equal(c.viewFor(0).activePlayer, 0);
+test('normal draw deck-out retains refresh and stops before DON addition, with idempotent replay', () => {
+  const { c } = setup({ nextDeckCount: 1, refreshSeed: true }), before = c.snapshotForCoordinator(), context = c.context();
+  c.endTurn(0, 'last-draw', context); assert.equal(c.endTurn(0, 'last-draw', context).replayed, true);
+  const after = c.snapshotForCoordinator();
+  assert.equal(c.viewFor(0).turnNumber, 2); assert.equal(c.viewFor(0).activePlayer, 1);
+  assert.deepEqual(c.viewFor(0).outcome, { winner: 0, reason: 'deck-empty' }); assert.deepEqual(c.viewFor(1).outcome, c.viewFor(0).outcome);
+  assert.equal(after.movement.players[1].deck.length, 0); assert.equal(after.movement.players[1].hand.length, before.movement.players[1].hand.length + 1);
+  assert.equal(after.movement.players[1].restDon.length, 0); assert.equal(after.movement.players[1].attachedDon.length, 0);
+  assert.deepEqual(after.movement.players[1].donDeck, before.movement.players[1].donDeck);
+  assert.throws(() => c.endTurn(1, 'after-end', c.context())); assert.deepEqual(c.snapshotForCoordinator(), after);
 });
 
 test('source, controller, request conflicts, production and attempted server-policy overrides are guarded', () => {
