@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "3.0.0-subset.16",
+  "cardId": "ST02-002",
+  "cardVersion": "reviewed.20261029.1",
+  "name": "ヴィト",
+  "cardType": "character",
+  "baseStats": {
+    "cost": 3,
+    "power": 5000,
+    "counter": 1000,
+    "life": null
+  },
+  "colors": [
+    "緑"
+  ],
+  "traits": [
+    "ファイアタンク海賊団"
+  ],
+  "attributes": [
+    "射"
+  ],
+  "keywords": [],
+  "reviewStatus": "approved",
+  "source": {
+    "text": "",
+    "triggerText": "",
+    "displayIds": [
+      "ST02-002"
+    ],
+    "datasetSha256": "34d695137fa8c8986ff1a641cf01232c8f5eda498f01db201b90c980808b01eb"
+  },
+  "effects": []
+}

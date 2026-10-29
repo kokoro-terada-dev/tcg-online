@@ -14,6 +14,9 @@ local-data/
 public/cards.zip
 public/cards/
 cards/
+!/server/data/effects-v3-reviewed/cards/
+/server/data/effects-v3-reviewed/cards/*
+!/server/data/effects-v3-reviewed/cards/*.json
 dist-ssr
 *.local
 

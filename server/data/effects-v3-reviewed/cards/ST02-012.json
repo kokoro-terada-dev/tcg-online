@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "3.0.0-subset.16",
+  "cardId": "ST02-012",
+  "cardVersion": "reviewed.20261029.1",
+  "name": "ベポ",
+  "cardType": "character",
+  "baseStats": {
+    "cost": 1,
+    "power": 3000,
+    "counter": 1000,
+    "life": null
+  },
+  "colors": [
+    "緑"
+  ],
+  "traits": [
+    "ミンク族",
+    "ハートの海賊団"
+  ],
+  "attributes": [
+    "打"
+  ],
+  "keywords": [],
+  "reviewStatus": "approved",
+  "source": {
+    "text": "",
+    "triggerText": "",
+    "displayIds": [
+      "ST02-012"
+    ],
+    "datasetSha256": "34d695137fa8c8986ff1a641cf01232c8f5eda498f01db201b90c980808b01eb"
+  },
+  "effects": []
+}

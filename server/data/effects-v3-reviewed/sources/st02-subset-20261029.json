@@ -1,0 +1,136 @@
+{
+  "version": "official-st02-subset.20261029.1",
+  "reviewedAt": "2026-10-29",
+  "cardList": "https://www.onepiece-cardgame.com/cardlist/?search=true&series=550002",
+  "qa": "https://www.onepiece-cardgame.com/pdf/qa_st-01-st-04.pdf?v220801=",
+  "normalization": {
+    "absentNumeric": "null",
+    "absentEffect": "empty string; official '-' is absence, not a zero counter",
+    "traits": "split the printed '/' separators; preserve each label"
+  },
+  "cards": [
+    {
+      "cardId": "ST02-001",
+      "name": "ユースタス・キッド",
+      "cardType": "leader",
+      "cost": null,
+      "power": 5000,
+      "counter": null,
+      "life": 5,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "特"
+      ],
+      "traits": [
+        "超新星",
+        "キッド海賊団"
+      ],
+      "text": "【起動メイン】【ターン1回】③(コストエリアのドン!!を指定の数レストにできる)，自分の手札1枚を捨てることができる：このリーダーをアクティブにする。",
+      "triggerText": ""
+    },
+    {
+      "cardId": "ST02-002",
+      "name": "ヴィト",
+      "cardType": "character",
+      "cost": 3,
+      "power": 5000,
+      "counter": 1000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "射"
+      ],
+      "traits": [
+        "ファイアタンク海賊団"
+      ],
+      "text": "",
+      "triggerText": ""
+    },
+    {
+      "cardId": "ST02-004",
+      "name": "カポネ・ベッジ",
+      "cardType": "character",
+      "cost": 1,
+      "power": 1000,
+      "counter": null,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "特"
+      ],
+      "traits": [
+        "超新星",
+        "ファイアタンク海賊団"
+      ],
+      "text": "【ブロッカー】(相手のアタックの後、このカードをレストにし、アタックの対象をこのカードにできる)",
+      "triggerText": ""
+    },
+    {
+      "cardId": "ST02-006",
+      "name": "コビー",
+      "cardType": "character",
+      "cost": 4,
+      "power": 6000,
+      "counter": 1000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "打"
+      ],
+      "traits": [
+        "海軍"
+      ],
+      "text": "",
+      "triggerText": ""
+    },
+    {
+      "cardId": "ST02-011",
+      "name": "ヒート",
+      "cardType": "character",
+      "cost": 2,
+      "power": 4000,
+      "counter": 1000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "特"
+      ],
+      "traits": [
+        "キッド海賊団"
+      ],
+      "text": "",
+      "triggerText": ""
+    },
+    {
+      "cardId": "ST02-012",
+      "name": "ベポ",
+      "cardType": "character",
+      "cost": 1,
+      "power": 3000,
+      "counter": 1000,
+      "life": null,
+      "colors": [
+        "緑"
+      ],
+      "attributes": [
+        "打"
+      ],
+      "traits": [
+        "ミンク族",
+        "ハートの海賊団"
+      ],
+      "text": "",
+      "triggerText": ""
+    }
+  ]
+}
