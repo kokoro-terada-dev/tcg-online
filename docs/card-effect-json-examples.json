@@ -1,7 +1,5 @@
 {
-  "basedOnCommit": "e6ba075",
-  "schemaVersion": "3.0.0-subset.16",
-  "compilerVersion": "v3-subset-compiler.16.3",
+  "basedOnCommit": "af3711a",
   "notice": "This file is an example index, not one CardDefinition. Compile only each non-null card. All cards are synthetic/unapproved; zero dataset hash is a clearly marked fixture placeholder, never a production source hash. No trusted approvals are supplied.",
   "examples": [
     {
@@ -1138,6 +1136,285 @@
           }
         ]
       }
+    },
+    {
+      "title": "PR02a: OP01-016の選択条件だけの合成検索",
+      "card": {
+        "schemaVersion": "3.0.0-subset.17",
+        "cardId": "EXAMPLE-META-NAMI",
+        "cardVersion": "draft.1",
+        "name": "合成・ナミの選択条件のみ",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic search with name exclusion and trait membership. Not a full OP01-016 definition or approval.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-META-NAMI"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "main.1",
+            "kind": "activated",
+            "timing": {
+              "type": "MAIN"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "LOOK_TOP",
+                "player": "SELF",
+                "count": 5,
+                "bindAs": "looked",
+                "onInsufficient": "takeAvailable"
+              },
+              {
+                "type": "SELECT",
+                "selector": {
+                  "type": "BOUND_CARDS",
+                  "cards": {
+                    "ref": "bindings.looked"
+                  },
+                  "excludeCards": null,
+                  "owner": "SELF",
+                  "controller": "SELF",
+                  "chooser": "SELF",
+                  "zone": "deck",
+                  "visibility": "OWNER_ONLY",
+                  "faceUpOnly": false,
+                  "cardTypes": [
+                    "character"
+                  ],
+                  "filters": {
+                    "type": "all",
+                    "conditions": [
+                      {
+                        "type": "CARD_NAME",
+                        "subject": "CANDIDATE",
+                        "basis": "PRINTED",
+                        "op": "ne",
+                        "value": "ナミ"
+                      },
+                      {
+                        "type": "CARD_METADATA",
+                        "subject": "CANDIDATE",
+                        "basis": "PRINTED",
+                        "field": "traits",
+                        "match": "ANY",
+                        "comparison": "EXACT",
+                        "values": [
+                          "麦わらの一味"
+                        ]
+                      }
+                    ]
+                  },
+                  "excludeSource": false,
+                  "min": 0,
+                  "max": 1,
+                  "selectionMode": "SELECT",
+                  "order": "UNORDERED",
+                  "onInsufficient": "fail"
+                },
+                "bindAs": "selected"
+              },
+              {
+                "type": "IF",
+                "condition": {
+                  "type": "compare",
+                  "left": {
+                    "ref": "bindings.selected.count"
+                  },
+                  "op": "gt",
+                  "right": 0
+                },
+                "then": [
+                  {
+                    "type": "REVEAL",
+                    "cards": {
+                      "ref": "bindings.selected"
+                    },
+                    "viewers": "BOTH"
+                  },
+                  {
+                    "type": "MOVE_CARD",
+                    "cards": {
+                      "ref": "bindings.selected"
+                    },
+                    "destination": {
+                      "owner": "SELF",
+                      "zone": "hand",
+                      "position": "append",
+                      "faceUp": true
+                    },
+                    "cause": "EFFECT"
+                  }
+                ],
+                "else": []
+              },
+              {
+                "type": "ORDER_CARDS",
+                "cards": {
+                  "ref": "bindings.looked"
+                },
+                "excludeCards": {
+                  "ref": "bindings.selected"
+                },
+                "bindAs": "remaining",
+                "chooser": "SELF"
+              },
+              {
+                "type": "IF",
+                "condition": {
+                  "type": "compare",
+                  "left": {
+                    "ref": "bindings.remaining.count"
+                  },
+                  "op": "gt",
+                  "right": 0
+                },
+                "then": [
+                  {
+                    "type": "RETURN_TO_DECK",
+                    "cards": {
+                      "ref": "bindings.remaining"
+                    },
+                    "player": "SELF",
+                    "position": "bottom"
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "PR02b: OP16-080のトリガー保持条件だけの合成選択",
+      "card": {
+        "schemaVersion": "3.0.0-subset.17",
+        "cardId": "EXAMPLE-META-TRIGGER",
+        "cardVersion": "draft.1",
+        "name": "合成・トリガー保持条件のみ",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic own-hand selection using a printed trigger tag. Not OP16-080; no continuous effect, discard cost or retargeting is implemented.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-META-TRIGGER"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "on_play.1",
+            "kind": "triggered",
+            "timing": {
+              "type": "ON_PLAY"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "SELECT",
+                "bindAs": "triggerCards",
+                "selector": {
+                  "type": "CARDS",
+                  "owner": "SELF",
+                  "controller": "SELF",
+                  "chooser": "SELF",
+                  "zone": "hand",
+                  "cardTypes": [
+                    "character",
+                    "event",
+                    "stage"
+                  ],
+                  "filters": {
+                    "type": "HAS_ABILITY",
+                    "subject": "CANDIDATE",
+                    "basis": "PRINTED",
+                    "ability": "TRIGGER"
+                  },
+                  "excludeSource": false,
+                  "faceUpOnly": false,
+                  "min": 0,
+                  "max": 1,
+                  "visibility": "OWNER_ONLY",
+                  "selectionMode": "SELECT",
+                  "order": "UNORDERED",
+                  "onInsufficient": "fail"
+                }
+              }
+            ]
+          }
+        ]
+      }
     }
-  ]
+  ],
+  "schemaVersions": [
+    "3.0.0-subset.16",
+    "3.0.0-subset.17"
+  ],
+  "compilerProfiles": {
+    "3.0.0-subset.16": {
+      "compilerVersion": "v3-subset-compiler.16.3",
+      "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763"
+    },
+    "3.0.0-subset.17": {
+      "compilerVersion": "v3-subset-compiler.17.1",
+      "registryHash": "d18b0e340ce690d8a7e864aacf7c41974d8a9b9d233766afc512a795e6abf8d9"
+    }
+  }
 }

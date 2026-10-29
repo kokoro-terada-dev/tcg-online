@@ -1,14 +1,14 @@
 # 効果JSON生成に関する実装状況
 
-調査基準: `e6ba075` / 2026-10-29。ゲーム処理の変更なし。
+更新: PR02a・PR02b / 2026-10-29。実装開始時点は`af3711a`。詳細は`card-effect-pr02.md`。
 対象は隔離v3エンジン。通常対戦・一人回し・旧効果スキーマと混ぜないでください。
 
 ## 対応段階の区別
 
 | 層 | 状態 | 注意 |
 | --- | --- | --- |
-| JSON構造 | `3.0.0-subset.16`、Compiler `v3-subset-compiler.16.3` | SchemaだけではCompilerと同等にならない |
-| Registry | 38命令、8カテゴリー（replacementは空） | 登録されていることと全状況で動くことは別 |
+| JSON構造 | 新機能は`3.0.0-subset.17` / Compiler `v3-subset-compiler.17.1`。旧16/.16.3を併存 | 旧承認のhashを変更しない。SchemaだけではCompilerと同等にならない |
+| Registry | 新17は41命令、旧16は38命令。8カテゴリー（replacementは空） | 対応profileを明示して使用 |
 | 解決機械 | 選択・支払い・work待ち・保存データからの再開を実装 | 本番DB保存/ネットワーク再接続復旧ではない |
 | 盤面適用 | 限定的な移動・修正・キーワード・誘発・バトル | 実行時の領域/所有者/世代/非公開情報チェックあり |
 | 実カード | 14種類、指定プリセットのみ独立承認 | 生成JSONを配置しただけでは使用不可 |
@@ -17,6 +17,8 @@
 ## 実装済み（限定範囲）
 
 - Predicate: all/any/not/compare。lifeCount/handCount、SOURCE/CANDIDATEのcost/power/cardType/rotated、束縛枚数。
+- 新17のPredicate: CARD_NAME、CARD_METADATA、HAS_ABILITY。名前・特徴・色・属性のliteral/集合条件、印刷/付与/現在の能力タグ。既存のAND/OR/NOTと合成。
+- PR00/01: 実行不可レビュー台帳、EventContext、権限付きDerivedCardFacts。新Predicateも同じFacts/evaluate経路を使用。
 - 発動コスト: REST_DON、REST_SOURCE、DISCARD_HAND、DON_RETURN。複合支払いの重複を検証。
 - 選択: 公開の場/trash/public、自分手札、自分active/rest/attached DON、自分が見たデッキ上の集合。
 - アクション: 命令一覧JSONの15種。移動・KO・REST・SET_ACTIVE・DRAW・サーチ/公開/順序・分岐等。
@@ -30,7 +32,8 @@
 
 | 機能 | 実際の制限 |
 | --- | --- |
-| 特徴・属性・名前・色の条件 | 基本情報として保存可能だがPredicate/Selectorの参照にはない |
+| メタデータ条件の未対応範囲 | 任意の別カード/自リーダーへの汎用Query、メタデータ変更効果、公式名称alias、正規化による同一視は未対応 |
+| 未知の能力タグ | DOUBLE_ATTACK等は未対応。存在しないものとしてfalseにせずCompilerで拒否 |
 | 場の存在/総数のPredicate | 任意集合の存在問い合わせなし。SELECTを発動条件の代用にしない |
 | 自分ターン/登場ターン/原因の条件 | 汎用Value/Predicateなし。MAINのタイミング制約は自分ターン条件の代用ではない |
 | 条件付き誘発成立 | triggeredのactivationConditionsは空all必須。解決時IFへ勝手に変更不可 |

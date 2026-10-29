@@ -404,7 +404,7 @@ export class V3SyntheticMatchCoordinator {
     const effect = card.definition.effects.find(effect => effect.id === effectId)!;
     const facts = pinMasterFacts(this.#board, { master: this.#master, numericPolicy: "certifiedUnmodified" });
     const environment = fixtureEnvironment(() => this.#board, { matchId: this.#board.matchId, resolutionId: "activation-preflight", actor, source, effectId },
-      card, facts, this.#now, [...this.#cards.values()], () => this.#statEffects, this.#progression.activePlayer);
+      card, facts, this.#now, [...this.#cards.values()], () => this.#statEffects, this.#progression.activePlayer, () => 0, undefined, () => this.#keywordGrants);
     return environment.evaluate(effect.activationConditions, {}) === true && environment.canPayCosts?.(effect.costs, null, null) === true;
   }
   snapshotForCoordinator() {

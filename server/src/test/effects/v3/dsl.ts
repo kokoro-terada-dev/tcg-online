@@ -6,8 +6,16 @@ export type NodeMeta = { id?: string; sourceSpan?: SourceSpan };
 export type CardField = "cost" | "power" | "cardType" | "rotated";
 export type Value = number | string | boolean | null | { ref: "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17";
+export type CardSubject = "SOURCE" | "CANDIDATE";
+export type MetadataBasis = "PRINTED" | "CURRENT";
+export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
 // Declaration merging extends the typed vocabulary; parsers must also be registered.
 export interface PredicateMap {
+  CARD_NAME: NodeMeta & { type: "CARD_NAME"; subject: CardSubject; basis: MetadataBasis; op: "eq" | "ne"; value: string };
+  CARD_METADATA: NodeMeta & { type: "CARD_METADATA"; subject: CardSubject; basis: MetadataBasis; field: "traits" | "colors" | "attributes";
+    match: "ANY" | "ALL" | "NONE" | "EXACT"; comparison: "EXACT" | "CONTAINS"; values: string[] };
+  HAS_ABILITY: NodeMeta & { type: "HAS_ABILITY"; subject: CardSubject; basis: "PRINTED" | "GRANTED" | "CURRENT"; ability: AbilityTag };
   all: NodeMeta & { type: "all"; conditions: Predicate[] };
   any: NodeMeta & { type: "any"; conditions: Predicate[] };
   not: NodeMeta & { type: "not"; condition: Predicate };
@@ -81,7 +89,7 @@ export type Effect = {
   activationConditions: Predicate; resolutionConditions: Predicate; costs: Node<"cost">[]; actions: Action[];
 };
 export type CardDefinition = {
-  schemaVersion: "3.0.0-subset.16"; cardId: string; cardVersion: string;
+  schemaVersion: SchemaVersion; cardId: string; cardVersion: string;
   name: string; cardType: "leader" | "character" | "stage" | "event";
   baseStats: { cost: number | null; power: number | null; counter: number | null; life: number | null };
   colors: string[]; traits: string[]; attributes: string[]; keywords: Node<"keyword">[];

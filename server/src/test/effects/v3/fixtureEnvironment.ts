@@ -8,14 +8,15 @@ import type { ApprovedV3Card } from "./approval";
 import type { ResolutionEnvironment, ResolutionIdentity } from "./resolution";
 import type { StatEffects } from "./statEffects";
 import { UNKNOWN, createDerivedCardFactsReader, readEventContext, type EventContext } from "./readContext";
+import type { KeywordGrants } from "./keywordEffects";
 
 type Scalar = string | number | boolean | null | typeof UNKNOWN;
-export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext): ResolutionEnvironment {
+export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext, keywordGrants: () => KeywordGrants = () => []): ResolutionEnvironment {
   const knownDefinitions = new Map(definitions.map(card => [card.definition.cardId, card]));
   const context = eventContext ?? readEventContext(board(), identity);
   ensureMove(context.effectController === identity.actor && context.source.instanceId === identity.source.instanceId && context.source.generation === identity.source.generation, "v3-read-context-source-mismatch");
   const seat = (side: string): 0 | 1 => side === "SELF" ? context.effectController : (1 - context.effectController) as 0 | 1;
-  const cardFacts = createDerivedCardFactsReader({ board, definitions: knownDefinitions, master: facts, statEffects, activePlayer, counterPower });
+  const cardFacts = createDerivedCardFactsReader({ board, definitions: knownDefinitions, master: facts, statEffects, activePlayer, counterPower, keywordGrants });
   const read = (value: DeepReadonly<Value>, bindings: Readonly<Record<string, readonly Readonly<CardObjectRef>[]>>, candidate?: Readonly<CardObjectRef>): Scalar => {
     if (value === null || typeof value !== "object") return value;
     const state = board(), parts = value.ref.split(".");
@@ -42,6 +43,24 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       return unknown ? "unknown" : predicate.type === "all";
     }
     if (predicate.type === "not") { const result = evaluate(predicate.condition, bindings, candidate); return result === "unknown" ? result : !result; }
+    if (predicate.type === "CARD_NAME" || predicate.type === "CARD_METADATA" || predicate.type === "HAS_ABILITY") {
+      const ref = predicate.subject === "SOURCE" ? identity.source : candidate;
+      if (!ref) return "unknown";
+      const derived = cardFacts(ref, context.effectController);
+      if (derived === UNKNOWN) return "unknown";
+      if (predicate.type === "HAS_ABILITY") {
+        const ability = derived.abilities[predicate.basis][predicate.ability];
+        return ability === UNKNOWN || typeof ability !== "boolean" ? "unknown" : ability;
+      }
+      const metadata = derived.metadata[predicate.basis === "PRINTED" ? "printed" : "current"];
+      if (predicate.type === "CARD_NAME") return metadata.name === UNKNOWN ? "unknown" : predicate.op === "eq" ? metadata.name === predicate.value : metadata.name !== predicate.value;
+      const values = metadata[predicate.field]; if (values === UNKNOWN) return "unknown";
+      const contains = (query: string) => values.some(value => predicate.comparison === "EXACT" ? value === query : value.includes(query));
+      if (predicate.match === "ANY") return predicate.values.some(contains);
+      if (predicate.match === "ALL") return predicate.values.every(contains);
+      if (predicate.match === "NONE") return !predicate.values.some(contains);
+      return values.length === predicate.values.length && predicate.values.every(contains);
+    }
     if (predicate.type !== "compare") return "unknown";
     const left = read(predicate.left, bindings, candidate), right = read(predicate.right, bindings, candidate);
     if (left === UNKNOWN || right === UNKNOWN) return "unknown";

@@ -1,9 +1,12 @@
 {
-  "basedOnCommit": "e6ba075",
-  "compilerVersion": "v3-subset-compiler.16.3",
-  "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763",
+  "basedOnCommit": "af3711a",
+  "compilerVersion": "v3-subset-compiler.17.1",
+  "registryHash": "d18b0e340ce690d8a7e864aacf7c41974d8a9b9d233766afc512a795e6abf8d9",
   "registries": {
     "predicate": [
+      "CARD_METADATA@1",
+      "CARD_NAME@1",
+      "HAS_ABILITY@1",
       "all@1",
       "any@1",
       "compare@3",
@@ -61,7 +64,10 @@
     "Registry names requested by consumers are not separate classes: builtinV3Registries() returns category registries.",
     "TriggerRegistry corresponds to timing plus triggerScheduler; ModifierRegistry does not exist; MODIFY_STAT and GRANT_KEYWORD use runtime ledgers.",
     "JSON snippets may need earlier bindings and valid board/timing; successful compiler validation is not runtime approval.",
-    "All commands accept optional id/sourceSpan. Required parameter schemas are structural; compiler imposes additional contextual rules."
+    "All commands accept optional id/sourceSpan. Required parameter schemas are structural; compiler imposes additional contextual rules.",
+    "Legacy subset.16 retains the exact old compiler and registry hashes. New nodes require subset.17. No trusted approval manifest was modified.",
+    "Current metadata is UNKNOWN when unmodeled modifiers/grants exist. Missing approved metadata never becomes an empty set or false.",
+    "Printed/current metadata and printed/granted/current abilities are distinct. Comparisons use literal strings without NFC/NFKC, width folding or aliases."
   ],
   "absentOrEmpty": [
     {
@@ -99,7 +105,11 @@
       "example": {
         "type": "all",
         "conditions": []
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "predicate",
@@ -133,7 +143,11 @@
             "right": 2
           }
         ]
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "predicate",
@@ -177,7 +191,11 @@
         },
         "op": "gt",
         "right": 0
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "predicate",
@@ -209,7 +227,11 @@
           "op": "lt",
           "right": 5
         }
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -234,7 +256,11 @@
       "example": {
         "type": "BIND_SOURCE",
         "bindAs": "self"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -267,7 +293,11 @@
         "type": "DRAW",
         "player": "SELF",
         "count": 2
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -310,7 +340,11 @@
           "player": "SELF",
           "occurrence": 1
         }
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -366,7 +400,11 @@
           }
         ],
         "else": []
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -393,7 +431,11 @@
         "cards": {
           "ref": "bindings.target"
         }
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -436,7 +478,11 @@
         "count": 5,
         "bindAs": "looked",
         "onInsufficient": "takeAvailable"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -490,7 +536,11 @@
           "player": "SELF",
           "occurrence": 1
         }
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -532,7 +582,11 @@
           "faceUp": true
         },
         "cause": "EFFECT"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -583,7 +637,11 @@
         },
         "bindAs": "remaining",
         "chooser": "SELF"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -610,7 +668,11 @@
         "cards": {
           "ref": "bindings.target"
         }
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -650,7 +712,11 @@
         },
         "player": "SELF",
         "position": "bottom"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -682,7 +748,11 @@
           "ref": "bindings.selected"
         },
         "viewers": "BOTH"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -733,7 +803,11 @@
           "onInsufficient": "fail"
         },
         "bindAs": "target"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -764,7 +838,11 @@
             "count": 1
           }
         ]
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "action",
@@ -791,7 +869,11 @@
         "cards": {
           "ref": "bindings.target"
         }
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "cost",
@@ -816,7 +898,11 @@
       "example": {
         "type": "DISCARD_HAND",
         "count": 1
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "cost",
@@ -850,7 +936,11 @@
           "restDon",
           "attachedDon"
         ]
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "cost",
@@ -875,7 +965,11 @@
       "example": {
         "type": "REST_DON",
         "count": 1
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "cost",
@@ -893,7 +987,11 @@
       "runtimeConstraints": "発生元がアクティブの場のカード。最大1件。",
       "example": {
         "type": "REST_SOURCE"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "selector",
@@ -1023,7 +1121,11 @@
         "selectionMode": "SELECT",
         "order": "UNORDERED",
         "onInsufficient": "fail"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "selector",
@@ -1149,7 +1251,11 @@
         "chooser": "SELF",
         "order": "UNORDERED",
         "onInsufficient": "fail"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "duration",
@@ -1167,7 +1273,11 @@
       "runtimeConstraints": "バトル外では実行拒否。",
       "example": {
         "type": "BATTLE_END"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "duration",
@@ -1200,7 +1310,11 @@
         "type": "TURN_END",
         "player": "SELF",
         "occurrence": 1
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "timing",
@@ -1218,7 +1332,11 @@
       "runtimeConstraints": "optional:false、usageLimit:null、costs:[]、activation空all。",
       "example": {
         "type": "COUNTER"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "timing",
@@ -1236,7 +1354,11 @@
       "runtimeConstraints": "leader/character/stageのみ。event MAIN未対応。",
       "example": {
         "type": "MAIN"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "timing",
@@ -1254,7 +1376,11 @@
       "runtimeConstraints": "leader/character。activationConditionsは空all必須。",
       "example": {
         "type": "ON_ATTACK"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "timing",
@@ -1272,7 +1398,11 @@
       "runtimeConstraints": "追加コスト不可。SOURCE数値ref不可。直接trashは対象外。",
       "example": {
         "type": "ON_KO"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "timing",
@@ -1290,7 +1420,11 @@
       "runtimeConstraints": "発生条件の追加は未対応。",
       "example": {
         "type": "ON_OPPONENT_ATTACK"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "timing",
@@ -1308,7 +1442,11 @@
       "runtimeConstraints": "他カード登場監視やactivationConditions付き誘発は未対応。",
       "example": {
         "type": "ON_PLAY"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "timing",
@@ -1326,7 +1464,11 @@
       "runtimeConstraints": "TRIGGER定義1件とtriggerText非空が1対1。SOURCE参照/追加コスト/条件付き誘発不可。",
       "example": {
         "type": "TRIGGER"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "keyword",
@@ -1344,7 +1486,11 @@
       "runtimeConstraints": "公開leader/characterに有効。自身の攻撃対象からの再ブロック不可。",
       "example": {
         "type": "BLOCKER"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "keyword",
@@ -1362,7 +1508,11 @@
       "runtimeConstraints": "対象条件付きブロック不可は表現不可。",
       "example": {
         "type": "CANNOT_BE_BLOCKED"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "keyword",
@@ -1380,7 +1530,11 @@
       "runtimeConstraints": "双方の最初のターンの攻撃禁止は解除しない。",
       "example": {
         "type": "RUSH"
-      }
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
     },
     {
       "category": "keyword",
@@ -1398,7 +1552,338 @@
       "runtimeConstraints": "登場ターンにリーダーを攻撃できない。",
       "example": {
         "type": "RUSH_CHARACTER"
+      },
+      "availableIn": [
+        "3.0.0-subset.16",
+        "3.0.0-subset.17"
+      ]
+    },
+    {
+      "category": "predicate",
+      "name": "CARD_NAME",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "availableIn": [
+        "3.0.0-subset.17"
+      ],
+      "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
+      "requiredParameters": [
+        "subject",
+        "basis",
+        "op",
+        "value"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "type": {
+          "const": "CARD_NAME"
+        },
+        "subject": {
+          "enum": [
+            "SOURCE",
+            "CANDIDATE"
+          ]
+        },
+        "basis": {
+          "enum": [
+            "PRINTED",
+            "CURRENT"
+          ]
+        },
+        "op": {
+          "enum": [
+            "eq",
+            "ne"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "\\S"
+        }
+      },
+      "description": "カード名の文字列完全一致/不一致。",
+      "runtimeConstraints": "正規化なし。SOURCE/CANDIDATEを明示、CANDIDATEはselector.filtersのみ。",
+      "example": {
+        "type": "CARD_NAME",
+        "subject": "CANDIDATE",
+        "basis": "PRINTED",
+        "op": "ne",
+        "value": "ナミ"
+      }
+    },
+    {
+      "category": "predicate",
+      "name": "CARD_METADATA",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "availableIn": [
+        "3.0.0-subset.17"
+      ],
+      "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
+      "requiredParameters": [
+        "subject",
+        "basis",
+        "field",
+        "match",
+        "comparison",
+        "values"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "type": {
+          "const": "CARD_METADATA"
+        },
+        "subject": {
+          "enum": [
+            "SOURCE",
+            "CANDIDATE"
+          ]
+        },
+        "basis": {
+          "enum": [
+            "PRINTED",
+            "CURRENT"
+          ]
+        },
+        "field": {
+          "enum": [
+            "traits",
+            "colors",
+            "attributes"
+          ]
+        },
+        "match": {
+          "enum": [
+            "ANY",
+            "ALL",
+            "NONE",
+            "EXACT"
+          ]
+        },
+        "comparison": {
+          "enum": [
+            "EXACT",
+            "CONTAINS"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "pattern": "\\S"
+          }
+        }
+      },
+      "description": "特徴/色/属性の集合判定、特徴内の文字列部分一致。",
+      "runtimeConstraints": "ANY/ALL/NONE/EXACT。CONTAINSはtraitsかつANY/ALL/NONEのみ。名前や色の部分一致は不可。",
+      "example": {
+        "type": "CARD_METADATA",
+        "subject": "CANDIDATE",
+        "basis": "PRINTED",
+        "field": "traits",
+        "match": "ANY",
+        "comparison": "EXACT",
+        "values": [
+          "麦わらの一味"
+        ]
+      }
+    },
+    {
+      "category": "predicate",
+      "name": "HAS_ABILITY",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "availableIn": [
+        "3.0.0-subset.17"
+      ],
+      "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
+      "requiredParameters": [
+        "subject",
+        "basis",
+        "ability"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "type": {
+          "const": "HAS_ABILITY"
+        },
+        "subject": {
+          "enum": [
+            "SOURCE",
+            "CANDIDATE"
+          ]
+        },
+        "basis": {
+          "enum": [
+            "PRINTED",
+            "GRANTED",
+            "CURRENT"
+          ]
+        },
+        "ability": {
+          "enum": [
+            "BLOCKER",
+            "RUSH",
+            "RUSH_CHARACTER",
+            "CANNOT_BE_BLOCKED",
+            "MAIN",
+            "ON_PLAY",
+            "ON_ATTACK",
+            "ON_OPPONENT_ATTACK",
+            "ON_KO",
+            "COUNTER",
+            "TRIGGER"
+          ]
+        }
+      },
+      "description": "印刷・付与分・現在の能力タグを判定。",
+      "runtimeConstraints": "GRANTEDは既存4種キーワードだけ。TRIGGERは自身のTRIGGER定義で判定し本文の言及を検索しない。未知タグはCompiler拒否。",
+      "example": {
+        "type": "HAS_ABILITY",
+        "subject": "CANDIDATE",
+        "basis": "PRINTED",
+        "ability": "TRIGGER"
       }
     }
-  ]
+  ],
+  "implementationUpdate": "PR02a/PR02b; no PR03 features or new real-card approvals",
+  "profiles": {
+    "3.0.0-subset.16": {
+      "compilerVersion": "v3-subset-compiler.16.3",
+      "registryHash": "44c9c6deaa3a9a9d6f7926011dad26ced77b65d6cbe81093814946fd97ad5763",
+      "registries": {
+        "predicate": [
+          "all@1",
+          "any@1",
+          "compare@3",
+          "not@1"
+        ],
+        "action": [
+          "BIND_SOURCE@2",
+          "DRAW@2",
+          "GRANT_KEYWORD@1",
+          "IF@2",
+          "KO@1",
+          "LOOK_TOP@1",
+          "MODIFY_STAT@1",
+          "MOVE_CARD@2",
+          "ORDER_CARDS@1",
+          "REST@1",
+          "RETURN_TO_DECK@1",
+          "REVEAL@1",
+          "SELECT@1",
+          "SEQUENCE@1",
+          "SET_ACTIVE@1"
+        ],
+        "cost": [
+          "DISCARD_HAND@1",
+          "DON_RETURN@2",
+          "REST_DON@1",
+          "REST_SOURCE@1"
+        ],
+        "replacement": [],
+        "selector": [
+          "BOUND_CARDS@1",
+          "CARDS@4"
+        ],
+        "duration": [
+          "BATTLE_END@1",
+          "TURN_END@1"
+        ],
+        "timing": [
+          "COUNTER@1",
+          "MAIN@1",
+          "ON_ATTACK@1",
+          "ON_KO@1",
+          "ON_OPPONENT_ATTACK@1",
+          "ON_PLAY@1",
+          "TRIGGER@1"
+        ],
+        "keyword": [
+          "BLOCKER@1",
+          "CANNOT_BE_BLOCKED@1",
+          "RUSH@1",
+          "RUSH_CHARACTER@1"
+        ]
+      }
+    },
+    "3.0.0-subset.17": {
+      "compilerVersion": "v3-subset-compiler.17.1",
+      "registryHash": "d18b0e340ce690d8a7e864aacf7c41974d8a9b9d233766afc512a795e6abf8d9",
+      "registries": {
+        "predicate": [
+          "CARD_METADATA@1",
+          "CARD_NAME@1",
+          "HAS_ABILITY@1",
+          "all@1",
+          "any@1",
+          "compare@3",
+          "not@1"
+        ],
+        "action": [
+          "BIND_SOURCE@2",
+          "DRAW@2",
+          "GRANT_KEYWORD@1",
+          "IF@2",
+          "KO@1",
+          "LOOK_TOP@1",
+          "MODIFY_STAT@1",
+          "MOVE_CARD@2",
+          "ORDER_CARDS@1",
+          "REST@1",
+          "RETURN_TO_DECK@1",
+          "REVEAL@1",
+          "SELECT@1",
+          "SEQUENCE@1",
+          "SET_ACTIVE@1"
+        ],
+        "cost": [
+          "DISCARD_HAND@1",
+          "DON_RETURN@2",
+          "REST_DON@1",
+          "REST_SOURCE@1"
+        ],
+        "replacement": [],
+        "selector": [
+          "BOUND_CARDS@1",
+          "CARDS@4"
+        ],
+        "duration": [
+          "BATTLE_END@1",
+          "TURN_END@1"
+        ],
+        "timing": [
+          "COUNTER@1",
+          "MAIN@1",
+          "ON_ATTACK@1",
+          "ON_KO@1",
+          "ON_OPPONENT_ATTACK@1",
+          "ON_PLAY@1",
+          "TRIGGER@1"
+        ],
+        "keyword": [
+          "BLOCKER@1",
+          "CANNOT_BE_BLOCKED@1",
+          "RUSH@1",
+          "RUSH_CHARACTER@1"
+        ]
+      }
+    }
+  }
 }

@@ -2,7 +2,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto
 import { dataArray, dataObject, ensureMove, freezeMovement, reference } from "../../movement/state";
 import type { CardObjectRef, DeepReadonly } from "../types";
 import type { Action, Node, Predicate } from "./dsl";
-import { builtinV3Registries, label, v3RegistryHash } from "./compiler";
+import { label, supportsV3RuntimeProfile } from "./compiler";
 import { isApprovedV3Card, type ApprovedV3Card } from "./approval";
 
 type Ref = Readonly<CardObjectRef>;
@@ -85,7 +85,7 @@ export class V3ResolutionMachine {
     label(identity.matchId); label(identity.resolutionId); label(identity.effectId); reference(identity.source);
     ensureMove(identity.actor === 0 || identity.actor === 1, "v3-invalid-actor");
     ensureMove(signingKey instanceof Uint8Array && signingKey.length >= 32 && signingKey.length <= 128, "v3-signing-key-required");
-    ensureMove(v3RegistryHash(builtinV3Registries()) === card.registryHash, "v3-runtime-registry-mismatch");
+    ensureMove(supportsV3RuntimeProfile(card), "v3-runtime-registry-mismatch");
     this.#key = Buffer.from(signingKey); this.#environment = environment; this.#card = card; this.#code = program(card, identity.effectId);
     const worldRevision = environment.revision(); ensureMove(Number.isSafeInteger(worldRevision) && worldRevision >= 0, "v3-invalid-world-revision");
     this.#state = { version: "v3-frame.9", identity: structuredClone(identity), definitionHash: card.definitionHash, compilerVersion: card.compilerVersion, registryHash: card.registryHash, rulesetVersion: card.rulesetVersion,

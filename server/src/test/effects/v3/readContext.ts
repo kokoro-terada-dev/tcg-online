@@ -6,6 +6,9 @@ import { masterCardFacts, type PinnedMasterFacts } from "../masterFacts";
 import type { ApprovedV3Card } from "./approval";
 import type { ResolutionIdentity } from "./resolution";
 import { statDelta, type StatEffects } from "./statEffects";
+import { ABILITY_TAGS } from "./compiler";
+import type { AbilityTag } from "./dsl";
+import type { KeywordGrants } from "./keywordEffects";
 
 export const UNKNOWN: unique symbol = Symbol("v3-unknown-fact");
 export type KnownOrUnknown<T> = T | typeof UNKNOWN;
@@ -35,17 +38,23 @@ export function readEventContext(state: MovementState, identity: ResolutionIdent
     origin: origin?.type ?? "activation", attack: origin?.type === "attack" ? { battleId: origin.battleId, attacker: origin.attacker } : null });
 }
 
+export type CardMetadataFacts = Readonly<{ name: KnownOrUnknown<string>; traits: KnownOrUnknown<readonly string[]>;
+  colors: KnownOrUnknown<readonly string[]>; attributes: KnownOrUnknown<readonly string[]> }>;
 export type DerivedCardFacts = Readonly<{
   cardType: KnownOrUnknown<string>; rotated: boolean; owner: Player; controller: Player;
   printed: Readonly<Record<"cost" | "power" | "counter" | "life", KnownOrUnknown<number>>>;
   current: Readonly<Record<"cost" | "power", KnownOrUnknown<number>>>;
+  metadata: Readonly<{ printed: CardMetadataFacts; current: CardMetadataFacts }>;
+  abilities: Readonly<Record<"PRINTED" | "GRANTED" | "CURRENT", Readonly<Record<AbilityTag, KnownOrUnknown<boolean>>>>>;
 }>;
 type Ref = Readonly<CardObjectRef>;
 type ReaderOptions = Readonly<{
   board: () => MovementState; definitions: ReadonlyMap<string, ApprovedV3Card>; master?: PinnedMasterFacts;
   statEffects: () => StatEffects; activePlayer: Player; counterPower?: (ref: Ref) => number;
+  keywordGrants?: () => KeywordGrants;
 }>;
 const numeric = (value: unknown): KnownOrUnknown<number> => typeof value === "number" && Number.isSafeInteger(value) ? value : UNKNOWN;
+const keywordTags = new Set<AbilityTag>(["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"]);
 
 // A hidden card yields no facts, even when its definition happens to be in the catalog.
 export function createDerivedCardFactsReader(options: ReaderOptions) {
@@ -69,8 +78,21 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
         const result = numeric(baseNumber + statDelta(options.statEffects(), ref, field) + don + counter);
         return result === UNKNOWN ? UNKNOWN : field === "cost" ? Math.max(0, result) : result;
       };
+      const definition = known && matching ? known.definition : null;
+      const metadata: CardMetadataFacts = { name: definition?.name ?? UNKNOWN, traits: definition ? [...definition.traits] : UNKNOWN,
+        colors: definition ? [...definition.colors] : UNKNOWN, attributes: definition ? [...definition.attributes] : UNKNOWN };
+      const unmodeled = card.modifierIds.length > 0 || card.grantIds.length > 0;
+      const unknownMetadata: CardMetadataFacts = { name: UNKNOWN, traits: UNKNOWN, colors: UNKNOWN, attributes: UNKNOWN };
+      const printedAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => [tag, definition ?
+        keywordTags.has(tag) ? definition.keywords.some(keyword => keyword.type === tag) : definition.effects.some(effect => effect.timing.type === tag) : UNKNOWN])) as Record<AbilityTag, KnownOrUnknown<boolean>>;
+      const grantedAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => [tag, !definition || unmodeled || !keywordTags.has(tag) ? UNKNOWN :
+        ["leader", "character"].includes(at.zone) && (options.keywordGrants?.() ?? []).some(grant => grant.target.instanceId === ref.instanceId && grant.target.generation === ref.generation && grant.keyword === tag)])) as Record<AbilityTag, KnownOrUnknown<boolean>>;
+      // Timing tags cannot be granted by this engine. Keyword union preserves three-valued facts.
+      const currentAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => [tag, !definition || unmodeled ? UNKNOWN : !keywordTags.has(tag) ? printedAbilities[tag] :
+        printedAbilities[tag] === true || grantedAbilities[tag] === true ? true : printedAbilities[tag] === UNKNOWN || grantedAbilities[tag] === UNKNOWN ? UNKNOWN : false])) as Record<AbilityTag, KnownOrUnknown<boolean>>;
       return freezeMovement({ cardType: card.kind === "unknown" ? UNKNOWN : card.kind, rotated: card.rotated, owner: card.owner, controller: card.controller,
-        printed, current: { cost: current("cost"), power: current("power") } });
+        printed, current: { cost: current("cost"), power: current("power") }, metadata: { printed: metadata, current: unmodeled ? unknownMetadata : metadata },
+        abilities: { PRINTED: printedAbilities, GRANTED: grantedAbilities, CURRENT: currentAbilities } });
     } catch { return UNKNOWN; }
   };
 }

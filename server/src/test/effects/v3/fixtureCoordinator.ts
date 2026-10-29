@@ -10,7 +10,7 @@ import type { MasterSnapshot } from "../../cardMaster";
 import { pinMasterFacts, type PinnedMasterFacts } from "../masterFacts";
 import type { ApprovedV3Card } from "./approval";
 import { isApprovedV3Card } from "./approval";
-import { label } from "./compiler";
+import { label, supportsV3RuntimeProfile } from "./compiler";
 import { fixtureEnvironment } from "./fixtureEnvironment";
 import { V3ResolutionMachine, type ResolutionIdentity, type WorkRequest } from "./resolution";
 import { addStatEffects, pruneStatEffects, validateStatEffects, type StatEffects } from "./statEffects";
@@ -44,7 +44,7 @@ export class V3FixtureCoordinator {
     ensureMove(process.env.NODE_ENV !== "production" && options.mode === "syntheticNoAbilities", "v3-fixture-disabled");
     ensureMove(isApprovedV3Card(options.card), "v3-approved-server-plan-required");
     const definitions = options.definitions ?? [options.card]; dataArray(definitions, 128);
-    ensureMove(definitions.every(card => isApprovedV3Card(card) && card.rulesetVersion === options.card.rulesetVersion && card.compilerVersion === options.card.compilerVersion && card.registryHash === options.card.registryHash) &&
+    ensureMove(definitions.every(card => isApprovedV3Card(card) && card.rulesetVersion === options.card.rulesetVersion && supportsV3RuntimeProfile(card)) &&
       new Set(definitions.map(card => card.definition.cardId)).size === definitions.length && definitions.some(card => card.definitionHash === options.card.definitionHash), "v3-fixture-approved-definitions-required");
     this.#definitions = [...definitions];
     validateMovementState(options.movement);
@@ -107,7 +107,7 @@ export class V3FixtureCoordinator {
     const origin: EventOrigin | undefined = sourceEvent ? { type: "movement", event: sourceEvent } : trigger && "battleId" in trigger ?
       { type: "attack", eventId: trigger.eventId, battleId: trigger.battleId, attacker: trigger.attacker } : undefined;
     this.#readContext = readEventContext(this.#board, this.#identity, null, origin);
-    this.#machine = new V3ResolutionMachine(card, this.#identity, this.#key, fixtureEnvironment(() => this.#board, this.#identity, card, this.#facts, this.#now, this.#definitions, () => this.#statEffects, this.#progression.activePlayer, this.#counterPower, this.#readContext));
+    this.#machine = new V3ResolutionMachine(card, this.#identity, this.#key, fixtureEnvironment(() => this.#board, this.#identity, card, this.#facts, this.#now, this.#definitions, () => this.#statEffects, this.#progression.activePlayer, this.#counterPower, this.#readContext, () => this.#keywordGrants));
     this.#progression = applySystemEvent(this.#progression, this.#progression.revision, { kind: "beginResolution", resolutionId: identity.resolutionId, controller: identity.actor });
   }
   context(): FixtureContext { return { frameRevision: this.#machine.viewFor(this.#identity.actor).revision, movementRevision: this.#board.revision, progressionRevision: this.#progression.revision }; }
@@ -135,7 +135,7 @@ export class V3FixtureCoordinator {
     this.#busy = true;
     try {
       const draft = { board: this.#board, events: [...this.#events], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants };
-      const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => draft.statEffects, this.#progression.activePlayer, this.#counterPower, this.#readContext);
+      const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => draft.statEffects, this.#progression.activePlayer, this.#counterPower, this.#readContext, () => draft.keywordGrants);
       const machine = V3ResolutionMachine.restore(this.#card, this.#identity, this.#key, environment, this.#machine.exportForStorage(), current.frameRevision);
       action(machine, draft); let progression = this.#gate(this.#progression, machine);
       const outcome = deckOutOutcome(draft.board);

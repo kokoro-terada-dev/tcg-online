@@ -1,8 +1,14 @@
 import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
-import type { CardDefinition, CardSetRef, Category, CompiledCard, DonZone, Node, NodeMeta, Value } from "./dsl";
+import type { AbilityTag, CardDefinition, CardSetRef, CardSubject, Category, CompiledCard, DonZone, Node, NodeMeta, SchemaVersion, Value } from "./dsl";
 
 export const COMPILER_VERSION = "v3-subset-compiler.16.3";
+export const METADATA_COMPILER_VERSION = "v3-subset-compiler.17.1";
+export const ABILITY_TAGS: readonly AbilityTag[] = ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED", "MAIN", "ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_KO", "COUNTER", "TRIGGER"];
+export function compilerVersionForSchema(schema: SchemaVersion): string {
+  ensureMove(schema === "3.0.0-subset.16" || schema === "3.0.0-subset.17", "unsupported-v3-schema-version");
+  return schema === "3.0.0-subset.17" ? METADATA_COMPILER_VERSION : COMPILER_VERSION;
+}
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 function inspectData(input: unknown): void {
@@ -55,6 +61,7 @@ export interface CompileContext {
   maxCards(input: CardSetRef): number;
   branch(input: unknown): Node<"action">[];
   candidate(input: unknown): Node<"predicate">;
+  subject(input: unknown): CardSubject;
 }
 type Parser<C extends Category> = (input: Record<string, unknown>, context: CompileContext) => Node<C>;
 export class V3Registry<C extends Category> {
@@ -93,8 +100,35 @@ function valueType(value: Value): string {
   if (value !== null && typeof value === "object") return value.ref.endsWith(".cardType") ? "string" : value.ref.endsWith(".rotated") ? "boolean" : "number";
   return value === null ? "null" : typeof value;
 }
-export function builtinV3Registries(): V3Registries {
+export function builtinV3Registries(schema: SchemaVersion = "3.0.0-subset.16"): V3Registries {
+  compilerVersionForSchema(schema);
   const r: V3Registries = { predicate: new V3Registry(), action: new V3Registry(), cost: new V3Registry(), replacement: new V3Registry(), selector: new V3Registry(), duration: new V3Registry(), timing: new V3Registry(), keyword: new V3Registry() };
+  if (schema === "3.0.0-subset.17") {
+    const text = (input: unknown): string => { ensureMove(typeof input === "string" && input.trim().length > 0 && input.length <= 300, "v3-invalid-metadata-literal"); return input; };
+    const basis = (input: unknown): "PRINTED" | "CURRENT" => { ensureMove(input === "PRINTED" || input === "CURRENT", "v3-invalid-metadata-basis"); return input; };
+    r.predicate.register("CARD_NAME", "1", (n, c) => {
+      const meta = c.fields(n, ["subject", "basis", "op", "value"]);
+      ensureMove(n.op === "eq" || n.op === "ne", "v3-invalid-name-comparison");
+      return { type: "CARD_NAME", ...meta, subject: c.subject(n.subject), basis: basis(n.basis), op: n.op, value: text(n.value) };
+    });
+    r.predicate.register("CARD_METADATA", "1", (n, c) => {
+      const meta = c.fields(n, ["subject", "basis", "field", "match", "comparison", "values"]);
+      ensureMove(n.field === "traits" || n.field === "colors" || n.field === "attributes", "v3-invalid-metadata-field");
+      ensureMove(["ANY", "ALL", "NONE", "EXACT"].includes(n.match as string) && (n.comparison === "EXACT" || n.comparison === "CONTAINS"), "v3-invalid-metadata-comparison");
+      ensureMove(n.comparison !== "CONTAINS" || n.field === "traits" && n.match !== "EXACT", "v3-unsupported-metadata-substring");
+      dataArray(n.values, 32); ensureMove(n.values.length > 0, "v3-empty-metadata-query");
+      const values = n.values.map(text); ensureMove(new Set(values).size === values.length, "v3-duplicate-metadata-query");
+      return { type: "CARD_METADATA", ...meta, subject: c.subject(n.subject), basis: basis(n.basis), field: n.field,
+        match: n.match as "ANY" | "ALL" | "NONE" | "EXACT", comparison: n.comparison, values };
+    });
+    r.predicate.register("HAS_ABILITY", "1", (n, c) => {
+      const meta = c.fields(n, ["subject", "basis", "ability"]);
+      ensureMove(ABILITY_TAGS.includes(n.ability as AbilityTag), "v3-unsupported-ability-tag");
+      ensureMove(n.basis === "PRINTED" || n.basis === "CURRENT" || n.basis === "GRANTED", "v3-invalid-ability-basis");
+      ensureMove(n.basis !== "GRANTED" || ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"].includes(n.ability as string), "v3-unsupported-granted-ability");
+      return { type: "HAS_ABILITY", ...meta, subject: c.subject(n.subject), basis: n.basis, ability: n.ability as AbilityTag };
+    });
+  }
   for (const type of ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"] as const) r.keyword.register(type, "1", (n, c) => ({ type, ...c.fields(n, []) }));
   r.action.register("GRANT_KEYWORD", "1", (n, c) => ({ type: "GRANT_KEYWORD", ...c.fields(n, ["cards", "keyword", "duration"]), cards: c.cards(n.cards), keyword: c.read("keyword", n.keyword), duration: c.read("duration", n.duration) }));
   r.action.register("BIND_SOURCE", "2", (n, c) => ({ type: "BIND_SOURCE", ...c.fields(n, ["bindAs"]), bindAs: c.bindSource(n.bindAs) }));
@@ -201,12 +235,14 @@ export function builtinV3Registries(): V3Registries {
 }
 
 export function isCompiledV3Card(value: unknown): value is CompiledCard { return typeof value === "object" && value !== null && compiled.has(value); }
-export function compileV3CardJson(json: string, registries: V3Registries = builtinV3Registries()): CompiledCard {
+export function compileV3CardJson(json: string, registries?: V3Registries): CompiledCard {
   ensureMove(typeof json === "string" && Buffer.byteLength(json) <= 262144, "v3-document-too-large");
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.16", "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17", "unsupported-v3-schema-version");
+  const schemaVersion = input.schemaVersion, compilerVersion = compilerVersionForSchema(schemaVersion);
+  registries ??= builtinV3Registries(schemaVersion);
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
   ensureMove(typeof input.name === "string" && input.name.trim().length > 0 && input.name.length <= 300, "invalid-v3-card-name");
   ensureMove(input.cardType === "leader" || input.cardType === "character" || input.cardType === "stage" || input.cardType === "event", "unsupported-v3-card-type");
@@ -259,6 +295,11 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
       const parent = candidateAllowed; candidateAllowed = true;
       try { return context.read("predicate", input); } finally { candidateAllowed = parent; }
     },
+    subject(input) {
+      ensureMove(input === "SOURCE" || input === "CANDIDATE" && candidateAllowed, "v3-out-of-scope-metadata-subject");
+      ensureMove(input !== "SOURCE" || currentTiming !== "ON_KO" && currentTiming !== "TRIGGER", "v3-unresolved-metadata-source");
+      return input;
+    },
     fields(node, required) {
       dataObject(node, ["type", ...required], ["id", "sourceSpan"]); const meta: NodeMeta = {};
       if (Object.hasOwn(node, "id")) { meta.id = label(node.id); ensureMove(!ids.has(meta.id), "duplicate-v3-node-id"); ids.add(meta.id); }
@@ -305,9 +346,14 @@ export function compileV3CardJson(json: string, registries: V3Registries = built
   });
   const triggers = effects.filter(effect => effect.timing.type === "TRIGGER");
   ensureMove(triggers.length <= 1 && (triggers.length === 1) === (source.triggerText.trim().length > 0), "v3-trigger-text-definition-mismatch");
-  const definition: CardDefinition = { schemaVersion: "3.0.0-subset.16", cardId, cardVersion, name: input.name, cardType: input.cardType,
+  const definition: CardDefinition = { schemaVersion, cardId, cardVersion, name: input.name, cardType: input.cardType,
     baseStats: input.baseStats as CardDefinition["baseStats"], colors, traits, attributes, keywords, reviewStatus: input.reviewStatus as CardDefinition["reviewStatus"], source, effects };
   inspectData(definition);
-  const plan = freezeMovement({ status: "compiled_not_executable" as const, compilerVersion: COMPILER_VERSION, registryHash, definitionHash: digest(canonical(definition)), sourceHash: digest(canonical(source)), definition, requiredHandlers: [...used].sort() });
+  const plan = freezeMovement({ status: "compiled_not_executable" as const, compilerVersion, registryHash, definitionHash: digest(canonical(definition)), sourceHash: digest(canonical(source)), definition, requiredHandlers: [...used].sort() });
   compiled.add(plan); return plan;
+}
+
+export function supportsV3RuntimeProfile(card: Pick<CompiledCard, "definition" | "compilerVersion" | "registryHash">): boolean {
+  return card.compilerVersion === compilerVersionForSchema(card.definition.schemaVersion) &&
+    card.registryHash === v3RegistryHash(builtinV3Registries(card.definition.schemaVersion));
 }

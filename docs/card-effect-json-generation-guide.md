@@ -1,6 +1,8 @@
 # ChatGPT向け カード効果JSON生成ガイド
 
-調査日: 2026-10-29。基準コミット: `e6ba075`。
+更新日: 2026-10-29。初回調査`e6ba075`、PR02実装開始`af3711a`。
+PR02a/bの新Predicateはsubset.17です。詳細・全パラメータは[PR02](card-effect-pr02.md)を併読してください。
+旧subset.16と承認14枚は併存し、旧hashを維持します。
 対象: **隔離v3の現在の実装**。通常オンライン対戦、一人回し、旧テスト効果形式の仕様ではありません。
 この資料作成ではゲームエンジンを変更していません。
 
@@ -17,12 +19,13 @@
 ### ChatGPTに渡す資料
 
 1. このガイド。
-2. `card-effect-json-schema.json`: 構造用JSON Schema、Draft 2020-12。
+2. `card-effect-json-schema.json`（旧16）と`card-effect-metadata.schema.json`（新17）: Draft 2020-12。使用するカードのschemaVersionに合わせます。
 3. `card-effect-types.ts.txt`: 現在の`dsl.ts`の型定義全文の写し。
-4. `card-effect-supported-operations.json`: Registry38命令のパラメータ、例、実行制約。
+4. `card-effect-supported-operations.json`: 新17の41命令/旧16の38命令のパラメータ、例、profile、実行制約。
 5. `card-effect-json-examples.json`: 15要望への対応/非対応と、全文CardDefinitionの合成例12件。
 6. `card-effect-implementation-status.md`: 実装の層と未対応一覧。
-7. 入力CSV、差異一覧、タグ/パターン分析、元の代表例。後者は実行仕様ではなく参考資料。
+7. `card-effect-pr02.md`: メタデータ/能力タグの意味と互換性。
+8. 入力CSV、差異一覧、タグ/パターン分析、元の代表例。後者は実行仕様ではなく参考資料。
 
 `validate-card-effect-json.cjs`はCodex/開発者側の検証用です。ChatGPTには任意で渡せます。
 情報の優先順位は実装コード、Compiler、当資料、旧仕様書の順です。
@@ -37,7 +40,7 @@ Zod Schemaはありません。正規の実装バリデータは`compileV3CardJs
 
 | キー | 型・制約 |
 | --- | --- |
-| schemaVersion | 必須、`3.0.0-subset.16`固定 |
+| schemaVersion | 必須。新Predicateは`3.0.0-subset.17`。既存形式は`3.0.0-subset.16`も受理 |
 | cardId | 必須、カード番号。ASCII識別子、100文字以下 |
 | cardVersion | 必須、定義の版。例`draft.1`。同じ番号の変更時は更新する運用を推奨 |
 | name | 必須、空白だけ不可、300文字以下 |
@@ -58,7 +61,7 @@ Zod Schemaはありません。正規の実装バリデータは`compileV3CardJs
 
 `cardId/cardVersion/effect.id/node.id`は`^[A-Za-z0-9][A-Za-z0-9_.:-]*$`、100文字以下で、`constructor/prototype`は禁止。
 `bindAs`はより狭く`^[A-Za-z][A-Za-z0-9_]{0,63}$`です。日本語のカード名・特徴はよいですが識別子には使いません。
-特徴を保存できることと、特徴で対象を絞れることは別です。現状そのPredicateはありません。
+新17ではCARD_METADATAで特徴等を絞れます。旧16では保存のみで、新Predicateは受理しません。
 数値不明・`-`・空欄を0としないでください。nullで保持し、必要な数値が不明な処理は承認しません。
 印刷keywordsはcharacterなら4種、leaderならBLOCKER/CANNOT_BE_BLOCKEDだけです。stage/eventは空配列が必要です。
 
@@ -123,7 +126,7 @@ TRIGGER内はtriggerText、それ以外はtextの範囲。誤ったオフセッ�
 | 依頼のRegistry | 現在の対応物 | 使用できるtype |
 | --- | --- | --- |
 | TriggerRegistry | timing Registry + triggerScheduler.ts | MAIN, ON_PLAY, ON_ATTACK, ON_OPPONENT_ATTACK, ON_KO, COUNTER, TRIGGER |
-| PredicateRegistry | predicate | all, any, not, compare |
+| PredicateRegistry | predicate | all, any, not, compare。新17のみCARD_NAME, CARD_METADATA, HAS_ABILITY |
 | CostRegistry | cost | REST_DON, REST_SOURCE, DISCARD_HAND, DON_RETURN |
 | SelectorRegistry | selector | CARDS, BOUND_CARDS |
 | ActionRegistry | action | BIND_SOURCE, GRANT_KEYWORD, MODIFY_STAT, LOOK_TOP, REVEAL, ORDER_CARDS, RETURN_TO_DECK, DRAW, SEQUENCE, IF, SELECT, MOVE_CARD, KO, REST, SET_ACTIVE |
@@ -166,7 +169,7 @@ CANDIDATEはselector.filters内だけ。SOURCEは場など現在の参照であ�
 | --- | --- |
 | 自分ライフ2枚以下 | 下例A |
 | 相手の場にcost5以上のキャラが存在 | 存在Predicateなし。対象フィルタ`CANDIDATE.cost >= 5`は可能だが、発動条件の存在検査とは別 |
-| 自分リーダーに特定特徴 | 未対応。traitsは保存のみ |
+| 自分リーダーに特定特徴 | SOURCEがそのリーダーなら新17のCARD_METADATA。任意の別リーダーへのQueryは未対応 |
 | 自分ターン中 | 汎用条件として未対応。MAINの発動タイミング制限だけは存在 |
 | このキャラが登場したターン | Predicate未対応。バトルの登場ターン制限実装とは別 |
 | 自分手札5枚以上 | 下例B |
@@ -252,7 +255,7 @@ REST_SOURCEは最大1件。DISCARD_HANDは特徴による制限を持ちませ�
 | --- | --- |
 | リーダーへDONを付与 | 通常操作attachDonはあるが効果DSLは未対応 |
 | 自分の手札から2枚公開 | CARDSの自分hand、min/max:2→REVEALは可能 |
-| 指定特徴の手札2枚公開 | 特徴条件が未対応。単なる2枚公開へ置き換え不可 |
+| 指定特徴の手札2枚公開 | 新17のCARDS.filtersにCARD_METADATA→REVEALは可能。発動cost化は未対応 |
 | 手札公開を発動コストとする | コスト命令なし。actionsのREVEALで代用不可 |
 | 相手手札を見ずに選ぶ | 非公開相手handの選択は未対応 |
 | 効果途中の任意支払い | actions内の支払い命令なし。optional:trueは効果全体の発動前確認 |
@@ -283,7 +286,7 @@ CARDSでdeck全体やlifeは選択できません。デッキ上の選択はLOOK
 | 12 | 場を離れる代わりに別キャラ破棄 | **置換未対応** |
 | 13 | 相手効果でKOされない | **耐性未対応** |
 | 14 | 条件付きブロッカー付与 | 解決時IF + 期限を明示した付与のみ。常時条件や誘発成立時条件は未対応 |
-| 15 | 上5枚サーチ | LOOK_TOP/BOUND_CARDS/REVEAL/MOVE_CARD/ORDER_CARDS/RETURN_TO_DECK。例はcost3以下キャラ。特徴条件は未対応 |
+| 15 | 上5枚サーチ | 既存例はcost3以下。PR02追加例は名前除外+特徴条件。公式カード全体の承認ではない |
 
 合成例は全てneeds_review、ハッシュ0埋めは検証用プレースホルダーです。公式カードの定義・原資料・承認ではありません。
 期限や対象条件を省略した質問に対して、例で選んだ値を実カードへ勝手に適用しないでください。
@@ -427,7 +430,7 @@ node docs/validate-card-effect-json.cjs --examples docs/card-effect-json-example
 ```
 
 Schemaも行う場合は前節のNODE_PATH設定内で`--schema --examples`を指定します。
-非対応5件はunsupportedとして報告し、全文カード12件（追加例2件含む）だけを検証します。
+非対応5件はunsupportedとして報告し、全文カード14件（初期追加例2件、PR02追加例2件含む）を検証します。
 未対応をコンパイル失敗の架空カードとして生成しません。
 
 ### 原資料に存在しないcardId
@@ -487,7 +490,7 @@ datasetSha256は私が渡す原資料スナップショットの値だけを使�
 - `cardData.ts`、`tools/audit-effect-cards.js`、`tools/build-card-master.js`: 公式CSV監査と簡易マスターの区別。
 - `schemas/effect-v3-subset.schema.json`: 構造Schemaの元。
 
-## 今回の確認結果
+## 初回生成資料の確認結果（旧16）
 
 2026-10-29、基準コードに対して以下を確認しました。
 
@@ -500,3 +503,7 @@ datasetSha256は私が渡す原資料スナップショットの値だけを使�
 
 合成例は公式CSVのcardId存在検査・意味的裁定・独立承認の対象ではありません。
 ゲームエンジンの変更や、生成した公式カードの独立承認は行っていません。
+
+PR02更新では新17のPredicate3種類と合成例2件を追加しました。現在の新旧全文例14件は両Schema/Compilerで確認済みです。
+初回の「特徴ref拒否」はSOURCE.traits等の未定義Value.refを指し、新しいCARD_METADATAノードを拒否するという意味ではありません。
+新旧profileの承認と対応範囲、検証結果は`card-effect-pr02.md`を参照してください。
