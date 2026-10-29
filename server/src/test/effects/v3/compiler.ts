@@ -108,7 +108,7 @@ export function builtinV3Registries(): V3Registries {
   r.timing.register("ON_PLAY", "1", (n, c) => ({ type: "ON_PLAY", ...c.fields(n, []) }));
   for (const type of ["all", "any"] as const) r.predicate.register(type, "1", (n, c) => ({ type, ...c.fields(n, ["conditions"]), conditions: c.list("predicate", n.conditions) }));
   r.predicate.register("not", "1", (n, c) => ({ type: "not", ...c.fields(n, ["condition"]), condition: c.read("predicate", n.condition) }));
-  r.predicate.register("compare", "2", (n, c) => {
+  r.predicate.register("compare", "3", (n, c) => {
     const meta = c.fields(n, ["left", "op", "right"]), left = c.value(n.left), right = c.value(n.right);
     ensureMove(["eq", "ne", "lt", "lte", "gt", "gte"].includes(n.op as string), "unsupported-v3-comparison");
     const numeric = (v: Value) => valueType(v) === "number";

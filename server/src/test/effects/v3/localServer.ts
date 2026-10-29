@@ -160,11 +160,17 @@ export async function startLocalV3Server(port = 0) {
     handle("v3-session:sync", () => { const { room, actor, session } = continuousActive(); return { sessionView: sessionView(session, room.code, actor) }; });
     handle("v3-session:command", input => {
       const { room, actor, session } = continuousActive(); ensureMove(input && typeof input === "object", "v3-session-command-object");
-      const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value; ensureMove(["activate", "trigger", "play", "advance", "work", "answer", "endTurn"].includes(kind), "v3-session-command-kind");
-      dataObject(input, ["kind", "requestId", "matchId", "context", ...(kind === "activate" ? ["effectId"] : kind === "trigger" ? ["token"] : kind === "answer" ? ["selectionId", "tokens"] : kind === "play" ? ["card", ...(Object.hasOwn(input, "slotIndex") ? ["slotIndex"] : [])] : [])]);
+      const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value; ensureMove(["activate", "trigger", "play", "advance", "work", "answer", "endTurn", "attack", "counter", "passBlock", "endCounter", "damage", "life", "attachDon"].includes(kind), "v3-session-command-kind");
+      dataObject(input, ["kind", "requestId", "matchId", "context", ...(kind === "activate" ? ["effectId"] : kind === "trigger" ? ["token"] : kind === "answer" ? ["selectionId", "tokens"] : kind === "life" ? ["selectionId", "token"] : kind === "attack" ? ["source", "target"] : kind === "counter" ? ["card", "target"] : kind === "attachDon" ? ["target", "count"] : kind === "play" ? ["card", ...(Object.hasOwn(input, "slotIndex") ? ["slotIndex"] : [])] : [])]);
       ensureMove(input.matchId === session.matchId, "v3-session-match-context"); const requestId = label(input.requestId), expected = input.context as V3SessionContext, c = session.coordinator;
       if (kind === "activate") c.activate(actor, requestId, expected, session.sources[actor]!, label(input.effectId));
       else if (kind === "trigger") c.resolveTrigger(actor, requestId, expected, label(input.token));
+      else if (kind === "attack") c.attack(actor, requestId, expected, input.source as { instanceId: string; generation: number }, input.target as { instanceId: string; generation: number });
+      else if (kind === "counter") c.counter(actor, requestId, expected, input.card as { instanceId: string; generation: number }, input.target as { instanceId: string; generation: number });
+      else if (kind === "passBlock" || kind === "endCounter") c.battleDecision(actor, requestId, expected, kind);
+      else if (kind === "damage") c.resolveDamage(actor, requestId, expected);
+      else if (kind === "life") c.takeDamageLife(actor, requestId, expected, label(input.selectionId), label(input.token));
+      else if (kind === "attachDon") c.attachDon(actor, requestId, expected, input.target as { instanceId: string; generation: number }, input.count as number);
       else if (kind === "play") { ensureMove(input.slotIndex === undefined || Number.isSafeInteger(input.slotIndex), "v3-session-play-slot"); c.playCard(actor, requestId, expected, input.card as { instanceId: string; generation: number }, input.slotIndex as number | undefined); }
       else if (kind === "answer") { const selectionId = label(input.selectionId); dataArray(input.tokens, 50); input.tokens.forEach(token => label(token)); c.answer(actor, requestId, expected, selectionId, input.tokens as string[]); }
       else if (kind === "advance") c.advance(actor, requestId, expected);

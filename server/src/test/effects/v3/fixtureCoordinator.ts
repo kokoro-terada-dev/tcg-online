@@ -51,7 +51,7 @@ export class V3FixtureCoordinator {
     this.#board = freezeMovement(structuredClone(movement)); this.#progression = freezeMovement(structuredClone(progression));
     this.#identity = freezeMovement(structuredClone(identity)); this.#card = card; this.#key = Uint8Array.from(options.signingKey); this.#now = options.now ?? Date.now;
     this.#facts = pinMasterFacts(movement, { master: options.master, numericPolicy: "certifiedUnmodified" });
-    this.#machine = new V3ResolutionMachine(card, this.#identity, this.#key, fixtureEnvironment(() => this.#board, this.#identity, card, this.#facts, this.#now, this.#definitions, () => this.#statEffects));
+    this.#machine = new V3ResolutionMachine(card, this.#identity, this.#key, fixtureEnvironment(() => this.#board, this.#identity, card, this.#facts, this.#now, this.#definitions, () => this.#statEffects, this.#progression.activePlayer));
     this.#progression = applySystemEvent(this.#progression, this.#progression.revision, { kind: "beginResolution", resolutionId: identity.resolutionId, controller: identity.actor });
   }
   context(): FixtureContext { return { frameRevision: this.#machine.viewFor(this.#identity.actor).revision, movementRevision: this.#board.revision, progressionRevision: this.#progression.revision }; }
@@ -76,7 +76,7 @@ export class V3FixtureCoordinator {
     this.#busy = true;
     try {
       const draft = { board: this.#board, events: [...this.#events], statEffects: this.#statEffects };
-      const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => draft.statEffects);
+      const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => draft.statEffects, this.#progression.activePlayer);
       const machine = V3ResolutionMachine.restore(this.#card, this.#identity, this.#key, environment, this.#machine.exportForStorage(), current.frameRevision);
       action(machine, draft); const progression = this.#gate(this.#progression, machine);
       this.#checkEvents?.(draft.events.slice(this.#events.length));

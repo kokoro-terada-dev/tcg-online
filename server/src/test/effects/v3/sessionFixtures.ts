@@ -74,5 +74,5 @@ export function sessionView(session: SyntheticSession, roomId: string, actor: 0 
   const imageAliases = Object.fromEntries(Object.entries(session.imageAliases).filter(([id]) => visibleIds.has(id)));
   return { ...view, matchId: session.matchId, roomId, localPlayerIndex: actor, imageAliases,
     workType: session.coordinator.pendingWorkKind(),
-    effects: session.coordinator.effectsFor(actor, session.sources[actor]!).map(effect => ({ ...effect, label: labels[effect.effectId]! })), playableCards: session.coordinator.playableCardsFor(actor) };
+    effects: session.coordinator.effectsFor(actor, session.sources[actor]!).map(effect => ({ ...effect, label: labels[effect.effectId]! })), playableCards: session.coordinator.playableCardsFor(actor), attackChoices: session.coordinator.attackChoicesFor(actor) };
 }

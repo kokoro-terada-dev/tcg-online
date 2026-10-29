@@ -30,6 +30,51 @@ async function complete(socket, v) {
   throw Error('Session resolution did not complete');
 }
 
+for (const actor of [0, 1]) test(`basic battle for seat ${actor} handles DON, counters, private life and lethal damage`, async t => {
+  const smallLife = { ...deck, leaderLifeCount: 1 };
+  const { clients } = await setup(t, actor, [smallLife, smallLife]), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView;
+  assert.equal(v.attackChoices.sources.length, 0); v = await send(own, v, 'endTurn');
+  v = (await request(peer, 'v3-session:sync')).sessionView; v = await send(peer, v, 'endTurn');
+  v = (await request(own, 'v3-session:sync')).sessionView;
+  const leader = v.publicStats.find(card => card.player === actor && card.zone === 'leader').card;
+  v = await send(own, v, 'attachDon', { target: leader, count: 1 });
+  assert.equal(v.movement.players[actor].attachedDon.length, 1);
+  async function fight(attacker, defender, counters = 0) {
+    let attackView = (await request(attacker, 'v3-session:sync')).sessionView;
+    const input = command(attackView, 'attack', { source: attackView.attackChoices.sources[0].card, target: attackView.attackChoices.targets[0].card });
+    attackView = (await request(attacker, 'v3-session:command', input)).sessionView;
+    assert.equal((await request(attacker, 'v3-session:command', input)).sessionView.context.revision, attackView.context.revision);
+    let defended = (await request(defender, 'v3-session:sync')).sessionView;
+    assert.equal((await request(attacker, 'v3-session:command', command(attackView, 'passBlock'))).ok, false);
+    defended = await send(defender, defended, 'passBlock');
+    for (let i = 0; i < counters; i++) defended = await send(defender, defended, 'counter', { card: defended.counterChoices[0].card, target: defended.battle.target });
+    defended = await send(defender, defended, 'endCounter');
+    const powers = defended.battle.powers; defended = await send(defender, defended, 'damage');
+    if (defended.lifeChoice) {
+      const hidden = (await request(attacker, 'v3-session:sync')).sessionView;
+      assert.equal(hidden.lifeChoice, null); assert.equal(hidden.lifePending, true);
+      const life = command(defended, 'life', { selectionId: defended.lifeChoice.selectionId, token: defended.lifeChoice.token });
+      assert.equal((await request(attacker, 'v3-session:command', life)).ok, false);
+      defended = (await request(defender, 'v3-session:command', life)).sessionView;
+      assert.equal((await request(defender, 'v3-session:command', life)).sessionView.context.revision, defended.context.revision);
+      const after = (await request(attacker, 'v3-session:sync')).sessionView;
+      assert.equal(after.movement.players[after.battle?.defender ?? defended.localPlayerIndex].hand.every(card => card.cardId === null), true);
+    }
+    return { view: defended, powers };
+  }
+  let result = await fight(own, peer, 2);
+  assert.deepEqual(result.powers, { attack: 6000, defense: 7000 }); assert.equal(result.view.movement.players[1 - actor].life.length, 1);
+  v = (await request(own, 'v3-session:sync')).sessionView; await send(own, v, 'endTurn');
+  result = await fight(peer, own); assert.deepEqual(result.powers, { attack: 5000, defense: 5000 }); assert.equal(result.view.movement.players[actor].life.length, 0);
+  v = (await request(peer, 'v3-session:sync')).sessionView; await send(peer, v, 'endTurn');
+  result = await fight(own, peer); assert.equal(result.view.movement.players[1 - actor].life.length, 0);
+  v = (await request(own, 'v3-session:sync')).sessionView; await send(own, v, 'endTurn');
+  result = await fight(peer, own); assert.equal(result.view.outcome.winner, 1 - actor); assert.equal(result.view.battle, null);
+  assert.deepEqual((await request(peer, 'v3-session:sync')).sessionView.outcome, result.view.outcome);
+  assert.equal((await request(own, 'v3-session:command', command(result.view, 'endTurn'))).ok, false);
+});
+
 for (const actor of [0, 1]) test(`stat changes sync and expire at their declared player boundary for seat ${actor}`, async t => {
   const { clients } = await setup(t, actor), own = clients[actor], peer = clients[1 - actor];
   let v = (await request(own, 'v3-session:sync')).sessionView;

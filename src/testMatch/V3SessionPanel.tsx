@@ -12,18 +12,52 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
 }) {
   const [collapsed, setCollapsed] = useState(false), frame = view.frame, ownTurn = view.activePlayer === view.localPlayerIndex;
   const [revealPreview, setRevealPreview] = useState<string | null>(null);
-  useEffect(() => setCollapsed(false), [view.context.resolutionId, frame?.choice?.selectionId, frame?.status, view.turnNumber, view.gate, view.pendingTriggerCount]);
+  const [counterTargetId, setCounterTargetId] = useState<string>("");
+  useEffect(() => setCounterTargetId(view.battle?.target.instanceId ?? ""), [view.battle?.battleId, view.battle?.target.instanceId]);
+  useEffect(() => setCollapsed(false), [view.context.resolutionId, frame?.choice?.selectionId, frame?.status, view.turnNumber, view.gate, view.pendingTriggerCount, view.battle?.step, view.lifePending]);
   useEffect(() => setRevealPreview(null), [view.context.revision]);
-  const idle = view.gate === "idle" && (!frame || frame.status === "completed"), disabled = busy || needsSync;
+  const idle = !view.battle && !view.outcome && view.gate === "idle" && (!frame || frame.status === "completed"), disabled = busy || needsSync;
   const playable = (id: string) => view.playableCards.find(play => play.card.instanceId === id);
+  const battle = view.battle, defending = battle?.defender === view.localPlayerIndex;
+  const counterTargets = view.publicStats.filter(card => card.player === view.localPlayerIndex && (card.zone === "leader" || card.zone === "character"));
+  const counterTarget = counterTargets.find(card => card.card.instanceId === counterTargetId)?.card ?? battle?.target;
   return <>
     <TestBoard key={`${view.matchId}:${view.movement.revision}`} match={v3BoardView(view)} roomId={view.roomId} readOnly busy={busy} error={error} onCommand={() => {}} onEnd={onEnd}
       testPlayLabel={card => `登場（DON${playable(card.id)?.cost ?? "?"}）`} canTestPlay={card => !disabled && !!playable(card.id)?.enabled}
       testPlayUnavailableReason={card => { const play = playable(card.id); return disabled ? needsSync ? "再同期が必要" : "処理中" : !play ? "未対応カード" : play.cost === null ? "コスト未確認" : play.slotIndex < 0 ? "空き枠なし" : !ownTurn || !idle ? "操作待ち" : "DON不足"; }}
+      canTestAttackSource={card => !disabled && view.attackChoices.sources.some(option => option.card.instanceId === card.id)}
+      canTestAttackTarget={card => !disabled && view.attackChoices.targets.some(option => option.card.instanceId === card.id)}
+      canTestAttachDon={card => !disabled && idle && ownTurn && view.movement.players[view.localPlayerIndex].activeDon.length > 0 && view.publicStats.some(option => option.card.instanceId === card.id && option.player === view.localPlayerIndex && (option.zone === "leader" || option.zone === "character"))}
+      onTestAttachDon={card => { const target = view.publicStats.find(option => option.card.instanceId === card.id)?.card; if (target) onAction("attachDon", { target, count: 1 }); }}
+      onInspectEffects={() => setCollapsed(false)} onTestAttack={(sourceId, targetId) => {
+        const source = view.attackChoices.sources.find(option => option.card.instanceId === sourceId)?.card, target = view.attackChoices.targets.find(option => option.card.instanceId === targetId)?.card;
+        if (source && target) onAction("attack", { source, target });
+      }}
       onTestPlay={card => { const play = playable(card.id); if (play?.enabled) onAction("play", { card: play.card }); }} />
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="v3連続操作検証">
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
       <div hidden={collapsed}><strong>v3検証・連続操作</strong><p>{view.turnNumber}ターン目・{ownTurn ? "自分" : "相手"}のターン</p>
+        {battle && <div className="v3-battle-status"><p role="status">{battle.step === "block" ? "ブロック" : battle.step === "counter" ? "カウンター" : "ダメージ確認"}・{defending ? "自分が操作" : "相手の操作待ち"}</p>
+          <p>攻撃 {battle.powers?.attack ?? "?"} → 防御 {battle.powers?.defense ?? "?"}</p>
+          {defending && !view.lifePending && <div className="test-effect-actions">
+            {battle.step === "block" && <button disabled={disabled} onClick={() => onAction("passBlock")}>ブロックしない</button>}
+            {battle.step === "counter" && <button disabled={disabled} onClick={() => onAction("endCounter")}>カウンター終了</button>}
+            {battle.step === "damage" && <button disabled={disabled} onClick={() => onAction("damage")}>バトル結果を確定</button>}
+          </div>}
+          {defending && battle.step === "counter" && <>
+            <select aria-label="カウンターの対象" value={counterTarget?.instanceId ?? ""} onChange={event => setCounterTargetId(event.target.value)}>{counterTargets.map(card =>
+              <option key={card.card.instanceId} value={card.card.instanceId}>{card.zone === "leader" ? "リーダー" : `キャラ${card.slot + 1}`}</option>)}</select>
+            <div className="v3-counter-cards">{view.counterChoices.map(choice => {
+              const id = view.imageAliases[choice.cardId] ?? choice.cardId, image = getLocalCardImage(id)?.imageUrl;
+              return <button key={choice.card.instanceId} disabled={disabled || !counterTarget} onClick={() => counterTarget && onAction("counter", { card: choice.card, target: counterTarget })}>
+                {image ? <img src={image} alt={id} draggable={false} /> : <span>{id}</span>}<b>+{choice.amount}</b>
+              </button>;
+            })}</div>
+          </>}
+          {view.lifePending && <p role="status">{view.lifeChoice ? "ライフを確認" : "相手がライフを確認中"}</p>}
+          {view.lifeChoice && <div className="v3-life-choice"><button onClick={() => setRevealPreview(view.imageAliases[view.lifeChoice!.cardId] ?? view.lifeChoice!.cardId)}>カード詳細</button>
+            <button disabled={disabled} onClick={() => onAction("life", { token: view.lifeChoice!.token })}>手札へ</button></div>}
+        </div>}
         {view.gate === "trigger" && <div><p role="status">{view.triggerChooser === view.localPlayerIndex ? "登場時効果を選択" : "相手の登場時効果を待っています"}（{view.pendingTriggerCount}件）</p>
           <div className="test-effect-actions">{view.triggerChoices.map(choice => <button key={choice.token} disabled={disabled} onClick={() => onAction("trigger", { token: choice.token })}>
             登場時効果・{view.imageAliases[choice.cardId] ?? choice.cardId}
@@ -49,6 +83,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
         </div>{error && <p role="alert">{error}</p>}
       </div>
     </section>
+    {view.outcome && <div className="test-effect-result" role="status">{view.outcome.winner === null ? "DRAW" : view.outcome.winner === view.localPlayerIndex ? "WIN" : "LOSE"}</div>}
     {revealPreview && <div className="test-preview" role="dialog" aria-modal="true" aria-label="公開カード詳細" onClick={() => setRevealPreview(null)}>
       {getLocalCardImage(revealPreview)?.imageUrl ? <img src={getLocalCardImage(revealPreview)!.imageUrl} alt={revealPreview} onClick={event => event.stopPropagation()} /> : <span>{revealPreview}</span>}
       <button onClick={() => setRevealPreview(null)}>閉じる</button>
