@@ -12,14 +12,18 @@ import type { KeywordGrants } from "./keywordEffects";
 
 export const UNKNOWN: unique symbol = Symbol("v3-unknown-fact");
 export type KnownOrUnknown<T> = T | typeof UNKNOWN;
+export type BoundaryEvent = Readonly<{ type: "ON_BLOCK" | "MAIN_START" | "TURN_END"; eventId: string; turnNumber: number; activePlayer: Player;
+  phase: "main" | "refresh" | "end"; phaseToken: string; battleId: string | null; blocker: Readonly<CardObjectRef> | null }>;
 export type EventContext = Readonly<{
   effectController: Player; chooser: Player | null; sourceOwner: Player; sourceController: Player;
   source: Readonly<CardObjectRef>; eventId: string | null; cause: DeepReadonly<EventCause> | null;
-  origin: "activation" | "movement" | "attack"; attack: Readonly<{ battleId: string; attacker: Player }> | null;
+  origin: "activation" | "movement" | "attack" | "boundary"; attack: Readonly<{ battleId: string; attacker: Player }> | null;
+  boundary?: BoundaryEvent;
   movement?: Readonly<{ groupId: string; operationIndex: number; targetBefore: Readonly<CardObjectRef> | null;
     targetAfter: Readonly<CardObjectRef> | null; from: MovementEvent["from"]; to: MovementEvent["to"]; isKO: boolean }>;
 }>;
 export type EventOrigin = Readonly<{ type: "movement"; event: DeepReadonly<MovementEvent> }> |
+  Readonly<{ type: "boundary"; event: BoundaryEvent }> |
   Readonly<{ type: "attack"; eventId: string; battleId: string; attacker: Player }>;
 
 export function withEventChooser(context: EventContext, chooser: Player | null): EventContext {
@@ -35,9 +39,11 @@ export function readEventContext(state: MovementState, identity: ResolutionIdent
   const event = origin?.type === "movement" ? origin.event : undefined;
   if (event) { id(event.eventId); player(event.cause.actor); if (event.cause.effectController !== null) player(event.cause.effectController); }
   if (origin?.type === "attack") { id(origin.eventId); id(origin.battleId); player(origin.attacker); }
+  if (origin?.type === "boundary") { id(origin.event.eventId); id(origin.event.phaseToken); player(origin.event.activePlayer); ensureMove(origin.event.turnNumber === state.turnNumber, "v3-boundary-turn-mismatch"); }
   return freezeMovement({ effectController: identity.actor, chooser, sourceOwner: source.owner, sourceController: source.controller,
-    source: { ...identity.source }, eventId: event?.eventId ?? (origin?.type === "attack" ? origin.eventId : null), cause: event ? structuredClone(event.cause) : null,
+    source: { ...identity.source }, eventId: event?.eventId ?? (origin?.type === "attack" ? origin.eventId : origin?.type === "boundary" ? origin.event.eventId : null), cause: event ? structuredClone(event.cause) : null,
     origin: origin?.type ?? "activation", attack: origin?.type === "attack" ? { battleId: origin.battleId, attacker: origin.attacker } : null,
+    ...(origin?.type === "boundary" ? { boundary: origin.event } : {}),
     ...(event ? { movement: { groupId: event.groupId, operationIndex: event.operationIndex,
       targetBefore: event.before ? { instanceId: event.before.instanceId, generation: event.before.generation } : null,
       targetAfter: event.after ? { instanceId: event.after.instanceId, generation: event.after.generation } : null,

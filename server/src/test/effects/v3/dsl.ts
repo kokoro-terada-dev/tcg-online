@@ -6,7 +6,7 @@ export type NodeMeta = { id?: string; sourceSpan?: SourceSpan };
 export type CardField = "cost" | "power" | "cardType" | "rotated";
 export type Value = number | string | boolean | null | { ref: "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "current"}.${"cost" | "power"}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
 export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
@@ -74,6 +74,9 @@ export interface DurationMap {
   BATTLE_END: NodeMeta & { type: "BATTLE_END" };
 }
 export interface TimingMap {
+  ON_BLOCK: NodeMeta & { type: "ON_BLOCK" };
+  MAIN_START: NodeMeta & { type: "MAIN_START"; player: Player };
+  TURN_END: NodeMeta & { type: "TURN_END"; player: Player };
   ON_EVENT: NodeMeta & { type: "ON_EVENT"; event: "CARD_ENTERED" | "CARD_KO" | "CARD_MOVED";
     snapshot: "TRANSACTION_BEFORE" | "TRANSACTION_AFTER"; relation: "SELF" | "OTHER" | "ANY";
     owner: Player | "ANY"; controller: Player | "ANY";

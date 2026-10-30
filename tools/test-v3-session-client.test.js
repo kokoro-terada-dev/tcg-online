@@ -9,6 +9,15 @@ const { acceptV3SessionView, v3SessionCommand } = module.exports;
 function view() { return { mode: 'v3-synthetic-session', matchId: 'm', localPlayerIndex: 0, activePlayer: 0, turnNumber: 1, phase: 'main', gate: 'idle', frame: null, resolutionActor: null,
   context: { revision: 0, movementRevision: 0, progressionRevision: 0, resolutionId: null, frameRevision: null }, movement: { revision: 0 }, effects: [{ sourceToken: 'main-token', effectId: 'draw', enabled: true }], playableCards: [] }; }
 
+test('phase continuation is current-turn-only and never enables a manual MAIN command', () => {
+  const v = { ...view(), phaseContinuation: true, phase: 'end', pendingTriggerCount: 0 };
+  assert.equal(v3SessionCommand(v, 'advance', 'continue-phase').kind, 'advance');
+  assert.throws(() => v3SessionCommand({ ...v, localPlayerIndex: 1 }, 'advance', 'wrong-player'));
+  assert.throws(() => v3SessionCommand(v, 'endTurn', 'manual-end'));
+  assert.throws(() => v3SessionCommand(v, 'activate', 'manual-main', { sourceToken: 'main-token', effectId: 'draw' }));
+  assert.throws(() => v3SessionCommand({ ...v, pendingTriggerCount: 1 }, 'advance', 'pending'));
+});
+
 test('conditional-trigger hold blocks new commands but preserves current choice/resume permissions', () => {
   const v = { ...view(), conditionalTriggerHold: true };
   assert.throws(() => v3SessionCommand(v, 'endTurn', 'held'), /held/);

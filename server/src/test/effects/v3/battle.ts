@@ -73,6 +73,18 @@ function battleParticipantsPresent(board: MovementState, progression: Progressio
     return card.owner === player && card.controller === player && card.faceUp && at.player === player && card.kind === at.zone && (at.zone === "leader" || at.zone === "character");
   });
 }
+export function finishBlockStep(board: MovementState, progression: Progression): Progression {
+  const battle = progression.battle;
+  ensureMove(battle?.step === "block" && battle.decisionComplete && progression.gate.kind === "idle", "v3-block-effects-pending");
+  const present = battleParticipantsPresent(board, progression);
+  let next = applySystemEvent(progression, progression.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "block" });
+  next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "block", participantsPresent: present });
+  if (!present) {
+    next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "end" });
+    next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "end", participantsPresent: false });
+  }
+  return next;
+}
 export function finishCounterStep(board: MovementState, progression: Progression, actor: Seat): Progression {
   ensureMove(checkTiming(progression, actor, "endCounter").allowed, "v3-counter-end-window");
   const battle = progression.battle!, present = battleParticipantsPresent(board, progression);
@@ -90,12 +102,13 @@ export function blockerOptions(board: MovementState, progression: Progression, a
   if (!battle || !checkTiming(progression, actor, "passBlock").allowed || effectiveKeywords(board, definitions, grants, battle.source).includes("CANNOT_BE_BLOCKED")) return [];
   return fieldRows(board, actor, definitions).filter(row => !board.cards[row.card.instanceId]!.rotated && row.card.instanceId !== battle.target.instanceId && effectiveKeywords(board, definitions, grants, row.card).includes("BLOCKER"));
 }
-export function declareBlock(board: MovementState, progression: Progression, actor: Seat, card: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants, transactionId: string) {
+export function declareBlock(board: MovementState, progression: Progression, actor: Seat, card: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants, transactionId: string, deferCounter = false) {
   field(board, card, actor); const battle = progression.battle!;
   ensureMove(blockerOptions(board, progression, actor, definitions, grants).some(option => option.card.instanceId === card.instanceId && option.card.generation === card.generation), "v3-blocker-unavailable");
   let next = applySystemEvent(progression, progression.revision, { kind: "redirectBattle", battleId: battle.battleId, target: card });
   const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
     actor, effectController: actor, source: card, mode: "cost", resolutionId: `block:${battle.battleId}`, operations: [{ kind: "setRest", card, rotated: true }] }, { status: "certifiedNone" });
+  if (deferCounter) return { movement: result.state, progression: next, events: result.events };
   next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "block" });
   next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "block", participantsPresent: true });
   return { movement: result.state, progression: next, events: result.events };

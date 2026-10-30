@@ -10,9 +10,13 @@ export function acceptV3SessionView(current: V3SessionView | null, next: V3Sessi
 }
 export type SessionDetails = Readonly<{ sourceToken?: string; effectId?: string; token?: string; tokens?: readonly string[]; count?: number; card?: Readonly<{ instanceId: string; generation: number }>; source?: Readonly<{ instanceId: string; generation: number }>; target?: Readonly<{ instanceId: string; generation: number }> }>;
 export function v3SessionCommand(view: V3SessionView, kind: V3SessionCommand["kind"], requestId: string, details: SessionDetails = {}): V3SessionCommand {
+  if (kind === "advance" && view.phaseContinuation) {
+    if (view.activePlayer !== view.localPlayerIndex || view.conditionalTriggerHold || view.pendingTriggerCount || view.gate !== "idle" || view.outcome) throw Error("Phase continuation unavailable");
+    return { matchId: view.matchId, requestId, context: { ...view.context }, kind };
+  }
   if (view.conditionalTriggerHold && (!view.frame || view.frame.status === "completed" || !["advance", "answer", "work"].includes(kind))) throw Error("Conditional trigger is held");
   const base = { matchId: view.matchId, requestId, context: { ...view.context } }, ownTurn = view.activePlayer === view.localPlayerIndex;
-  const idle = view.gate === "idle" && !view.outcome && !view.battle && (!view.frame || view.frame.status === "completed");
+  const idle = view.phase === "main" && !view.phaseContinuation && view.gate === "idle" && !view.outcome && !view.battle && (!view.frame || view.frame.status === "completed");
   if (kind === "mainEvent") {
     if (!idle || !ownTurn || view.phase !== "main" || !details.sourceToken || !view.mainEventChoices.some(e => e.enabled && e.sourceToken === details.sourceToken && e.effectId === details.effectId)) throw Error("MAIN event is unavailable");
     return { ...base, kind, sourceToken: details.sourceToken, effectId: details.effectId! };

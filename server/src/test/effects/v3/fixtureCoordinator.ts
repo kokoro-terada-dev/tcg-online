@@ -23,7 +23,7 @@ import type { LifeTriggerCause } from "./lifeTriggers";
 import { readEventContext, withEventChooser, type EventOrigin, type EventContext } from "./readContext";
 import { isSimpleMainEvent, isInteractiveMainEvent } from "./simpleMainEvent";
 import { trackMovementOccurrences } from "../../movement/occurrence";
-import { isTriggerObservation, validateObservedSource } from "./conditionalTriggers";
+import { hasPhaseBoundaries, isTriggerObservation, validateObservedSource } from "./conditionalTriggers";
 
 export type FixtureContext = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number }>;
 type Receipt = { requestId: string; fingerprint: string };
@@ -68,7 +68,14 @@ export class V3FixtureCoordinator {
     const mainUse = options.mainEventCause, eventUse = options.counterEventCause ?? mainUse;
     const lifeUse = options.lifeTriggerCause; this.#lifeTrigger = !!lifeUse;
     ensureMove([trigger, options.counterEventCause, mainUse, lifeUse].filter(Boolean).length <= 1, "v3-mixed-source-authorization");
-    const triggerTiming = trigger && progression.gate.kind === "idle" && progression.phase === "main" && progression.phaseSettled && !progression.outcome && (!battle || battle.step === "attack" || battle.step === "damage" || battle.step === "counter");
+    const boundary = trigger?.type === "ON_EVENT" ? trigger.observation.context.boundary : undefined;
+    const boundaryTiming = boundary && boundary.phaseToken === progression.phaseToken && boundary.activePlayer === progression.activePlayer && boundary.turnNumber === progression.turnNumber &&
+      (boundary.type === "ON_BLOCK" ? battle?.battleId === boundary.battleId && battle.step === "block" && battle.decisionComplete && progression.phase === "main" :
+        !battle && !progression.phaseSettled && progression.phase === (boundary.type === "MAIN_START" ? "main" : "end"));
+    const phaseWindow = hasPhaseBoundaries(definitions) && !battle && !progression.phaseSettled && (progression.phase === "main" || progression.phase === "end");
+    const blockWindow = definitions.some(card => card.definition.effects.some(effect => effect.timing.type === "ON_BLOCK")) && battle?.step === "block" && battle.decisionComplete;
+    const triggerTiming = trigger && progression.gate.kind === "idle" && !progression.outcome && (boundary ? boundaryTiming : phaseWindow ||
+      progression.phase === "main" && progression.phaseSettled && (!battle || battle.step === "attack" || battle.step === "damage" || battle.step === "counter" || blockWindow));
     const lifeTiming = lifeUse && battle?.step === "damage" && battle.defender === identity.actor && progression.gate.kind === "idle" && !progression.outcome;
     ensureMove(identity.matchId === movement.matchId && movement.turnNumber === progression.turnNumber && (triggerTiming || lifeTiming || options.counterEventCause && checkTiming(progression, identity.actor, "counterEffect").allowed || checkTiming(progression, identity.actor, "mainEffect").allowed), "v3-fixture-timing");
     ensureMove(Object.values(movement.cards).every(card => !card.modifierIds.length && !card.grantIds.length) && movement.players.every(zones => zones.deck.length > 0) && movement.reveals.length === 0, "v3-fixture-unmodeled-board");
@@ -85,16 +92,16 @@ export class V3FixtureCoordinator {
         event.after?.instanceId === source.instanceId && event.after.cardId === source.cardId && event.after.generation === source.generation && event.before.generation + 1 === source.generation, "v3-life-trigger-authorization");
     } else if (eventUse) {
       const event = eventUse.event;
-      ensureMove(effect.kind === "activated" && source.kind === "event" && (mainUse ? (card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent(effect) : ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22"].includes(card.definition.schemaVersion) && isInteractiveMainEvent(effect)) && !battle && checkTiming(progression, identity.actor, "mainEffect").allowed :
+      ensureMove(effect.kind === "activated" && source.kind === "event" && (mainUse ? (card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent(effect) : ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23"].includes(card.definition.schemaVersion) && isInteractiveMainEvent(effect)) && !battle && checkTiming(progression, identity.actor, "mainEffect").allowed :
         effect.timing.type === "COUNTER" && battle?.step === "counter" && battle.battleId === options.counterEventCause!.battleId && battle.defender === identity.actor) &&
         at.zone === "trash" && event.kind === "moved" && event.from?.player === identity.actor && event.from.zone === "hand" && event.to?.player === identity.actor && event.to.zone === "trash" &&
         event.before?.kind === "event" && event.before.owner === identity.actor && event.before.controller === identity.actor && event.before.cardId === source.cardId && event.before.instanceId === source.instanceId &&
         event.after?.instanceId === source.instanceId && event.after.generation === source.generation && event.before.generation + 1 === source.generation && event.after.cardId === source.cardId, "v3-counter-event-authorization");
     } else if (trigger) {
-      ensureMove(effect.kind === "triggered" && effect.timing.type === trigger.type, "v3-fixture-trigger-type");
+      ensureMove(effect.kind === "triggered" && effect.timing.type === (boundary?.type ?? trigger.type), "v3-fixture-trigger-type");
       if (trigger.type === "ON_EVENT") {
         const record = trigger.observation;
-        ensureMove(card.definition.schemaVersion === "3.0.0-subset.22" && isTriggerObservation(record) && record.result === true && record.status === "PENDING" &&
+        ensureMove(["3.0.0-subset.22", "3.0.0-subset.23"].includes(card.definition.schemaVersion) && isTriggerObservation(record) && record.result === true && record.status === "PENDING" &&
           record.key.length === 64 && record.eventId === trigger.eventId && record.context.effectController === identity.actor &&
           record.effectId === identity.effectId && record.source.instanceId === source.instanceId && record.source.generation === source.generation &&
           validateObservedSource(record, movement, new Map(definitions.map(card => [card.definition.cardId, card]))) === "CURRENT", "v3-fixture-observed-authorization");

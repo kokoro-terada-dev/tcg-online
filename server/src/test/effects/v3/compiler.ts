@@ -11,6 +11,7 @@ export const INTERACTIVE_EVENT_COMPILER_VERSION = "v3-subset-compiler.20.1";
 export const CONDITIONAL_TRIGGER_COMPILER_VERSION = "v3-subset-compiler.21.1";
 export const ABILITY_TAGS: readonly AbilityTag[] = ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED", "MAIN", "ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_KO", "COUNTER", "TRIGGER"];
 export function compilerVersionForSchema(schema: SchemaVersion): string {
+  if (schema === "3.0.0-subset.23") return "v3-subset-compiler.23.1";
   if (schema === "3.0.0-subset.22") return "v3-subset-compiler.22.1";
   if (schema === "3.0.0-subset.21") return CONDITIONAL_TRIGGER_COMPILER_VERSION;
   ensureMove(schema === "3.0.0-subset.16" || schema === "3.0.0-subset.17" || schema === "3.0.0-subset.18" || schema === "3.0.0-subset.19" || schema === "3.0.0-subset.20", "unsupported-v3-schema-version");
@@ -137,7 +138,7 @@ export function builtinV3Registries(schema: SchemaVersion = "3.0.0-subset.16"): 
       return { type: "HAS_ABILITY", ...meta, subject: c.subject(n.subject), basis: n.basis, ability: n.ability as AbilityTag };
     });
   }
-  if (schema === "3.0.0-subset.18" || schema === "3.0.0-subset.19" || schema === "3.0.0-subset.20" || schema === "3.0.0-subset.21" || schema === "3.0.0-subset.22") {
+  if (schema === "3.0.0-subset.18" || schema === "3.0.0-subset.19" || schema === "3.0.0-subset.20" || schema === "3.0.0-subset.21" || schema === "3.0.0-subset.22" || schema === "3.0.0-subset.23") {
     r.query = new V3Registry<"query">();
     r.query.register("QUERY_CARDS", "1", (n, c) => {
       const meta = c.fields(n, ["owner", "controller", "zone", "visibility", "faceUpOnly", "cardTypes", "filters", "excludeSource"]);
@@ -161,13 +162,13 @@ export function builtinV3Registries(schema: SchemaVersion = "3.0.0-subset.16"): 
       return { type: "COUNT", ...meta, query: c.read("query", n.query), op: n.op as Extract<Node<"predicate">, { type: "COUNT" }>["op"], value: n.value };
     });
   }
-  if (schema === "3.0.0-subset.21" || schema === "3.0.0-subset.22") {
+  if (schema === "3.0.0-subset.21" || schema === "3.0.0-subset.22" || schema === "3.0.0-subset.23") {
     r.predicate.register("TURN_IS", "1", (n, c) => {
       const meta = c.fields(n, ["player"]);
       ensureMove(n.player === "SELF" || n.player === "OPPONENT", "v3-invalid-turn-player");
       return { type: "TURN_IS", ...meta, player: n.player };
     });
-    r.timing.register("ON_EVENT", schema === "3.0.0-subset.22" ? "1" : "candidate.1", (n, c) => {
+    r.timing.register("ON_EVENT", schema === "3.0.0-subset.21" ? "candidate.1" : "1", (n, c) => {
       const meta = c.fields(n, ["event", "snapshot", "relation", "owner", "controller", "fromZones", "toZones", "cardTypes", "filters"]);
       ensureMove(["CARD_ENTERED", "CARD_KO", "CARD_MOVED"].includes(n.event as string) &&
         ["TRANSACTION_BEFORE", "TRANSACTION_AFTER"].includes(n.snapshot as string) &&
@@ -182,6 +183,13 @@ export function builtinV3Registries(schema: SchemaVersion = "3.0.0-subset.16"): 
       const fromZones = list(n.fromZones, zones), toZones = list(n.toZones, zones), cardTypes = list(n.cardTypes, ["character", "stage", "event"]);
       return { type: "ON_EVENT", ...meta, event: n.event, snapshot: n.snapshot, relation: n.relation, owner: n.owner, controller: n.controller,
         fromZones, toZones, cardTypes, filters: c.candidate(n.filters) } as Extract<Node<"timing">, { type: "ON_EVENT" }>;
+    });
+  }
+  if (schema === "3.0.0-subset.23") {
+    r.timing.register("ON_BLOCK", "1", (n, c) => ({ type: "ON_BLOCK", ...c.fields(n, []) }));
+    for (const type of ["MAIN_START", "TURN_END"] as const) r.timing.register(type, "1", (n, c) => {
+      const meta = c.fields(n, ["player"]); ensureMove(n.player === "SELF" || n.player === "OPPONENT", "v3-invalid-boundary-player");
+      return { type, ...meta, player: n.player };
     });
   }
   for (const type of ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"] as const) r.keyword.register(type, "1", (n, c) => ({ type, ...c.fields(n, []) }));
@@ -295,9 +303,9 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19" || input.schemaVersion === "3.0.0-subset.20" || input.schemaVersion === "3.0.0-subset.21" || input.schemaVersion === "3.0.0-subset.22", "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19" || input.schemaVersion === "3.0.0-subset.20" || input.schemaVersion === "3.0.0-subset.21" || input.schemaVersion === "3.0.0-subset.22" || input.schemaVersion === "3.0.0-subset.23", "unsupported-v3-schema-version");
   const schemaVersion = input.schemaVersion, compilerVersion = compilerVersionForSchema(schemaVersion);
-  const interactiveEventProfile = ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22"].includes(schemaVersion);
+  const interactiveEventProfile = ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23"].includes(schemaVersion);
   registries ??= builtinV3Registries(schemaVersion);
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
   ensureMove(typeof input.name === "string" && input.name.trim().length > 0 && input.name.length <= 300, "invalid-v3-card-name");
@@ -333,7 +341,7 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
     },
     list(category, nodes) { dataArray(nodes, 128); return nodes.map(node => context.read(category, node)); },
     value(input) {
-      const parsed = value(input, bindings, candidateAllowed, schemaVersion === "3.0.0-subset.18" || schemaVersion === "3.0.0-subset.19" || schemaVersion === "3.0.0-subset.20" || schemaVersion === "3.0.0-subset.21" || schemaVersion === "3.0.0-subset.22");
+      const parsed = value(input, bindings, candidateAllowed, schemaVersion === "3.0.0-subset.18" || schemaVersion === "3.0.0-subset.19" || schemaVersion === "3.0.0-subset.20" || schemaVersion === "3.0.0-subset.21" || schemaVersion === "3.0.0-subset.22" || schemaVersion === "3.0.0-subset.23");
       ensureMove(currentTiming !== "ON_KO" || parsed === null || typeof parsed !== "object" || !parsed.ref.startsWith("SOURCE."), "v3-ko-source-facts-unresolved");
       ensureMove(currentTiming !== "TRIGGER" || parsed === null || typeof parsed !== "object" || !parsed.ref.startsWith("SOURCE."), "v3-trigger-source-facts-unresolved");
       return parsed;
@@ -390,15 +398,17 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
       usageLimit = { type: "PER_TURN", scope: "SOURCE_OBJECT", count: count(effect.usageLimit.count) };
     }
     const timing = context.read("timing", effect.timing); currentTiming = timing.type;
+    const boundary = timing.type === "ON_BLOCK" || timing.type === "MAIN_START" || timing.type === "TURN_END";
+    ensureMove(!boundary || effect.kind === "triggered" && input.cardType !== "event" && (timing.type !== "ON_BLOCK" || input.cardType === "character"), "v3-boundary-source-kind");
     ensureMove((timing.type === "TRIGGER" ? source.triggerText : source.text).trim().length > 0, "v3-missing-effect-source-text");
     dataArray(effect.sourceZones, 3); ensureMove(effect.sourceZones.length === 1 && effect.sourceZones[0] === (timing.type === "TRIGGER" ? "life" : input.cardType === "event" ? "hand" : input.cardType), "unsupported-v3-source-zones");
     const activationConditions = context.read("predicate", effect.activationConditions),
       resolutionConditions = context.read("predicate", effect.resolutionConditions), costs = context.list("cost", effect.costs);
-    ensureMove(timing.type === "TRIGGER" ? input.cardType !== "leader" && effect.kind === "triggered" : input.cardType === "event" ? effect.kind === "activated" && (timing.type === "COUNTER" || (schemaVersion === "3.0.0-subset.19" || interactiveEventProfile) && timing.type === "MAIN") : effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_EVENT" || timing.type === "ON_PLAY" && input.cardType !== "leader" || timing.type === "ON_ATTACK" && input.cardType !== "stage" || timing.type === "ON_OPPONENT_ATTACK" || timing.type === "ON_KO" && input.cardType === "character", "v3-kind-timing-mismatch");
+    ensureMove(boundary || (timing.type === "TRIGGER" ? input.cardType !== "leader" && effect.kind === "triggered" : input.cardType === "event" ? effect.kind === "activated" && (timing.type === "COUNTER" || (schemaVersion === "3.0.0-subset.19" || interactiveEventProfile) && timing.type === "MAIN") : effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_EVENT" || timing.type === "ON_PLAY" && input.cardType !== "leader" || timing.type === "ON_ATTACK" && input.cardType !== "stage" || timing.type === "ON_OPPONENT_ATTACK" || timing.type === "ON_KO" && input.cardType === "character"), "v3-kind-timing-mismatch");
     if (input.cardType === "event") ensureMove(!effect.optional && usageLimit === null && costs.length === 0 && activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-event-additional-activation-unresolved");
     if (timing.type === "TRIGGER") ensureMove(!effect.optional && usageLimit === null && costs.length === 0 && activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-trigger-additional-activation-unresolved");
     ensureMove(timing.type !== "ON_KO" || costs.length === 0, "v3-ko-activation-cost-unresolved");
-    ensureMove(effect.kind !== "triggered" || timing.type === "ON_EVENT" || activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-trigger-event-conditions-unresolved");
+    ensureMove(effect.kind !== "triggered" || boundary || timing.type === "ON_EVENT" || activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-trigger-event-conditions-unresolved");
     ensureMove(costs.reduce((sum, cost) => sum + (cost.type === "DISCARD_HAND" ? cost.count : 0), 0) <= 50, "v3-discard-cost-limit");
     ensureMove(costs.filter(cost => cost.type === "REST_SOURCE").length <= 1, "v3-duplicate-rest-source-cost");
     ensureMove(costs.filter(cost => cost.type === "DON_RETURN").length <= 1, "v3-multiple-don-return-costs-unsupported");

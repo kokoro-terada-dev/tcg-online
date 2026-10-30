@@ -30,7 +30,7 @@ function select(c, effectId, actor = c.viewFor(0).triggerChooser) {
 function finish(c, actor = c.viewFor(0).resolutionActor) {
   for (let i = 0; i < 40; i++) {
     const frame = c.viewFor(actor).frame;
-    if (frame.status === 'completed') return;
+    if (!frame || frame.status === 'completed') return;
     if (frame.status === 'ready') c.advance(actor, id(), c.context());
     else if (frame.status === 'waitingForWork') c.applyPendingWork(actor, id(), c.context());
     else return frame;

@@ -31,6 +31,22 @@ async function complete(socket, v) {
   throw Error('Session resolution did not complete');
 }
 
+for (const actor of [0, 1]) test(`phase boundaries resume over two clients exactly once (seat=${actor})`, async t => {
+  const { clients } = await setup(t, actor, [deck, deck], 'timings'), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView;
+  assert.equal(v.phaseContinuation, true); v = await send(own, v, 'advance');
+  assert.equal(v.triggerChoices[0].effectId, 'boundary-MAIN_START'); assert.deepEqual((await request(peer, 'v3-session:sync')).sessionView.triggerChoices, []);
+  v = await send(own, v, 'trigger', { token: v.triggerChoices[0].token }); v = await complete(own, v); v = await send(own, v, 'advance');
+  assert.equal(v.phaseContinuation, false);
+  v = await send(own, v, 'endTurn'); assert.equal(v.phase, 'end'); const context = v.context;
+  const wrong = await request(peer, 'v3-session:command', command(v, 'advance')); assert.equal(wrong.ok, false); assert.deepEqual(wrong.sessionView.context, context);
+  v = await send(own, v, 'trigger', { token: v.triggerChoices[0].token }); v = await complete(own, v);
+  const input = command(v, 'advance'), result = await request(own, 'v3-session:command', input); assert.equal(result.ok, true);
+  assert.equal((await request(own, 'v3-session:command', input)).ok, true);
+  const seen = (await request(peer, 'v3-session:sync')).sessionView; assert.equal(seen.activePlayer, 1 - actor); assert.equal(seen.triggerChoices[0].effectId, 'boundary-MAIN_START');
+  assert(!JSON.stringify(seen).includes('triggerObservations'));
+});
+
 for (const actor of [0, 1]) test(`observed ordering resumes privately over two sockets (seat=${actor})`, async t => {
   const { clients } = await setup(t, actor, [deck, deck], 'triggers'), own = clients[actor], peer = clients[1 - actor];
   let v = (await request(own, 'v3-session:sync')).sessionView;
