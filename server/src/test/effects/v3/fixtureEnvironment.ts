@@ -9,7 +9,7 @@ import type { ResolutionEnvironment, ResolutionIdentity } from "./resolution";
 import type { StatEffects } from "./statEffects";
 import { UNKNOWN, createDerivedCardFactsReader, readEventContext, type EventContext } from "./readContext";
 import type { KeywordGrants } from "./keywordEffects";
-import { rememberedColors } from "./moveResults";
+import { readRememberedColors, rememberedColors } from "./moveResults";
 
 type Scalar = string | number | boolean | null | typeof UNKNOWN;
 export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext, keywordGrants: () => KeywordGrants = () => [], occurrenceAuthorized = false): ResolutionEnvironment {
@@ -35,9 +35,10 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     }
     return field === "cost" || field === "power" ? derived.current[field] : UNKNOWN;
   };
-  const evaluate: ResolutionEnvironment["evaluate"] = (predicate, bindings, candidate, results) => {
-    if (predicate.type === "MOVED_COLORS") {
-      const colors = rememberedColors(results?.[predicate.result], identity), ref = predicate.subject === "SOURCE" ? identity.source : candidate;
+  const evaluate: ResolutionEnvironment["evaluate"] = (predicate, bindings, candidate, results, memories) => {
+    if (predicate.type === "MOVED_COLORS" || predicate.type === "REMEMBERED_COLORS") {
+      const colors = predicate.type === "MOVED_COLORS" ? rememberedColors(results?.[predicate.result], identity) : readRememberedColors(memories?.[predicate.memory], identity);
+      const ref = predicate.subject === "SOURCE" ? identity.source : candidate;
       if (colors === UNKNOWN || !ref) return "unknown";
       const derived = cardFacts(ref, context.effectController);
       const values = derived === UNKNOWN ? UNKNOWN : derived.metadata[predicate.basis === "PRINTED" ? "printed" : "current"].colors;
@@ -48,14 +49,14 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     if (predicate.type === "all" || predicate.type === "any") {
       let unknown = false;
       for (const child of predicate.conditions) {
-        const result = evaluate(child, bindings, candidate, results);
+        const result = evaluate(child, bindings, candidate, results, memories);
         if (predicate.type === "all" && result === false) return false;
         if (predicate.type === "any" && result === true) return true;
         if (result === "unknown") unknown = true;
       }
       return unknown ? "unknown" : predicate.type === "all";
     }
-    if (predicate.type === "not") { const result = evaluate(predicate.condition, bindings, candidate, results); return result === "unknown" ? result : !result; }
+    if (predicate.type === "not") { const result = evaluate(predicate.condition, bindings, candidate, results, memories); return result === "unknown" ? result : !result; }
     if (predicate.type === "EXISTS" || predicate.type === "COUNT") {
       const query = predicate.query, state = board();
       try {
@@ -82,7 +83,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
         let count = 0, unknown = false;
         for (const row of rows) {
           if (query.excludeSource && row.ref.instanceId === context.source.instanceId && row.ref.generation === context.source.generation) continue;
-          const matches = evaluate(query.filters, bindings, row.ref, results);
+          const matches = evaluate(query.filters, bindings, row.ref, results, memories);
           if (matches === "unknown") unknown = true;
           else if (matches) count++;
         }
