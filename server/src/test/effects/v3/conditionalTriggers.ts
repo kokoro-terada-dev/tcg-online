@@ -39,7 +39,7 @@ export function hasConditionalTriggers(definitions: ReadonlyMap<string, Approved
   return [...definitions.values()].some(card => card.definition.effects.some(effect => effect.timing.type === "ON_EVENT"));
 }
 export const conditionalTriggersHeld = (ledger: TriggerObservations): boolean => ledger.records.some(record => record.status === "HELD");
-export const hasPhaseBoundaries = (definitions: readonly ApprovedV3Card[]): boolean => definitions.some(card => ["3.0.0-subset.23", "3.0.0-subset.24"].includes(card.definition.schemaVersion) &&
+export const hasPhaseBoundaries = (definitions: readonly ApprovedV3Card[]): boolean => definitions.some(card => ["3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25"].includes(card.definition.schemaVersion) &&
   card.definition.effects.some(effect => effect.timing.type === "MAIN_START" || effect.timing.type === "TURN_END"));
 function privateQuery(predicate: DeepReadonly<Predicate>): boolean {
   if (predicate.type === "all" || predicate.type === "any") return predicate.conditions.some(privateQuery);
@@ -96,7 +96,7 @@ export function observeConditionalTriggers(ledger: TriggerObservations, events: 
           const result = multiMove || !authorized || targetCard.kind === "unknown" || privateQuery(timing.filters) || privateQuery(effect.activationConditions) ? "unknown" :
             !structural || filter === false || activation === false ? false : filter === "unknown" || activation === "unknown" ? "unknown" : true;
           ensureMove(records.length < 4096, "v3-trigger-observation-limit");
-          const executable = ["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24"].includes(definition.definition.schemaVersion);
+          const executable = ["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25"].includes(definition.definition.schemaVersion);
           const record: TriggerObservation = { key: hash([state.matchId, event.eventId, source, effect.id, definition.definitionHash]), eventId: event.eventId, groupId: event.groupId,
             transactionId: occurrence.transactionId, eventType: timing.event, causeEffectId: resolvingEffect && resolvingEffect.resolutionId === event.cause.resolutionId ? resolvingEffect.effectId : null,
             source, cardId: sourceCard.cardId, effectId: effect.id, definitionHash: definition.definitionHash, context, target, snapshot: basis,
@@ -118,7 +118,7 @@ export function observeBoundaryTriggers(ledger: TriggerObservations, event: Boun
   const records = [...ledger.records];
   for (const card of Object.values(state.cards)) {
     const at = location(state, card.instanceId), definition = definitions.get(card.cardId);
-    if (!definition || !["3.0.0-subset.23", "3.0.0-subset.24"].includes(definition.definition.schemaVersion) || !["leader", "character", "stage"].includes(at.zone) || card.kind !== at.zone ||
+    if (!definition || !["3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25"].includes(definition.definition.schemaVersion) || !["leader", "character", "stage"].includes(at.zone) || card.kind !== at.zone ||
       card.owner !== card.controller || at.player !== card.controller || !card.faceUp || !visibleTo(state, card, at, 0) || !visibleTo(state, card, at, 1)) continue;
     const source = { instanceId: card.instanceId, generation: card.generation }, actor = card.controller;
     for (const effect of definition.definition.effects) {

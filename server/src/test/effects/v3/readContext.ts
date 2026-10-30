@@ -26,6 +26,13 @@ export type EventOrigin = Readonly<{ type: "movement"; event: DeepReadonly<Movem
   Readonly<{ type: "boundary"; event: BoundaryEvent }> |
   Readonly<{ type: "attack"; eventId: string; battleId: string; attacker: Player }>;
 
+export function movementReadContext(event: DeepReadonly<MovementEvent>): NonNullable<EventContext["movement"]> {
+  return freezeMovement({ groupId: event.groupId, operationIndex: event.operationIndex,
+    targetBefore: event.before ? { instanceId: event.before.instanceId, generation: event.before.generation } : null,
+    targetAfter: event.after ? { instanceId: event.after.instanceId, generation: event.after.generation } : null,
+    from: event.from, to: event.to, isKO: event.isKO });
+}
+
 export function withEventChooser(context: EventContext, chooser: Player | null): EventContext {
   if (chooser !== null) player(chooser);
   return freezeMovement({ ...context, chooser });
@@ -44,10 +51,7 @@ export function readEventContext(state: MovementState, identity: ResolutionIdent
     source: { ...identity.source }, eventId: event?.eventId ?? (origin?.type === "attack" ? origin.eventId : origin?.type === "boundary" ? origin.event.eventId : null), cause: event ? structuredClone(event.cause) : null,
     origin: origin?.type ?? "activation", attack: origin?.type === "attack" ? { battleId: origin.battleId, attacker: origin.attacker } : null,
     ...(origin?.type === "boundary" ? { boundary: origin.event } : {}),
-    ...(event ? { movement: { groupId: event.groupId, operationIndex: event.operationIndex,
-      targetBefore: event.before ? { instanceId: event.before.instanceId, generation: event.before.generation } : null,
-      targetAfter: event.after ? { instanceId: event.after.instanceId, generation: event.after.generation } : null,
-      from: event.from, to: event.to, isKO: event.isKO } } : {}) });
+    ...(event ? { movement: movementReadContext(event) } : {}) });
 }
 
 export type CardMetadataFacts = Readonly<{ name: KnownOrUnknown<string>; traits: KnownOrUnknown<readonly string[]>;
