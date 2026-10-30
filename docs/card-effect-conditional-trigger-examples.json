@@ -1,0 +1,36 @@
+{
+  "basedOnCommit": "fe6e037",
+  "schemaVersion": "3.0.0-subset.21",
+  "status": "candidate_detection_only_not_executable",
+  "examples": [
+    {
+      "title": "Synthetic own character with matching trait enters during own turn",
+      "card": {
+        "schemaVersion": "3.0.0-subset.21",
+        "cardId": "EXAMPLE-CONDITIONAL-OBSERVER",
+        "cardVersion": "draft.1",
+        "name": "合成の誘発監視カード",
+        "cardType": "leader",
+        "baseStats": { "cost": null, "power": 5000, "counter": null, "life": 5 },
+        "colors": [], "traits": [], "attributes": [], "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": { "text": "Synthetic observer. Not an official card or approved program.", "triggerText": "", "displayIds": ["EXAMPLE-CONDITIONAL-OBSERVER"], "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000" },
+        "effects": [
+          {
+            "id": "own-character-entry",
+            "kind": "triggered",
+            "timing": {
+              "type": "ON_EVENT", "event": "CARD_ENTERED", "snapshot": "TRANSACTION_AFTER", "relation": "OTHER",
+              "owner": "SELF", "controller": "SELF", "fromZones": ["hand"], "toZones": ["character"], "cardTypes": ["character"],
+              "filters": { "type": "CARD_METADATA", "subject": "CANDIDATE", "basis": "PRINTED", "field": "traits", "match": "ANY", "comparison": "EXACT", "values": ["麦わらの一味"] }
+            },
+            "sourceZones": ["leader"], "optional": false, "usageLimit": null,
+            "activationConditions": { "type": "TURN_IS", "player": "SELF" },
+            "resolutionConditions": { "type": "all", "conditions": [] }, "costs": [],
+            "actions": [{ "type": "DRAW", "player": "SELF", "count": 1 }]
+          }
+        ]
+      }
+    }
+  ]
+}

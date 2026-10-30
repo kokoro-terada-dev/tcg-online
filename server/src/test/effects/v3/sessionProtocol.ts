@@ -5,6 +5,7 @@ export type V3SessionView = Readonly<{
   movement: V3FixtureView["movement"]; frame: V3FixtureView["frame"] | null; imageAliases: Readonly<Record<string, string>>;
   turnNumber: number; activePlayer: 0 | 1; phase: "refresh" | "draw" | "don" | "main" | "end"; gate: "idle" | "resolving" | "choice" | "trigger";
   triggerPolicy: string; pendingTriggerCount: number; triggerChooser: 0 | 1 | null;
+  conditionalTriggerHold?: boolean;
   triggerChoices: readonly Readonly<{ token: string; cardId: string; effectId: string; timing: "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" }>[];
   damageEffectsPending: boolean;
   battle: (NonNullable<import("../../progression/types").Progression["battle"]> & { powers: Readonly<{ attack: number; defense: number }> | null }) | null;

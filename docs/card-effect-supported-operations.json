@@ -1,7 +1,7 @@
 {
-  "basedOnCommit": "f3bdb18",
-  "compilerVersion": "v3-subset-compiler.20.1",
-  "registryHash": "ca4ae5ac8cc70eefa20ee7411ce0e54a305a07b43fd503f6a387ef0b5dd80916",
+  "basedOnCommit": "fe6e037",
+  "compilerVersion": "v3-subset-compiler.21.1",
+  "registryHash": "b283c93467d4f993aeb8294a8154da85476c7e8657079a45842b13f279930b2e",
   "registries": {
     "predicate": [
       "CARD_METADATA@1",
@@ -9,6 +9,7 @@
       "COUNT@1",
       "EXISTS@1",
       "HAS_ABILITY@1",
+      "TURN_IS@1",
       "all@1",
       "any@1",
       "compare@3",
@@ -50,6 +51,7 @@
       "COUNTER@1",
       "MAIN@1",
       "ON_ATTACK@1",
+      "ON_EVENT@candidate.1",
       "ON_KO@1",
       "ON_OPPONENT_ATTACK@1",
       "ON_PLAY@1",
@@ -117,7 +119,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -158,7 +161,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -209,7 +213,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -248,7 +253,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -280,7 +286,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -320,7 +327,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -370,7 +378,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -433,7 +442,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -467,7 +477,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -517,7 +528,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -578,7 +590,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -627,7 +640,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -685,7 +699,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -719,7 +734,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -766,7 +782,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -805,7 +822,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -863,7 +881,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -901,7 +920,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -935,7 +955,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -967,7 +988,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1008,7 +1030,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1040,7 +1063,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1065,7 +1089,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1202,7 +1227,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1335,7 +1361,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1360,7 +1387,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1400,7 +1428,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1425,7 +1454,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1450,7 +1480,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1475,7 +1506,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1500,7 +1532,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1525,7 +1558,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1550,7 +1584,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1575,7 +1610,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1600,7 +1636,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1625,7 +1662,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1650,7 +1688,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1675,7 +1714,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ]
     },
     {
@@ -1687,7 +1727,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -1748,7 +1789,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -1836,7 +1878,8 @@
         "3.0.0-subset.17",
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -1898,7 +1941,8 @@
       "availableIn": [
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ],
       "schemaRef": "card-effect-query.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -1949,7 +1993,8 @@
       "availableIn": [
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ],
       "schemaRef": "card-effect-query.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -2016,7 +2061,8 @@
       "availableIn": [
         "3.0.0-subset.18",
         "3.0.0-subset.19",
-        "3.0.0-subset.20"
+        "3.0.0-subset.20",
+        "3.0.0-subset.21"
       ],
       "schemaRef": "card-effect-query.schema.json#/$defs/query",
       "requiredParameters": [
@@ -2101,6 +2147,178 @@
         },
         "excludeSource": false
       }
+    },
+    {
+      "category": "predicate",
+      "name": "TURN_IS",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "schemaRef": "card-effect-conditional-trigger.schema.json#/$defs/predicate",
+      "requiredParameters": [
+        "player"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "player": {
+          "enum": [
+            "SELF",
+            "OPPONENT"
+          ]
+        }
+      },
+      "description": "Turn player relative to effect controller; shared three-valued predicate evaluator.",
+      "runtimeConstraints": "Server-only occurrence evidence; no hidden candidate DTO. Transaction boundary snapshots; multi-move timing remains UNKNOWN.",
+      "example": {
+        "type": "TURN_IS",
+        "player": "SELF"
+      },
+      "availableIn": [
+        "3.0.0-subset.21"
+      ]
+    },
+    {
+      "category": "timing",
+      "name": "ON_EVENT",
+      "handlerVersion": "candidate.1",
+      "status": "candidate_detection_only",
+      "schemaRef": "card-effect-conditional-trigger.schema.json#/$defs/timing",
+      "requiredParameters": [
+        "event",
+        "snapshot",
+        "relation",
+        "owner",
+        "controller",
+        "fromZones",
+        "toZones",
+        "cardTypes",
+        "filters"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "event": {
+          "enum": [
+            "CARD_ENTERED",
+            "CARD_KO",
+            "CARD_MOVED"
+          ]
+        },
+        "snapshot": {
+          "enum": [
+            "TRANSACTION_BEFORE",
+            "TRANSACTION_AFTER"
+          ]
+        },
+        "relation": {
+          "enum": [
+            "SELF",
+            "OTHER",
+            "ANY"
+          ]
+        },
+        "owner": {
+          "enum": [
+            "SELF",
+            "OPPONENT",
+            "ANY"
+          ]
+        },
+        "controller": {
+          "enum": [
+            "SELF",
+            "OPPONENT",
+            "ANY"
+          ]
+        },
+        "fromZones": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "hand",
+              "deck",
+              "life",
+              "trash",
+              "public",
+              "character",
+              "stage"
+            ]
+          }
+        },
+        "toZones": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "hand",
+              "deck",
+              "life",
+              "trash",
+              "public",
+              "character",
+              "stage"
+            ]
+          }
+        },
+        "cardTypes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "character",
+              "stage",
+              "event"
+            ]
+          }
+        },
+        "filters": {
+          "$ref": "#/$defs/predicate"
+        }
+      },
+      "description": "Candidate detection only. TRUE/UNKNOWN are HELD; not executable until PR06b.",
+      "runtimeConstraints": "Server-only occurrence evidence; no hidden candidate DTO. Transaction boundary snapshots; multi-move timing remains UNKNOWN.",
+      "example": {
+        "type": "ON_EVENT",
+        "event": "CARD_ENTERED",
+        "snapshot": "TRANSACTION_AFTER",
+        "relation": "OTHER",
+        "owner": "SELF",
+        "controller": "SELF",
+        "fromZones": [
+          "hand"
+        ],
+        "toZones": [
+          "character"
+        ],
+        "cardTypes": [
+          "character"
+        ],
+        "filters": {
+          "type": "CARD_METADATA",
+          "subject": "CANDIDATE",
+          "basis": "PRINTED",
+          "field": "traits",
+          "match": "ANY",
+          "comparison": "EXACT",
+          "values": [
+            "麦わらの一味"
+          ]
+        }
+      },
+      "availableIn": [
+        "3.0.0-subset.21"
+      ]
     }
   ],
   "implementationUpdate": "PR05b: subset20 resumable event MAIN, existing handlers only; paid event use is committed before later selections/work. See card-effect-pr05b.md.",
@@ -2411,6 +2629,75 @@
           "COUNTER@1",
           "MAIN@1",
           "ON_ATTACK@1",
+          "ON_KO@1",
+          "ON_OPPONENT_ATTACK@1",
+          "ON_PLAY@1",
+          "TRIGGER@1"
+        ],
+        "keyword": [
+          "BLOCKER@1",
+          "CANNOT_BE_BLOCKED@1",
+          "RUSH@1",
+          "RUSH_CHARACTER@1"
+        ],
+        "query": [
+          "QUERY_CARDS@1"
+        ]
+      }
+    },
+    "3.0.0-subset.21": {
+      "compilerVersion": "v3-subset-compiler.21.1",
+      "registryHash": "b283c93467d4f993aeb8294a8154da85476c7e8657079a45842b13f279930b2e",
+      "registries": {
+        "predicate": [
+          "CARD_METADATA@1",
+          "CARD_NAME@1",
+          "COUNT@1",
+          "EXISTS@1",
+          "HAS_ABILITY@1",
+          "TURN_IS@1",
+          "all@1",
+          "any@1",
+          "compare@3",
+          "not@1"
+        ],
+        "action": [
+          "BIND_SOURCE@2",
+          "DRAW@2",
+          "GRANT_KEYWORD@1",
+          "IF@2",
+          "KO@1",
+          "LOOK_TOP@1",
+          "MODIFY_STAT@1",
+          "MOVE_CARD@2",
+          "ORDER_CARDS@1",
+          "REST@1",
+          "RETURN_TO_DECK@1",
+          "REVEAL@1",
+          "SELECT@1",
+          "SEQUENCE@1",
+          "SET_ACTIVE@1"
+        ],
+        "cost": [
+          "DISCARD_HAND@1",
+          "DON_RETURN@2",
+          "REST_DON@1",
+          "REST_SOURCE@1"
+        ],
+        "replacement": [],
+        "selector": [
+          "BOUND_CARDS@1",
+          "CARDS@4"
+        ],
+        "duration": [
+          "BATTLE_END@1",
+          "TURN_END@1"
+        ],
+        "timing": [
+          "COUNTER@1",
+          "MAIN@1",
+          "ON_ATTACK@1",
+          "ON_EVENT@candidate.1",
           "ON_KO@1",
           "ON_OPPONENT_ATTACK@1",
           "ON_PLAY@1",

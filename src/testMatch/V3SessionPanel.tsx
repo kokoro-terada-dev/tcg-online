@@ -19,7 +19,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
   useEffect(() => setCollapsed(false), [view.context.resolutionId, frame?.choice?.selectionId, frame?.status, view.turnNumber, view.gate, view.pendingTriggerCount, view.battle?.step, view.lifePending]);
   useEffect(() => setRevealPreview(null), [view.context.revision]);
   useEffect(() => setMainSourceId(null), [view.context.revision]);
-  const idle = !view.battle && !view.outcome && view.gate === "idle" && (!frame || frame.status === "completed"), disabled = busy || needsSync;
+  const idle = !view.conditionalTriggerHold && !view.battle && !view.outcome && view.gate === "idle" && (!frame || frame.status === "completed"), disabled = busy || needsSync;
   const playable = (id: string) => view.playableCards.find(play => play.card.instanceId === id);
   const battle = view.battle, defending = battle?.defender === view.localPlayerIndex;
   const attackEffectActor = view.gate === "trigger" ? view.triggerChooser : view.resolutionActor;
@@ -42,6 +42,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="v3連続操作検証">
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
       <div hidden={collapsed}><strong>{view.mode === "v3-reviewed-session" ? "v3検証・限定実カード" : "v3検証・連続操作"}</strong><p>{view.turnNumber}ターン目・{ownTurn ? "自分" : "相手"}のターン</p>
+        {view.conditionalTriggerHold && <p role="status">条件付き誘発を保留しています。現在の効果処理完了後、安全停止します。</p>}
         {view.mainEvent && <div className="v3-public-reveals"><button onClick={() => setRevealPreview(view.imageAliases[view.mainEvent!.cardId] ?? view.mainEvent!.cardId)}>イベント詳細</button><p role="status">{view.mainEvent.actor === view.localPlayerIndex ? "自分" : "相手"}のイベント処理中・DON{view.mainEvent.paidCost}支払済み<br />{view.mainEvent.effectId}</p></div>}
         {battle && <div className="v3-battle-status"><p role="status">{view.damageEffectsPending ? "ダメージ時の効果処理" : battle.step === "attack" ? "アタック時の効果処理" : battle.step === "block" ? "ブロック" : battle.step === "counter" ? "カウンター" : "ダメージ確認"}・{battle.step === "attack" || view.damageEffectsPending ? attackEffectActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち" : defending ? "自分が操作" : "相手の操作待ち"}</p>
           {!view.damageEffectsPending && <p>攻撃 {battle.powers?.attack ?? "?"} → 防御 {battle.powers?.defense ?? "?"}</p>}

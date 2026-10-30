@@ -23,6 +23,8 @@ import { prepareLifeTrigger } from "./lifeTriggers";
 import { isReviewedV3Catalog, type ReviewedV3Catalog } from "./reviewedCatalog";
 import { pinMasterFacts } from "../masterFacts";
 import { fixtureEnvironment } from "./fixtureEnvironment";
+import { trackMovementOccurrences } from "../../movement/occurrence";
+import { conditionalTriggersHeld, emptyTriggerObservations, hasConditionalTriggers, observeConditionalTriggers, type TriggerObservations } from "./conditionalTriggers";
 
 type Seat = 0 | 1;
 export type V3MatchContext = Readonly<{ revision: number; movementRevision: number; progressionRevision: number; resolutionId: string | null; frameRevision: number | null }>;
@@ -40,6 +42,8 @@ export class V3SyntheticMatchCoordinator {
   #statEffects: StatEffects = [];
   #keywordGrants: KeywordGrants = [];
   #triggers: readonly ScheduledTrigger[] = [];
+  #observations = emptyTriggerObservations();
+  #observationDraft: TriggerObservations | null = null;
   #battleCounters: BattleCounters = []; #lifeDecision: LifeDecision | null = null;
   #damageSettling = false;
   #reviewed: boolean;
@@ -62,6 +66,7 @@ export class V3SyntheticMatchCoordinator {
     }
     if (this.#reviewed) ensureMove(Object.values(options.movement.cards).every(card => card.kind === "don" || this.#cards.get(card.cardId)?.definition.cardType === card.kind), "v3-match-unreviewed-board-card");
     this.#board = freezeMovement(structuredClone(options.movement)); this.#progression = freezeMovement(structuredClone(options.progression));
+    if (hasConditionalTriggers(this.#cards)) trackMovementOccurrences(this.#board);
     this.#key = Uint8Array.from(options.signingKey); this.#master = options.master; this.#now = options.now ?? Date.now;
   }
   context(): V3MatchContext {
@@ -78,15 +83,19 @@ export class V3SyntheticMatchCoordinator {
     if (receipt) { ensureMove(receipt.fingerprint === fingerprint, "v3-match-request-conflict"); return { replayed: true }; }
     const current = this.context();
     ensureMove(this.#receipts.length < 2048 && this.#revision < Number.MAX_SAFE_INTEGER && (Object.keys(current) as (keyof V3MatchContext)[]).every(key => current[key] === expected[key]), "v3-match-stale-or-limited");
-    this.#busy = true;
+    const held = conditionalTriggersHeld(this.#observations);
+    const resuming = ["advance", "answer", "work"].includes((body as { kind?: string }).kind ?? "") && this.#active && this.#active.coordinator.viewFor(this.#active.actor).frame.status !== "completed";
+    ensureMove(!held || resuming, "v3-conditional-trigger-held-pr06b");
+    this.#busy = true; this.#observationDraft = this.#observations;
     try {
       apply();
       const battleId = this.#progression.outcome ? null : this.#progression.battle?.battleId ?? null;
       this.#statEffects = retainBattleStatEffects(this.#statEffects, battleId);
       this.#keywordGrants = retainBattleKeywordGrants(this.#keywordGrants, battleId);
+      this.#observations = this.#observationDraft;
       this.#revision++; this.#receipts.push({ requestId, fingerprint }); return { replayed: false };
     }
-    finally { this.#busy = false; }
+    finally { this.#busy = false; this.#observationDraft = null; }
   }
   #settled(allowTriggers = false, allowBattleTriggers = false): void {
     ensureMove(!this.#active || this.#active.coordinator.viewFor(this.#active.actor).frame.status === "completed", "v3-match-resolution-pending");
@@ -95,6 +104,10 @@ export class V3SyntheticMatchCoordinator {
   }
   #checkNewEvents = (events: readonly MovementEvent[]): void => {
     ensureMove(this.#triggers.length + movementTriggerCandidates(events, this.#cards).length <= 128, "v3-trigger-queue-limit");
+    ensureMove(this.#observationDraft !== null, "v3-trigger-observation-transaction-required");
+    this.#observationDraft = observeConditionalTriggers(this.#observationDraft, events, this.#cards, this.#progression.activePlayer, this.#statEffects, this.#keywordGrants,
+      ref => this.#battleCounters.filter(counter => counter.target.instanceId === ref.instanceId && counter.target.generation === ref.generation).reduce((sum, counter) => sum + counter.amount, 0),
+      this.#active ? { resolutionId: this.#active.resolutionId, effectId: this.#active.effectId } : undefined);
   };
   #archive(): void {
     if (!this.#active) return;
@@ -165,6 +178,7 @@ export class V3SyntheticMatchCoordinator {
       if (this.#progression.outcome) {
         this.#triggers = []; this.#battleCounters = []; this.#lifeDecision = null; this.#damageSettling = false; return;
       }
+      if (conditionalTriggersHeld(this.#observationDraft!)) return;
       if (frame.status === "completed" && !this.#triggers.length && (this.#progression.battle?.step === "attack" || this.#damageSettling)) {
         const progression = this.#damageSettling ? finishDamageStep(this.#progression) : finishAttackStep(this.#board, this.#progression);
         this.#archive(); this.#progression = progression; this.#damageSettling = false; if (!progression.battle) this.#battleCounters = [];
@@ -212,7 +226,7 @@ export class V3SyntheticMatchCoordinator {
   }
   playableCardsFor(actor: Seat) {
     ensureMove(actor === 0 || actor === 1, "v3-match-actor");
-    const ready = !this.#triggers.length && (!this.#active || this.#active.coordinator.viewFor(actor).frame.status === "completed") && checkTiming(this.#progression, actor, "playCard").allowed;
+    const ready = !conditionalTriggersHeld(this.#observations) && !this.#triggers.length && (!this.#active || this.#active.coordinator.viewFor(actor).frame.status === "completed") && checkTiming(this.#progression, actor, "playCard").allowed;
     return this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId);
       if (!card || !["character", "stage"].includes(card.definition.cardType) || object.kind !== card.definition.cardType) return [];
@@ -222,7 +236,7 @@ export class V3SyntheticMatchCoordinator {
     });
   }
   attackChoicesFor(actor: Seat) {
-    if (this.#triggers.length || this.#lifeDecision || this.#active && this.#active.coordinator.viewFor(actor).frame.status !== "completed") return { sources: [], targets: [], pairs: [] };
+    if (conditionalTriggersHeld(this.#observations) || this.#triggers.length || this.#lifeDecision || this.#active && this.#active.coordinator.viewFor(actor).frame.status !== "completed") return { sources: [], targets: [], pairs: [] };
     return attackOptions(this.#board, this.#progression, actor, this.#cards, this.#keywordGrants);
   }
   attack(actor: Seat, requestId: string, expected: V3MatchContext, source: Readonly<CardObjectRef>, target: Readonly<CardObjectRef>) {
@@ -258,11 +272,12 @@ export class V3SyntheticMatchCoordinator {
   #acceptBattle(result: { movement: MovementState; progression: Progression; events: readonly MovementEvent[]; deferredKO?: boolean }, counters: BattleCounters, pendingLife: LifeDecision | null) {
     ensureMove(this.#ruleEvents.length + result.events.length <= 512, "v3-match-rule-event-limit"); this.#checkNewEvents(result.events);
     const triggers = enqueueMovementTriggers(result.events, this.#cards);
-    const progression = result.deferredKO && !triggers.length ? finishDamageStep(result.progression) : result.progression;
+    const held = conditionalTriggersHeld(this.#observationDraft!);
+    const progression = result.deferredKO && !triggers.length && !held ? finishDamageStep(result.progression) : result.progression;
     this.#board = result.movement; this.#progression = progression; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...result.events]);
     this.#statEffects = pruneStatEffects(this.#board, this.#statEffects); this.#triggers = freezeMovement([...this.#triggers, ...triggers]);
     this.#keywordGrants = pruneKeywordGrants(this.#board, this.#keywordGrants);
-    this.#battleCounters = progression.battle ? counters : []; this.#lifeDecision = pendingLife; this.#damageSettling = !!result.deferredKO && triggers.length > 0;
+    this.#battleCounters = progression.battle ? counters : []; this.#lifeDecision = pendingLife; this.#damageSettling = !!result.deferredKO && (triggers.length > 0 || held);
   }
   battleDecision(actor: Seat, requestId: string, expected: V3MatchContext, decision: "passBlock" | "endCounter") {
     return this.#run(actor, requestId, expected, { kind: decision }, () => {
@@ -303,10 +318,10 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
-      return card.definition.effects.filter(card.definition.schemaVersion === "3.0.0-subset.20" ? isInteractiveMainEvent : isSimpleMainEvent).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
+      return card.definition.effects.filter(card.definition.schemaVersion !== "3.0.0-subset.19" ? isInteractiveMainEvent : isSimpleMainEvent).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
         enabled: this.#board.players[actor].activeDon.length >= cost,
         sourceToken: createHmac("sha256", this.#key).update(JSON.stringify(["v3-main-event.1", this.#board.matchId, actor, this.context(), source, "hand", effect.id, cost, card.definitionHash])).digest("hex") }));
     }));
@@ -323,7 +338,7 @@ export class V3SyntheticMatchCoordinator {
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source: prepared.source }, movement: prepared.movement, progression: this.#progression,
         signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
         mainEventCause: { event: prepared.event }, checkEvents: this.#checkNewEvents });
-      if (card.definition.schemaVersion === "3.0.0-subset.20") {
+      if (card.definition.schemaVersion !== "3.0.0-subset.19") {
         // First selection is validated privately. Publication commits use, not future choices/work.
         for (let step = 0; step < 32 && coordinator.viewFor(actor).frame.status === "ready"; step++) coordinator.advance(actor, `event-declaration-${step}`, coordinator.context());
         ensureMove(coordinator.viewFor(actor).frame.status !== "ready", "v3-main-event-declaration-limit");
@@ -417,10 +432,16 @@ export class V3SyntheticMatchCoordinator {
           const result = new MovementStore(board).commit({ transactionId: hash(`${board.matchId}:${requestId}:${work.token}`), matchId: board.matchId,
             expectedRevision: board.revision, turnNumber: progression.turnNumber, actor: player, effectController: null, source: null, mode: "rule", resolutionId: null, operations }, { status: "certifiedNone" });
           board = result.state; ruleEvents.push(...result.events); ensureMove(ruleEvents.length <= 512, "v3-match-rule-event-limit");
+          // Turn-boundary events use the incoming turn's player and expired modifiers.
+          this.#observationDraft = observeConditionalTriggers(this.#observationDraft!, result.events, this.#cards, progression.activePlayer, statEffects, keywordGrants);
         }
         const outcome = deckOutOutcome(board);
         if (outcome) {
           progression = applySystemEvent(progression, progression.revision, { kind: "finishGame", winner: outcome.winner, reason: outcome.reason });
+          this.#archive(); this.#board = board; this.#progression = progression; this.#ruleEvents = freezeMovement(ruleEvents);
+          this.#statEffects = pruneStatEffects(board, statEffects); this.#keywordGrants = pruneKeywordGrants(board, keywordGrants); this.#usage.clear(); return;
+        }
+        if (conditionalTriggersHeld(this.#observationDraft!)) {
           this.#archive(); this.#board = board; this.#progression = progression; this.#ruleEvents = freezeMovement(ruleEvents);
           this.#statEffects = pruneStatEffects(board, statEffects); this.#keywordGrants = pruneKeywordGrants(board, keywordGrants); this.#usage.clear(); return;
         }
@@ -443,6 +464,7 @@ export class V3SyntheticMatchCoordinator {
     const heldId = this.#board.players.flatMap(zones => zones.resolving)[0], held = heldId ? this.#board.cards[heldId]! : null;
     return freezeMovement({ mode: this.#reviewed ? "v3-reviewed-session" as const : "v3-synthetic-session" as const, context: this.context(), movement: active?.movement ?? projectV3Movement(this.#board, viewer),
       frame: active?.frame ?? null, turnNumber: this.#progression.turnNumber, activePlayer: this.#progression.activePlayer, phase: this.#progression.phase,
+      conditionalTriggerHold: conditionalTriggersHeld(this.#observations),
       mainEvent: this.#active?.mainEventCost !== undefined && active?.frame.status !== "completed" ? { cardId: this.#active.cardId, effectId: this.#active.effectId, actor: this.#active.actor, paidCost: this.#active.mainEventCost } : null,
       gate: waitingTriggers ? "trigger" as const : this.#progression.gate.kind, resolutionActor: this.#active?.actor ?? null, history: [...this.#history],
       triggerPolicy: SYNTHETIC_TRIGGER_POLICY, pendingTriggerCount: this.#triggers.length, triggerChooser: chooser,
@@ -467,7 +489,7 @@ export class V3SyntheticMatchCoordinator {
     ensureMove(actor === 0 || actor === 1, "v3-match-actor"); const object = getCard(this.#board, source), card = this.#cards.get(object.cardId);
     ensureMove(object.owner === actor && object.controller === actor && card, "v3-match-source-policy");
     const at = location(this.#board, source.instanceId);
-    const ready = !this.#triggers.length && object.faceUp && at.player === actor && (!this.#active || this.#active.coordinator.viewFor(actor).frame.status === "completed") && checkTiming(this.#progression, actor, "mainEffect").allowed;
+    const ready = !conditionalTriggersHeld(this.#observations) && !this.#triggers.length && object.faceUp && at.player === actor && (!this.#active || this.#active.coordinator.viewFor(actor).frame.status === "completed") && checkTiming(this.#progression, actor, "mainEffect").allowed;
     return card.definition.effects.filter(effect => effect.kind === "activated" && effect.timing.type === "MAIN").map(effect => {
       const limit = effect.usageLimit?.count ?? null, usageKey = JSON.stringify([this.#board.turnNumber, actor, source.instanceId, source.generation, effect.id]);
       const used = this.#usage.get(usageKey) ?? 0;
@@ -499,7 +521,7 @@ export class V3SyntheticMatchCoordinator {
   }
   snapshotForCoordinator() {
     return freezeMovement({ context: this.context(), movement: this.#board, progression: this.#progression, active: this.#active?.coordinator.snapshotForCoordinator() ?? null,
-      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, pendingTriggers: this.#triggers, battleCounters: this.#battleCounters, pendingLife: this.#lifeDecision, damageEffectsPending: this.#damageSettling });
+      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, pendingTriggers: this.#triggers, triggerObservations: this.#observations, battleCounters: this.#battleCounters, pendingLife: this.#lifeDecision, damageEffectsPending: this.#damageSettling });
   }
   toJSON(): never { throw new Error("v3-match-server-only"); }
 }

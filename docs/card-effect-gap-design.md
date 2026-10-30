@@ -6,6 +6,7 @@
 
 後続の実装更新: PR00/01は`af3711a`、PR02a/bはCARD_NAME/CARD_METADATA/HAS_ABILITYとして実装しました。
 本書の提案名とは区別し、現行の正確な構造は`card-effect-pr02.md`を参照してください。それ以外の提案を実装済みと扱わないでください。
+PR06aの後続実装は`card-effect-pr06a.md`を参照。ON_EVENTは候補検出のみで、解決・順序は未実装です。本書の提案名をそのままDSLへ追加したものではありません。
 
 ## 1. 方針
 

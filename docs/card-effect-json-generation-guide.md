@@ -1,6 +1,7 @@
 # ChatGPT向け カード効果JSON生成ガイド
 
 更新日: 2026-10-30。初回調査`e6ba075`、PR05b実装開始`f3bdb18`。
+PR06a（基準`fe6e037`）で新21にON_EVENT候補検出・TURN_ISを追加しました。新ON_EVENTは**解決不可**です。`card-effect-pr06a.md`の保留条件を読み、実行対応済みのカードとして生成・承認しないでください。
 新20で限定的なSELECT/IF/対象操作を伴うイベントMAINに対応しました。[PR05b](card-effect-pr05b.md)の許可範囲・公開境界・停止条件を必ず確認してください。
 旧19は自己DRAW/SEQUENCEだけの一括イベントMAINです。[PR05a](card-effect-pr05a.md)参照。対象選択は新20と混ぜずに扱ってください。
 PR04のleader/character/stage MAINの個体別入口は[PR04](card-effect-pr04.md)を参照してください。

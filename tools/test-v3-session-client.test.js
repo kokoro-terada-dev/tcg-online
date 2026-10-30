@@ -8,6 +8,15 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL("../src/testMatch/
 const { acceptV3SessionView, v3SessionCommand } = module.exports;
 function view() { return { mode: 'v3-synthetic-session', matchId: 'm', localPlayerIndex: 0, activePlayer: 0, turnNumber: 1, phase: 'main', gate: 'idle', frame: null, resolutionActor: null,
   context: { revision: 0, movementRevision: 0, progressionRevision: 0, resolutionId: null, frameRevision: null }, movement: { revision: 0 }, effects: [{ sourceToken: 'main-token', effectId: 'draw', enabled: true }], playableCards: [] }; }
+
+test('conditional-trigger hold blocks new commands but preserves current choice/resume permissions', () => {
+  const v = { ...view(), conditionalTriggerHold: true };
+  assert.throws(() => v3SessionCommand(v, 'endTurn', 'held'), /held/);
+  assert.throws(() => v3SessionCommand(v, 'activate', 'held-main', { sourceToken: 'main-token', effectId: 'draw' }), /held/);
+  v.frame = { status: 'waitingForChoice', choice: { selectionId: 'selection', chooser: 0, min: 0, max: 1, options: [] } };
+  v.gate = 'choice'; v.resolutionActor = 0;
+  assert.equal(v3SessionCommand(v, 'answer', 'continue', { tokens: [] }).selectionId, 'selection');
+});
 test('session views allow new resolution IDs only with increasing session revisions, without seat or board rollback', () => {
   const v = view(); assert.equal(acceptV3SessionView(null, v, 'm'), true);
   const next = { ...v, frame: { resolutionId: 'r', revision: 0 }, context: { ...v.context, revision: 1, resolutionId: 'r', frameRevision: 0 } };

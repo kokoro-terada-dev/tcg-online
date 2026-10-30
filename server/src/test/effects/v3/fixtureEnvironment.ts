@@ -35,6 +35,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     return field === "cost" || field === "power" ? derived.current[field] : UNKNOWN;
   };
   const evaluate: ResolutionEnvironment["evaluate"] = (predicate, bindings, candidate) => {
+    if (predicate.type === "TURN_IS") return activePlayer === seat(predicate.player);
     if (predicate.type === "all" || predicate.type === "any") {
       let unknown = false;
       for (const child of predicate.conditions) {

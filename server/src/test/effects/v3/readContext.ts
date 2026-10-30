@@ -16,6 +16,8 @@ export type EventContext = Readonly<{
   effectController: Player; chooser: Player | null; sourceOwner: Player; sourceController: Player;
   source: Readonly<CardObjectRef>; eventId: string | null; cause: DeepReadonly<EventCause> | null;
   origin: "activation" | "movement" | "attack"; attack: Readonly<{ battleId: string; attacker: Player }> | null;
+  movement?: Readonly<{ groupId: string; operationIndex: number; targetBefore: Readonly<CardObjectRef> | null;
+    targetAfter: Readonly<CardObjectRef> | null; from: MovementEvent["from"]; to: MovementEvent["to"]; isKO: boolean }>;
 }>;
 export type EventOrigin = Readonly<{ type: "movement"; event: DeepReadonly<MovementEvent> }> |
   Readonly<{ type: "attack"; eventId: string; battleId: string; attacker: Player }>;
@@ -35,7 +37,11 @@ export function readEventContext(state: MovementState, identity: ResolutionIdent
   if (origin?.type === "attack") { id(origin.eventId); id(origin.battleId); player(origin.attacker); }
   return freezeMovement({ effectController: identity.actor, chooser, sourceOwner: source.owner, sourceController: source.controller,
     source: { ...identity.source }, eventId: event?.eventId ?? (origin?.type === "attack" ? origin.eventId : null), cause: event ? structuredClone(event.cause) : null,
-    origin: origin?.type ?? "activation", attack: origin?.type === "attack" ? { battleId: origin.battleId, attacker: origin.attacker } : null });
+    origin: origin?.type ?? "activation", attack: origin?.type === "attack" ? { battleId: origin.battleId, attacker: origin.attacker } : null,
+    ...(event ? { movement: { groupId: event.groupId, operationIndex: event.operationIndex,
+      targetBefore: event.before ? { instanceId: event.before.instanceId, generation: event.before.generation } : null,
+      targetAfter: event.after ? { instanceId: event.after.instanceId, generation: event.after.generation } : null,
+      from: event.from, to: event.to, isKO: event.isKO } } : {}) });
 }
 
 export type CardMetadataFacts = Readonly<{ name: KnownOrUnknown<string>; traits: KnownOrUnknown<readonly string[]>;

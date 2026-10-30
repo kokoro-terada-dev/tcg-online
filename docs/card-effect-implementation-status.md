@@ -1,14 +1,14 @@
 # 効果JSON生成に関する実装状況
 
-更新: PR05b / 2026-10-30。基準`f3bdb18`。選択を伴うイベントMAINは`card-effect-pr05b.md`、旧一括処理は`card-effect-pr05a.md`を参照。
+更新: PR06a / 2026-10-30。基準`fe6e037`。条件付き誘発の候補検出は`card-effect-pr06a.md`を参照。解決・順序はPR06bへ保留。イベントMAINは`card-effect-pr05b.md`を参照。
 対象は隔離v3エンジン。通常対戦・一人回し・旧効果スキーマと混ぜないでください。
 
 ## 対応段階の区別
 
 | 層 | 状態 | 注意 |
 | --- | --- | --- |
-| JSON構造 | 選択付きイベントMAINは`3.0.0-subset.20` / Compiler `v3-subset-compiler.20.1`。旧16〜19を併存 | 旧承認のhashを変更しない。SchemaだけではCompilerと同等にならない |
-| Registry | 18/19/20は同じ44命令・9カテゴリー。旧17は41、旧16は38（replacementは空） | 新命令なし。19と20ではイベントMAINの許可範囲・確定境界が異なる |
+| JSON構造 | 新21 / Compiler `v3-subset-compiler.21.1`で条件付き誘発の候補検出。旧16〜20を併存 | ON_EVENTは解決不可。旧承認のhashを変更しない |
+| Registry | 新21は46登録（ON_EVENTは候補検出のみ）。18/19/20は44、旧17は41、旧16は38 | 検出対応と解決対応を区別する。replacementは空 |
 | 解決機械 | 選択・支払い・work待ち・保存データからの再開を実装 | 本番DB保存/ネットワーク再接続復旧ではない |
 | 盤面適用 | 限定的な移動・修正・キーワード・誘発・バトル | 実行時の領域/所有者/世代/非公開情報チェックあり |
 | 実カード | 14種類、指定プリセットのみ独立承認 | 生成JSONを配置しただけでは使用不可 |
@@ -27,7 +27,8 @@
 - 選択: 公開の場/trash/public、自分手札、自分active/rest/attached DON、自分が見たデッキ上の集合。
 - アクション: 命令一覧JSONの15種。移動・KO・REST・SET_ACTIVE・DRAW・サーチ/公開/順序・分岐等。
 - 修正: power/costの期間付き増減、BLOCKER/RUSH/RUSH_CHARACTER/CANNOT_BE_BLOCKED付与。TURN_END/BATTLE_ENDで失効。付与先はleader/character、leaderへのRUSH系付与は不可。
-- 誘発: 自身のON_PLAY/ON_ATTACK/ON_KO、場のON_OPPONENT_ATTACK。条件付き誘発成立の判定は未対応。
+- 誘発: 旧ON_PLAY/ON_ATTACK/ON_KO/ON_OPPONENT_ATTACKの動作を維持。新21のON_EVENTで登場・KO・移動の条件を共通Predicateで判定。TRUE/UNKNOWNはHELD、FALSEはNOT_MATCHED。新候補の解決は未対応。
+- PR06a: TURN_IS、発生時の移動transaction前後の読み取り、世代別候補、再送重複排除、非公開Query/複数移動のUNKNOWN保留。候補の詳細はサーバー内部のみ。旧16〜20のhashと14枚の承認は変更なし。
 - カウンターイベントとライフトリガー: 追加発動コスト等がない限定形式。
 - バトル進行・手札カウンター・ブロック・ダメージ・デッキ切れ/ライフ0へのダメージによる勝敗。
 - 原資料と定義・Compiler・Registry・Rulesetのハッシュを照合する独立承認。
@@ -38,9 +39,9 @@
 | --- | --- |
 | メタデータ条件の未対応範囲 | 任意個体を指定する参照、メタデータ変更効果、公式名称alias、正規化による同一視は未対応。公開leader等の集合Queryは新18で対応 |
 | 未知の能力タグ | DOUBLE_ATTACK等は未対応。存在しないものとしてfalseにせずCompilerで拒否 |
-| 集合条件の未対応範囲 | 複数領域の合算COUNT、SUM、ネストQuery、deck/life/相手手札/DONのQueryは未対応。条件付き誘発成立の解禁もしない |
+| 集合条件の未対応範囲 | 複数領域の合算COUNT、SUM、ネストQuery、deck/life/相手手札/DONのQueryは未対応。ON_EVENTの非公開QueryはUNKNOWN保留 |
 | 自分ターン/登場ターン/原因の条件 | 汎用Value/Predicateなし。MAINのタイミング制約は自分ターン条件の代用ではない |
-| 条件付き誘発成立 | triggeredのactivationConditionsは空all必須。解決時IFへ勝手に変更不可 |
+| 条件付き誘発 | 新21のON_EVENTのみ発生時条件を評価。旧timingは空all必須を維持。新候補の解決・順序・任意発動・復旧はPR06b以降 |
 | 継続効果 | 常時条件の再計算・常時ModifierRegistryなし |
 | 置換/KO耐性/効果を受けない/対象不可 | replacement登録0件。Movementの低層機能をDSL対応と見なさない |
 | イベントMAINの未対応範囲 | 追加発動コスト、任意の発動辞退、SOURCE参照/移動、deck検索/順序、継続/置換等は未対応。20のSELECT/IF/対象操作の具体的範囲はPR05b資料を参照 |

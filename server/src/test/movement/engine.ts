@@ -2,6 +2,7 @@ import type { CardObjectRef, MoveCause } from "../effects/types";
 import type { EventCause, Location, MovementCard, MovementEvent, MovementOperation, MovementRules, MovementState, MovementTransaction, MovementZone, MoveDestination, Proposal, RevealGrant, TransactionResult } from "./types";
 import { ensureMove, freezeMovement, getCard, id, location, MOVEMENT_LIMITS, MovementError, physicalArea, player, reference, validateMovementState } from "./state";
 import { validateMovementTransaction } from "./validation";
+import { inheritMovementTracking, recordMovementOccurrence } from "./occurrence";
 
 type Draft = Omit<MovementState, "players" | "cards" | "reveals" | "appliedTransactions" | "revision" | "turnNumber"> & {
   revision: number; turnNumber: number; players: [Record<MovementZone, (string | null)[]>, Record<MovementZone, (string | null)[]>];
@@ -183,12 +184,12 @@ function applyTransaction(state: MovementState, input: MovementTransaction, rule
 export class MovementStore {
   #state: MovementState;
   #busy = false;
-  constructor(state: MovementState) { validateMovementState(state); this.#state = freezeMovement(structuredClone(state)); }
+  constructor(state: MovementState) { validateMovementState(state); this.#state = freezeMovement(structuredClone(state)); inheritMovementTracking(state, this.#state); }
   snapshot(): MovementState { return this.#state; }
   toJSON(): never { throw new MovementError("server-only-movement-store"); }
   commit(transaction: MovementTransaction, rules: MovementRules): TransactionResult {
     ensureMove(!this.#busy, "reentrant-movement-transaction"); this.#busy = true;
-    try { const result = applyTransaction(this.#state, transaction, rules); this.#state = result.state; return result; }
+    try { const result = applyTransaction(this.#state, transaction, rules); recordMovementOccurrence(this.#state, result.state, result.events); this.#state = result.state; return result; }
     finally { this.#busy = false; }
   }
 }
