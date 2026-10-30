@@ -81,6 +81,9 @@ base/originalとcurrentを区別し、cost/power/counter/traits/colors/attribute
 
 ### F02 集合の存在・枚数・比較
 
+PR03更新（2026-10-30）: EXISTS/COUNT/QUERY_CARDS、SOURCE除外、共通filterをsubset.18で実装しました。
+対応範囲・UNKNOWN・旧承認の互換性は`card-effect-pr03.md`を参照。以下は当初の提案で、SUM等は未対応です。
+
 - 代表: EB01-012「他の『キャベンディッシュ』がいない」、OP01-039「キャラが３枚以上」。
 - 提案: EXISTS、COUNT、SUM、QUERY_CARDS、SOURCE以外という同一個体除外。SUMは必要な参照型だけ後段で公開。
 - 改修: Predicate/Selectorの共通探索、範囲上限、元々/現在値の指定。

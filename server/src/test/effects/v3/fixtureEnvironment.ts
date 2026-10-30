@@ -29,6 +29,9 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     if (derived === UNKNOWN) return UNKNOWN;
     if (field === "rotated") return derived.rotated;
     if (field === "cardType") return derived.cardType;
+    if (field === "printed" || field === "current") {
+      const stat = parts[2]; return stat === "cost" || stat === "power" ? derived[field][stat] : UNKNOWN;
+    }
     return field === "cost" || field === "power" ? derived.current[field] : UNKNOWN;
   };
   const evaluate: ResolutionEnvironment["evaluate"] = (predicate, bindings, candidate) => {
@@ -43,6 +46,46 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       return unknown ? "unknown" : predicate.type === "all";
     }
     if (predicate.type === "not") { const result = evaluate(predicate.condition, bindings, candidate); return result === "unknown" ? result : !result; }
+    if (predicate.type === "EXISTS" || predicate.type === "COUNT") {
+      const query = predicate.query, state = board();
+      try {
+        const publicScope = ["leader", "character", "stage", "trash", "public"].includes(query.zone) && query.visibility === "PUBLIC" && query.faceUpOnly;
+        const ownHand = query.zone === "hand" && query.owner === "SELF" && query.controller === "SELF" && query.visibility === "OWNER_ONLY" && !query.faceUpOnly;
+        if (!publicScope && !ownHand) return "unknown";
+        // Do not reinterpret an incomplete/hidden collection as an empty collection.
+        if (query.excludeSource) getCard(state, context.source);
+        const ids = state.players[seat(query.owner)][query.zone];
+        if (ids.length > 256 || new Set(ids.filter(id => id !== null)).size !== ids.filter(id => id !== null).length) return "unknown";
+        for (const id of ids) {
+          if (id === null) continue;
+          const card = state.cards[id]; if (!card) return "unknown";
+          const at = location(state, id);
+          if (at.player !== seat(query.owner) || at.zone !== query.zone || card.kind === "unknown") return "unknown";
+          const viewers = ([0, 1] as const).filter(viewer => visibleTo(state, card, at, viewer));
+          const authorized = query.visibility === "PUBLIC" ? card.faceUp && viewers.length === 2 :
+            at.zone === "hand" && at.player === context.effectController && card.owner === context.effectController && card.controller === context.effectController && viewers.length === 1 && viewers[0] === context.effectController;
+          if (!authorized) return "unknown";
+        }
+        const scope = { ...query, type: "CARDS" as const, chooser: "SELF" as const, min: 0, max: 50,
+          selectionMode: "SELECT" as const, order: "UNORDERED" as const, onInsufficient: "fail" as const };
+        const rows = environment.candidates(scope, bindings);
+        let count = 0, unknown = false;
+        for (const row of rows) {
+          if (query.excludeSource && row.ref.instanceId === context.source.instanceId && row.ref.generation === context.source.generation) continue;
+          const matches = evaluate(query.filters, bindings, row.ref);
+          if (matches === "unknown") unknown = true;
+          else if (matches) count++;
+        }
+        if (unknown) return "unknown";
+        if (predicate.type === "EXISTS") return count > 0;
+        const value = predicate.value;
+        switch (predicate.op) {
+          case "eq": return count === value; case "ne": return count !== value;
+          case "lt": return count < value; case "lte": return count <= value;
+          case "gt": return count > value; case "gte": return count >= value;
+        }
+      } catch { return "unknown"; }
+    }
     if (predicate.type === "CARD_NAME" || predicate.type === "CARD_METADATA" || predicate.type === "HAS_ABILITY") {
       const ref = predicate.subject === "SOURCE" ? identity.source : candidate;
       if (!ref) return "unknown";
@@ -70,7 +113,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     const operations = { lt: () => left < right, lte: () => left <= right, gt: () => left > right, gte: () => left >= right };
     return operations[predicate.op]();
   };
-  return {
+  const environment: ResolutionEnvironment = {
     revision: () => board().revision, now, evaluate,
     peekTop: amount => board().players[identity.actor].deck.slice(0, amount).map(id => ({ instanceId: id!, generation: board().cards[id!]!.generation })),
     canPayCosts: (costs, discarded, returned) => {
@@ -141,4 +184,5 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       });
     },
   };
+  return environment;
 }

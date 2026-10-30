@@ -1,19 +1,19 @@
-// Snapshot of server/src/test/effects/v3/dsl.ts after PR02a/PR02b.
-// Documentation only. New metadata predicates require subset.17; legacy subset.16 remains unchanged.
 import type { DeepReadonly } from "../types";
 export type Player = "SELF" | "OPPONENT";
 export type DonZone = "activeDon" | "restDon" | "attachedDon";
 export type SourceSpan = { start: number; end: number };
 export type NodeMeta = { id?: string; sourceSpan?: SourceSpan };
 export type CardField = "cost" | "power" | "cardType" | "rotated";
-export type Value = number | string | boolean | null | { ref: "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `bindings.${string}.count` };
+export type Value = number | string | boolean | null | { ref: "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "current"}.${"cost" | "power"}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
 export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
 // Declaration merging extends the typed vocabulary; parsers must also be registered.
 export interface PredicateMap {
+  EXISTS: NodeMeta & { type: "EXISTS"; query: Node<"query"> };
+  COUNT: NodeMeta & { type: "COUNT"; query: Node<"query">; op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte"; value: number };
   CARD_NAME: NodeMeta & { type: "CARD_NAME"; subject: CardSubject; basis: MetadataBasis; op: "eq" | "ne"; value: string };
   CARD_METADATA: NodeMeta & { type: "CARD_METADATA"; subject: CardSubject; basis: MetadataBasis; field: "traits" | "colors" | "attributes";
     match: "ANY" | "ALL" | "NONE" | "EXACT"; comparison: "EXACT" | "CONTAINS"; values: string[] };
@@ -47,6 +47,12 @@ export interface CostMap {
   DISCARD_HAND: NodeMeta & { type: "DISCARD_HAND"; count: number };
 }
 export interface ReplacementMap {}
+export interface QueryMap {
+  QUERY_CARDS: NodeMeta & { type: "QUERY_CARDS"; owner: Player; controller: Player;
+    cardTypes: ("leader" | "character" | "stage" | "event")[]; filters: Predicate; excludeSource: boolean;
+  } & ({ zone: "leader" | "character" | "stage" | "trash" | "public"; visibility: "PUBLIC"; faceUpOnly: true } |
+    { zone: "hand"; owner: "SELF"; controller: "SELF"; visibility: "OWNER_ONLY"; faceUpOnly: false });
+}
 export interface SelectorMap {
   BOUND_CARDS: NodeMeta & { type: "BOUND_CARDS"; cards: CardSetRef; excludeCards: CardSetRef | null;
     owner: "SELF"; controller: "SELF"; chooser: "SELF"; zone: "deck"; visibility: "OWNER_ONLY"; faceUpOnly: false;
@@ -79,7 +85,7 @@ export interface KeywordMap {
   RUSH_CHARACTER: NodeMeta & { type: "RUSH_CHARACTER" };
   CANNOT_BE_BLOCKED: NodeMeta & { type: "CANNOT_BE_BLOCKED" };
 }
-export interface Categories { predicate: PredicateMap; action: ActionMap; cost: CostMap; replacement: ReplacementMap; selector: SelectorMap; duration: DurationMap; timing: TimingMap; keyword: KeywordMap }
+export interface Categories { predicate: PredicateMap; action: ActionMap; cost: CostMap; replacement: ReplacementMap; selector: SelectorMap; duration: DurationMap; timing: TimingMap; keyword: KeywordMap; query: QueryMap }
 export type Category = keyof Categories;
 export type Node<C extends Category> = Categories[C][keyof Categories[C]];
 export type Predicate = Node<"predicate">;

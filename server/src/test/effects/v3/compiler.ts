@@ -4,10 +4,11 @@ import type { AbilityTag, CardDefinition, CardSetRef, CardSubject, Category, Com
 
 export const COMPILER_VERSION = "v3-subset-compiler.16.3";
 export const METADATA_COMPILER_VERSION = "v3-subset-compiler.17.1";
+export const QUERY_COMPILER_VERSION = "v3-subset-compiler.18.1";
 export const ABILITY_TAGS: readonly AbilityTag[] = ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED", "MAIN", "ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_KO", "COUNTER", "TRIGGER"];
 export function compilerVersionForSchema(schema: SchemaVersion): string {
-  ensureMove(schema === "3.0.0-subset.16" || schema === "3.0.0-subset.17", "unsupported-v3-schema-version");
-  return schema === "3.0.0-subset.17" ? METADATA_COMPILER_VERSION : COMPILER_VERSION;
+  ensureMove(schema === "3.0.0-subset.16" || schema === "3.0.0-subset.17" || schema === "3.0.0-subset.18", "unsupported-v3-schema-version");
+  return schema === "3.0.0-subset.18" ? QUERY_COMPILER_VERSION : schema === "3.0.0-subset.17" ? METADATA_COMPILER_VERSION : COMPILER_VERSION;
 }
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -80,11 +81,11 @@ export class V3Registry<C extends Category> {
     return parsed;
   }
 }
-export type V3Registries = { [C in Category]: V3Registry<C> };
+export type V3Registries = { [C in Exclude<Category, "query">]: V3Registry<C> } & { query?: V3Registry<"query"> };
 export function v3RegistryHash(registries: V3Registries): string {
   return digest(canonical(Object.fromEntries(Object.entries(registries).map(([category, registry]) => [category, registry.manifest()]))));
 }
-function value(input: unknown, bindings: ReadonlyMap<string, number>, candidateAllowed: boolean): Value {
+function value(input: unknown, bindings: ReadonlyMap<string, number>, candidateAllowed: boolean, queryProfile: boolean): Value {
   if (input === null || typeof input === "boolean") return input;
   if (typeof input === "string") { ensureMove(input.length <= 1000, "v3-literal-too-long"); return input; }
   if (typeof input === "number") { ensureMove(Number.isSafeInteger(input), "v3-invalid-numeric-literal"); return input; }
@@ -92,8 +93,9 @@ function value(input: unknown, bindings: ReadonlyMap<string, number>, candidateA
   ensureMove(typeof input.ref === "string", "unsupported-v3-reference");
   const binding = /^bindings\.([A-Za-z][A-Za-z0-9_]{0,63})\.count$/.exec(input.ref);
   const field = /^(SOURCE|CANDIDATE)\.(cost|power|cardType|rotated)$/.exec(input.ref);
+  const basedField = queryProfile ? /^(SOURCE|CANDIDATE)\.(printed|current)\.(cost|power)$/.exec(input.ref) : null;
   ensureMove(["SELF.lifeCount", "SELF.handCount", "OPPONENT.lifeCount", "OPPONENT.handCount"].includes(input.ref) ||
-    binding && bindings.has(binding[1]!) || field && (field[1] === "SOURCE" || candidateAllowed), "unsupported-or-out-of-scope-v3-reference");
+    binding && bindings.has(binding[1]!) || field && (field[1] === "SOURCE" || candidateAllowed) || basedField && (basedField[1] === "SOURCE" || candidateAllowed), "unsupported-or-out-of-scope-v3-reference");
   return { ref: input.ref as Extract<Value, object>["ref"] };
 }
 function valueType(value: Value): string {
@@ -103,7 +105,7 @@ function valueType(value: Value): string {
 export function builtinV3Registries(schema: SchemaVersion = "3.0.0-subset.16"): V3Registries {
   compilerVersionForSchema(schema);
   const r: V3Registries = { predicate: new V3Registry(), action: new V3Registry(), cost: new V3Registry(), replacement: new V3Registry(), selector: new V3Registry(), duration: new V3Registry(), timing: new V3Registry(), keyword: new V3Registry() };
-  if (schema === "3.0.0-subset.17") {
+  if (schema !== "3.0.0-subset.16") {
     const text = (input: unknown): string => { ensureMove(typeof input === "string" && input.trim().length > 0 && input.length <= 300, "v3-invalid-metadata-literal"); return input; };
     const basis = (input: unknown): "PRINTED" | "CURRENT" => { ensureMove(input === "PRINTED" || input === "CURRENT", "v3-invalid-metadata-basis"); return input; };
     r.predicate.register("CARD_NAME", "1", (n, c) => {
@@ -127,6 +129,30 @@ export function builtinV3Registries(schema: SchemaVersion = "3.0.0-subset.16"): 
       ensureMove(n.basis === "PRINTED" || n.basis === "CURRENT" || n.basis === "GRANTED", "v3-invalid-ability-basis");
       ensureMove(n.basis !== "GRANTED" || ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"].includes(n.ability as string), "v3-unsupported-granted-ability");
       return { type: "HAS_ABILITY", ...meta, subject: c.subject(n.subject), basis: n.basis, ability: n.ability as AbilityTag };
+    });
+  }
+  if (schema === "3.0.0-subset.18") {
+    r.query = new V3Registry<"query">();
+    r.query.register("QUERY_CARDS", "1", (n, c) => {
+      const meta = c.fields(n, ["owner", "controller", "zone", "visibility", "faceUpOnly", "cardTypes", "filters", "excludeSource"]);
+      ensureMove(["leader", "character", "stage", "trash", "public", "hand"].includes(n.zone as string), "v3-unsupported-query-zone");
+      dataArray(n.cardTypes, 4);
+      ensureMove(n.cardTypes.length > 0 && n.cardTypes.every(type => ["leader", "character", "stage", "event"].includes(type as string)), "v3-invalid-query-card-types");
+      // Reuse the selector parser and candidate scope, without registering a selectable query.
+      const scope = c.read("selector", { type: "CARDS", owner: n.owner, controller: n.controller, zone: n.zone, visibility: n.visibility,
+        faceUpOnly: n.faceUpOnly, cardTypes: n.cardTypes, filters: n.filters, excludeSource: n.excludeSource,
+        min: 0, max: 50, chooser: "SELF", selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" });
+      ensureMove(scope.type === "CARDS", "v3-invalid-query-scope");
+      if (scope.excludeSource) c.subject("SOURCE");
+      return { type: "QUERY_CARDS", ...meta, owner: scope.owner, controller: scope.controller, zone: scope.zone,
+        visibility: scope.visibility, faceUpOnly: scope.faceUpOnly, cardTypes: scope.cardTypes, filters: scope.filters, excludeSource: scope.excludeSource } as Node<"query">;
+    });
+    r.predicate.register("EXISTS", "1", (n, c) => ({ type: "EXISTS", ...c.fields(n, ["query"]), query: c.read("query", n.query) }));
+    r.predicate.register("COUNT", "1", (n, c) => {
+      const meta = c.fields(n, ["query", "op", "value"]);
+      ensureMove(["eq", "ne", "lt", "lte", "gt", "gte"].includes(n.op as string), "v3-invalid-query-comparison");
+      ensureMove(typeof n.value === "number" && Number.isSafeInteger(n.value) && n.value >= 0 && n.value <= 256, "v3-invalid-query-count");
+      return { type: "COUNT", ...meta, query: c.read("query", n.query), op: n.op as Extract<Node<"predicate">, { type: "COUNT" }>["op"], value: n.value };
     });
   }
   for (const type of ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"] as const) r.keyword.register(type, "1", (n, c) => ({ type, ...c.fields(n, []) }));
@@ -240,7 +266,7 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17", "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18", "unsupported-v3-schema-version");
   const schemaVersion = input.schemaVersion, compilerVersion = compilerVersionForSchema(schemaVersion);
   registries ??= builtinV3Registries(schemaVersion);
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
@@ -262,16 +288,22 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
   Object.values(registries).forEach(registry => registry.seal());
   const registryHash = v3RegistryHash(registries);
   const used = new Set<string>(), ids = new Set<string>();
-  let bindings = new Map<string, number>(), candidateAllowed = false, currentTiming: string | null = null;
+  let bindings = new Map<string, number>(), candidateAllowed = false, currentTiming: string | null = null, parsingQuery = false;
   const context: CompileContext = {
     read(category, node) {
       ensureMove(node && typeof node === "object" && !Array.isArray(node), "v3-node-object-required");
       const input = node as Record<string, unknown>; const type = label(input.type);
-      used.add(`${category}:${type}`); return registries[category].parse(type, input, context);
+      const registry = registries[category]; ensureMove(registry, `unsupported-v3-category:${category}`);
+      used.add(`${category}:${type}`);
+      if (category === "query") {
+        ensureMove(!parsingQuery, "v3-nested-query-unsupported"); parsingQuery = true;
+        try { return registry.parse(type, input, context) as Node<typeof category>; } finally { parsingQuery = false; }
+      }
+      return registry.parse(type, input, context) as Node<typeof category>;
     },
     list(category, nodes) { dataArray(nodes, 128); return nodes.map(node => context.read(category, node)); },
     value(input) {
-      const parsed = value(input, bindings, candidateAllowed);
+      const parsed = value(input, bindings, candidateAllowed, schemaVersion === "3.0.0-subset.18");
       ensureMove(currentTiming !== "ON_KO" || parsed === null || typeof parsed !== "object" || !parsed.ref.startsWith("SOURCE."), "v3-ko-source-facts-unresolved");
       ensureMove(currentTiming !== "TRIGGER" || parsed === null || typeof parsed !== "object" || !parsed.ref.startsWith("SOURCE."), "v3-trigger-source-facts-unresolved");
       return parsed;

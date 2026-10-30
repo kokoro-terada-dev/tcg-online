@@ -1,6 +1,7 @@
 # ChatGPT向け カード効果JSON生成ガイド
 
-更新日: 2026-10-29。初回調査`e6ba075`、PR02実装開始`af3711a`。
+更新日: 2026-10-30。初回調査`e6ba075`、PR03実装開始`4659b2c`。
+PR03のEXISTS/COUNT/QUERY_CARDSと数値の明示printed/current参照はsubset.18です。[PR03](card-effect-pr03.md)を併読してください。
 PR02a/bの新Predicateはsubset.17です。詳細・全パラメータは[PR02](card-effect-pr02.md)を併読してください。
 旧subset.16と承認14枚は併存し、旧hashを維持します。
 対象: **隔離v3の現在の実装**。通常オンライン対戦、一人回し、旧テスト効果形式の仕様ではありません。
@@ -19,12 +20,12 @@ PR02a/bの新Predicateはsubset.17です。詳細・全パラメータは[PR02](
 ### ChatGPTに渡す資料
 
 1. このガイド。
-2. `card-effect-json-schema.json`（旧16）と`card-effect-metadata.schema.json`（新17）: Draft 2020-12。使用するカードのschemaVersionに合わせます。
+2. `card-effect-json-schema.json`（旧16）、`card-effect-metadata.schema.json`（17）、`card-effect-query.schema.json`（18）: Draft 2020-12。使用するカードのschemaVersionに合わせます。
 3. `card-effect-types.ts.txt`: 現在の`dsl.ts`の型定義全文の写し。
-4. `card-effect-supported-operations.json`: 新17の41命令/旧16の38命令のパラメータ、例、profile、実行制約。
-5. `card-effect-json-examples.json`: 15要望への対応/非対応と、全文CardDefinitionの合成例12件。
+4. `card-effect-supported-operations.json`: 18の44命令/17の41命令/旧16の38命令のパラメータ、例、profile、実行制約。
+5. `card-effect-json-examples.json`: 新旧全文CardDefinitionの合成例14件。`card-effect-query-examples.json`: PR03の条件部分の合成全文例3件。
 6. `card-effect-implementation-status.md`: 実装の層と未対応一覧。
-7. `card-effect-pr02.md`: メタデータ/能力タグの意味と互換性。
+7. `card-effect-pr02.md`と`card-effect-pr03.md`: メタデータ/能力タグ/集合の意味と互換性。
 8. 入力CSV、差異一覧、タグ/パターン分析、元の代表例。後者は実行仕様ではなく参考資料。
 
 `validate-card-effect-json.cjs`はCodex/開発者側の検証用です。ChatGPTには任意で渡せます。
@@ -40,7 +41,7 @@ Zod Schemaはありません。正規の実装バリデータは`compileV3CardJs
 
 | キー | 型・制約 |
 | --- | --- |
-| schemaVersion | 必須。新Predicateは`3.0.0-subset.17`。既存形式は`3.0.0-subset.16`も受理 |
+| schemaVersion | 必須。集合条件は`3.0.0-subset.18`、メタデータは17/18。旧16も独立profileとして受理 |
 | cardId | 必須、カード番号。ASCII識別子、100文字以下 |
 | cardVersion | 必須、定義の版。例`draft.1`。同じ番号の変更時は更新する運用を推奨 |
 | name | 必須、空白だけ不可、300文字以下 |
@@ -126,7 +127,8 @@ TRIGGER内はtriggerText、それ以外はtextの範囲。誤ったオフセッ�
 | 依頼のRegistry | 現在の対応物 | 使用できるtype |
 | --- | --- | --- |
 | TriggerRegistry | timing Registry + triggerScheduler.ts | MAIN, ON_PLAY, ON_ATTACK, ON_OPPONENT_ATTACK, ON_KO, COUNTER, TRIGGER |
-| PredicateRegistry | predicate | all, any, not, compare。新17のみCARD_NAME, CARD_METADATA, HAS_ABILITY |
+| PredicateRegistry | predicate | all, any, not, compare。17/18にCARD_NAME, CARD_METADATA, HAS_ABILITY。18にEXISTS, COUNT |
+| QueryRegistry | query | 18のみQUERY_CARDS。条件専用でSELECTのselectorではない |
 | CostRegistry | cost | REST_DON, REST_SOURCE, DISCARD_HAND, DON_RETURN |
 | SelectorRegistry | selector | CARDS, BOUND_CARDS |
 | ActionRegistry | action | BIND_SOURCE, GRANT_KEYWORD, MODIFY_STAT, LOOK_TOP, REVEAL, ORDER_CARDS, RETURN_TO_DECK, DRAW, SEQUENCE, IF, SELECT, MOVE_CARD, KO, REST, SET_ACTIVE |
@@ -162,20 +164,20 @@ CANDIDATE.cost / CANDIDATE.power / CANDIDATE.cardType / CANDIDATE.rotated
 bindings.<既存の束縛名>.count
 ```
 
-CANDIDATEはselector.filters内だけ。SOURCEは場など現在の参照であり、任意の最終情報ではありません。
+CANDIDATEはselector.filtersまたは新18のquery.filters内だけ。SOURCEは場など現在の参照であり、任意の最終情報ではありません。
 不明値は0/null/falseへ置き換えずunknownとして安全停止します。
 
 | 要望 | 記述/可否 |
 | --- | --- |
 | 自分ライフ2枚以下 | 下例A |
-| 相手の場にcost5以上のキャラが存在 | 存在Predicateなし。対象フィルタ`CANDIDATE.cost >= 5`は可能だが、発動条件の存在検査とは別 |
-| 自分リーダーに特定特徴 | SOURCEがそのリーダーなら新17のCARD_METADATA。任意の別リーダーへのQueryは未対応 |
+| 相手の場にcost5以上のキャラが存在 | 新18のEXISTS + QUERY_CARDS（owner/controller:OPPONENT,zone:character）+ compare CANDIDATE.current.cost >= 5。条件付き誘発成立の解禁とは別 |
+| 自分リーダーに特定特徴 | SOURCEがそのリーダーなら17/18のCARD_METADATA。18ではQUERY_CARDSのzone:leaderと同じfilterで存在判定も可能 |
 | 自分ターン中 | 汎用条件として未対応。MAINの発動タイミング制限だけは存在 |
 | このキャラが登場したターン | Predicate未対応。バトルの登場ターン制限実装とは別 |
 | 自分手札5枚以上 | 下例B |
 | AND/OR/NOT | all/any/not、下例C |
 | 原因が相手カード効果 | Predicate未対応。サーバー内の移動原因記録をJSONから参照できない |
-| 対象がSOURCE以外 | selector.excludeSource:true。ref比較の架空命令は作らない |
+| 対象がSOURCE以外 | selector.excludeSource:true、または新18のquery.excludeSource:true。ref比較の架空命令は作らない |
 
 ```json
 {"type":"compare","left":{"ref":"SELF.lifeCount"},"op":"lte","right":2}

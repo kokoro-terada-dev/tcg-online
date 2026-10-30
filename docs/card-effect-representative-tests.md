@@ -60,6 +60,8 @@
 
 ### T05 EB01-012 キャベンディッシュ（PR03/06/09）
 
+PR03: 同名他個体の不在条件の核のみ`server/test/v3-query.cjs`で検証済み。全能力/版差異/裁定の保留は解除しません。
+
 - 原文: 「【登場時】/【アタック時】…他の『キャベンディッシュ』がいない場合…ドン!!2枚までをアクティブ」。
 - 分解: 2timing、leader trait超新星、同名SOURCE以外の自character不存在、DON0〜2active。
 - 不足: metadata、EXISTS否定、DON状態変更、条件の評価時点。
@@ -67,6 +69,8 @@
 - 状態: ruling_required。2timingを2つの別効果へ分ける場合の共有制限も原文に従う。
 
 ### T06 OP01-039 キラー（PR03/07）
+
+PR03: character集合の0/2/3/4枚・SOURCEを含む条件の核のみ検証済み。ON_BLOCK/DON/誘発評価時点は未対応のままです。
 
 - 原文: 「【ドン‼×1】【ブロック時】自分のキャラが３枚以上いる場合、カード1枚を引く」。
 - 分解: attached DON条件、ON_BLOCK、character count>=3、DRAW1。

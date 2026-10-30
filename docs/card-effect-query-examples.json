@@ -1,0 +1,263 @@
+{
+  "basedOnCommit": "4659b2c",
+  "schemaVersion": "3.0.0-subset.18",
+  "note": "Synthetic MAIN/DRAW scaffolding verifies only condition fragments; no real card approval and no new timing.",
+  "examples": [
+    {
+      "title": "EB01-012 condition fragment only: no other named character",
+      "card": {
+        "schemaVersion": "3.0.0-subset.18",
+        "cardId": "EXAMPLE-QUERY-NO-OTHER",
+        "cardVersion": "draft.1",
+        "name": "キャベンディッシュ",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic query condition only; not a complete official card or a ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-QUERY-NO-OTHER"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "main.1",
+            "kind": "activated",
+            "timing": {
+              "type": "MAIN"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "not",
+              "condition": {
+                "type": "EXISTS",
+                "query": {
+                  "type": "QUERY_CARDS",
+                  "owner": "SELF",
+                  "controller": "SELF",
+                  "zone": "character",
+                  "visibility": "PUBLIC",
+                  "faceUpOnly": true,
+                  "cardTypes": [
+                    "character"
+                  ],
+                  "filters": {
+                    "type": "CARD_NAME",
+                    "subject": "CANDIDATE",
+                    "basis": "PRINTED",
+                    "op": "eq",
+                    "value": "キャベンディッシュ"
+                  },
+                  "excludeSource": true
+                }
+              }
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "DRAW",
+                "player": "SELF",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "OP01-039 condition fragment only: at least three characters",
+      "card": {
+        "schemaVersion": "3.0.0-subset.18",
+        "cardId": "EXAMPLE-QUERY-THREE",
+        "cardVersion": "draft.1",
+        "name": "キラー",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic query condition only; not a complete official card or a ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-QUERY-THREE"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "main.1",
+            "kind": "activated",
+            "timing": {
+              "type": "MAIN"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "COUNT",
+              "query": {
+                "type": "QUERY_CARDS",
+                "owner": "SELF",
+                "controller": "SELF",
+                "zone": "character",
+                "visibility": "PUBLIC",
+                "faceUpOnly": true,
+                "cardTypes": [
+                  "character"
+                ],
+                "filters": {
+                  "type": "all",
+                  "conditions": []
+                },
+                "excludeSource": false
+              },
+              "op": "gte",
+              "value": 3
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "DRAW",
+                "player": "SELF",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "Compound cost and trait query",
+      "card": {
+        "schemaVersion": "3.0.0-subset.18",
+        "cardId": "EXAMPLE-QUERY-COMPOUND",
+        "cardVersion": "draft.1",
+        "name": "合成Query検証例（公式カードではありません）",
+        "cardType": "character",
+        "baseStats": {
+          "cost": 2,
+          "power": 5000,
+          "counter": 1000,
+          "life": null
+        },
+        "colors": [
+          "緑"
+        ],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic query condition only; not a complete official card or a ruling.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-QUERY-COMPOUND"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "main.1",
+            "kind": "activated",
+            "timing": {
+              "type": "MAIN"
+            },
+            "sourceZones": [
+              "character"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "EXISTS",
+              "query": {
+                "type": "QUERY_CARDS",
+                "owner": "SELF",
+                "controller": "SELF",
+                "zone": "character",
+                "visibility": "PUBLIC",
+                "faceUpOnly": true,
+                "cardTypes": [
+                  "character"
+                ],
+                "filters": {
+                  "type": "all",
+                  "conditions": [
+                    {
+                      "type": "compare",
+                      "left": {
+                        "ref": "CANDIDATE.current.cost"
+                      },
+                      "op": "lte",
+                      "right": 3
+                    },
+                    {
+                      "type": "CARD_METADATA",
+                      "subject": "CANDIDATE",
+                      "basis": "PRINTED",
+                      "field": "traits",
+                      "match": "ANY",
+                      "comparison": "EXACT",
+                      "values": [
+                        "超新星"
+                      ]
+                    }
+                  ]
+                },
+                "excludeSource": false
+              }
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "DRAW",
+                "player": "SELF",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

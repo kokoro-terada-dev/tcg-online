@@ -1,11 +1,13 @@
 {
-  "basedOnCommit": "af3711a",
-  "compilerVersion": "v3-subset-compiler.17.1",
-  "registryHash": "d18b0e340ce690d8a7e864aacf7c41974d8a9b9d233766afc512a795e6abf8d9",
+  "basedOnCommit": "4659b2c",
+  "compilerVersion": "v3-subset-compiler.18.1",
+  "registryHash": "ca4ae5ac8cc70eefa20ee7411ce0e54a305a07b43fd503f6a387ef0b5dd80916",
   "registries": {
     "predicate": [
       "CARD_METADATA@1",
       "CARD_NAME@1",
+      "COUNT@1",
+      "EXISTS@1",
       "HAS_ABILITY@1",
       "all@1",
       "any@1",
@@ -58,6 +60,9 @@
       "CANNOT_BE_BLOCKED@1",
       "RUSH@1",
       "RUSH_CHARACTER@1"
+    ],
+    "query": [
+      "QUERY_CARDS@1"
     ]
   },
   "notes": [
@@ -65,7 +70,7 @@
     "TriggerRegistry corresponds to timing plus triggerScheduler; ModifierRegistry does not exist; MODIFY_STAT and GRANT_KEYWORD use runtime ledgers.",
     "JSON snippets may need earlier bindings and valid board/timing; successful compiler validation is not runtime approval.",
     "All commands accept optional id/sourceSpan. Required parameter schemas are structural; compiler imposes additional contextual rules.",
-    "Legacy subset.16 retains the exact old compiler and registry hashes. New nodes require subset.17. No trusted approval manifest was modified.",
+    "Legacy subset.16 and subset.17 retain their exact compiler/registry hashes. Metadata nodes require 17 or 18; query nodes require 18. No trusted approval manifest was modified.",
     "Current metadata is UNKNOWN when unmodeled modifiers/grants exist. Missing approved metadata never becomes an empty set or false.",
     "Printed/current metadata and printed/granted/current abilities are distinct. Comparisons use literal strings without NFC/NFKC, width folding or aliases."
   ],
@@ -108,7 +113,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -146,7 +152,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -194,7 +201,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -230,7 +238,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -259,7 +268,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -296,7 +306,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -343,7 +354,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -403,7 +415,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -434,7 +447,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -481,7 +495,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -539,7 +554,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -585,7 +601,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -640,7 +657,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -671,7 +689,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -715,7 +734,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -751,7 +771,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -806,7 +827,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -841,7 +863,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -872,7 +895,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -901,7 +925,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -939,7 +964,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -968,7 +994,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -990,7 +1017,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1124,7 +1152,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1254,7 +1283,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1276,7 +1306,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1313,7 +1344,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1335,7 +1367,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1357,7 +1390,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1379,7 +1413,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1401,7 +1436,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1423,7 +1459,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1445,7 +1482,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1467,7 +1505,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1489,7 +1528,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1511,7 +1551,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1533,7 +1574,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1555,7 +1597,8 @@
       },
       "availableIn": [
         "3.0.0-subset.16",
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ]
     },
     {
@@ -1564,7 +1607,8 @@
       "handlerVersion": "1",
       "status": "implemented_limited",
       "availableIn": [
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -1622,7 +1666,8 @@
       "handlerVersion": "1",
       "status": "implemented_limited",
       "availableIn": [
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -1707,7 +1752,8 @@
       "handlerVersion": "1",
       "status": "implemented_limited",
       "availableIn": [
-        "3.0.0-subset.17"
+        "3.0.0-subset.17",
+        "3.0.0-subset.18"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -1760,9 +1806,215 @@
         "basis": "PRINTED",
         "ability": "TRIGGER"
       }
+    },
+    {
+      "category": "predicate",
+      "name": "EXISTS",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "availableIn": [
+        "3.0.0-subset.18"
+      ],
+      "schemaRef": "card-effect-query.schema.json#/$defs/predicate",
+      "requiredParameters": [
+        "query"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "type": {
+          "const": "EXISTS"
+        },
+        "query": {
+          "$ref": "#/$defs/query"
+        }
+      },
+      "description": "権限付き集合の存在判定。",
+      "runtimeConstraints": "Public leader/character/stage/trash/public, or own private hand only; one zone; unknown/stale/unreadable -> UNKNOWN. No nested queries, deck/life/opponent-hand queries, SUM or new approvals. Filters share the selector evaluator.",
+      "example": {
+        "type": "EXISTS",
+        "query": {
+          "type": "QUERY_CARDS",
+          "owner": "SELF",
+          "controller": "SELF",
+          "zone": "character",
+          "visibility": "PUBLIC",
+          "faceUpOnly": true,
+          "cardTypes": [
+            "character"
+          ],
+          "filters": {
+            "type": "CARD_NAME",
+            "subject": "CANDIDATE",
+            "basis": "PRINTED",
+            "op": "eq",
+            "value": "キャベンディッシュ"
+          },
+          "excludeSource": true
+        }
+      }
+    },
+    {
+      "category": "predicate",
+      "name": "COUNT",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "availableIn": [
+        "3.0.0-subset.18"
+      ],
+      "schemaRef": "card-effect-query.schema.json#/$defs/predicate",
+      "requiredParameters": [
+        "query",
+        "op",
+        "value"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "type": {
+          "const": "COUNT"
+        },
+        "query": {
+          "$ref": "#/$defs/query"
+        },
+        "op": {
+          "enum": [
+            "eq",
+            "ne",
+            "lt",
+            "lte",
+            "gt",
+            "gte"
+          ]
+        },
+        "value": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        }
+      },
+      "description": "権限付き集合の正確な枚数と整数の比較。",
+      "runtimeConstraints": "Public leader/character/stage/trash/public, or own private hand only; one zone; unknown/stale/unreadable -> UNKNOWN. No nested queries, deck/life/opponent-hand queries, SUM or new approvals. Filters share the selector evaluator.",
+      "example": {
+        "type": "COUNT",
+        "query": {
+          "type": "QUERY_CARDS",
+          "owner": "SELF",
+          "controller": "SELF",
+          "zone": "character",
+          "visibility": "PUBLIC",
+          "faceUpOnly": true,
+          "cardTypes": [
+            "character"
+          ],
+          "filters": {
+            "type": "all",
+            "conditions": []
+          },
+          "excludeSource": false
+        },
+        "op": "gte",
+        "value": 3
+      }
+    },
+    {
+      "category": "query",
+      "name": "QUERY_CARDS",
+      "handlerVersion": "1",
+      "status": "implemented_limited",
+      "availableIn": [
+        "3.0.0-subset.18"
+      ],
+      "schemaRef": "card-effect-query.schema.json#/$defs/query",
+      "requiredParameters": [
+        "owner",
+        "controller",
+        "zone",
+        "cardTypes",
+        "filters",
+        "excludeSource",
+        "faceUpOnly",
+        "visibility"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "type": {
+          "const": "QUERY_CARDS"
+        },
+        "owner": {
+          "$ref": "#/$defs/player"
+        },
+        "controller": {
+          "$ref": "#/$defs/player"
+        },
+        "zone": {
+          "enum": [
+            "leader",
+            "character",
+            "stage",
+            "trash",
+            "public",
+            "hand"
+          ]
+        },
+        "cardTypes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "leader",
+              "character",
+              "event",
+              "stage"
+            ]
+          }
+        },
+        "filters": {
+          "$ref": "#/$defs/predicate"
+        },
+        "excludeSource": {
+          "type": "boolean"
+        },
+        "faceUpOnly": {
+          "type": "boolean"
+        },
+        "visibility": {
+          "enum": [
+            "PUBLIC",
+            "OWNER_ONLY"
+          ]
+        }
+      },
+      "description": "条件専用の集合。選択UI・束縛・クライアント候補を作らない。",
+      "runtimeConstraints": "Public leader/character/stage/trash/public, or own private hand only; one zone; unknown/stale/unreadable -> UNKNOWN. No nested queries, deck/life/opponent-hand queries, SUM or new approvals. Filters share the selector evaluator.",
+      "example": {
+        "type": "QUERY_CARDS",
+        "owner": "SELF",
+        "controller": "SELF",
+        "zone": "character",
+        "visibility": "PUBLIC",
+        "faceUpOnly": true,
+        "cardTypes": [
+          "character"
+        ],
+        "filters": {
+          "type": "all",
+          "conditions": []
+        },
+        "excludeSource": false
+      }
     }
   ],
-  "implementationUpdate": "PR02a/PR02b; no PR03 features or new real-card approvals",
+  "implementationUpdate": "PR03 / 2026-10-30: subset18 adds EXISTS/COUNT and a condition-only QUERY_CARDS registry. Subset16/17 hashes remain pinned. See card-effect-pr03.md.",
   "profiles": {
     "3.0.0-subset.16": {
       "compilerVersion": "v3-subset-compiler.16.3",
@@ -1882,6 +2134,73 @@
           "CANNOT_BE_BLOCKED@1",
           "RUSH@1",
           "RUSH_CHARACTER@1"
+        ]
+      }
+    },
+    "3.0.0-subset.18": {
+      "compilerVersion": "v3-subset-compiler.18.1",
+      "registryHash": "ca4ae5ac8cc70eefa20ee7411ce0e54a305a07b43fd503f6a387ef0b5dd80916",
+      "registries": {
+        "predicate": [
+          "CARD_METADATA@1",
+          "CARD_NAME@1",
+          "COUNT@1",
+          "EXISTS@1",
+          "HAS_ABILITY@1",
+          "all@1",
+          "any@1",
+          "compare@3",
+          "not@1"
+        ],
+        "action": [
+          "BIND_SOURCE@2",
+          "DRAW@2",
+          "GRANT_KEYWORD@1",
+          "IF@2",
+          "KO@1",
+          "LOOK_TOP@1",
+          "MODIFY_STAT@1",
+          "MOVE_CARD@2",
+          "ORDER_CARDS@1",
+          "REST@1",
+          "RETURN_TO_DECK@1",
+          "REVEAL@1",
+          "SELECT@1",
+          "SEQUENCE@1",
+          "SET_ACTIVE@1"
+        ],
+        "cost": [
+          "DISCARD_HAND@1",
+          "DON_RETURN@2",
+          "REST_DON@1",
+          "REST_SOURCE@1"
+        ],
+        "replacement": [],
+        "selector": [
+          "BOUND_CARDS@1",
+          "CARDS@4"
+        ],
+        "duration": [
+          "BATTLE_END@1",
+          "TURN_END@1"
+        ],
+        "timing": [
+          "COUNTER@1",
+          "MAIN@1",
+          "ON_ATTACK@1",
+          "ON_KO@1",
+          "ON_OPPONENT_ATTACK@1",
+          "ON_PLAY@1",
+          "TRIGGER@1"
+        ],
+        "keyword": [
+          "BLOCKER@1",
+          "CANNOT_BE_BLOCKED@1",
+          "RUSH@1",
+          "RUSH_CHARACTER@1"
+        ],
+        "query": [
+          "QUERY_CARDS@1"
         ]
       }
     }
