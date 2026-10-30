@@ -6,7 +6,7 @@ import V3ChoicePanel from "./V3ChoicePanel";
 import TestBoard from "./TestBoard";
 import V3MainEffectDialog from "./V3MainEffectDialog";
 import { getLocalCardImage } from "../utils/localCardImages";
-const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", GRANT_KEYWORD: "能力を付与", FINISH_LIFE_TRIGGER: "トリガー処理を終了" };
+const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", PLAY_BY_EFFECT: "効果で登場", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", GRANT_KEYWORD: "能力を付与", FINISH_LIFE_TRIGGER: "トリガー処理を終了" };
 export default function V3SessionPanel({ view, busy, needsSync, error, isHost, onAction, onSync, onEnd }: {
   view: V3SessionView; busy: boolean; needsSync: boolean; error: string; isHost: boolean;
   onAction: (kind: V3SessionCommand["kind"], details?: SessionDetails) => void; onSync: () => void; onEnd: () => void;

@@ -6,7 +6,7 @@ export type NodeMeta = { id?: string; sourceSpan?: SourceSpan };
 export type CardField = "cost" | "power" | "cardType" | "rotated";
 export type Value = number | string | boolean | null | { ref: "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "current"}.${"cost" | "power"}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
 export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
@@ -27,6 +27,8 @@ export interface PredicateMap {
   compare: NodeMeta & { type: "compare"; left: Value; op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte"; right: Value };
 }
 export interface ActionMap {
+  PLAY_BY_EFFECT: NodeMeta & { type: "PLAY_BY_EFFECT"; cards: CardSetRef; from: "hand";
+    destination: { owner: "SELF"; zone: "character"; slotPolicy: "FIRST_EMPTY" }; enterState: "ACTIVE" | "REST"; provenance: "EFFECT"; condition: Predicate };
   REMEMBER_FACTS: NodeMeta & { type: "REMEMBER_FACTS"; result: string; cards: CardSetRef | null; snapshot: "BEFORE" | "AFTER"; basis: MetadataBasis; field: "colors"; bindAs: string };
   MOVE_RESULT: NodeMeta & { type: "MOVE_RESULT"; bindAs: string };
   BIND_SOURCE: NodeMeta & { type: "BIND_SOURCE"; bindAs: string };

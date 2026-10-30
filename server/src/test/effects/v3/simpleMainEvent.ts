@@ -29,6 +29,7 @@ export function isInteractiveMainEvent(effect: DeepReadonly<Effect>): boolean {
       case "KO": case "REST": case "SET_ACTIVE": case "REVEAL": return true;
       case "MODIFY_STAT": case "GRANT_KEYWORD": return action.duration.type === "TURN_END";
       case "MOVE_CARD": return ["hand", "trash", "public"].includes(action.destination.zone) && action.destination.position === "append";
+      case "PLAY_BY_EFFECT": return true;
       default: return false;
     }
   };
