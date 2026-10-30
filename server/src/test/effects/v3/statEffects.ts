@@ -5,7 +5,7 @@ import type { MovementState } from "../../movement/types";
 import type { CardObjectRef, DeepReadonly } from "../types";
 import type { Node } from "./dsl";
 import type { ApprovedV3Card } from "./approval";
-import { expiryFor, validateExpiry, type EffectExpiry } from "./effectExpiry";
+import { expiryFor, validateExpiry, type EffectExpiry, type ExpiryAnchor } from "./effectExpiry";
 
 export type StatEffect = Readonly<{
   id: string; target: Readonly<CardObjectRef>; source: Readonly<CardObjectRef>; actor: 0 | 1;
@@ -20,7 +20,7 @@ const field = (state: MovementState, ref: Readonly<CardObjectRef>) => {
 export function validateStatEffects(state: MovementState, effects: StatEffects): StatEffects {
   dataArray(effects, 256); const ids = new Set<string>();
   for (const effect of effects) {
-    dataObject(effect, ["id", "target", "source", "actor", "stat", "amount", "endPlayer", "remaining"], ["battleId"]); validateExpiry(effect);
+    dataObject(effect, ["id", "target", "source", "actor", "stat", "amount", "endPlayer", "remaining"], ["battleId", "boundary"]); validateExpiry(effect, state.matchId);
     ensureMove(typeof effect.id === "string" && /^[a-f0-9]{64}$/.test(effect.id) && !ids.has(effect.id), "v3-invalid-stat-id"); ids.add(effect.id);
     reference(effect.target); reference(effect.source); field(state, effect.target);
     ensureMove((effect.actor === 0 || effect.actor === 1) &&
@@ -38,14 +38,14 @@ export function statDelta(effects: StatEffects, ref: Readonly<CardObjectRef>, st
   return effects.reduce((sum, effect) => sum + (effect.target.instanceId === ref.instanceId && effect.target.generation === ref.generation && effect.stat === stat ? effect.amount : 0), 0);
 }
 export function addStatEffects(state: MovementState, effects: StatEffects, workId: string, source: Readonly<CardObjectRef>, actor: 0 | 1,
-  targets: readonly Readonly<CardObjectRef>[], stat: "power" | "cost", amount: number, duration: DeepReadonly<Node<"duration">>, definitions: readonly ApprovedV3Card[], battleId: string | null = null): StatEffects {
+  targets: readonly Readonly<CardObjectRef>[], stat: "power" | "cost", amount: number, duration: DeepReadonly<Node<"duration">>, definitions: readonly ApprovedV3Card[], battleId: string | null = null, anchor?: ExpiryAnchor): StatEffects {
   ensureMove(targets.length > 0 && new Set(targets.map(ref => ref.instanceId)).size === targets.length && effects.length + targets.length <= 256, "v3-stat-target-or-count-limit");
   const entries = targets.map(target => {
     const card = field(state, target), definition = definitions.find(known => known.definition.cardId === card.cardId);
     ensureMove(definition && definition.definition.cardType === card.kind && definition.definition.baseStats[stat] !== null && !card.modifierIds.length && !card.grantIds.length, "v3-stat-value-unknown");
     ensureMove(Number.isSafeInteger(definition.definition.baseStats[stat]! + statDelta(effects, target, stat) + amount), "v3-stat-number-overflow");
     const id = createHash("sha256").update(JSON.stringify([state.matchId, workId, target])).digest("hex");
-    return { id, target: { ...target }, source: { ...source }, actor, stat, amount, ...expiryFor(duration, actor, battleId) };
+    return { id, target: { ...target }, source: { ...source }, actor, stat, amount, ...expiryFor(duration, actor, battleId, anchor) };
   });
   return validateStatEffects(state, [...effects, ...entries]);
 }

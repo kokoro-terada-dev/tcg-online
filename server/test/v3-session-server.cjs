@@ -31,6 +31,23 @@ async function complete(socket, v) {
   throw Error('Session resolution did not complete');
 }
 
+for (const actor of [0, 1]) for (const boundary of ['TURN_START', 'END_PHASE_END']) test(`timed stats/keywords expire together without a client-controlled deadline (seat=${actor}, ${boundary})`, async t => {
+  const { clients } = await setup(t, actor, [deck, deck], 'expiry'), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView;
+  v = await send(own, v, 'activate', { effectId: `expiry-${boundary}` }); v = await complete(own, v);
+  const changed = view => view.publicStats.find(row => row.player === actor && row.zone === 'leader');
+  assert.equal(changed(v).powerDelta, 1000); assert(changed(v).keywords.includes('CANNOT_BE_BLOCKED'));
+  const remote = (await request(peer, 'v3-session:sync')).sessionView; assert.equal(changed(remote).powerDelta, 1000);
+  assert(!JSON.stringify(remote).includes('expiryTokens')); assert(!JSON.stringify(remote).includes('movementRevisionAnchor'));
+  const bad = await request(peer, 'v3-session:command', { ...command(remote, 'endTurn'), expiryCheckpoint: { boundary, turnNumber: 999 } }); assert.equal(bad.ok, false);
+  v = await send(own, v, 'endTurn'); assert.equal(changed(v).powerDelta, 1000);
+  const peerView = (await request(peer, 'v3-session:sync')).sessionView, input = command(peerView, 'endTurn');
+  const result = await request(peer, 'v3-session:command', input); assert.equal(result.ok, true);
+  const replay = await request(peer, 'v3-session:command', input); assert.equal(replay.ok, true); assert.deepEqual(replay.sessionView.context, result.sessionView.context);
+  v = (await request(own, 'v3-session:sync')).sessionView;
+  assert.equal(changed(v).powerDelta, 0); assert.equal(changed(v).keywords.includes('CANNOT_BE_BLOCKED'), false);
+});
+
 for (const actor of [0, 1]) test(`phase boundaries resume over two clients exactly once (seat=${actor})`, async t => {
   const { clients } = await setup(t, actor, [deck, deck], 'timings'), own = clients[actor], peer = clients[1 - actor];
   let v = (await request(own, 'v3-session:sync')).sessionView;

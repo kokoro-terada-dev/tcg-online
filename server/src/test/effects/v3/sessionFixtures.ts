@@ -9,17 +9,23 @@ import { ApprovedV3Catalog } from "./approval";
 import { V3SyntheticMatchCoordinator } from "./matchCoordinator";
 import type { V3SessionView } from "./sessionProtocol";
 import { ensureMove } from "../../movement/state";
-const labels: Record<string, string> = { fieldDraw: "自身をレストして1枚ドロー", draw: "1枚ドロー", paidDraw: "任意発動・コストでドロー", search: "上から3枚サーチ", buff: "自分+1000・このターン", debuff: "相手-1000・相手ターン終了まで", costDown: "自分コスト-1・このターン", unblockable: "リーダーにブロック不可を付与" };
-export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], firstPlayer: 0 | 1, key: Uint8Array, eventMode: "atomic" | "selection" | "triggers" | "timings" = "atomic") {
+const labels: Record<string, string> = { fieldDraw: "自身をレストして1枚ドロー", draw: "1枚ドロー", paidDraw: "任意発動・コストでドロー", search: "上から3枚サーチ", buff: "自分+1000・このターン", debuff: "相手-1000・相手ターン終了まで", costDown: "自分コスト-1・このターン", unblockable: "リーダーにブロック不可を付与", "expiry-TURN_START": "次の自分ターン開始まで+1000", "expiry-END_PHASE_END": "次の相手エンド終了まで+1000" };
+export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], firstPlayer: 0 | 1, key: Uint8Array, eventMode: "atomic" | "selection" | "triggers" | "timings" | "expiry" = "atomic") {
   const match = createMatch(decks[0], decks[1]), imageAliases: Record<string, string> = {}, always = () => ({ type: "all", conditions: [] });
   const plans = ([0, 1] as const).map(actor => {
     const z = match.players[actor].zones, leader = z.leader[0]!, cardId = `V3-SESSION-LEADER-${actor}`;
     imageAliases[cardId] = leader.cardId; leader.cardId = cardId;
     for (let i = 0; i < 2; i++) z.activeDon.push({ ...z.donDeck.shift()!, faceUp: true, rotated: false });
-    return compileV3CardJson(JSON.stringify({ schemaVersion: eventMode === "timings" ? "3.0.0-subset.23" : eventMode === "triggers" ? "3.0.0-subset.22" : "3.0.0-subset.16", cardId, cardVersion: eventMode === "timings" ? "session-boundary.1" : eventMode === "triggers" ? "session-observed.1" : "session-fixture.4", name: "Synthetic session leader", cardType: "leader",
+    return compileV3CardJson(JSON.stringify({ schemaVersion: eventMode === "expiry" ? "3.0.0-subset.24" : eventMode === "timings" ? "3.0.0-subset.23" : eventMode === "triggers" ? "3.0.0-subset.22" : "3.0.0-subset.16", cardId, cardVersion: eventMode === "expiry" ? "session-expiry.1" : eventMode === "timings" ? "session-boundary.1" : eventMode === "triggers" ? "session-observed.1" : "session-fixture.4", name: "Synthetic session leader", cardType: "leader",
       baseStats: { cost: null, power: 5000, counter: null, life: null }, colors: [], traits: [], attributes: [], keywords: [], reviewStatus: "approved",
       source: { text: "Synthetic session only: draw once per object turn, or optionally rest one DON and discard one hand to draw; or look at three cards, reveal up to one character with cost at most three and add it to hand, then return the rest to deck bottom in chosen order. Also select own leader power +1000 through this turn end, opponent leader power -1000 through their next turn end, or own character cost -1 through this turn end; or grant CANNOT_BE_BLOCKED to own leader through this turn end. Each effect once per object turn. Not a real card or official ruling.", triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-fixture.4").digest("hex") },
-      effects: [...(eventMode === "timings" ? ["MAIN_START", "TURN_END"].map(type => ({ id: `boundary-${type}`, kind: "triggered", timing: { type, player: "SELF" }, sourceZones: ["leader"],
+      effects: [...(eventMode === "expiry" ? ["TURN_START", "END_PHASE_END"].map(boundary => {
+        const duration = { type: "UNTIL_BOUNDARY", player: boundary === "TURN_START" ? "SELF" : "OPPONENT", boundary, occurrence: 1, includeCurrent: false };
+        return { id: `expiry-${boundary}`, kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: false, usageLimit: null,
+          activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "BIND_SOURCE", bindAs: "self" },
+            { type: "MODIFY_STAT", cards: { ref: "bindings.self" }, stat: "power", amount: 1000, duration },
+            { type: "GRANT_KEYWORD", cards: { ref: "bindings.self" }, keyword: { type: "CANNOT_BE_BLOCKED" }, duration }] };
+      }) : []), ...(eventMode === "timings" ? ["MAIN_START", "TURN_END"].map(type => ({ id: `boundary-${type}`, kind: "triggered", timing: { type, player: "SELF" }, sourceZones: ["leader"],
         optional: false, usageLimit: null, activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] })) : []),
         ...(eventMode === "triggers" ? ["watchDraw", "watchHand"].map(id => ({ id, kind: "triggered", timing: { type: "ON_EVENT", event: "CARD_ENTERED", snapshot: "TRANSACTION_AFTER", relation: "OTHER",
         owner: "SELF", controller: "SELF", fromZones: ["hand"], toZones: ["character"], cardTypes: ["character"], filters: always() },

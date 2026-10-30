@@ -4,14 +4,14 @@ import type { MovementState } from "../../movement/types";
 import type { CardObjectRef, DeepReadonly } from "../types";
 import type { Node } from "./dsl";
 import type { ApprovedV3Card } from "./approval";
-import { expiryFor, validateExpiry, type EffectExpiry } from "./effectExpiry";
+import { expiryFor, validateExpiry, type EffectExpiry, type ExpiryAnchor } from "./effectExpiry";
 export type Keyword = Node<"keyword">["type"];
 export type KeywordGrant = Readonly<{ id: string; target: Readonly<CardObjectRef>; source: Readonly<CardObjectRef>; actor: 0 | 1; keyword: Keyword }> & EffectExpiry;
 export type KeywordGrants = readonly KeywordGrant[];
 export function validateKeywordGrants(board: MovementState, grants: KeywordGrants): KeywordGrants {
   dataArray(grants, 256); const ids = new Set<string>();
   for (const grant of grants) {
-    dataObject(grant, ["id", "target", "source", "actor", "keyword", "endPlayer", "remaining"], ["battleId"]); validateExpiry(grant); reference(grant.target); reference(grant.source);
+    dataObject(grant, ["id", "target", "source", "actor", "keyword", "endPlayer", "remaining"], ["battleId", "boundary"]); validateExpiry(grant, board.matchId); reference(grant.target); reference(grant.source);
     const card = getCard(board, grant.target), at = location(board, card.instanceId);
     ensureMove(typeof grant.id === "string" && /^[a-f0-9]{64}$/.test(grant.id) && !ids.has(grant.id) && card.faceUp && card.kind === at.zone &&
       (card.kind === "character" || card.kind === "leader") && (grant.actor === 0 || grant.actor === 1) &&
@@ -24,13 +24,13 @@ export function pruneKeywordGrants(board: MovementState, grants: KeywordGrants):
   return freezeMovement(grants.filter(grant => { const card = board.cards[grant.target.instanceId]; return card?.generation === grant.target.generation && ["leader", "character"].includes(location(board, card.instanceId).zone); }));
 }
 export function addKeywordGrants(board: MovementState, grants: KeywordGrants, workId: string, source: Readonly<CardObjectRef>, actor: 0 | 1,
-  targets: readonly Readonly<CardObjectRef>[], keyword: DeepReadonly<Node<"keyword">>, duration: DeepReadonly<Node<"duration">>, definitions: readonly ApprovedV3Card[], battleId: string | null = null): KeywordGrants {
+  targets: readonly Readonly<CardObjectRef>[], keyword: DeepReadonly<Node<"keyword">>, duration: DeepReadonly<Node<"duration">>, definitions: readonly ApprovedV3Card[], battleId: string | null = null, anchor?: ExpiryAnchor): KeywordGrants {
   ensureMove(targets.length > 0 && new Set(targets.map(ref => ref.instanceId)).size === targets.length && grants.length + targets.length <= 256, "v3-keyword-grant-limit");
   const entries = targets.map(target => {
     const card = getCard(board, target), definition = definitions.find(known => known.definition.cardId === card.cardId);
     ensureMove(definition && definition.definition.cardType === card.kind && !card.modifierIds.length && !card.grantIds.length, "v3-keyword-target-unregistered");
     return { id: createHash("sha256").update(JSON.stringify([board.matchId, workId, target])).digest("hex"), target: { ...target }, source: { ...source }, actor,
-      keyword: keyword.type, ...expiryFor(duration, actor, battleId) };
+      keyword: keyword.type, ...expiryFor(duration, actor, battleId, anchor) };
   });
   return validateKeywordGrants(board, [...grants, ...entries]);
 }

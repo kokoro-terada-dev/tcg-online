@@ -24,6 +24,7 @@ import { readEventContext, withEventChooser, type EventOrigin, type EventContext
 import { isSimpleMainEvent, isInteractiveMainEvent } from "./simpleMainEvent";
 import { trackMovementOccurrences } from "../../movement/occurrence";
 import { hasPhaseBoundaries, isTriggerObservation, validateObservedSource } from "./conditionalTriggers";
+import { applicationAnchor } from "./effectExpiry";
 
 export type FixtureContext = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number }>;
 type Receipt = { requestId: string; fingerprint: string };
@@ -92,7 +93,7 @@ export class V3FixtureCoordinator {
         event.after?.instanceId === source.instanceId && event.after.cardId === source.cardId && event.after.generation === source.generation && event.before.generation + 1 === source.generation, "v3-life-trigger-authorization");
     } else if (eventUse) {
       const event = eventUse.event;
-      ensureMove(effect.kind === "activated" && source.kind === "event" && (mainUse ? (card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent(effect) : ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23"].includes(card.definition.schemaVersion) && isInteractiveMainEvent(effect)) && !battle && checkTiming(progression, identity.actor, "mainEffect").allowed :
+      ensureMove(effect.kind === "activated" && source.kind === "event" && (mainUse ? (card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent(effect) : ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24"].includes(card.definition.schemaVersion) && isInteractiveMainEvent(effect)) && !battle && checkTiming(progression, identity.actor, "mainEffect").allowed :
         effect.timing.type === "COUNTER" && battle?.step === "counter" && battle.battleId === options.counterEventCause!.battleId && battle.defender === identity.actor) &&
         at.zone === "trash" && event.kind === "moved" && event.from?.player === identity.actor && event.from.zone === "hand" && event.to?.player === identity.actor && event.to.zone === "trash" &&
         event.before?.kind === "event" && event.before.owner === identity.actor && event.before.controller === identity.actor && event.before.cardId === source.cardId && event.before.instanceId === source.instanceId &&
@@ -101,7 +102,7 @@ export class V3FixtureCoordinator {
       ensureMove(effect.kind === "triggered" && effect.timing.type === (boundary?.type ?? trigger.type), "v3-fixture-trigger-type");
       if (trigger.type === "ON_EVENT") {
         const record = trigger.observation;
-        ensureMove(["3.0.0-subset.22", "3.0.0-subset.23"].includes(card.definition.schemaVersion) && isTriggerObservation(record) && record.result === true && record.status === "PENDING" &&
+        ensureMove(["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24"].includes(card.definition.schemaVersion) && isTriggerObservation(record) && record.result === true && record.status === "PENDING" &&
           record.key.length === 64 && record.eventId === trigger.eventId && record.context.effectController === identity.actor &&
           record.effectId === identity.effectId && record.source.instanceId === source.instanceId && record.source.generation === source.generation &&
           validateObservedSource(record, movement, new Map(definitions.map(card => [card.definition.cardId, card]))) === "CURRENT", "v3-fixture-observed-authorization");
@@ -199,8 +200,9 @@ export class V3FixtureCoordinator {
       grant.card.instanceId === ref.instanceId && grant.card.generation === ref.generation && grant.viewers.includes(actor));
     if (work.type === "MODIFY_STAT" || work.type === "GRANT_KEYWORD") {
       const battleId = this.#progression.battle?.battleId ?? null;
-      const next = work.type === "MODIFY_STAT" ? { statEffects: addStatEffects(board, statEffects, work.workId, this.#identity.source, actor, work.cards, work.stat, work.amount, work.duration, this.#definitions, battleId) } :
-        { keywordGrants: addKeywordGrants(board, keywordGrants, work.workId, this.#identity.source, actor, work.cards, work.keyword, work.duration, this.#definitions, battleId) };
+      const anchor = work.duration.type === "UNTIL_BOUNDARY" ? applicationAnchor(board, this.#progression) : undefined;
+      const next = work.type === "MODIFY_STAT" ? { statEffects: addStatEffects(board, statEffects, work.workId, this.#identity.source, actor, work.cards, work.stat, work.amount, work.duration, this.#definitions, battleId, anchor) } :
+        { keywordGrants: addKeywordGrants(board, keywordGrants, work.workId, this.#identity.source, actor, work.cards, work.keyword, work.duration, this.#definitions, battleId, anchor) };
       const result = new MovementStore(board).commit({ transactionId: hash(`${board.matchId}:${work.workId}`), matchId: board.matchId, expectedRevision: board.revision,
         turnNumber: board.turnNumber, actor, effectController: actor, source: this.#identity.source, mode: "effect", resolutionId: this.#identity.resolutionId, operations: [] }, { status: "certifiedNone" });
       return { ...result, ...next };

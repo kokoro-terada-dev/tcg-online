@@ -31,6 +31,7 @@ function main() {
       ['3.0.0-subset.21', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-conditional-trigger.schema.json'), 'utf8')))],
       ['3.0.0-subset.22', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-resolving-trigger.schema.json'), 'utf8')))],
       ['3.0.0-subset.23', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-boundary.schema.json'), 'utf8')))],
+      ['3.0.0-subset.24', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-expiry.schema.json'), 'utf8')))],
     ]);
     validate = card => {
       const checker = validators.get(card?.schemaVersion);
@@ -84,7 +85,7 @@ function main() {
     } catch (error) { results.push({ file, status: 'compiler_or_catalog_error', error: error.message }); }
   }
   const failures = results.filter(result => result.status !== 'compiled_not_executable');
-  console.log(JSON.stringify({ compilerProfiles: Object.fromEntries(['3.0.0-subset.16', '3.0.0-subset.17', '3.0.0-subset.18', '3.0.0-subset.19', '3.0.0-subset.20', '3.0.0-subset.21', '3.0.0-subset.22', '3.0.0-subset.23'].map(schema => [schema,
+  console.log(JSON.stringify({ compilerProfiles: Object.fromEntries(['3.0.0-subset.16', '3.0.0-subset.17', '3.0.0-subset.18', '3.0.0-subset.19', '3.0.0-subset.20', '3.0.0-subset.21', '3.0.0-subset.22', '3.0.0-subset.23', '3.0.0-subset.24'].map(schema => [schema,
     { compilerVersion: compilerVersionForSchema(schema), registryHash: v3RegistryHash(builtinV3Registries(schema)) }])),
     schemaValidation: validate ? 'performed' : 'not_performed', sourceCardExistenceCheck: sourceCards ? 'performed' : 'not_performed',
     semanticRulesAndRuntimeApproval: 'not_performed', count: results.length, failures: failures.length, unsupported, results }, null, 2));

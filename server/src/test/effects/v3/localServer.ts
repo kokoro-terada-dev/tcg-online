@@ -177,7 +177,7 @@ export async function startLocalV3Server(port = 0, options: Readonly<{ lanOrigin
         room.host.deck && room.guest.deck && io.sockets.sockets.get(room.guest.socketId)?.connected, "v3-session-cannot-start");
       ensureMove(room.mode === "synthetic", "v3-reviewed-start-required");
       dataObject(input, ["firstPlayer"], ["eventMode"]); ensureMove(input.firstPlayer === 0 || input.firstPlayer === 1, "v3-session-first-player");
-      ensureMove(input.eventMode === undefined || input.eventMode === "atomic" || input.eventMode === "selection" || input.eventMode === "triggers" || input.eventMode === "timings", "v3-session-event-mode");
+      ensureMove(input.eventMode === undefined || input.eventMode === "atomic" || input.eventMode === "selection" || input.eventMode === "triggers" || input.eventMode === "timings" || input.eventMode === "expiry", "v3-session-event-mode");
       room.continuous = createSyntheticSession([room.host.deck, room.guest.deck], input.firstPlayer, key, input.eventMode); publish(room); publishSession(room);
     });
     const reviewedActive = () => {

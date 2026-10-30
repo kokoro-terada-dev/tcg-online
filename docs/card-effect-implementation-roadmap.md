@@ -12,7 +12,8 @@ PR05bは`card-effect-pr05b.md`の限定範囲で実装・確認済みです。
 PR06aは`card-effect-pr06a.md`の範囲で候補検出・検証を実装しました。新ON_EVENTの解決・順序はPR06bへ保留します。
 PR06bは`card-effect-pr06b.md`の限定範囲で解決・順序選択・共通frameへの接続を実装しました。
 PR07aは`card-effect-pr07a.md`の範囲でON_BLOCK/MAIN_START/TURN_ENDの検出・条件判定・共通Runtime解決を実装しました。
-以下の表は実装前の段階計画です。PR07b以降と、代表カード全体の承認は未実施のままです。
+PR07bは`card-effect-pr07b.md`の範囲でUNTIL_BOUNDARYによる適用済み修正・能力付与の期限管理を実装しました。
+以下の表は実装前の段階計画です。PR08以降と、代表カード全体の承認は未実施のままです。
 
 ## 1. 推奨順序
 

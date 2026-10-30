@@ -27,6 +27,7 @@ import { trackMovementOccurrences } from "../../movement/occurrence";
 import { conditionalTriggersHeld, conditionalTriggersWaiting, emptyTriggerObservations, hasConditionalTriggers, hasPhaseBoundaries, observeBoundaryTriggers, observeConditionalTriggers, updateTriggerObservation, validateObservedSource, type TriggerObservations } from "./conditionalTriggers";
 import type { BoundaryEvent } from "./readContext";
 import { finishBlockStep } from "./battle";
+import { expireAtBoundary, expiryCheckpoint, hasBoundaryDurations } from "./effectExpiry";
 
 type Seat = 0 | 1;
 export type V3MatchContext = Readonly<{ revision: number; movementRevision: number; progressionRevision: number; resolutionId: string | null; frameRevision: number | null }>;
@@ -48,6 +49,7 @@ export class V3SyntheticMatchCoordinator {
   #observationDraft: TriggerObservations | null = null;
   #phaseContinuation = false;
   #boundaryTokens: readonly string[] = [];
+  #expiryTokens: readonly string[] = [];
   #battleCounters: BattleCounters = []; #lifeDecision: LifeDecision | null = null;
   #damageSettling = false;
   #reviewed: boolean;
@@ -370,7 +372,7 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
       return card.definition.effects.filter(card.definition.schemaVersion !== "3.0.0-subset.19" ? isInteractiveMainEvent : isSimpleMainEvent).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
@@ -463,7 +465,7 @@ export class V3SyntheticMatchCoordinator {
   endTurn(actor: Seat, requestId: string, expected: V3MatchContext) {
     return this.#run(actor, requestId, expected, { kind: "endTurn" }, () => {
       this.#settled(); ensureMove(this.#history.length < 256, "v3-match-history-limit");
-      if (hasPhaseBoundaries([...this.#cards.values()])) { this.#continuePhases(requestId, actor); return; }
+      if (hasPhaseBoundaries([...this.#cards.values()]) || hasBoundaryDurations([...this.#cards.values()])) { this.#continuePhases(requestId, actor); return; }
       let progression = applyPlayerIntent(this.#progression, this.#progression.revision, actor, "endMain"), board = this.#board;
       const statEffects = endTurnStatEffects(this.#statEffects, this.#progression.activePlayer);
       const keywordGrants = endTurnKeywordGrants(this.#keywordGrants, this.#progression.activePlayer);
@@ -513,21 +515,34 @@ export class V3SyntheticMatchCoordinator {
   #continuePhases(requestId: string, endingActor?: Seat): void {
     let progression = endingActor === undefined ? this.#progression : applyPlayerIntent(this.#progression, this.#progression.revision, endingActor, "endMain");
     let board = this.#board, stats = this.#statEffects, grants = this.#keywordGrants, clearUsage = false;
-    const tokens = [...this.#boundaryTokens], events = [...this.#ruleEvents];
+    const tokens = [...this.#boundaryTokens], expiryTokens = [...this.#expiryTokens], events = [...this.#ruleEvents];
+    const boundaryClock = hasBoundaryDurations([...this.#cards.values()]);
+    const expire = (kind: "TURN_START" | "END_PHASE_END") => {
+      const key = `${kind}:${progression.phaseToken}`; if (expiryTokens.includes(key)) return;
+      ensureMove(expiryTokens.length < 1024, "v3-expiry-token-limit"); const checkpoint = expiryCheckpoint(board, progression, kind);
+      stats = expireAtBoundary(stats, checkpoint); grants = expireAtBoundary(grants, checkpoint); expiryTokens.push(key);
+    };
     const commit = (pending: boolean) => {
       this.#archive(); this.#board = board; this.#progression = progression; this.#ruleEvents = freezeMovement(events);
       this.#statEffects = pruneStatEffects(board, stats); this.#keywordGrants = pruneKeywordGrants(board, grants);
       this.#boundaryTokens = freezeMovement(tokens); this.#phaseContinuation = pending; if (clearUsage) this.#usage.clear();
+      this.#expiryTokens = freezeMovement(expiryTokens);
     };
     for (let steps = 0; steps < 12; steps++) {
       const work = phaseWork(progression); ensureMove(work, "v3-match-phase-work-required");
+      if (boundaryClock && progression.phase === "refresh") expire("TURN_START");
       if ((progression.phase === "main" || progression.phase === "end") && !tokens.includes(progression.phaseToken)) {
         ensureMove(tokens.length < 512, "v3-boundary-token-limit"); tokens.push(progression.phaseToken);
         this.#observeBoundary({ type: progression.phase === "main" ? "MAIN_START" : "TURN_END", eventId: `phase:${progression.phaseToken}`, turnNumber: progression.turnNumber,
           activePlayer: progression.activePlayer, phase: progression.phase, phaseToken: progression.phaseToken, battleId: null, blocker: null }, board, stats, grants);
         if (conditionalTriggersWaiting(this.#observationDraft!)) { commit(true); return; }
       }
-      if (progression.phase === "end") { stats = endTurnStatEffects(stats, progression.activePlayer); grants = endTurnKeywordGrants(grants, progression.activePlayer); }
+      if (progression.phase === "end") {
+        if (!boundaryClock || !expiryTokens.includes(`END_PHASE_END:${progression.phaseToken}`)) {
+          if (boundaryClock) expire("END_PHASE_END");
+          stats = endTurnStatEffects(stats, progression.activePlayer); grants = endTurnKeywordGrants(grants, progression.activePlayer);
+        }
+      }
       const result = this.#phaseMovement(board, progression, requestId);
       if (result) {
         board = result.state; events.push(...result.events); ensureMove(events.length <= 512, "v3-match-rule-event-limit");
@@ -616,7 +631,7 @@ export class V3SyntheticMatchCoordinator {
   }
   snapshotForCoordinator() {
     return freezeMovement({ context: this.context(), movement: this.#board, progression: this.#progression, active: this.#active?.coordinator.snapshotForCoordinator() ?? null,
-      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, pendingTriggers: this.#triggers, triggerObservations: this.#observations, boundaryTokens: this.#boundaryTokens, phaseContinuation: this.#phaseContinuation, battleCounters: this.#battleCounters, pendingLife: this.#lifeDecision, damageEffectsPending: this.#damageSettling });
+      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, pendingTriggers: this.#triggers, triggerObservations: this.#observations, boundaryTokens: this.#boundaryTokens, expiryTokens: this.#expiryTokens, phaseContinuation: this.#phaseContinuation, battleCounters: this.#battleCounters, pendingLife: this.#lifeDecision, damageEffectsPending: this.#damageSettling });
   }
   toJSON(): never { throw new Error("v3-match-server-only"); }
 }
