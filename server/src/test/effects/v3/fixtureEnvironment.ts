@@ -11,7 +11,7 @@ import { UNKNOWN, createDerivedCardFactsReader, readEventContext, type EventCont
 import type { KeywordGrants } from "./keywordEffects";
 
 type Scalar = string | number | boolean | null | typeof UNKNOWN;
-export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext, keywordGrants: () => KeywordGrants = () => []): ResolutionEnvironment {
+export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext, keywordGrants: () => KeywordGrants = () => [], occurrenceAuthorized = false): ResolutionEnvironment {
   const knownDefinitions = new Map(definitions.map(card => [card.definition.cardId, card]));
   const context = eventContext ?? readEventContext(board(), identity);
   ensureMove(context.effectController === identity.actor && context.source.instanceId === identity.source.instanceId && context.source.generation === identity.source.generation, "v3-read-context-source-mismatch");
@@ -115,6 +115,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     return operations[predicate.op]();
   };
   const environment: ResolutionEnvironment = {
+    activationAtOccurrence: () => occurrenceAuthorized ? true : "unknown",
     revision: () => board().revision, now, evaluate,
     peekTop: amount => board().players[identity.actor].deck.slice(0, amount).map(id => ({ instanceId: id!, generation: board().cards[id!]!.generation })),
     canPayCosts: (costs, discarded, returned) => {

@@ -13,6 +13,7 @@ type Selector = DeepReadonly<Node<"selector">>;
 export type ResolutionCandidate = Readonly<{ ref: Ref; cardId: string; owner: Seat; controller: Seat; zone: string; kind: string; faceUp: boolean; visibleTo: readonly Seat[]; label?: string }>;
 // Server-owned, pure reads. This interface is not a socket payload or a game-rule implementation.
 export interface ResolutionEnvironment {
+  activationAtOccurrence?(): true | "unknown";
   revision(): number;
   now(): number;
   evaluate(predicate: DeepReadonly<Predicate>, bindings: Bindings, candidate?: Ref): boolean | "unknown";
@@ -22,7 +23,7 @@ export interface ResolutionEnvironment {
 }
 export type ResolutionIdentity = Readonly<{ matchId: string; resolutionId: string; effectId: string; actor: Seat; source: Ref }>;
 type WorkAction = Exclude<A, { type: "SEQUENCE" | "IF" | "SELECT" | "ORDER_CARDS" | "BIND_SOURCE" }>;
-type Instruction = { type: "CHECK"; predicate: DeepReadonly<Predicate> } | { type: "COSTS" } | { type: "OPTIONAL" } |
+type Instruction = { type: "CHECK"; predicate: DeepReadonly<Predicate> } | { type: "OCCURRENCE_CHECK" } | { type: "COSTS" } | { type: "OPTIONAL" } |
   { type: "SELECT"; action: Extract<A, { type: "SELECT" }> } | { type: "BIND_SOURCE"; bindAs: string } | { type: "ORDER"; action: Extract<A, { type: "ORDER_CARDS" }> } | { type: "WORK"; action: WorkAction } |
   { type: "BRANCH"; predicate: DeepReadonly<Predicate>; otherwise: number } | { type: "ENTER" } | { type: "EXIT" } | { type: "JUMP"; to: number } | { type: "TRIGGER_END" } | { type: "END" };
 type ChoiceBase = { kind: "choice"; selectionId: string; chooser: Seat; expiresAt: number };
@@ -53,8 +54,8 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 const relative = (actor: Seat, player: "SELF" | "OPPONENT"): Seat => player === "SELF" ? actor : (1 - actor) as Seat;
 function program(card: ApprovedV3Card, effectId: string): Instruction[] {
   const effect = card.definition.effects.find(effect => effect.id === effectId); ensureMove(effect, "v3-effect-not-found");
-  ensureMove(effect.timing.type !== "ON_EVENT", "v3-conditional-trigger-resolution-deferred-pr06b");
-  const code: Instruction[] = [{ type: "CHECK", predicate: effect.activationConditions }];
+  ensureMove(effect.timing.type !== "ON_EVENT" || card.definition.schemaVersion === "3.0.0-subset.22", "v3-conditional-trigger-resolution-deferred-pr06b");
+  const code: Instruction[] = [effect.timing.type === "ON_EVENT" ? { type: "OCCURRENCE_CHECK" } : { type: "CHECK", predicate: effect.activationConditions }];
   if (effect.optional) code.push({ type: "OPTIONAL" });
   code.push({ type: "COSTS" }, { type: "CHECK", predicate: effect.resolutionConditions });
   const append = (actions: readonly A[]): void => { for (const action of actions) {
@@ -116,7 +117,9 @@ export class V3ResolutionMachine {
       for (let steps = 0; steps < 256 && state.status === "ready"; steps++) {
         const instruction = this.#code[state.pc]; ensureMove(instruction, "v3-invalid-program-counter");
         const workId = `${state.identity.resolutionId}:${state.pc}`;
-        if (instruction.type === "CHECK") {
+        if (instruction.type === "OCCURRENCE_CHECK") {
+          ensureMove(this.#environment.activationAtOccurrence?.() === true, "v3-trigger-occurrence-not-authorized"); state.pc++;
+        } else if (instruction.type === "CHECK") {
           if (!this.#evaluate(instruction.predicate, state)) {
             if (this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)!.timing.type === "TRIGGER") { state.pc = this.#code.length - 2; continue; }
             state.status = "completed"; return;
@@ -238,7 +241,7 @@ export class V3ResolutionMachine {
       }
       // UNORDERED input is canonicalized to server candidate order, not client token order.
       const cards = choice.purpose === "order" ? tokens.map(token => ({ ...choice.candidates.find(candidate => candidate.token === token)!.ref })) : choice.candidates.filter(candidate => selected.has(candidate.token)).map(candidate => ({ ...candidate.ref }));
-      if (["3.0.0-subset.20", "3.0.0-subset.21"].includes(this.#card.definition.schemaVersion) && this.#card.definition.cardType === "event" && this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)?.timing.type === "MAIN" && choice.purpose === "action") {
+      if (choice.purpose === "action" && (this.#card.definition.schemaVersion === "3.0.0-subset.22" || ["3.0.0-subset.20", "3.0.0-subset.21"].includes(this.#card.definition.schemaVersion) && this.#card.definition.cardType === "event" && this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)?.timing.type === "MAIN")) {
         const instruction = this.#code[state.pc]; ensureMove(instruction?.type === "SELECT", "v3-choice-program-mismatch");
         const selector = instruction.action.selector, rows = this.#environment.candidates(selector, this.#bindings(state));
         for (const ref of cards) {

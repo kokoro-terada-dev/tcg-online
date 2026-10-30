@@ -18,14 +18,23 @@ export type TriggerObservation = Readonly<{
   causeEffectId: string | null; source: Readonly<CardObjectRef>; cardId: string;
   effectId: string; definitionHash: string; context: EventContext; target: Readonly<CardObjectRef>;
   snapshot: "TRANSACTION_BEFORE" | "TRANSACTION_AFTER"; turnNumber: number; activePlayer: 0 | 1;
-  result: true | false | "unknown"; status: "HELD" | "NOT_MATCHED";
-  reason: "PR06B_REQUIRED" | "CONDITION_FALSE" | "UNKNOWN_FACTS" | "MULTI_MOVE_TIMING_UNRESOLVED";
+  result: true | false | "unknown"; status: "HELD" | "NOT_MATCHED" | "PENDING" | "RESOLVING" | "RESOLVED" | "SKIPPED";
+  reason: "PR06B_REQUIRED" | "CONDITION_FALSE" | "UNKNOWN_FACTS" | "MULTI_MOVE_TIMING_UNRESOLVED" | "READY" | "SOURCE_STALE" | "USAGE_EXHAUSTED" | "NON_MAIN_BOUNDARY";
 }>;
 export type TriggerObservations = Readonly<{
   events: Readonly<Record<string, string>>; records: readonly TriggerObservation[];
 }>;
 export const emptyTriggerObservations = (): TriggerObservations => freezeMovement({ events: {}, records: [] });
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+const observations = new WeakSet<object>();
+export const isTriggerObservation = (value: TriggerObservation): boolean => observations.has(value);
+export function updateTriggerObservation(ledger: TriggerObservations, key: string, status: TriggerObservation["status"], reason?: TriggerObservation["reason"]): TriggerObservations {
+  return freezeMovement({ ...ledger, records: ledger.records.map(record => {
+    if (record.key !== key) return record;
+    const next = { ...record, status, reason: reason ?? record.reason }; observations.add(next); return next;
+  }) });
+}
+export const conditionalTriggersWaiting = (ledger: TriggerObservations): boolean => ledger.records.some(record => record.status === "PENDING" || record.status === "HELD");
 export function hasConditionalTriggers(definitions: ReadonlyMap<string, ApprovedV3Card>): boolean {
   return [...definitions.values()].some(card => card.definition.effects.some(effect => effect.timing.type === "ON_EVENT"));
 }
@@ -85,11 +94,13 @@ export function observeConditionalTriggers(ledger: TriggerObservations, events: 
           const result = multiMove || !authorized || targetCard.kind === "unknown" || privateQuery(timing.filters) || privateQuery(effect.activationConditions) ? "unknown" :
             !structural || filter === false || activation === false ? false : filter === "unknown" || activation === "unknown" ? "unknown" : true;
           ensureMove(records.length < 4096, "v3-trigger-observation-limit");
-          records.push({ key: hash([state.matchId, event.eventId, source, effect.id, definition.definitionHash]), eventId: event.eventId, groupId: event.groupId,
+          const executable = definition.definition.schemaVersion === "3.0.0-subset.22";
+          const record: TriggerObservation = { key: hash([state.matchId, event.eventId, source, effect.id, definition.definitionHash]), eventId: event.eventId, groupId: event.groupId,
             transactionId: occurrence.transactionId, eventType: timing.event, causeEffectId: resolvingEffect && resolvingEffect.resolutionId === event.cause.resolutionId ? resolvingEffect.effectId : null,
             source, cardId: sourceCard.cardId, effectId: effect.id, definitionHash: definition.definitionHash, context, target, snapshot: basis,
-            turnNumber: occurrence.after.turnNumber, activePlayer, result, status: result === false ? "NOT_MATCHED" : "HELD",
-            reason: multiMove ? "MULTI_MOVE_TIMING_UNRESOLVED" : result === false ? "CONDITION_FALSE" : result === "unknown" ? "UNKNOWN_FACTS" : "PR06B_REQUIRED" });
+            turnNumber: occurrence.after.turnNumber, activePlayer, result, status: result === false ? "NOT_MATCHED" : result === true && executable ? "PENDING" : "HELD",
+            reason: multiMove ? "MULTI_MOVE_TIMING_UNRESOLVED" : result === false ? "CONDITION_FALSE" : result === "unknown" ? "UNKNOWN_FACTS" : executable ? "READY" : "PR06B_REQUIRED" };
+          observations.add(record); records.push(record);
         }
       }
     }
@@ -101,7 +112,7 @@ export function validateObservedSource(record: TriggerObservation, state: Moveme
   try {
     const card = getCard(state, record.source), at = location(state, card.instanceId);
     const definition = definitions.get(card.cardId), effect = definition?.definition.effects.find(effect => effect.id === record.effectId);
-    return definition?.definitionHash === record.definitionHash && card.cardId === record.cardId && effect?.timing.type === "ON_EVENT" &&
+    return card.faceUp && visibleTo(state, card, at, 0) && visibleTo(state, card, at, 1) && definition?.definitionHash === record.definitionHash && card.cardId === record.cardId && effect?.timing.type === "ON_EVENT" &&
       effect.sourceZones.some(zone => zone === at.zone) && card.owner === record.context.sourceOwner && card.controller === record.context.sourceController ? "CURRENT" : "STALE";
   } catch { return "STALE"; }
 }

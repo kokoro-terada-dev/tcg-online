@@ -31,6 +31,25 @@ async function complete(socket, v) {
   throw Error('Session resolution did not complete');
 }
 
+for (const actor of [0, 1]) test(`observed ordering resumes privately over two sockets (seat=${actor})`, async t => {
+  const { clients } = await setup(t, actor, [deck, deck], 'triggers'), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView;
+  v = await send(own, v, 'play', { card: v.playableCards.find(c => c.enabled).card });
+  const choices = v.triggerChoices; assert.equal(choices.filter(c => c.timing === 'ON_EVENT').length, 2);
+  assert.deepEqual((await request(peer, 'v3-session:sync')).sessionView.triggerChoices, []);
+  const selected = choices.find(c => c.effectId === 'watchHand'), input = command(v, 'trigger', { token: selected.token });
+  const started = await request(own, 'v3-session:command', input); assert.equal(started.ok, true); v = started.sessionView;
+  assert.equal((await request(own, 'v3-session:command', input)).ok, true);
+  v = await send(own, v, 'advance'); const q = v.frame.choice;
+  assert(q.options.length > 0); const other = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.deepEqual(other.frame.choice.options, []); assert(!JSON.stringify(other).includes('triggerObservations'));
+  assert.equal((await request(peer, 'v3-session:command', command(v, 'answer', { selectionId: q.selectionId, tokens: [] }))).ok, false);
+  assert.equal((await request(own, 'v3-session:command', { ...input, requestId: 'stale-trigger' })).ok, false);
+  v = await send(own, v, 'answer', { selectionId: q.selectionId, tokens: [] }); v = await complete(own, v);
+  while (v.triggerChoices.length) { v = await send(own, v, 'trigger', { token: v.triggerChoices[0].token }); v = await complete(own, v); }
+  assert.equal(v.pendingTriggerCount, 0); assert.equal(v.conditionalTriggerHold, false);
+});
+
 for (const actor of [0, 1]) for (const privateHand of [false, true]) test(`resumable event MAIN publishes use but hides choices until authorized response (seat=${actor}, private=${privateHand})`, async t => {
   const events = { ...deck, mainDeck: Array(50).fill('EVENT'), cardTypes: { EVENT: 'event' } };
   const { clients } = await setup(t, actor, [events, events], 'selection'), own = clients[actor], peer = clients[1 - actor];

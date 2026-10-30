@@ -4,12 +4,22 @@ import type { ApprovedV3Card } from "./approval";
 import type { Progression } from "../../progression/types";
 import type { MovementState } from "../../movement/types";
 import type { CardObjectRef } from "../types";
+import type { TriggerObservation, TriggerObservations } from "./conditionalTriggers";
 
 export type TriggerCause = Readonly<{ type: "ON_PLAY"; eventId: string; event: MovementEvent }> |
+  Readonly<{ type: "ON_EVENT"; eventId: string; observation: TriggerObservation }> |
   Readonly<{ type: "ON_KO"; eventId: string; event: MovementEvent }> |
   Readonly<{ type: "ON_ATTACK" | "ON_OPPONENT_ATTACK"; eventId: string; battleId: string; attacker: 0 | 1; attackSource: Readonly<CardObjectRef>; turnNumber: number }>;
 export type ScheduledTrigger = Readonly<{ token: string; batchId: string; actor: 0 | 1; cardId: string; effectId: string; source: Readonly<CardObjectRef>; cause: TriggerCause }>;
 export const SYNTHETIC_TRIGGER_POLICY = "synthetic-triggers.attack-entry-ko.4";
+export function enqueueObservedTriggers(queue: readonly ScheduledTrigger[], ledger: TriggerObservations): readonly ScheduledTrigger[] {
+  const keys = new Set(queue.flatMap(entry => entry.cause.type === "ON_EVENT" ? [entry.cause.observation.key] : []));
+  return ledger.records.filter(record => record.status === "PENDING" && !keys.has(record.key)).map(record => ({
+    token: randomUUID(), batchId: queue.find(entry => entry.cause.eventId === record.eventId)?.batchId ?? `observed:${record.transactionId}`,
+    actor: record.context.effectController, cardId: record.cardId, effectId: record.effectId, source: record.source,
+    cause: { type: "ON_EVENT", eventId: record.eventId, observation: record }
+  }));
+}
 
 // Self-entry events only. Watcher abilities and official simultaneous-trigger rulings are not inferred.
 export function movementTriggerCandidates(events: readonly MovementEvent[], definitions: ReadonlyMap<string, ApprovedV3Card>) {

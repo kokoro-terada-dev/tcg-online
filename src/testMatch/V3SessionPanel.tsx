@@ -77,7 +77,8 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
         </div>}
         {view.gate === "trigger" && <div><p role="status">{view.triggerChooser === view.localPlayerIndex ? "解決する効果を選択" : "相手の効果を待っています"}（{view.pendingTriggerCount}件）</p>
           <div className="test-effect-actions">{view.triggerChoices.map(choice => <button key={choice.token} disabled={disabled} onClick={() => onAction("trigger", { token: choice.token })}>
-            {choice.timing === "ON_KO" ? "KO時" : choice.timing === "ON_PLAY" ? "登場時" : choice.timing === "ON_ATTACK" ? "アタック時" : "相手のアタック時"}・{view.imageAliases[choice.cardId] ?? choice.cardId}
+            {choice.timing === "ON_EVENT" ? "誘発" : choice.timing === "ON_KO" ? "KO時" : choice.timing === "ON_PLAY" ? "登場時" : choice.timing === "ON_ATTACK" ? "アタック時" : "相手のアタック時"}・{view.imageAliases[choice.cardId] ?? choice.cardId}
+            {choice.timing === "ON_EVENT" && <>・{choice.sourceLabel}・{choice.effectId}</>}
           </button>)}</div></div>}
         {view.publicReveals.length > 0 && <div className="v3-public-reveals" aria-label="公開中のカード">{view.publicReveals.map((card, index) => {
           const id = view.imageAliases[card.cardId] ?? card.cardId, image = getLocalCardImage(id)?.imageUrl;

@@ -23,6 +23,7 @@ import type { LifeTriggerCause } from "./lifeTriggers";
 import { readEventContext, withEventChooser, type EventOrigin, type EventContext } from "./readContext";
 import { isSimpleMainEvent, isInteractiveMainEvent } from "./simpleMainEvent";
 import { trackMovementOccurrences } from "../../movement/occurrence";
+import { isTriggerObservation, validateObservedSource } from "./conditionalTriggers";
 
 export type FixtureContext = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number }>;
 type Receipt = { requestId: string; fingerprint: string };
@@ -41,6 +42,7 @@ export class V3FixtureCoordinator {
   #battleCounters: BattleCounters;
   #lifeTrigger: boolean;
   #readContext: EventContext;
+  #occurrenceAuthorized = false;
   #counterPower = (ref: Readonly<{ instanceId: string; generation: number }>) => this.#battleCounters.filter(entry => entry.target.instanceId === ref.instanceId && entry.target.generation === ref.generation).reduce((sum, entry) => sum + entry.amount, 0);
   constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; definitions?: readonly ApprovedV3Card[]; statEffects?: StatEffects; keywordGrants?: KeywordGrants; triggerCause?: TriggerCause; counterEventCause?: CounterEventCause; mainEventCause?: Readonly<{ event: MovementEvent }>; lifeTriggerCause?: LifeTriggerCause; battleCounters?: BattleCounters; checkEvents?: (events: readonly MovementEvent[]) => void }>) {
     ensureMove(process.env.NODE_ENV !== "production" && options.mode === "syntheticNoAbilities", "v3-fixture-disabled");
@@ -83,14 +85,21 @@ export class V3FixtureCoordinator {
         event.after?.instanceId === source.instanceId && event.after.cardId === source.cardId && event.after.generation === source.generation && event.before.generation + 1 === source.generation, "v3-life-trigger-authorization");
     } else if (eventUse) {
       const event = eventUse.event;
-      ensureMove(effect.kind === "activated" && source.kind === "event" && (mainUse ? (card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent(effect) : ["3.0.0-subset.20", "3.0.0-subset.21"].includes(card.definition.schemaVersion) && isInteractiveMainEvent(effect)) && !battle && checkTiming(progression, identity.actor, "mainEffect").allowed :
+      ensureMove(effect.kind === "activated" && source.kind === "event" && (mainUse ? (card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent(effect) : ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22"].includes(card.definition.schemaVersion) && isInteractiveMainEvent(effect)) && !battle && checkTiming(progression, identity.actor, "mainEffect").allowed :
         effect.timing.type === "COUNTER" && battle?.step === "counter" && battle.battleId === options.counterEventCause!.battleId && battle.defender === identity.actor) &&
         at.zone === "trash" && event.kind === "moved" && event.from?.player === identity.actor && event.from.zone === "hand" && event.to?.player === identity.actor && event.to.zone === "trash" &&
         event.before?.kind === "event" && event.before.owner === identity.actor && event.before.controller === identity.actor && event.before.cardId === source.cardId && event.before.instanceId === source.instanceId &&
         event.after?.instanceId === source.instanceId && event.after.generation === source.generation && event.before.generation + 1 === source.generation && event.after.cardId === source.cardId, "v3-counter-event-authorization");
     } else if (trigger) {
       ensureMove(effect.kind === "triggered" && effect.timing.type === trigger.type, "v3-fixture-trigger-type");
-      if (trigger.type === "ON_PLAY") {
+      if (trigger.type === "ON_EVENT") {
+        const record = trigger.observation;
+        ensureMove(card.definition.schemaVersion === "3.0.0-subset.22" && isTriggerObservation(record) && record.result === true && record.status === "PENDING" &&
+          record.key.length === 64 && record.eventId === trigger.eventId && record.context.effectController === identity.actor &&
+          record.effectId === identity.effectId && record.source.instanceId === source.instanceId && record.source.generation === source.generation &&
+          validateObservedSource(record, movement, new Map(definitions.map(card => [card.definition.cardId, card]))) === "CURRENT", "v3-fixture-observed-authorization");
+        this.#occurrenceAuthorized = true;
+      } else if (trigger.type === "ON_PLAY") {
         const event = trigger.event;
         ensureMove(event.kind === "moved" && event.eventId === trigger.eventId && event.from && event.to && event.from.zone !== event.to.zone &&
           event.to.player === identity.actor && event.to.zone === at.zone && event.after?.instanceId === source.instanceId && event.after.generation === source.generation && event.after.cardId === source.cardId, "v3-fixture-entry-authorization");
@@ -111,8 +120,8 @@ export class V3FixtureCoordinator {
     const sourceEvent = trigger && "event" in trigger ? trigger.event : eventUse?.event ?? lifeUse?.event;
     const origin: EventOrigin | undefined = sourceEvent ? { type: "movement", event: sourceEvent } : trigger && "battleId" in trigger ?
       { type: "attack", eventId: trigger.eventId, battleId: trigger.battleId, attacker: trigger.attacker } : undefined;
-    this.#readContext = readEventContext(this.#board, this.#identity, null, origin);
-    this.#machine = new V3ResolutionMachine(card, this.#identity, this.#key, fixtureEnvironment(() => this.#board, this.#identity, card, this.#facts, this.#now, this.#definitions, () => this.#statEffects, this.#progression.activePlayer, this.#counterPower, this.#readContext, () => this.#keywordGrants));
+    this.#readContext = trigger?.type === "ON_EVENT" ? trigger.observation.context : readEventContext(this.#board, this.#identity, null, origin);
+    this.#machine = new V3ResolutionMachine(card, this.#identity, this.#key, fixtureEnvironment(() => this.#board, this.#identity, card, this.#facts, this.#now, this.#definitions, () => this.#statEffects, this.#progression.activePlayer, this.#counterPower, this.#readContext, () => this.#keywordGrants, this.#occurrenceAuthorized));
     this.#progression = applySystemEvent(this.#progression, this.#progression.revision, { kind: "beginResolution", resolutionId: identity.resolutionId, controller: identity.actor });
   }
   context(): FixtureContext { return { frameRevision: this.#machine.viewFor(this.#identity.actor).revision, movementRevision: this.#board.revision, progressionRevision: this.#progression.revision }; }
@@ -140,7 +149,7 @@ export class V3FixtureCoordinator {
     this.#busy = true;
     try {
       const draft = { board: this.#board, events: [...this.#events], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants };
-      const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => draft.statEffects, this.#progression.activePlayer, this.#counterPower, this.#readContext, () => draft.keywordGrants);
+      const environment = fixtureEnvironment(() => draft.board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => draft.statEffects, this.#progression.activePlayer, this.#counterPower, this.#readContext, () => draft.keywordGrants, this.#occurrenceAuthorized);
       const machine = V3ResolutionMachine.restore(this.#card, this.#identity, this.#key, environment, this.#machine.exportForStorage(), current.frameRevision);
       action(machine, draft); let progression = this.#gate(this.#progression, machine);
       const outcome = deckOutOutcome(draft.board);

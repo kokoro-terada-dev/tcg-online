@@ -10,16 +10,22 @@ import { V3SyntheticMatchCoordinator } from "./matchCoordinator";
 import type { V3SessionView } from "./sessionProtocol";
 import { ensureMove } from "../../movement/state";
 const labels: Record<string, string> = { fieldDraw: "自身をレストして1枚ドロー", draw: "1枚ドロー", paidDraw: "任意発動・コストでドロー", search: "上から3枚サーチ", buff: "自分+1000・このターン", debuff: "相手-1000・相手ターン終了まで", costDown: "自分コスト-1・このターン", unblockable: "リーダーにブロック不可を付与" };
-export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], firstPlayer: 0 | 1, key: Uint8Array, eventMode: "atomic" | "selection" = "atomic") {
+export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], firstPlayer: 0 | 1, key: Uint8Array, eventMode: "atomic" | "selection" | "triggers" = "atomic") {
   const match = createMatch(decks[0], decks[1]), imageAliases: Record<string, string> = {}, always = () => ({ type: "all", conditions: [] });
   const plans = ([0, 1] as const).map(actor => {
     const z = match.players[actor].zones, leader = z.leader[0]!, cardId = `V3-SESSION-LEADER-${actor}`;
     imageAliases[cardId] = leader.cardId; leader.cardId = cardId;
     for (let i = 0; i < 2; i++) z.activeDon.push({ ...z.donDeck.shift()!, faceUp: true, rotated: false });
-    return compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.16", cardId, cardVersion: "session-fixture.4", name: "Synthetic session leader", cardType: "leader",
+    return compileV3CardJson(JSON.stringify({ schemaVersion: eventMode === "triggers" ? "3.0.0-subset.22" : "3.0.0-subset.16", cardId, cardVersion: eventMode === "triggers" ? "session-observed.1" : "session-fixture.4", name: "Synthetic session leader", cardType: "leader",
       baseStats: { cost: null, power: 5000, counter: null, life: null }, colors: [], traits: [], attributes: [], keywords: [], reviewStatus: "approved",
       source: { text: "Synthetic session only: draw once per object turn, or optionally rest one DON and discard one hand to draw; or look at three cards, reveal up to one character with cost at most three and add it to hand, then return the rest to deck bottom in chosen order. Also select own leader power +1000 through this turn end, opponent leader power -1000 through their next turn end, or own character cost -1 through this turn end; or grant CANNOT_BE_BLOCKED to own leader through this turn end. Each effect once per object turn. Not a real card or official ruling.", triggerText: "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-fixture.4").digest("hex") },
-      effects: [...["draw", "paidDraw"].map(id => ({ id, kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: id === "paidDraw", usageLimit: { type: "PER_TURN", scope: "SOURCE_OBJECT", count: 1 },
+      effects: [...(eventMode === "triggers" ? ["watchDraw", "watchHand"].map(id => ({ id, kind: "triggered", timing: { type: "ON_EVENT", event: "CARD_ENTERED", snapshot: "TRANSACTION_AFTER", relation: "OTHER",
+        owner: "SELF", controller: "SELF", fromZones: ["hand"], toZones: ["character"], cardTypes: ["character"], filters: always() },
+        sourceZones: ["leader"], optional: false, usageLimit: null, activationConditions: always(), resolutionConditions: always(), costs: [], actions: [
+          ...(id === "watchHand" ? [{ type: "SELECT", bindAs: "hand", selector: { type: "CARDS", owner: "SELF", controller: "SELF", chooser: "SELF", zone: "hand", visibility: "OWNER_ONLY", faceUpOnly: false,
+            cardTypes: ["character", "stage", "event"], filters: always(), excludeSource: false, min: 0, max: 1, selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } }] : []),
+          { type: "DRAW", player: "SELF", count: 1 }]
+      })) : []), ...["draw", "paidDraw"].map(id => ({ id, kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: id === "paidDraw", usageLimit: { type: "PER_TURN", scope: "SOURCE_OBJECT", count: 1 },
         activationConditions: always(), resolutionConditions: always(), costs: id === "paidDraw" ? [{ type: "REST_DON", count: 1 }, { type: "DISCARD_HAND", count: 1 }] : [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] })),
         { id: "search", kind: "activated", timing: { type: "MAIN" }, sourceZones: ["leader"], optional: false, usageLimit: { type: "PER_TURN", scope: "SOURCE_OBJECT", count: 1 },
           activationConditions: always(), resolutionConditions: always(), costs: [], actions: [
