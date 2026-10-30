@@ -1,6 +1,6 @@
 # 効果JSON生成に関する実装状況
 
-更新: PR03 / 2026-10-30。基準`4659b2c`。詳細は`card-effect-pr03.md`、メタデータは`card-effect-pr02.md`。
+更新: PR04 / 2026-10-30。基準`d6df2d4`。MAIN入口は`card-effect-pr04.md`、集合条件は`card-effect-pr03.md`、メタデータは`card-effect-pr02.md`。
 対象は隔離v3エンジン。通常対戦・一人回し・旧効果スキーマと混ぜないでください。
 
 ## 対応段階の区別
@@ -12,7 +12,7 @@
 | 解決機械 | 選択・支払い・work待ち・保存データからの再開を実装 | 本番DB保存/ネットワーク再接続復旧ではない |
 | 盤面適用 | 限定的な移動・修正・キーワード・誘発・バトル | 実行時の領域/所有者/世代/非公開情報チェックあり |
 | 実カード | 14種類、指定プリセットのみ独立承認 | 生成JSONを配置しただけでは使用不可 |
-| 画面・Socket | 限定実カード試合、先後・マリガン・勝敗まで接続 | MAINのSocket発動元は現状リーダー固定。キャラ/ステージMAINは核の対応と画面接続を区別 |
+| 画面・Socket | 限定実カード試合、先後・マリガン・勝敗まで接続。MAINはleader/character/stageの個体別tokenと中央ダイアログ | 発動元/世代/効果/revisionをサーバー再検証。イベントMAINは未対応 |
 
 ## 実装済み（限定範囲）
 
@@ -20,6 +20,7 @@
 - 新17のPredicate: CARD_NAME、CARD_METADATA、HAS_ABILITY。名前・特徴・色・属性のliteral/集合条件、印刷/付与/現在の能力タグ。既存のAND/OR/NOTと合成。
 - 新18: EXISTS、COUNT、条件専用QUERY_CARDS。公開領域と自分手札の単一領域を対象とし、Selectorと共通評価。SOURCE除外、cost/powerの明示printed/current参照。UNKNOWNは0/falseにしない。
 - PR00/01: 実行不可レビュー台帳、EventContext、権限付きDerivedCardFacts。新Predicateも同じFacts/evaluate経路を使用。
+- PR04: MAIN発動元をサーバー列挙し、カード個体/effectId/tokenで選択。可否preflightと既存の支払い・解決機構を分離。通常対戦・一人回しは対象外。
 - 発動コスト: REST_DON、REST_SOURCE、DISCARD_HAND、DON_RETURN。複合支払いの重複を検証。
 - 選択: 公開の場/trash/public、自分手札、自分active/rest/attached DON、自分が見たデッキ上の集合。
 - アクション: 命令一覧JSONの15種。移動・KO・REST・SET_ACTIVE・DRAW・サーチ/公開/順序・分岐等。

@@ -101,6 +101,9 @@ PR03更新（2026-10-30）: EXISTS/COUNT/QUERY_CARDS、SOURCE除外、共通filt
 
 ### F04 MAINの発生元とイベントMAIN
 
+PR04更新（2026-10-30）: leader/character/stageの個体別MAIN発動元token・Socket・中央モーダルを接続済み。
+詳細は`card-effect-pr04.md`。以下の提案のうちイベントMAINはPR05として未実施です。
+
 - 代表: ST01-015「【メイン】…KOする」、EB01-020のhand event使用。
 - 提案: メイン使用手続USE_EVENTと、承認されたEFFECT_REF。手札からの使用と効果本文の呼出を分ける。
 - 改修: compilerのevent×MAIN許可、counterEvents相当の準備処理、matchCoordinator、localServer、UIの発生元token。

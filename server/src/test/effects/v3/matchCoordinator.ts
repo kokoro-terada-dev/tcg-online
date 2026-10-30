@@ -1,8 +1,8 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { MasterSnapshot } from "../../cardMaster";
 import type { CardObjectRef } from "../types";
 import type { MovementEvent, MovementOperation, MovementState } from "../../movement/types";
-import { MovementStore } from "../../movement/engine";
+import { MovementStore, visibleTo } from "../../movement/engine";
 import { projectV3Movement } from "./projection";
 import { dataArray, dataObject, ensureMove, freezeMovement, getCard, location, reference, validateMovementState } from "../../movement/state";
 import type { Progression } from "../../progression/types";
@@ -104,19 +104,32 @@ export class V3SyntheticMatchCoordinator {
   }
   activate(actor: Seat, requestId: string, expected: V3MatchContext, source: Readonly<CardObjectRef>, effectId: string) {
     reference(source); label(effectId);
-    return this.#run(actor, requestId, expected, { kind: "activate", source: { instanceId: source.instanceId, generation: source.generation }, effectId }, () => {
-      this.#settled(); ensureMove(this.#history.length < 256 && checkTiming(this.#progression, actor, "mainEffect").allowed, "v3-match-cannot-activate");
-      const object = getCard(this.#board, source), card = this.#cards.get(object.cardId), effect = card?.definition.effects.find(effect => effect.id === effectId);
-      ensureMove(card && effect && effect.kind === "activated" && effect.timing.type === "MAIN", "v3-match-unregistered-effect"); const limit = effect.usageLimit?.count ?? null;
-      if (this.#reviewed) ensureMove(this.#canStartReviewedEffect(actor, source, card, effectId), "v3-reviewed-activation-unavailable");
-      const usageKey = JSON.stringify([this.#board.turnNumber, actor, source.instanceId, source.generation, effectId]);
-      ensureMove(limit === null || (this.#usage.get(usageKey) ?? 0) < limit, "v3-match-usage-exhausted");
-      const resolutionId = randomUUID(), coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
-        identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: this.#board, progression: this.#progression,
-        signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, checkEvents: this.#checkNewEvents });
-      this.#archive(); this.#active = { coordinator, actor, cardId: object.cardId, effectId, source: { ...source }, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: null };
-      this.#progression = coordinator.snapshotForCoordinator().progression;
+    return this.#run(actor, requestId, expected, { kind: "activate", source: { instanceId: source.instanceId, generation: source.generation }, effectId }, () => this.#startMain(actor, source, effectId, false));
+  }
+  activateMain(actor: Seat, requestId: string, expected: V3MatchContext, sourceToken: string, effectId: string) {
+    label(sourceToken); label(effectId);
+    return this.#run(actor, requestId, expected, { kind: "activateMain", sourceToken, effectId }, () => {
+      const choice = this.mainEffectsFor(actor).find(entry => entry.sourceToken === sourceToken && entry.effectId === effectId && entry.enabled);
+      ensureMove(choice, "v3-main-source-token-unavailable");
+      this.#startMain(actor, choice.source, effectId, true);
     });
+  }
+  #startMain(actor: Seat, source: Readonly<CardObjectRef>, effectId: string, preflight: boolean): void {
+    this.#settled(); ensureMove(this.#history.length < 256 && checkTiming(this.#progression, actor, "mainEffect").allowed, "v3-match-cannot-activate");
+    const object = getCard(this.#board, source), card = this.#cards.get(object.cardId), effect = card?.definition.effects.find(effect => effect.id === effectId);
+    const at = location(this.#board, object.instanceId);
+    ensureMove(card && card.definition.cardType === object.kind && ["leader", "character", "stage"].includes(at.zone) && object.kind === at.zone &&
+      at.player === actor && object.owner === actor && object.controller === actor && object.faceUp && visibleTo(this.#board, object, at, 0) && visibleTo(this.#board, object, at, 1), "v3-main-source-policy");
+    ensureMove(card && effect && effect.kind === "activated" && effect.timing.type === "MAIN", "v3-match-unregistered-effect"); const limit = effect.usageLimit?.count ?? null;
+    ensureMove(effect.sourceZones.some(zone => zone === at.zone), "v3-main-source-zone");
+    if (this.#reviewed || preflight) ensureMove(this.#canStartMainEffect(actor, source, card, effectId), "v3-reviewed-activation-unavailable");
+    const usageKey = JSON.stringify([this.#board.turnNumber, actor, source.instanceId, source.generation, effectId]);
+    ensureMove(limit === null || (this.#usage.get(usageKey) ?? 0) < limit, "v3-match-usage-exhausted");
+    const resolutionId = randomUUID(), coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
+      identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: this.#board, progression: this.#progression,
+      signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, checkEvents: this.#checkNewEvents });
+    this.#archive(); this.#active = { coordinator, actor, cardId: object.cardId, effectId, source: { ...source }, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: null };
+    this.#progression = coordinator.snapshotForCoordinator().progression;
   }
   resolveTrigger(actor: Seat, requestId: string, expected: V3MatchContext, token: string) {
     label(token);
@@ -397,10 +410,26 @@ export class V3SyntheticMatchCoordinator {
     return card.definition.effects.filter(effect => effect.kind === "activated" && effect.timing.type === "MAIN").map(effect => {
       const limit = effect.usageLimit?.count ?? null, usageKey = JSON.stringify([this.#board.turnNumber, actor, source.instanceId, source.generation, effect.id]);
       const used = this.#usage.get(usageKey) ?? 0;
-      return { effectId: effect.id, used, limit, enabled: ready && effect.sourceZones.some(zone => zone === at.zone) && (limit === null || used < limit) && (!this.#reviewed || this.#canStartReviewedEffect(actor, source, card, effect.id)) };
+      return { effectId: effect.id, used, limit, enabled: ready && effect.sourceZones.some(zone => zone === at.zone) && (limit === null || used < limit) && (!this.#reviewed || this.#canStartMainEffect(actor, source, card, effect.id)) };
     });
   }
-  #canStartReviewedEffect(actor: Seat, source: Readonly<CardObjectRef>, card: ApprovedV3Card, effectId: string): boolean {
+  mainEffectsFor(actor: Seat) {
+    ensureMove(actor === 0 || actor === 1, "v3-match-actor");
+    return freezeMovement((["leader", "character", "stage"] as const).flatMap(zone => this.#board.players[actor][zone].flatMap((id, slot) => {
+      if (!id) return [];
+      const object = this.#board.cards[id]!, at = location(this.#board, id), card = this.#cards.get(object.cardId);
+      if (!card || card.definition.cardType !== zone || object.kind !== zone || object.owner !== actor || object.controller !== actor || !object.faceUp ||
+        at.player !== actor || at.zone !== zone || !visibleTo(this.#board, object, at, 0) || !visibleTo(this.#board, object, at, 1)) return [];
+      const source = { instanceId: id, generation: object.generation };
+      return this.effectsFor(actor, source).map(effect => {
+        const sourceToken = createHmac("sha256", this.#key).update(JSON.stringify(["v3-main-source.1", this.#board.matchId, actor, this.context(), source, zone, effect.effectId, card.definitionHash])).digest("hex");
+        let available = false;
+        try { available = effect.enabled && this.#history.length < 256 && !this.#lifeDecision && this.#canStartMainEffect(actor, source, card, effect.effectId); } catch { /* Unknown facts do not authorize activation. */ }
+        return { ...effect, enabled: available, sourceToken, source, cardId: object.cardId, zone, slot };
+      });
+    })));
+  }
+  #canStartMainEffect(actor: Seat, source: Readonly<CardObjectRef>, card: ApprovedV3Card, effectId: string): boolean {
     const effect = card.definition.effects.find(effect => effect.id === effectId)!;
     const facts = pinMasterFacts(this.#board, { master: this.#master, numericPolicy: "certifiedUnmodified" });
     const environment = fixtureEnvironment(() => this.#board, { matchId: this.#board.matchId, resolutionId: "activation-preflight", actor, source, effectId },

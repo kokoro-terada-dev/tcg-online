@@ -16,14 +16,14 @@ export type V3SessionView = Readonly<{
   lifePending: boolean; lifeChoice: Readonly<{ selectionId: string; token: string; expiresAt: number; cardId: string; canTrigger: boolean }> | null;
   lifeTrigger: Readonly<{ cardId: string; owner: 0 | 1 }> | null;
   resolutionActor: 0 | 1 | null; workType: V3FixtureView["workType"];
-  effects: readonly Readonly<{ effectId: string; label: string; enabled: boolean; used: number; limit: number | null }>[];
+  effects: readonly Readonly<{ sourceToken: string; source: Readonly<{ instanceId: string; generation: number }>; cardId: string; zone: "leader" | "character" | "stage"; slot: number; effectId: string; label: string; enabled: boolean; used: number; limit: number | null }>[];
   playableCards: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string; cost: number | null; zone: "character" | "stage"; slotIndex: number; enabled: boolean }>[];
   publicReveals: readonly Readonly<{ cardId: string; owner: 0 | 1 }>[];
   publicStats: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string; player: 0 | 1; zone: "leader" | "character" | "stage"; slot: number; power: number | null; cost: number | null; powerDelta: number; costDelta: number; keywords: readonly string[] }>[];
   history: readonly Readonly<{ turnNumber: number; actor: 0 | 1; cardId: string; effectId: string; resolutionId: string; committed: boolean; declined: boolean; triggerEventId: string | null }>[];
 }>;
 export type V3SessionCommand = Readonly<{ matchId: string; requestId: string; context: V3SessionContext }> & (
-  { kind: "activate"; effectId: string } | { kind: "trigger"; token: string } | { kind: "play"; card: Readonly<{ instanceId: string; generation: number }>; slotIndex?: number } |
+  { kind: "activate"; sourceToken: string; effectId: string } | { kind: "trigger"; token: string } | { kind: "play"; card: Readonly<{ instanceId: string; generation: number }>; slotIndex?: number } |
   { kind: "attack"; source: Readonly<{ instanceId: string; generation: number }>; target: Readonly<{ instanceId: string; generation: number }> } |
   { kind: "counter"; card: Readonly<{ instanceId: string; generation: number }>; target: Readonly<{ instanceId: string; generation: number }> } |
   { kind: "counterEvent"; card: Readonly<{ instanceId: string; generation: number }>; effectId: string } |

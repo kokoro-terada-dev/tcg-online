@@ -201,8 +201,8 @@ export async function startLocalV3Server(port = 0, options: Readonly<{ lanOrigin
       else { ensureMove(input.kind === "mulligan" && typeof input.value === "boolean", "v3-mulligan-choice"); setup.mulligan(actor, requestId, input.revision as number, input.value); }
       if (setup.viewFor(actor).status === "ready") {
         if (!room.continuous) {
-          const coordinator = setup.gameForServer(), board = coordinator.snapshotForCoordinator().movement;
-          room.continuous = { matchId: setup.matchId, coordinator, imageAliases: { DON: "don" }, sources: ([0, 1] as const).map(player => ({ instanceId: board.players[player].leader[0]!, generation: 0 })) };
+          const coordinator = setup.gameForServer();
+          room.continuous = { matchId: setup.matchId, coordinator, imageAliases: { DON: "don" } };
         }
         publishSession(room); return { sessionView: sessionView(room.continuous, room.code, actor) };
       }
@@ -219,12 +219,12 @@ export async function startLocalV3Server(port = 0, options: Readonly<{ lanOrigin
     handle("v3-session:command", input => {
       const { room, actor, session } = continuousActive(); ensureMove(input && typeof input === "object", "v3-session-command-object");
       const kind = Object.getOwnPropertyDescriptor(input, "kind")?.value;
-      const fields: Record<string, string[]> = { activate: ["effectId"], trigger: ["token"], play: ["card"], answer: ["selectionId", "tokens"], life: ["selectionId", "token"], lifeTrigger: ["selectionId", "token"],
+      const fields: Record<string, string[]> = { activate: ["effectId", "sourceToken"], trigger: ["token"], play: ["card"], answer: ["selectionId", "tokens"], life: ["selectionId", "token"], lifeTrigger: ["selectionId", "token"],
         attack: ["source", "target"], counter: ["card", "target"], counterEvent: ["card", "effectId"], attachDon: ["target", "count"], block: ["card"], advance: [], work: [], endTurn: [], passBlock: [], endCounter: [], damage: [] };
       ensureMove(typeof kind === "string" && Object.hasOwn(fields, kind), "v3-session-command-kind");
       dataObject(input, ["kind", "requestId", "matchId", "context", ...fields[kind]!, ...(kind === "play" && Object.hasOwn(input, "slotIndex") ? ["slotIndex"] : [])]);
       ensureMove(input.matchId === session.matchId, "v3-session-match-context"); const requestId = label(input.requestId), expected = input.context as V3SessionContext, c = session.coordinator;
-      if (kind === "activate") c.activate(actor, requestId, expected, session.sources[actor]!, label(input.effectId));
+      if (kind === "activate") c.activateMain(actor, requestId, expected, label(input.sourceToken), label(input.effectId));
       else if (kind === "trigger") c.resolveTrigger(actor, requestId, expected, label(input.token));
       else if (kind === "attack") c.attack(actor, requestId, expected, input.source as { instanceId: string; generation: number }, input.target as { instanceId: string; generation: number });
       else if (kind === "counter") c.counter(actor, requestId, expected, input.card as { instanceId: string; generation: number }, input.target as { instanceId: string; generation: number });

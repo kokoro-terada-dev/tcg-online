@@ -4,6 +4,7 @@ import type { SessionDetails } from "./v3SessionClient";
 import { v3BoardView } from "./v3FixtureClient";
 import V3ChoicePanel from "./V3ChoicePanel";
 import TestBoard from "./TestBoard";
+import V3MainEffectDialog from "./V3MainEffectDialog";
 import { getLocalCardImage } from "../utils/localCardImages";
 const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", GRANT_KEYWORD: "能力を付与", FINISH_LIFE_TRIGGER: "トリガー処理を終了" };
 export default function V3SessionPanel({ view, busy, needsSync, error, isHost, onAction, onSync, onEnd }: {
@@ -12,10 +13,12 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
 }) {
   const [collapsed, setCollapsed] = useState(false), frame = view.frame, ownTurn = view.activePlayer === view.localPlayerIndex;
   const [revealPreview, setRevealPreview] = useState<string | null>(null);
+  const [mainSourceId, setMainSourceId] = useState<string | null>(null);
   const [counterTargetId, setCounterTargetId] = useState<string>("");
   useEffect(() => setCounterTargetId(view.battle?.target.instanceId ?? ""), [view.battle?.battleId, view.battle?.target.instanceId]);
   useEffect(() => setCollapsed(false), [view.context.resolutionId, frame?.choice?.selectionId, frame?.status, view.turnNumber, view.gate, view.pendingTriggerCount, view.battle?.step, view.lifePending]);
   useEffect(() => setRevealPreview(null), [view.context.revision]);
+  useEffect(() => setMainSourceId(null), [view.context.revision]);
   const idle = !view.battle && !view.outcome && view.gate === "idle" && (!frame || frame.status === "completed"), disabled = busy || needsSync;
   const playable = (id: string) => view.playableCards.find(play => play.card.instanceId === id);
   const battle = view.battle, defending = battle?.defender === view.localPlayerIndex;
@@ -30,7 +33,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
       canTestAttackTarget={(card, sourceId) => !disabled && view.attackChoices.targets.some(option => option.card.instanceId === card.id) && (!sourceId || view.attackChoices.pairs.some(pair => pair.sourceId === sourceId && pair.targetId === card.id))}
       canTestAttachDon={card => !disabled && idle && ownTurn && view.movement.players[view.localPlayerIndex].activeDon.length > 0 && view.publicStats.some(option => option.card.instanceId === card.id && option.player === view.localPlayerIndex && (option.zone === "leader" || option.zone === "character"))}
       onTestAttachDon={card => { const target = view.publicStats.find(option => option.card.instanceId === card.id)?.card; if (target) onAction("attachDon", { target, count: 1 }); }}
-      onInspectEffects={() => setCollapsed(false)} onTestAttack={(sourceId, targetId) => {
+      onInspectEffects={card => { setMainSourceId(card.id); setCollapsed(true); }} onTestAttack={(sourceId, targetId) => {
         const source = view.attackChoices.sources.find(option => option.card.instanceId === sourceId)?.card, target = view.attackChoices.targets.find(option => option.card.instanceId === targetId)?.card;
         if (source && target) onAction("attack", { source, target });
       }}
@@ -86,7 +89,6 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
           </p>)}</div>}
         {frame?.choice?.chooser === view.localPlayerIndex && <V3ChoicePanel key={frame.choice.selectionId} choice={frame.choice} imageAliases={view.imageAliases} disabled={disabled} onConfirm={tokens => onAction("answer", { tokens })} />}
         <div className="test-effect-actions">
-          {view.effects.map(effect => <button key={effect.effectId} disabled={disabled || !effect.enabled} onClick={() => onAction("activate", { effectId: effect.effectId })}>{effect.label} {effect.limit === null ? "" : `${effect.used}/${effect.limit}`}</button>)}
           {view.resolutionActor === view.localPlayerIndex && frame?.status === "ready" && <button disabled={disabled} onClick={() => onAction("advance")}>処理を進める</button>}
           {view.resolutionActor === view.localPlayerIndex && frame?.status === "waitingForWork" && <button disabled={disabled} onClick={() => onAction("work")}>{view.workType ? workLabels[view.workType] : "処理を実行"}</button>}
           {ownTurn && <button disabled={disabled || !idle} onClick={() => onAction("endTurn")}>ターン終了</button>}
@@ -95,6 +97,8 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
         </div>{error && <p role="alert">{error}</p>}
       </div>
     </section>
+    {mainSourceId && <V3MainEffectDialog view={view} sourceId={mainSourceId} disabled={disabled} onClose={() => setMainSourceId(null)}
+      onActivate={effect => { setMainSourceId(null); setCollapsed(false); onAction("activate", { sourceToken: effect.sourceToken, effectId: effect.effectId }); }} />}
     {view.outcome && <div className="test-effect-result" role="status">{view.outcome.winner === null ? "DRAW" : view.outcome.winner === view.localPlayerIndex ? "WIN" : "LOSE"}</div>}
     {revealPreview && <div className="test-preview" role="dialog" aria-modal="true" aria-label="公開カード詳細" onClick={() => setRevealPreview(null)}>
       {getLocalCardImage(revealPreview)?.imageUrl ? <img src={getLocalCardImage(revealPreview)!.imageUrl} alt={revealPreview} onClick={event => event.stopPropagation()} /> : <span>{revealPreview}</span>}

@@ -1,5 +1,8 @@
 # 代表カードの意味分解・テスト計画
 
+PR04更新: 実カードの追加承認はせず、単純なcharacter/stage MAINを合成fixtureで検証しました。
+既存Kid MAINも回帰確認。結果は`card-effect-pr04.md`、テストは`v3-main-sources.cjs`と`v3-session-server.cjs`を参照。
+
 基準: `0cd0883` / 入力CSV SHA256 `cb0695bb48d2d73b4fe5d9931a71e0980be8e7ea7dadbb8bfb4d605b0eb8cb55`。
 この文書は新規テストの計画です。未実装機能のテストを実行済みとは扱いません。
 

@@ -1,6 +1,7 @@
 # ChatGPT向け カード効果JSON生成ガイド
 
-更新日: 2026-10-30。初回調査`e6ba075`、PR03実装開始`4659b2c`。
+更新日: 2026-10-30。初回調査`e6ba075`、PR04実装開始`d6df2d4`。
+PR04はDSLを変えず、leader/character/stage MAINの個体別発動元tokenと画面を接続しました。[PR04](card-effect-pr04.md)参照。イベントMAINは未対応です。
 PR03のEXISTS/COUNT/QUERY_CARDSと数値の明示printed/current参照はsubset.18です。[PR03](card-effect-pr03.md)を併読してください。
 PR02a/bの新Predicateはsubset.17です。詳細・全パラメータは[PR02](card-effect-pr02.md)を併読してください。
 旧subset.16と承認14枚は併存し、旧hashを維持します。

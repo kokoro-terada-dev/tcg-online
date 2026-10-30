@@ -6,7 +6,8 @@ const deck = { name: 'Synthetic session', leaderCardId: 'LEADER', mainDeck: Arra
 const request = (socket, event, input = null) => new Promise((resolve, reject) => socket.timeout(3000).emit(event, input, (error, reply) => error ? reject(error) : resolve(reply)));
 const once = (socket, event) => new Promise((resolve, reject) => { const timer = setTimeout(() => reject(Error(event)), 3000); socket.once(event, value => { clearTimeout(timer); resolve(value); }); });
 let sequence = 0;
-const command = (v, kind, extra = {}) => ({ matchId: v.matchId, requestId: `session-${++sequence}`, context: v.context, kind, ...extra });
+const command = (v, kind, extra = {}) => ({ matchId: v.matchId, requestId: `session-${++sequence}`, context: v.context, kind,
+  ...(kind === 'activate' ? { sourceToken: v.effects.find(effect => effect.zone === 'leader' && effect.effectId === extra.effectId)?.sourceToken } : {}), ...extra });
 async function send(socket, v, kind, extra = {}) {
   const result = await request(socket, 'v3-session:command', command(v, kind, extra)); assert.equal(result.ok, true, JSON.stringify(result)); return result.sessionView;
 }
@@ -29,6 +30,35 @@ async function complete(socket, v) {
   }
   throw Error('Session resolution did not complete');
 }
+
+for (const actor of [0, 1]) for (const zone of ['character', 'stage']) test(`MAIN source tokens select a public ${zone} and keep hand choices private between two clients (seat=${actor})`, async t => {
+  const selected = zone === 'stage' ? { ...deck, mainDeck: Array(50).fill('STAGE'), cardTypes: { STAGE: 'stage' } } : deck;
+  const { clients } = await setup(t, actor, [selected, selected]), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView;
+  const play = v.playableCards.find(p => p.enabled); v = await send(own, v, 'play', { card: play.card });
+  v = await send(own, v, 'trigger', { token: v.triggerChoices[0].token }); v = await complete(own, v);
+  const e = v.effects.find(e => e.zone === zone && e.source.instanceId === play.card.instanceId);
+  assert.ok(e?.enabled); assert.ok(e.source.generation > play.card.generation);
+  const peerView = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.equal(peerView.effects.some(other => other.sourceToken === e.sourceToken || other.source.instanceId === e.source.instanceId), false);
+  const before = v.context;
+  for (const extra of [{ sourceToken: '0'.repeat(64), effectId: e.effectId }, { sourceToken: e.sourceToken, effectId: 'draw' }, { sourceToken: e.sourceToken, effectId: 'enterDraw' },
+    { sourceToken: peerView.effects[0].sourceToken, effectId: e.effectId }, { sourceToken: undefined, effectId: e.effectId },
+    { sourceToken: e.sourceToken, effectId: e.effectId, source: e.source }, { sourceToken: e.sourceToken, effectId: e.effectId, actor: 1 - actor }]) {
+    const denied = await request(own, 'v3-session:command', command(v, 'activate', extra)); assert.equal(denied.ok, false); assert.deepEqual(denied.sessionView.context, before);
+  }
+  assert.equal((await request(peer, 'v3-session:command', command(peerView, 'activate', { sourceToken: e.sourceToken, effectId: e.effectId }))).ok, false);
+  const input = command(v, 'activate', { sourceToken: e.sourceToken, effectId: e.effectId }), hand = v.movement.players[actor].hand.length;
+  const accepted = await request(own, 'v3-session:command', input); assert.equal(accepted.ok, true); v = accepted.sessionView;
+  const replay = await request(own, 'v3-session:command', input); assert.equal(replay.ok, true); assert.deepEqual(replay.sessionView.context, v.context);
+  assert.equal((await request(own, 'v3-session:command', command(v, 'activate', { sourceToken: e.sourceToken, effectId: e.effectId }))).ok, false);
+  v = await complete(own, v); assert.equal(v.movement.players[actor].hand.length, hand + 1);
+  const used = v.effects.find(other => other.source.instanceId === e.source.instanceId); assert.equal(used.used, 1); assert.equal(used.enabled, false);
+  assert.equal(v.movement.players[actor][zone][e.slot].rotated, true);
+  const seen = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.equal(seen.movement.players[actor].hand.length, hand + 1); assert.equal(seen.movement.players[actor].hand.every(card => card.cardId === null && card.ref === null), true);
+  assert.equal((await request(own, 'v3-session:command', command(v, 'activate', { sourceToken: e.sourceToken, effectId: e.effectId }))).ok, false);
+});
 
 for (const actor of [0, 1]) for (const useTrigger of [false, true]) test(`life trigger choice stays private until activation and releases its no-area source (seat=${actor}, trigger=${useTrigger})`, async t => {
   const stages = { ...deck, mainDeck: Array(50).fill('STAGE'), cardTypes: { STAGE: 'stage' } }, attacker = 1 - actor;
