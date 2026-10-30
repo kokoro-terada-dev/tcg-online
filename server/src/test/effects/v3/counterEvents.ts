@@ -25,10 +25,26 @@ export function prepareCounterEvent(board: MovementState, progression: Progressi
   cards: ReadonlyMap<string, ApprovedV3Card>, transactionId: string, resolutionId: string) {
   const choice = counterEventChoices(board, progression, actor, cards).find(row => row.card.instanceId === source.instanceId && row.card.generation === source.generation && row.effectId === effectId);
   ensureMove(choice?.enabled && choice.cost !== null, "v3-counter-event-unavailable"); getCard(board, source);
+  const used = prepareEventFromHand(board, actor, source, choice.cost, transactionId, resolutionId);
+  return { ...used, cause: { battleId: progression.battle!.battleId, event: used.event } };
+}
+
+// Shared event payment/movement only; MAIN and COUNTER keep separate timing authorization.
+export function prepareEventFromHand(board: MovementState, actor: 0 | 1, source: Readonly<CardObjectRef>, cost: number,
+  transactionId: string, resolutionId: string, reveal = false) {
+  const object = getCard(board, source), at = location(board, source.instanceId);
+  ensureMove(at.player === actor && at.zone === "hand" && object.kind === "event" && object.owner === actor && object.controller === actor &&
+    Number.isSafeInteger(cost) && cost >= 0 && board.players[actor].activeDon.length >= cost, "v3-event-use-unavailable");
   let candidate = board; const events: MovementEvent[] = [];
-  if (choice.cost > 0) {
-    const operations: MovementOperation[] = board.players[actor].activeDon.slice(0, choice.cost).map(id => ({ kind: "setRest", card: { instanceId: id!, generation: board.cards[id!]!.generation }, rotated: true }));
-    const paid = new MovementStore(board).commit({ transactionId: createHash("sha256").update(`${transactionId}:cost`).digest("hex"), matchId: board.matchId, expectedRevision: board.revision,
+  if (reveal) {
+    const opened = new MovementStore(candidate).commit({ transactionId: createHash("sha256").update(`${transactionId}:reveal`).digest("hex"), matchId: board.matchId, expectedRevision: candidate.revision,
+      turnNumber: board.turnNumber, actor, effectController: actor, source, mode: "rule", resolutionId,
+      operations: [{ kind: "reveal", card: source, scopeId: resolutionId, viewers: [0, 1] }] }, { status: "certifiedNone" });
+    candidate = opened.state; events.push(...opened.events);
+  }
+  if (cost > 0) {
+    const operations: MovementOperation[] = candidate.players[actor].activeDon.slice(0, cost).map(id => ({ kind: "setRest", card: { instanceId: id!, generation: candidate.cards[id!]!.generation }, rotated: true }));
+    const paid = new MovementStore(candidate).commit({ transactionId: createHash("sha256").update(`${transactionId}:cost`).digest("hex"), matchId: board.matchId, expectedRevision: candidate.revision,
       turnNumber: board.turnNumber, actor, effectController: null, source, mode: "cost", resolutionId, operations }, { status: "certifiedNone" });
     candidate = paid.state; events.push(...paid.events);
   }
@@ -37,5 +53,5 @@ export function prepareCounterEvent(board: MovementState, progression: Progressi
       to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "OTHER" }] }, { status: "certifiedNone" });
   events.push(...used.events); const event = used.events.find(event => event.kind === "moved" && event.after?.instanceId === source.instanceId)!;
   ensureMove(event?.after, "v3-counter-event-move-missing");
-  return { movement: used.state, events, source: { instanceId: event.after.instanceId, generation: event.after.generation }, cause: { battleId: progression.battle!.battleId, event } };
+  return { movement: used.state, events, source: { instanceId: event.after.instanceId, generation: event.after.generation }, event };
 }

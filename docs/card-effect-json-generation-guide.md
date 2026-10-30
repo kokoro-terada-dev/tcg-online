@@ -1,7 +1,8 @@
 # ChatGPT向け カード効果JSON生成ガイド
 
-更新日: 2026-10-30。初回調査`e6ba075`、PR04実装開始`d6df2d4`。
-PR04はDSLを変えず、leader/character/stage MAINの個体別発動元tokenと画面を接続しました。[PR04](card-effect-pr04.md)参照。イベントMAINは未対応です。
+更新日: 2026-10-30。初回調査`e6ba075`、PR05a実装開始`1dbf700`。
+新19のみ、自己DRAW/SEQUENCEの単純イベントMAINに対応しました。[PR05a](card-effect-pr05a.md)参照。対象選択等は未対応です。
+PR04のleader/character/stage MAINの個体別入口は[PR04](card-effect-pr04.md)を参照してください。
 PR03のEXISTS/COUNT/QUERY_CARDSと数値の明示printed/current参照はsubset.18です。[PR03](card-effect-pr03.md)を併読してください。
 PR02a/bの新Predicateはsubset.17です。詳細・全パラメータは[PR02](card-effect-pr02.md)を併読してください。
 旧subset.16と承認14枚は併存し、旧hashを維持します。
@@ -21,10 +22,10 @@ PR02a/bの新Predicateはsubset.17です。詳細・全パラメータは[PR02](
 ### ChatGPTに渡す資料
 
 1. このガイド。
-2. `card-effect-json-schema.json`（旧16）、`card-effect-metadata.schema.json`（17）、`card-effect-query.schema.json`（18）: Draft 2020-12。使用するカードのschemaVersionに合わせます。
+2. `card-effect-json-schema.json`（旧16）、`card-effect-metadata.schema.json`（17）、`card-effect-query.schema.json`（18）、`card-effect-main-event.schema.json`（19）: Draft 2020-12。schemaVersionに合わせます。
 3. `card-effect-types.ts.txt`: 現在の`dsl.ts`の型定義全文の写し。
-4. `card-effect-supported-operations.json`: 18の44命令/17の41命令/旧16の38命令のパラメータ、例、profile、実行制約。
-5. `card-effect-json-examples.json`: 新旧全文CardDefinitionの合成例14件。`card-effect-query-examples.json`: PR03の条件部分の合成全文例3件。
+4. `card-effect-supported-operations.json`: 18/19の44命令/17の41命令/旧16の38命令のパラメータ、例、profile、実行制約。
+5. `card-effect-json-examples.json`: 従来例14件。`card-effect-query-examples.json`: 集合条件例3件。`card-effect-main-event-examples.json`: 単純イベントMAIN例1件。すべて合成例です。
 6. `card-effect-implementation-status.md`: 実装の層と未対応一覧。
 7. `card-effect-pr02.md`と`card-effect-pr03.md`: メタデータ/能力タグ/集合の意味と互換性。
 8. 入力CSV、差異一覧、タグ/パターン分析、元の代表例。後者は実行仕様ではなく参考資料。
@@ -42,7 +43,7 @@ Zod Schemaはありません。正規の実装バリデータは`compileV3CardJs
 
 | キー | 型・制約 |
 | --- | --- |
-| schemaVersion | 必須。集合条件は`3.0.0-subset.18`、メタデータは17/18。旧16も独立profileとして受理 |
+| schemaVersion | 必須。単純イベントMAINは19、集合条件は18/19、メタデータは17〜19。旧16も独立profileとして受理 |
 | cardId | 必須、カード番号。ASCII識別子、100文字以下 |
 | cardVersion | 必須、定義の版。例`draft.1`。同じ番号の変更時は更新する運用を推奨 |
 | name | 必須、空白だけ不可、300文字以下 |
@@ -76,7 +77,7 @@ Zod Schemaはありません。正規の実装バリデータは`compileV3CardJs
 | id | 識別子。そのカード内の全Effect/node.idと重複不可 |
 | kind | `activated / triggered` |
 | timing | `{type:...}`、下表 |
-| sourceZones | ちょうど1要素。場の効果はカード種類と同じ、event COUNTERはhand、TRIGGERはlife |
+| sourceZones | ちょうど1要素。場の効果はカード種類と同じ、event COUNTER/新19 MAINはhand、TRIGGERはlife |
 | optional | boolean。発動前の任意確認。actions内の任意支払いではない |
 | usageLimit | null、または`{type:"PER_TURN",scope:"SOURCE_OBJECT",count:1}`等 |
 | activationConditions | Predicate、発動の前提条件 |
@@ -86,7 +87,7 @@ Zod Schemaはありません。正規の実装バリデータは`compileV3CardJs
 
 | timing | 許可される組合せ |
 | --- | --- |
-| MAIN | activated、leader/character/stage、sourceZonesは同じ種類 |
+| MAIN | activated、leader/character/stage、sourceZonesは同じ種類。新19のeventのみhandでSELF DRAW/SEQUENCE限定 |
 | ON_PLAY | triggered、character/stage、自身の登場 |
 | ON_ATTACK | triggered、leader/character、自身の攻撃 |
 | ON_OPPONENT_ATTACK | triggered、leader/character/stage、相手攻撃時に場の定義を監視 |
@@ -280,7 +281,7 @@ CARDSでdeck全体やlifeは選択できません。デッキ上の選択はLOOK
 | 3 | アタック時に条件付きドロー | 解決時の手札枚数IF。誘発成立条件ではない |
 | 4 | 自分ターン中power+1000 | **継続効果は未対応** |
 | 5 | 登場時に速攻付与 | BIND_SOURCE→GRANT_KEYWORD。例の期限は自分ターン終了 |
-| 6 | イベントMAIN | **未対応** |
+| 6 | イベントMAIN | 旧例は未対応。新19の単純なSELF DRAW/SEQUENCEだけ別の全文例で対応。対象選択などは未対応 |
 | 7 | イベントCOUNTER | 印刷costの支払い→使用→自分リーダーへBATTLE_END修正 |
 | 8 | ステージON_PLAY | stage→DRAW1 |
 | 9 | ステージMAIN | REST_SOURCE→DRAW1。核は対応、現状Socketはリーダー固定のためUIからの発動は未接続 |

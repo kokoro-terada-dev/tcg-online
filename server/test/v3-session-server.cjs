@@ -31,6 +31,32 @@ async function complete(socket, v) {
   throw Error('Session resolution did not complete');
 }
 
+for (const actor of [0, 1]) test(`simple event MAIN is atomic over Socket and reveals no unused hand cards (seat=${actor})`, async t => {
+  const events = { ...deck, mainDeck: Array(50).fill('EVENT'), cardTypes: { EVENT: 'event' } };
+  const { clients } = await setup(t, actor, [events, events]), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView, seen = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.equal(v.mainEventChoices.length, 5); assert.equal(seen.mainEventChoices.length, 0);
+  const old = v.mainEventChoices[0];
+  v = await send(own, v, 'activate', { effectId: 'paidDraw' }); v = await send(own, v, 'advance');
+  assert.equal(v.mainEventChoices.length, 0);
+  assert.equal((await request(own, 'v3-session:command', command(v, 'mainEvent', { sourceToken: old.sourceToken, effectId: old.effectId }))).ok, false);
+  const choice = v.frame.choice; v = await send(own, v, 'answer', { selectionId: choice.selectionId, tokens: [choice.options[1].token] });
+  const e = v.mainEventChoices[0], before = v.context;
+  for (const detail of [{ sourceToken: e.sourceToken, effectId: 'counterPower' }, { sourceToken: '0'.repeat(64), effectId: e.effectId }, { sourceToken: e.sourceToken, effectId: e.effectId, card: e.source }]) {
+    const denied = await request(own, 'v3-session:command', command(v, 'mainEvent', detail)); assert.equal(denied.ok, false); assert.deepEqual(denied.sessionView.context, before);
+  }
+  seen = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.equal((await request(peer, 'v3-session:command', command(seen, 'mainEvent', { sourceToken: e.sourceToken, effectId: e.effectId }))).ok, false);
+  const input = command(v, 'mainEvent', { sourceToken: e.sourceToken, effectId: e.effectId }), accepted = await request(own, 'v3-session:command', input);
+  assert.equal(accepted.ok, true); v = accepted.sessionView; assert.equal(v.frame.status, 'completed'); assert.equal(v.gate, 'idle');
+  assert.equal(v.movement.players[actor].hand.length, 5); assert.equal(v.movement.players[actor].trash[0].ref.instanceId, e.source.instanceId);
+  assert.equal(v.movement.players[actor].restDon.length, 1);
+  const replay = await request(own, 'v3-session:command', input); assert.equal(replay.ok, true); assert.deepEqual(replay.sessionView.context, v.context);
+  seen = (await request(peer, 'v3-session:sync')).sessionView;
+  assert.equal(seen.mainEventChoices.length, 0); assert.equal(seen.movement.players[actor].hand.every(card => card.ref === null && card.cardId === null), true);
+  assert.equal(seen.movement.players[actor].trash[0].cardId, e.cardId); assert.equal(seen.movement.players[actor].restDon.length, 1);
+});
+
 for (const actor of [0, 1]) for (const zone of ['character', 'stage']) test(`MAIN source tokens select a public ${zone} and keep hand choices private between two clients (seat=${actor})`, async t => {
   const selected = zone === 'stage' ? { ...deck, mainDeck: Array(50).fill('STAGE'), cardTypes: { STAGE: 'stage' } } : deck;
   const { clients } = await setup(t, actor, [selected, selected]), own = clients[actor], peer = clients[1 - actor];

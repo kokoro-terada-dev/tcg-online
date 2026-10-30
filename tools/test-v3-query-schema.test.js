@@ -37,9 +37,9 @@ test("Schema and Compiler both reject malformed bounds/scopes; contextual restri
   assert.throws(() => compileV3CardJson(JSON.stringify(nested)), /nested-query/);
 });
 
-test("published operation profiles match executable manifests and pin all three hashes", () => {
+test("published operation profiles match executable manifests and pin all four profiles", () => {
   const operations = read("../docs/card-effect-supported-operations.json");
-  for (const schema of ["3.0.0-subset.16", "3.0.0-subset.17", "3.0.0-subset.18"]) {
+  for (const schema of ["3.0.0-subset.16", "3.0.0-subset.17", "3.0.0-subset.18", "3.0.0-subset.19"]) {
     const r = builtinV3Registries(schema), published = operations.profiles[schema];
     assert.equal(published.registryHash, v3RegistryHash(r));
     assert.deepEqual(published.registries, Object.fromEntries(Object.entries(r).map(([category, registry]) => [category, registry.manifest()])));

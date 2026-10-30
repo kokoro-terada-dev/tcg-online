@@ -21,6 +21,7 @@ import type { CounterEventCause } from "./counterEvents";
 import type { BattleCounters } from "./battle";
 import type { LifeTriggerCause } from "./lifeTriggers";
 import { readEventContext, withEventChooser, type EventOrigin, type EventContext } from "./readContext";
+import { isSimpleMainEvent } from "./simpleMainEvent";
 
 export type FixtureContext = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number }>;
 type Receipt = { requestId: string; fingerprint: string };
@@ -40,7 +41,7 @@ export class V3FixtureCoordinator {
   #lifeTrigger: boolean;
   #readContext: EventContext;
   #counterPower = (ref: Readonly<{ instanceId: string; generation: number }>) => this.#battleCounters.filter(entry => entry.target.instanceId === ref.instanceId && entry.target.generation === ref.generation).reduce((sum, entry) => sum + entry.amount, 0);
-  constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; definitions?: readonly ApprovedV3Card[]; statEffects?: StatEffects; keywordGrants?: KeywordGrants; triggerCause?: TriggerCause; counterEventCause?: CounterEventCause; lifeTriggerCause?: LifeTriggerCause; battleCounters?: BattleCounters; checkEvents?: (events: readonly MovementEvent[]) => void }>) {
+  constructor(options: Readonly<{ mode: "syntheticNoAbilities"; card: ApprovedV3Card; identity: ResolutionIdentity; movement: MovementState; progression: Progression; signingKey: Uint8Array; master: MasterSnapshot | null; now?: () => number; definitions?: readonly ApprovedV3Card[]; statEffects?: StatEffects; keywordGrants?: KeywordGrants; triggerCause?: TriggerCause; counterEventCause?: CounterEventCause; mainEventCause?: Readonly<{ event: MovementEvent }>; lifeTriggerCause?: LifeTriggerCause; battleCounters?: BattleCounters; checkEvents?: (events: readonly MovementEvent[]) => void }>) {
     ensureMove(process.env.NODE_ENV !== "production" && options.mode === "syntheticNoAbilities", "v3-fixture-disabled");
     ensureMove(isApprovedV3Card(options.card), "v3-approved-server-plan-required");
     const definitions = options.definitions ?? [options.card]; dataArray(definitions, 128);
@@ -60,12 +61,12 @@ export class V3FixtureCoordinator {
     const { identity, movement, progression, card } = options;
     const trigger = options.triggerCause, battle = progression.battle;
     ensureMove([...this.#statEffects, ...this.#keywordGrants].every(effect => effect.battleId === undefined || effect.battleId === battle?.battleId), "v3-stale-battle-duration");
-    const eventUse = options.counterEventCause;
+    const mainUse = options.mainEventCause, eventUse = options.counterEventCause ?? mainUse;
     const lifeUse = options.lifeTriggerCause; this.#lifeTrigger = !!lifeUse;
-    ensureMove([trigger, eventUse, lifeUse].filter(Boolean).length <= 1, "v3-mixed-source-authorization");
+    ensureMove([trigger, options.counterEventCause, mainUse, lifeUse].filter(Boolean).length <= 1, "v3-mixed-source-authorization");
     const triggerTiming = trigger && progression.gate.kind === "idle" && progression.phase === "main" && progression.phaseSettled && !progression.outcome && (!battle || battle.step === "attack" || battle.step === "damage" || battle.step === "counter");
     const lifeTiming = lifeUse && battle?.step === "damage" && battle.defender === identity.actor && progression.gate.kind === "idle" && !progression.outcome;
-    ensureMove(identity.matchId === movement.matchId && movement.turnNumber === progression.turnNumber && (triggerTiming || lifeTiming || eventUse && checkTiming(progression, identity.actor, "counterEffect").allowed || checkTiming(progression, identity.actor, "mainEffect").allowed), "v3-fixture-timing");
+    ensureMove(identity.matchId === movement.matchId && movement.turnNumber === progression.turnNumber && (triggerTiming || lifeTiming || options.counterEventCause && checkTiming(progression, identity.actor, "counterEffect").allowed || checkTiming(progression, identity.actor, "mainEffect").allowed), "v3-fixture-timing");
     ensureMove(Object.values(movement.cards).every(card => !card.modifierIds.length && !card.grantIds.length) && movement.players.every(zones => zones.deck.length > 0) && movement.reveals.length === 0, "v3-fixture-unmodeled-board");
     const source = getCard(movement, identity.source), at = location(movement, source.instanceId), effect = card.definition.effects.find(effect => effect.id === identity.effectId);
     const sourceZone = lifeUse ? "life" : eventUse ? "hand" : trigger?.type === "ON_KO" ? trigger.event.from?.zone : at.zone;
@@ -80,7 +81,8 @@ export class V3FixtureCoordinator {
         event.after?.instanceId === source.instanceId && event.after.cardId === source.cardId && event.after.generation === source.generation && event.before.generation + 1 === source.generation, "v3-life-trigger-authorization");
     } else if (eventUse) {
       const event = eventUse.event;
-      ensureMove(effect.kind === "activated" && effect.timing.type === "COUNTER" && source.kind === "event" && battle?.step === "counter" && battle.battleId === eventUse.battleId && battle.defender === identity.actor &&
+      ensureMove(effect.kind === "activated" && source.kind === "event" && (mainUse ? card.definition.schemaVersion === "3.0.0-subset.19" && isSimpleMainEvent(effect) && !battle && checkTiming(progression, identity.actor, "mainEffect").allowed :
+        effect.timing.type === "COUNTER" && battle?.step === "counter" && battle.battleId === options.counterEventCause!.battleId && battle.defender === identity.actor) &&
         at.zone === "trash" && event.kind === "moved" && event.from?.player === identity.actor && event.from.zone === "hand" && event.to?.player === identity.actor && event.to.zone === "trash" &&
         event.before?.kind === "event" && event.before.owner === identity.actor && event.before.controller === identity.actor && event.before.cardId === source.cardId && event.before.instanceId === source.instanceId &&
         event.after?.instanceId === source.instanceId && event.after.generation === source.generation && event.before.generation + 1 === source.generation && event.after.cardId === source.cardId, "v3-counter-event-authorization");
@@ -98,7 +100,7 @@ export class V3FixtureCoordinator {
       } else ensureMove(battle?.step === "attack" && battle.battleId === trigger.battleId && battle.attacker === trigger.attacker && progression.turnNumber === trigger.turnNumber &&
         battle.source.instanceId === trigger.attackSource.instanceId && battle.source.generation === trigger.attackSource.generation &&
         (trigger.type === "ON_ATTACK" ? identity.actor === battle.attacker && source.instanceId === battle.source.instanceId && source.generation === battle.source.generation : identity.actor === battle.defender), "v3-fixture-attack-authorization");
-    } else ensureMove(effect.kind === "activated" && effect.timing.type === "MAIN" && !battle, "v3-fixture-main-authorization");
+    } else ensureMove(effect.kind === "activated" && effect.timing.type === "MAIN" && source.kind !== "event" && !battle, "v3-fixture-main-authorization");
     this.#checkEvents = options.checkEvents;
     this.#board = freezeMovement(structuredClone(movement)); this.#progression = freezeMovement(structuredClone(progression));
     this.#identity = freezeMovement(structuredClone(identity)); this.#card = card; this.#key = Uint8Array.from(options.signingKey); this.#now = options.now ?? Date.now;

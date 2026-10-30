@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "3.0.0-subset.19",
+  "basedOnCommit": "1dbf700",
+  "examples": [
+    {
+      "title": "PR05a synthetic event MAIN, draw one; not a real card approval",
+      "card": {
+        "schemaVersion": "3.0.0-subset.19",
+        "cardId": "EXAMPLE-EVENT-MAIN",
+        "cardVersion": "draft.1",
+        "name": "合成イベント（公式カードではありません）",
+        "cardType": "event",
+        "baseStats": {
+          "cost": 1,
+          "power": null,
+          "counter": null,
+          "life": null
+        },
+        "colors": [],
+        "traits": [],
+        "attributes": [],
+        "keywords": [],
+        "reviewStatus": "needs_review",
+        "source": {
+          "text": "Synthetic event MAIN: draw one. Not an official card.",
+          "triggerText": "",
+          "displayIds": [
+            "EXAMPLE-EVENT-MAIN"
+          ],
+          "datasetSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "effects": [
+          {
+            "id": "main",
+            "kind": "activated",
+            "timing": {
+              "type": "MAIN"
+            },
+            "sourceZones": [
+              "hand"
+            ],
+            "optional": false,
+            "usageLimit": null,
+            "activationConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "resolutionConditions": {
+              "type": "all",
+              "conditions": []
+            },
+            "costs": [],
+            "actions": [
+              {
+                "type": "DRAW",
+                "player": "SELF",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

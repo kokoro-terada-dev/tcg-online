@@ -1,18 +1,18 @@
 # 効果JSON生成に関する実装状況
 
-更新: PR04 / 2026-10-30。基準`d6df2d4`。MAIN入口は`card-effect-pr04.md`、集合条件は`card-effect-pr03.md`、メタデータは`card-effect-pr02.md`。
+更新: PR05a / 2026-10-30。基準`1dbf700`。単純イベントMAINは`card-effect-pr05a.md`、場のMAIN入口は`card-effect-pr04.md`を参照。
 対象は隔離v3エンジン。通常対戦・一人回し・旧効果スキーマと混ぜないでください。
 
 ## 対応段階の区別
 
 | 層 | 状態 | 注意 |
 | --- | --- | --- |
-| JSON構造 | 新集合条件は`3.0.0-subset.18` / Compiler `v3-subset-compiler.18.1`。旧16/17を併存 | 旧承認のhashを変更しない。SchemaだけではCompilerと同等にならない |
-| Registry | 新18は44命令・9カテゴリー。旧17は41命令、旧16は38命令（replacementは空） | 対応profileを明示して使用 |
+| JSON構造 | 単純イベントMAINは`3.0.0-subset.19` / Compiler `v3-subset-compiler.19.1`。旧16/17/18を併存 | 旧承認のhashを変更しない。SchemaだけではCompilerと同等にならない |
+| Registry | 18/19は同じ44命令・9カテゴリー。旧17は41命令、旧16は38命令（replacementは空） | 新命令は追加せず、19だけevent MAINの限定形式を許可 |
 | 解決機械 | 選択・支払い・work待ち・保存データからの再開を実装 | 本番DB保存/ネットワーク再接続復旧ではない |
 | 盤面適用 | 限定的な移動・修正・キーワード・誘発・バトル | 実行時の領域/所有者/世代/非公開情報チェックあり |
 | 実カード | 14種類、指定プリセットのみ独立承認 | 生成JSONを配置しただけでは使用不可 |
-| 画面・Socket | 限定実カード試合、先後・マリガン・勝敗まで接続。MAINはleader/character/stageの個体別tokenと中央ダイアログ | 発動元/世代/効果/revisionをサーバー再検証。イベントMAINは未対応 |
+| 画面・Socket | 限定実カード試合、先後・マリガン・勝敗。場のMAINと自分手札の単純イベントMAINは個体別tokenと中央ダイアログ | 対象選択等を伴うイベントMAINは未対応 |
 
 ## 実装済み（限定範囲）
 
@@ -21,6 +21,7 @@
 - 新18: EXISTS、COUNT、条件専用QUERY_CARDS。公開領域と自分手札の単一領域を対象とし、Selectorと共通評価。SOURCE除外、cost/powerの明示printed/current参照。UNKNOWNは0/falseにしない。
 - PR00/01: 実行不可レビュー台帳、EventContext、権限付きDerivedCardFacts。新Predicateも同じFacts/evaluate経路を使用。
 - PR04: MAIN発動元をサーバー列挙し、カード個体/effectId/tokenで選択。可否preflightと既存の支払い・解決機構を分離。通常対戦・一人回しは対象外。
+- PR05a: 新19のみSELF DRAW/SEQUENCEのイベントMAIN。公開→使用コスト→trash→共通機械の解決を非公開draftで実行し、成功結果だけ反映。選択/条件/追加コスト等は拒否。
 - 発動コスト: REST_DON、REST_SOURCE、DISCARD_HAND、DON_RETURN。複合支払いの重複を検証。
 - 選択: 公開の場/trash/public、自分手札、自分active/rest/attached DON、自分が見たデッキ上の集合。
 - アクション: 命令一覧JSONの15種。移動・KO・REST・SET_ACTIVE・DRAW・サーチ/公開/順序・分岐等。
@@ -41,7 +42,7 @@
 | 条件付き誘発成立 | triggeredのactivationConditionsは空all必須。解決時IFへ勝手に変更不可 |
 | 継続効果 | 常時条件の再計算・常時ModifierRegistryなし |
 | 置換/KO耐性/効果を受けない/対象不可 | replacement登録0件。Movementの低層機能をDSL対応と見なさない |
-| イベントMAIN | Compilerと使用経路とも未対応 |
+| イベントMAINの未対応範囲 | 対象選択、任意発動、追加発動コスト、条件付き処理、SOURCE移動、継続/置換、非同期公開UIは未対応。新19の単純DRAWだけ対応 |
 | 相手の非公開手札の盲選択/ランダム破棄 | 未対応。自分手札選択で代用不可 |
 | 効果によるDON付与/アクティブ化 | 通常操作のattachDonはあるがDSLアクションはない |
 | 効果による登場 | MOVE_CARDのdestinationにcharacter/stageなし。手札からの通常登場と別 |

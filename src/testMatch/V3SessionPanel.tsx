@@ -33,6 +33,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
       canTestAttackTarget={(card, sourceId) => !disabled && view.attackChoices.targets.some(option => option.card.instanceId === card.id) && (!sourceId || view.attackChoices.pairs.some(pair => pair.sourceId === sourceId && pair.targetId === card.id))}
       canTestAttachDon={card => !disabled && idle && ownTurn && view.movement.players[view.localPlayerIndex].activeDon.length > 0 && view.publicStats.some(option => option.card.instanceId === card.id && option.player === view.localPlayerIndex && (option.zone === "leader" || option.zone === "character"))}
       onTestAttachDon={card => { const target = view.publicStats.find(option => option.card.instanceId === card.id)?.card; if (target) onAction("attachDon", { target, count: 1 }); }}
+      onTestEvent={idle && ownTurn ? card => { setMainSourceId(card.id); setCollapsed(true); } : undefined}
       onInspectEffects={card => { setMainSourceId(card.id); setCollapsed(true); }} onTestAttack={(sourceId, targetId) => {
         const source = view.attackChoices.sources.find(option => option.card.instanceId === sourceId)?.card, target = view.attackChoices.targets.find(option => option.card.instanceId === targetId)?.card;
         if (source && target) onAction("attack", { source, target });
@@ -98,7 +99,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
       </div>
     </section>
     {mainSourceId && <V3MainEffectDialog view={view} sourceId={mainSourceId} disabled={disabled} onClose={() => setMainSourceId(null)}
-      onActivate={effect => { setMainSourceId(null); setCollapsed(false); onAction("activate", { sourceToken: effect.sourceToken, effectId: effect.effectId }); }} />}
+      onActivate={effect => { setMainSourceId(null); setCollapsed(false); onAction("event" in effect ? "mainEvent" : "activate", { sourceToken: effect.sourceToken, effectId: effect.effectId }); }} />}
     {view.outcome && <div className="test-effect-result" role="status">{view.outcome.winner === null ? "DRAW" : view.outcome.winner === view.localPlayerIndex ? "WIN" : "LOSE"}</div>}
     {revealPreview && <div className="test-preview" role="dialog" aria-modal="true" aria-label="公開カード詳細" onClick={() => setRevealPreview(null)}>
       {getLocalCardImage(revealPreview)?.imageUrl ? <img src={getLocalCardImage(revealPreview)!.imageUrl} alt={revealPreview} onClick={event => event.stopPropagation()} /> : <span>{revealPreview}</span>}

@@ -37,3 +37,12 @@ test("stage MAIN dialog and empty effects retain a close button without borrowin
   assert.equal(elements.filter(e => e.type === "button").length, 1);
   assert.equal(elements.some(e => e.props?.role === "status"), true);
 });
+
+test("hand event uses its own MAIN token without borrowing a field or counter effect", () => {
+  let selected;
+  const source = { instanceId: "event", generation: 2 }, view = { localPlayerIndex: 0, effects: [], publicStats: [], imageAliases: {},
+    movement: { players: [{ hand: [{ ref: source, cardId: "EVENT" }] }] },
+    mainEventChoices: [{ source, sourceToken: "event-token", cardId: "EVENT", effectId: "main", cost: 1, enabled: true }] };
+  const buttons = all(Dialog({ view, sourceId: "event", disabled: false, onClose: () => {}, onActivate: e => selected = e })).filter(e => e.type === "button");
+  assert.equal(buttons.length, 2); buttons[1].props.onClick(); assert.equal(selected.sourceToken, "event-token"); assert.equal(selected.event, true);
+});

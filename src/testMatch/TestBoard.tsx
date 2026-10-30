@@ -7,13 +7,14 @@ import "./testMatch.css";
 
 type Props = { match: MatchView; roomId: string; busy: boolean; error: string; onCommand: (command: MatchCommand) => void; onEnd: () => void; readOnly?: boolean; onInspectEffects?: (card: CardView) => void;
   onTestPlay?: (card: CardView) => void; canTestPlay?: (card: CardView) => boolean;
+  onTestEvent?: (card: CardView) => void;
   onTestAttachDon?: (card: CardView) => void; canTestAttachDon?: (card: CardView) => boolean;
   testPlayUnavailableReason?: (card: CardView) => string; testPlayLabel?: string | ((card: CardView) => string);
   onTestAttack?: (sourceId: string, targetId: string) => void; canTestAttackSource?: (card: CardView) => boolean; canTestAttackTarget?: (card: CardView, sourceId?: string) => boolean };
 const labels: Record<Zone, string> = { hand: "手札", deck: "デッキ", life: "ライフ", trash: "トラッシュ", public: "公開", character: "キャラクター", stage: "ステージ", leader: "リーダー", donDeck: "DONデッキ", activeDon: "ACTIVE DON", restDon: "REST DON" };
 const imageUrl = (card: CardView) => !card.cardId ? getCardBackImageUrl() : getLocalCardImage(card.cardId)?.imageUrl ?? (card.kind === "don" ? getDonImageUrl() : null);
 
-export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd, readOnly = false, onInspectEffects, onTestPlay, canTestPlay, testPlayUnavailableReason, testPlayLabel, onTestAttack, canTestAttackSource, canTestAttackTarget, onTestAttachDon, canTestAttachDon }: Props) {
+export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd, readOnly = false, onInspectEffects, onTestPlay, canTestPlay, testPlayUnavailableReason, testPlayLabel, onTestAttack, canTestAttackSource, canTestAttackTarget, onTestAttachDon, canTestAttachDon, onTestEvent }: Props) {
   const [selection, setSelection] = useState<{ id: string; from: Zone } | null>(null);
   const [preview, setPreview] = useState<CardView | null>(null);
   const [list, setList] = useState<{ zone: Zone; owner: 0 | 1 } | null>(null);
@@ -43,7 +44,8 @@ export default function TestBoard({ match, roomId, busy, error, onCommand, onEnd
           if (attackCandidate) setAttackTarget(card);
           return;
         }
-        if (readOnly && mine && zone === "hand" && card.faceUp && (card.kind === "character" || card.kind === "stage") && onTestPlay) {
+        if (readOnly && mine && zone === "hand" && card.faceUp && card.kind === "event" && onTestEvent) { setList(null); onTestEvent(card); }
+        else if (readOnly && mine && zone === "hand" && card.faceUp && (card.kind === "character" || card.kind === "stage") && onTestPlay) {
           setSelection({ id: card.id, from: zone }); setList(null);
         }
         else if (readOnly && mine && (zone === "leader" || zone === "character") && onTestAttack) { setSelection({ id: card.id, from: zone }); setList(null); }

@@ -17,7 +17,8 @@ import { decideLocalBattle } from "../../localBattle";
 import { attackOptions, declareAttack, finishAttackStep, finishCounterStep, finishDamageStep, blockerOptions, declareBlock, battlePower, counterCandidates, useCounter, damage, takeLife, V3_BASE_BATTLE_RULES, type BattleCounters, type LifeDecision } from "./battle";
 import { effectiveKeywords, endTurnKeywordGrants, pruneKeywordGrants, retainBattleKeywordGrants, type KeywordGrants } from "./keywordEffects";
 import { deckOutOutcome, DECK_OUT_POLICY } from "./ruleOutcomes";
-import { counterEventChoices, prepareCounterEvent } from "./counterEvents";
+import { counterEventChoices, prepareCounterEvent, prepareEventFromHand } from "./counterEvents";
+import { isSimpleMainEvent } from "./simpleMainEvent";
 import { prepareLifeTrigger } from "./lifeTriggers";
 import { isReviewedV3Catalog, type ReviewedV3Catalog } from "./reviewedCatalog";
 import { pinMasterFacts } from "../masterFacts";
@@ -293,6 +294,53 @@ export class V3SyntheticMatchCoordinator {
       this.#board = candidate.movement; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...candidate.events]);
       this.#active = { coordinator, actor, cardId: object.cardId, effectId, source: candidate.source, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: null };
       this.#progression = coordinator.snapshotForCoordinator().progression;
+    });
+  }
+  mainEventChoicesFor(actor: Seat) {
+    ensureMove(actor === 0 || actor === 1, "v3-match-actor");
+    if (!checkTiming(this.#progression, actor, "mainEffect").allowed || this.#triggers.length || this.#lifeDecision ||
+      this.#active && this.#active.coordinator.viewFor(actor).frame.status !== "completed" || this.#history.length >= 256) return [];
+    return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
+      const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
+      if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || card?.definition.schemaVersion !== "3.0.0-subset.19" ||
+        card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
+      const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
+      return card.definition.effects.filter(isSimpleMainEvent).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
+        enabled: this.#board.players[actor].activeDon.length >= cost,
+        sourceToken: createHmac("sha256", this.#key).update(JSON.stringify(["v3-main-event.1", this.#board.matchId, actor, this.context(), source, "hand", effect.id, cost, card.definitionHash])).digest("hex") }));
+    }));
+  }
+  useMainEvent(actor: Seat, requestId: string, expected: V3MatchContext, sourceToken: string, effectId: string) {
+    label(sourceToken); label(effectId);
+    return this.#run(actor, requestId, expected, { kind: "mainEvent", sourceToken, effectId }, () => {
+      this.#settled();
+      const choice = this.mainEventChoicesFor(actor).find(e => e.sourceToken === sourceToken && e.effectId === effectId && e.enabled);
+      ensureMove(choice, "v3-main-event-unavailable");
+      const card = this.#cards.get(choice.cardId)!, resolutionId = randomUUID();
+      const prepared = prepareEventFromHand(this.#board, actor, choice.source, choice.cost, hash(`${this.#board.matchId}:${requestId}:main-event`), resolutionId, true);
+      const coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
+        identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source: prepared.source }, movement: prepared.movement, progression: this.#progression,
+        signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
+        mainEventCause: { event: prepared.event }, checkEvents: this.#checkNewEvents });
+      // Drive the shared machine on an unpublished draft; never keep a partial payment or draw.
+      for (let step = 0; step < 128; step++) {
+        const frame = coordinator.viewFor(actor).frame;
+        if (frame.status === "completed") break;
+        if (frame.status === "ready") coordinator.advance(actor, `event-advance-${step}`, coordinator.context());
+        else {
+          ensureMove(frame.status === "waitingForWork" && coordinator.pendingWorkKind() === "DRAW", "v3-main-event-needs-pr05b");
+          coordinator.applyPendingWork(actor, `event-work-${step}`, coordinator.context());
+        }
+      }
+      const frame = coordinator.viewFor(actor).frame, snapshot = coordinator.snapshotForCoordinator();
+      ensureMove(frame.status === "completed" && frame.activationCommitted, "v3-main-event-not-completed");
+      const events = [...prepared.events, ...snapshot.movementEvents];
+      ensureMove(this.#ruleEvents.length + events.length <= 512 && enqueueMovementTriggers(events, this.#cards).length === 0, "v3-main-event-deferred-interaction");
+      this.#archive(); this.#board = snapshot.movement; this.#progression = snapshot.progression;
+      this.#statEffects = snapshot.statEffects; this.#keywordGrants = snapshot.keywordGrants; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...events]);
+      this.#active = { coordinator, actor, cardId: choice.cardId, effectId, source: prepared.source, resolutionId,
+        usageKey: JSON.stringify([this.#board.turnNumber, actor, prepared.source.instanceId, prepared.source.generation, effectId]), counted: true, eventCount: snapshot.movementEvents.length, triggerEventId: null };
     });
   }
   counter(actor: Seat, requestId: string, expected: V3MatchContext, card: Readonly<CardObjectRef>, target: Readonly<CardObjectRef>) {

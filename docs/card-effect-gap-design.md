@@ -101,6 +101,9 @@ PR03更新（2026-10-30）: EXISTS/COUNT/QUERY_CARDS、SOURCE除外、共通filt
 
 ### F04 MAINの発生元とイベントMAIN
 
+PR05a更新: 新19で選択を伴わない自己DRAW/SEQUENCEだけを許可し、非公開draftから一括反映します。
+`card-effect-pr05a.md`参照。元の代表ST01-015の対象選択やTRIGGER呼出は未対応のままです。
+
 PR04更新（2026-10-30）: leader/character/stageの個体別MAIN発動元token・Socket・中央モーダルを接続済み。
 詳細は`card-effect-pr04.md`。以下の提案のうちイベントMAINはPR05として未実施です。
 

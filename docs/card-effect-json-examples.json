@@ -358,7 +358,7 @@
       "requestNumber": 6,
       "title": "イベントカードのメイン効果",
       "status": "unsupported",
-      "reason": "eventはCOUNTERまたはTRIGGERのみ。MAINイベントの使用入口もない。",
+      "reason": "旧16の例ではevent MAINは未対応。PR05aの新19ではSELF DRAW/SEQUENCEだけ別の例で対応。対象選択等は引き続き未対応。",
       "card": null
     },
     {

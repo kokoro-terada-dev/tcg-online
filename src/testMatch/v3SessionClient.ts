@@ -12,6 +12,10 @@ export type SessionDetails = Readonly<{ sourceToken?: string; effectId?: string;
 export function v3SessionCommand(view: V3SessionView, kind: V3SessionCommand["kind"], requestId: string, details: SessionDetails = {}): V3SessionCommand {
   const base = { matchId: view.matchId, requestId, context: { ...view.context } }, ownTurn = view.activePlayer === view.localPlayerIndex;
   const idle = view.gate === "idle" && !view.outcome && !view.battle && (!view.frame || view.frame.status === "completed");
+  if (kind === "mainEvent") {
+    if (!idle || !ownTurn || view.phase !== "main" || !details.sourceToken || !view.mainEventChoices.some(e => e.enabled && e.sourceToken === details.sourceToken && e.effectId === details.effectId)) throw Error("MAIN event is unavailable");
+    return { ...base, kind, sourceToken: details.sourceToken, effectId: details.effectId! };
+  }
   if (kind === "counterEvent") {
     if (!details.card || !view.counterEventChoices.some(choice => choice.enabled && choice.card.instanceId === details.card!.instanceId && choice.card.generation === details.card!.generation && choice.effectId === details.effectId)) throw Error("Counter event is unavailable");
     return { ...base, kind, card: { ...details.card }, effectId: details.effectId! };

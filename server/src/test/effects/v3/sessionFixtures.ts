@@ -50,7 +50,7 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
     const originalId = object.cardId, kind = object.kind, cardId = `V3-SESSION-MAIN-${createHash("sha256").update(JSON.stringify([kind, originalId])).digest("hex")}`;
     ensureMove(!imageAliases[cardId] || imageAliases[cardId] === originalId, "v3-session-image-alias-conflict"); imageAliases[cardId] = originalId; object.cardId = cardId;
     if (mainIds.has(cardId)) continue; mainIds.add(cardId);
-    plans.push(compileV3CardJson(JSON.stringify({ schemaVersion: "3.0.0-subset.16", cardId, cardVersion: "session-entry.7", name: `Synthetic ${kind}`, cardType: kind,
+    plans.push(compileV3CardJson(JSON.stringify({ schemaVersion: kind === "event" ? "3.0.0-subset.19" : "3.0.0-subset.16", cardId, cardVersion: kind === "event" ? "session-event.8" : "session-entry.7", name: `Synthetic ${kind}`, cardType: kind,
       baseStats: { cost: kind === "character" ? 2 : 1, power: kind === "character" ? 2000 : null, counter: kind === "character" ? 1000 : 0, life: null },
       colors: [], traits: [], attributes: [], keywords: kind === "character" ? [{ type: "BLOCKER" }, { type: "RUSH" }] : [], reviewStatus: "approved",
       effects: kind === "event" ? [{ id: "counterPower", kind: "activated", timing: { type: "COUNTER" }, sourceZones: ["hand"], optional: false, usageLimit: null,
@@ -58,7 +58,8 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
           { type: "SELECT", bindAs: "target", selector: { type: "CARDS", owner: "SELF", controller: "SELF", chooser: "SELF", zone: "leader", cardTypes: ["leader"], filters: always(), excludeSource: false,
             faceUpOnly: true, min: 1, max: 1, visibility: "PUBLIC", selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } },
           { type: "MODIFY_STAT", cards: { ref: "bindings.target" }, stat: "power", amount: 2000, duration: { type: "BATTLE_END" } },
-        ] }] : [{ id: "enterDraw", kind: "triggered", timing: { type: "ON_PLAY" }, sourceZones: [kind], optional: true, usageLimit: null,
+        ] }, { id: "mainDraw", kind: "activated", timing: { type: "MAIN" }, sourceZones: ["hand"], optional: false, usageLimit: null,
+          activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] }] : [{ id: "enterDraw", kind: "triggered", timing: { type: "ON_PLAY" }, sourceZones: [kind], optional: true, usageLimit: null,
         activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] },
         ...(kind === "character" ? [{ id: "attackDraw", kind: "triggered", timing: { type: "ON_ATTACK" }, sourceZones: [kind], optional: true, usageLimit: null,
           activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] },
@@ -68,8 +69,8 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
           activationConditions: always(), resolutionConditions: always(), costs: [{ type: "REST_SOURCE" }], actions: [{ type: "DRAW", player: "SELF", count: 1 }] },
         ...(kind === "stage" ? [{ id: "lifeDraw", kind: "triggered", timing: { type: "TRIGGER" }, sourceZones: ["life"], optional: false, usageLimit: null,
           activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] }] : [])],
-      source: { text: kind === "event" ? "Synthetic counter event: pay one DON and give your leader +2000 power during this battle. Not an official ability." : kind === "character" ? "Synthetic character: BLOCKER, RUSH. On play, when attacking and on KO, optionally draw one card. MAIN once per object turn: rest this source to draw one card. Not an official ability." : "Synthetic stage: when this card enters its field zone, optionally draw one card. MAIN once per object turn: rest this source to draw one card. Not an official ability.",
-        triggerText: kind === "stage" ? "Synthetic trigger: draw one card. Not an official ability." : "", displayIds: [cardId], datasetSha256: createHash("sha256").update("v3-session-entry.7").digest("hex") } })));
+      source: { text: kind === "event" ? "Synthetic event: MAIN draw one card, or COUNTER give your leader +2000 during this battle. Use cost one DON. Not an official ability." : kind === "character" ? "Synthetic character: BLOCKER, RUSH. On play, when attacking and on KO, optionally draw one card. MAIN once per object turn: rest this source to draw one card. Not an official ability." : "Synthetic stage: when this card enters its field zone, optionally draw one card. MAIN once per object turn: rest this source to draw one card. Not an official ability.",
+        triggerText: kind === "stage" ? "Synthetic trigger: draw one card. Not an official ability." : "", displayIds: [cardId], datasetSha256: createHash("sha256").update(kind === "event" ? "v3-session-event.8" : "v3-session-entry.7").digest("hex") } })));
   }
   const rulesetVersion = "synthetic-session.1", catalog = new ApprovedV3Catalog(plans, plans.map(plan => ({ status: "approved", cardId: plan.definition.cardId, cardVersion: plan.definition.cardVersion,
     definitionHash: plan.definitionHash, sourceHash: plan.sourceHash, compilerVersion: plan.compilerVersion, registryHash: plan.registryHash, rulesetVersion,
@@ -92,6 +93,6 @@ export function sessionView(session: SyntheticSession, roomId: string, actor: 0 
   if (view.lifeTrigger) visibleIds.add(view.lifeTrigger.cardId);
   const imageAliases = Object.fromEntries(Object.entries(session.imageAliases).filter(([id]) => visibleIds.has(id)));
   return { ...view, matchId: session.matchId, roomId, localPlayerIndex: actor, imageAliases,
-    workType: session.coordinator.pendingWorkKind(),
+    workType: session.coordinator.pendingWorkKind(), mainEventChoices: session.coordinator.mainEventChoicesFor(actor),
     effects: session.coordinator.mainEffectsFor(actor).map(effect => ({ ...effect, label: labels[effect.effectId] ?? (effect.effectId === "readyLeader" ? "リーダーをアクティブ" : "MAIN効果") })), playableCards: session.coordinator.playableCardsFor(actor), attackChoices: session.coordinator.attackChoicesFor(actor) };
 }

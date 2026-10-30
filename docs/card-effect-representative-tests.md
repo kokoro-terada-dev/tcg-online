@@ -1,5 +1,8 @@
 # 代表カードの意味分解・テスト計画
 
+PR05a更新: 実カードの追加承認なし。単純イベントMAINを合成fixtureで検証し、ST01-015の全能力/対象選択を対応済みにはしません。
+検証範囲と結果は`card-effect-pr05a.md`を参照してください。
+
 PR04更新: 実カードの追加承認はせず、単純なcharacter/stage MAINを合成fixtureで検証しました。
 既存Kid MAINも回帰確認。結果は`card-effect-pr04.md`、テストは`v3-main-sources.cjs`と`v3-session-server.cjs`を参照。
 

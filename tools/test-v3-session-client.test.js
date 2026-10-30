@@ -35,6 +35,13 @@ test('MAIN client requires an exact source token and effect pair; no leader fall
   assert.equal(command.sourceToken, 'stage-token'); assert.equal(command.effectId, 'stage-main');
 });
 
+test('event MAIN client sends only the current token/effect pair and rejects counter-only or blocked use', () => {
+  const v = view(); v.mainEventChoices = [{ sourceToken: 'event-token', effectId: 'main', enabled: true }];
+  assert.equal(v3SessionCommand(v, 'mainEvent', 'use', { sourceToken: 'event-token', effectId: 'main' }).sourceToken, 'event-token');
+  for (const patch of [{ activePlayer: 1 }, { phase: 'end' }, { gate: 'choice' }, { mainEventChoices: [] }]) assert.throws(() => v3SessionCommand({ ...v, ...patch }, 'mainEvent', 'bad', { sourceToken: 'event-token', effectId: 'main' }));
+  for (const details of [{ sourceToken: 'old', effectId: 'main' }, { sourceToken: 'event-token', effectId: 'counter' }, { effectId: 'main' }]) assert.throws(() => v3SessionCommand(v, 'mainEvent', 'bad', details));
+});
+
 test('normal play uses only the current approved playable reference and rejects disabled or stale cards', () => {
   const v = view(), card = { instanceId: 'hand-card', generation: 1 }; v.playableCards = [{ card, enabled: true }];
   const play = v3SessionCommand(v, 'play', 'play', { card }); assert.equal(play.card.instanceId, 'hand-card'); assert.equal(play.card.generation, 1);
