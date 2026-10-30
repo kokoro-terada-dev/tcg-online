@@ -25,6 +25,7 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState(""), [code, setCode] = useState(""), [scenario, setScenario] = useState<V3Scenario>("bounce"), [actor, setActor] = useState<0 | 1>(0), [deckId, setDeckId] = useState("");
   const [decks] = useState(getAllLocalDeckRecipes);
   const [collapsed, setCollapsed] = useState(false);
+  const [eventMode, setEventMode] = useState<"atomic" | "selection">("atomic");
   useEffect(() => { setCollapsed(false); }, [view?.frame.status, view?.frame.choice?.selectionId]);
   function receive(next: V3FixtureView) {
     if (!acceptV3View(viewRef.current, next, roomRef.current?.matchId ?? null)) return;
@@ -126,7 +127,8 @@ export default function V3FixtureLobby({ onBack }: { onBack: () => void }) {
       {isHost && room.mode === "synthetic" && <><label>合成効果<select value={scenario} disabled={busy} onChange={e => setScenario(e.target.value as V3Scenario)}>{Object.entries(scenarios).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>操作者<select value={actor} disabled={busy} onChange={e => setActor(Number(e.target.value) as 0 | 1)}><option value={0}>ホスト</option><option value={1}>ゲスト</option></select></label>
         <button disabled={busy || !room.host.ready || !room.guest?.ready} onClick={() => request("v3:start", { scenario, actor })}>単発効果の検証開始</button>
-        <button disabled={busy || !room.host.ready || !room.guest?.ready} onClick={() => request("v3-session:start", { firstPlayer: actor })}>連続操作の検証開始</button></>}
+        <select aria-label="イベント検証" value={eventMode} disabled={busy} onChange={event => setEventMode(event.target.value as "atomic" | "selection")}><option value="atomic">イベント：一括処理</option><option value="selection">イベント：対象選択</option></select>
+        <button disabled={busy || !room.host.ready || !room.guest?.ready} onClick={() => request("v3-session:start", { firstPlayer: actor, eventMode })}>連続操作の検証開始</button></>}
       <button disabled={busy} onClick={() => request("v3-room:leave")}>退出</button>
     </>}
     {error && <p role="alert">{error}</p>}

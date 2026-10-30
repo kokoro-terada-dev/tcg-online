@@ -10,7 +10,7 @@ import { V3SyntheticMatchCoordinator } from "./matchCoordinator";
 import type { V3SessionView } from "./sessionProtocol";
 import { ensureMove } from "../../movement/state";
 const labels: Record<string, string> = { fieldDraw: "自身をレストして1枚ドロー", draw: "1枚ドロー", paidDraw: "任意発動・コストでドロー", search: "上から3枚サーチ", buff: "自分+1000・このターン", debuff: "相手-1000・相手ターン終了まで", costDown: "自分コスト-1・このターン", unblockable: "リーダーにブロック不可を付与" };
-export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], firstPlayer: 0 | 1, key: Uint8Array) {
+export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], firstPlayer: 0 | 1, key: Uint8Array, eventMode: "atomic" | "selection" = "atomic") {
   const match = createMatch(decks[0], decks[1]), imageAliases: Record<string, string> = {}, always = () => ({ type: "all", conditions: [] });
   const plans = ([0, 1] as const).map(actor => {
     const z = match.players[actor].zones, leader = z.leader[0]!, cardId = `V3-SESSION-LEADER-${actor}`;
@@ -50,7 +50,7 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
     const originalId = object.cardId, kind = object.kind, cardId = `V3-SESSION-MAIN-${createHash("sha256").update(JSON.stringify([kind, originalId])).digest("hex")}`;
     ensureMove(!imageAliases[cardId] || imageAliases[cardId] === originalId, "v3-session-image-alias-conflict"); imageAliases[cardId] = originalId; object.cardId = cardId;
     if (mainIds.has(cardId)) continue; mainIds.add(cardId);
-    plans.push(compileV3CardJson(JSON.stringify({ schemaVersion: kind === "event" ? "3.0.0-subset.19" : "3.0.0-subset.16", cardId, cardVersion: kind === "event" ? "session-event.8" : "session-entry.7", name: `Synthetic ${kind}`, cardType: kind,
+    plans.push(compileV3CardJson(JSON.stringify({ schemaVersion: kind === "event" ? eventMode === "selection" ? "3.0.0-subset.20" : "3.0.0-subset.19" : "3.0.0-subset.16", cardId, cardVersion: kind === "event" ? eventMode === "selection" ? "session-event.9" : "session-event.8" : "session-entry.7", name: `Synthetic ${kind}`, cardType: kind,
       baseStats: { cost: kind === "character" ? 2 : 1, power: kind === "character" ? 2000 : null, counter: kind === "character" ? 1000 : 0, life: null },
       colors: [], traits: [], attributes: [], keywords: kind === "character" ? [{ type: "BLOCKER" }, { type: "RUSH" }] : [], reviewStatus: "approved",
       effects: kind === "event" ? [{ id: "counterPower", kind: "activated", timing: { type: "COUNTER" }, sourceZones: ["hand"], optional: false, usageLimit: null,
@@ -59,7 +59,17 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
             faceUpOnly: true, min: 1, max: 1, visibility: "PUBLIC", selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } },
           { type: "MODIFY_STAT", cards: { ref: "bindings.target" }, stat: "power", amount: 2000, duration: { type: "BATTLE_END" } },
         ] }, { id: "mainDraw", kind: "activated", timing: { type: "MAIN" }, sourceZones: ["hand"], optional: false, usageLimit: null,
-          activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] }] : [{ id: "enterDraw", kind: "triggered", timing: { type: "ON_PLAY" }, sourceZones: [kind], optional: true, usageLimit: null,
+          activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] },
+          ...(eventMode === "selection" ? [false, true].map(privateHand => ({ id: privateHand ? "handChoice" : "targetChoice", kind: "activated", timing: { type: "MAIN" }, sourceZones: ["hand"], optional: false, usageLimit: null,
+            activationConditions: always(), resolutionConditions: always(), costs: [], actions: [
+              { type: "SELECT", bindAs: "target", selector: { type: "CARDS", owner: privateHand ? "SELF" : "OPPONENT", controller: privateHand ? "SELF" : "OPPONENT", chooser: "SELF",
+                zone: privateHand ? "hand" : "leader", cardTypes: [privateHand ? "event" : "leader"], visibility: privateHand ? "OWNER_ONLY" : "PUBLIC", faceUpOnly: !privateHand,
+                filters: always(), excludeSource: false, min: 0, max: 1, selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } },
+              { type: "IF", condition: { type: "compare", left: { ref: "bindings.target.count" }, op: "gt", right: 0 }, then: [privateHand ?
+                { type: "MOVE_CARD", cards: { ref: "bindings.target" }, destination: { owner: "SELF", zone: "trash", position: "append", faceUp: true }, cause: "EFFECT" } :
+                { type: "REST", cards: { ref: "bindings.target" } }], else: [] },
+              { type: "DRAW", player: "SELF", count: 1 }
+            ] })) : [])] : [{ id: "enterDraw", kind: "triggered", timing: { type: "ON_PLAY" }, sourceZones: [kind], optional: true, usageLimit: null,
         activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] },
         ...(kind === "character" ? [{ id: "attackDraw", kind: "triggered", timing: { type: "ON_ATTACK" }, sourceZones: [kind], optional: true, usageLimit: null,
           activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] },
@@ -69,8 +79,8 @@ export function createSyntheticSession(decks: readonly [DeckInput, DeckInput], f
           activationConditions: always(), resolutionConditions: always(), costs: [{ type: "REST_SOURCE" }], actions: [{ type: "DRAW", player: "SELF", count: 1 }] },
         ...(kind === "stage" ? [{ id: "lifeDraw", kind: "triggered", timing: { type: "TRIGGER" }, sourceZones: ["life"], optional: false, usageLimit: null,
           activationConditions: always(), resolutionConditions: always(), costs: [], actions: [{ type: "DRAW", player: "SELF", count: 1 }] }] : [])],
-      source: { text: kind === "event" ? "Synthetic event: MAIN draw one card, or COUNTER give your leader +2000 during this battle. Use cost one DON. Not an official ability." : kind === "character" ? "Synthetic character: BLOCKER, RUSH. On play, when attacking and on KO, optionally draw one card. MAIN once per object turn: rest this source to draw one card. Not an official ability." : "Synthetic stage: when this card enters its field zone, optionally draw one card. MAIN once per object turn: rest this source to draw one card. Not an official ability.",
-        triggerText: kind === "stage" ? "Synthetic trigger: draw one card. Not an official ability." : "", displayIds: [cardId], datasetSha256: createHash("sha256").update(kind === "event" ? "v3-session-event.8" : "v3-session-entry.7").digest("hex") } })));
+      source: { text: kind === "event" ? eventMode === "selection" ? "Synthetic MAIN: draw, or select zero/one opponent leader to rest then draw, or discard zero/one owned hand then draw. COUNTER +2000 leader. Not official abilities." : "Synthetic event: MAIN draw one card, or COUNTER give your leader +2000 during this battle. Use cost one DON. Not an official ability." : kind === "character" ? "Synthetic character: BLOCKER, RUSH. On play, when attacking and on KO, optionally draw one card. MAIN once per object turn: rest this source to draw one card. Not an official ability." : "Synthetic stage: when this card enters its field zone, optionally draw one card. MAIN once per object turn: rest this source to draw one card. Not an official ability.",
+        triggerText: kind === "stage" ? "Synthetic trigger: draw one card. Not an official ability." : "", displayIds: [cardId], datasetSha256: createHash("sha256").update(kind === "event" ? eventMode === "selection" ? "v3-session-event.9" : "v3-session-event.8" : "v3-session-entry.7").digest("hex") } })));
   }
   const rulesetVersion = "synthetic-session.1", catalog = new ApprovedV3Catalog(plans, plans.map(plan => ({ status: "approved", cardId: plan.definition.cardId, cardVersion: plan.definition.cardVersion,
     definitionHash: plan.definitionHash, sourceHash: plan.sourceHash, compilerVersion: plan.compilerVersion, registryHash: plan.registryHash, rulesetVersion,

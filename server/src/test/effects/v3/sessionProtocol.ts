@@ -14,6 +14,7 @@ export type V3SessionView = Readonly<{
   counterChoices: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string; amount: number }>[];
   counterEventChoices: readonly Readonly<{ card: Readonly<{ instanceId: string; generation: number }>; cardId: string; effectId: string; cost: number | null; enabled: boolean }>[];
   mainEventChoices: readonly Readonly<{ source: Readonly<{ instanceId: string; generation: number }>; sourceToken: string; cardId: string; effectId: string; cost: number; enabled: boolean }>[];
+  mainEvent: Readonly<{ cardId: string; effectId: string; actor: 0 | 1; paidCost: number }> | null;
   lifePending: boolean; lifeChoice: Readonly<{ selectionId: string; token: string; expiresAt: number; cardId: string; canTrigger: boolean }> | null;
   lifeTrigger: Readonly<{ cardId: string; owner: 0 | 1 }> | null;
   resolutionActor: 0 | 1 | null; workType: V3FixtureView["workType"];

@@ -1,16 +1,17 @@
 import { createHash } from "node:crypto";
 import { dataArray, dataObject, ensureMove, freezeMovement } from "../../movement/state";
-import { isSimpleMainEvent } from "./simpleMainEvent";
+import { isSimpleMainEvent, isInteractiveMainEvent } from "./simpleMainEvent";
 import type { AbilityTag, CardDefinition, CardSetRef, CardSubject, Category, CompiledCard, DonZone, Node, NodeMeta, SchemaVersion, Value } from "./dsl";
 
 export const COMPILER_VERSION = "v3-subset-compiler.16.3";
 export const METADATA_COMPILER_VERSION = "v3-subset-compiler.17.1";
 export const QUERY_COMPILER_VERSION = "v3-subset-compiler.18.1";
 export const MAIN_EVENT_COMPILER_VERSION = "v3-subset-compiler.19.1";
+export const INTERACTIVE_EVENT_COMPILER_VERSION = "v3-subset-compiler.20.1";
 export const ABILITY_TAGS: readonly AbilityTag[] = ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED", "MAIN", "ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_KO", "COUNTER", "TRIGGER"];
 export function compilerVersionForSchema(schema: SchemaVersion): string {
-  ensureMove(schema === "3.0.0-subset.16" || schema === "3.0.0-subset.17" || schema === "3.0.0-subset.18" || schema === "3.0.0-subset.19", "unsupported-v3-schema-version");
-  return schema === "3.0.0-subset.19" ? MAIN_EVENT_COMPILER_VERSION : schema === "3.0.0-subset.18" ? QUERY_COMPILER_VERSION : schema === "3.0.0-subset.17" ? METADATA_COMPILER_VERSION : COMPILER_VERSION;
+  ensureMove(schema === "3.0.0-subset.16" || schema === "3.0.0-subset.17" || schema === "3.0.0-subset.18" || schema === "3.0.0-subset.19" || schema === "3.0.0-subset.20", "unsupported-v3-schema-version");
+  return schema === "3.0.0-subset.20" ? INTERACTIVE_EVENT_COMPILER_VERSION : schema === "3.0.0-subset.19" ? MAIN_EVENT_COMPILER_VERSION : schema === "3.0.0-subset.18" ? QUERY_COMPILER_VERSION : schema === "3.0.0-subset.17" ? METADATA_COMPILER_VERSION : COMPILER_VERSION;
 }
 const compiled = new WeakSet<object>();
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -133,7 +134,7 @@ export function builtinV3Registries(schema: SchemaVersion = "3.0.0-subset.16"): 
       return { type: "HAS_ABILITY", ...meta, subject: c.subject(n.subject), basis: n.basis, ability: n.ability as AbilityTag };
     });
   }
-  if (schema === "3.0.0-subset.18" || schema === "3.0.0-subset.19") {
+  if (schema === "3.0.0-subset.18" || schema === "3.0.0-subset.19" || schema === "3.0.0-subset.20") {
     r.query = new V3Registry<"query">();
     r.query.register("QUERY_CARDS", "1", (n, c) => {
       const meta = c.fields(n, ["owner", "controller", "zone", "visibility", "faceUpOnly", "cardTypes", "filters", "excludeSource"]);
@@ -268,7 +269,7 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19", "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19" || input.schemaVersion === "3.0.0-subset.20", "unsupported-v3-schema-version");
   const schemaVersion = input.schemaVersion, compilerVersion = compilerVersionForSchema(schemaVersion);
   registries ??= builtinV3Registries(schemaVersion);
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
@@ -305,7 +306,7 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
     },
     list(category, nodes) { dataArray(nodes, 128); return nodes.map(node => context.read(category, node)); },
     value(input) {
-      const parsed = value(input, bindings, candidateAllowed, schemaVersion === "3.0.0-subset.18" || schemaVersion === "3.0.0-subset.19");
+      const parsed = value(input, bindings, candidateAllowed, schemaVersion === "3.0.0-subset.18" || schemaVersion === "3.0.0-subset.19" || schemaVersion === "3.0.0-subset.20");
       ensureMove(currentTiming !== "ON_KO" || parsed === null || typeof parsed !== "object" || !parsed.ref.startsWith("SOURCE."), "v3-ko-source-facts-unresolved");
       ensureMove(currentTiming !== "TRIGGER" || parsed === null || typeof parsed !== "object" || !parsed.ref.startsWith("SOURCE."), "v3-trigger-source-facts-unresolved");
       return parsed;
@@ -366,7 +367,7 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
     dataArray(effect.sourceZones, 3); ensureMove(effect.sourceZones.length === 1 && effect.sourceZones[0] === (timing.type === "TRIGGER" ? "life" : input.cardType === "event" ? "hand" : input.cardType), "unsupported-v3-source-zones");
     const activationConditions = context.read("predicate", effect.activationConditions),
       resolutionConditions = context.read("predicate", effect.resolutionConditions), costs = context.list("cost", effect.costs);
-    ensureMove(timing.type === "TRIGGER" ? input.cardType !== "leader" && effect.kind === "triggered" : input.cardType === "event" ? effect.kind === "activated" && (timing.type === "COUNTER" || schemaVersion === "3.0.0-subset.19" && timing.type === "MAIN") : effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_PLAY" && input.cardType !== "leader" || timing.type === "ON_ATTACK" && input.cardType !== "stage" || timing.type === "ON_OPPONENT_ATTACK" || timing.type === "ON_KO" && input.cardType === "character", "v3-kind-timing-mismatch");
+    ensureMove(timing.type === "TRIGGER" ? input.cardType !== "leader" && effect.kind === "triggered" : input.cardType === "event" ? effect.kind === "activated" && (timing.type === "COUNTER" || (schemaVersion === "3.0.0-subset.19" || schemaVersion === "3.0.0-subset.20") && timing.type === "MAIN") : effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_PLAY" && input.cardType !== "leader" || timing.type === "ON_ATTACK" && input.cardType !== "stage" || timing.type === "ON_OPPONENT_ATTACK" || timing.type === "ON_KO" && input.cardType === "character", "v3-kind-timing-mismatch");
     if (input.cardType === "event") ensureMove(!effect.optional && usageLimit === null && costs.length === 0 && activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-event-additional-activation-unresolved");
     if (timing.type === "TRIGGER") ensureMove(!effect.optional && usageLimit === null && costs.length === 0 && activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-trigger-additional-activation-unresolved");
     ensureMove(timing.type !== "ON_KO" || costs.length === 0, "v3-ko-activation-cost-unresolved");
@@ -377,7 +378,7 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
     const actions = context.list("action", effect.actions); ensureMove(actions.length > 0, "v3-action-required");
     const parsed: CardDefinition["effects"][number] = { id, kind: effect.kind, optional: effect.optional, usageLimit, sourceZones: effect.sourceZones as CardDefinition["effects"][number]["sourceZones"], timing,
       activationConditions, resolutionConditions, costs, actions };
-    if (input.cardType === "event" && timing.type === "MAIN") ensureMove(isSimpleMainEvent(parsed), "v3-main-event-needs-pr05b");
+    if (input.cardType === "event" && timing.type === "MAIN") ensureMove(schemaVersion === "3.0.0-subset.20" ? isInteractiveMainEvent(parsed) : isSimpleMainEvent(parsed), "v3-main-event-unsupported-program");
     return parsed;
   });
   const triggers = effects.filter(effect => effect.timing.type === "TRIGGER");

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { V3Choice } from "../../server/src/test/effects/v3/fixtureProtocol";
 import { getLocalCardImage } from "../utils/localCardImages";
-export default function V3ChoicePanel({ choice, disabled, onConfirm, imageAliases = {} }: { choice: V3Choice; disabled: boolean; onConfirm: (tokens: string[]) => void; imageAliases?: Readonly<Record<string, string>> }) {
+export default function V3ChoicePanel({ choice, disabled, onConfirm, imageAliases = {}, allowSkip = false }: { choice: V3Choice; disabled: boolean; onConfirm: (tokens: string[]) => void; imageAliases?: Readonly<Record<string, string>>; allowSkip?: boolean }) {
   const [tokens, setTokens] = useState<string[]>([]), [failed, setFailed] = useState<string[]>([]);
   if (choice.purpose === "activation") return <div><p>効果を発動しますか？</p><div className="test-effect-actions v3-activation-actions">{choice.options.map(option =>
     <button key={option.token} disabled={disabled} onClick={() => onConfirm([option.token])}>{option.label}</button>
@@ -16,5 +16,6 @@ export default function V3ChoicePanel({ choice, disabled, onConfirm, imageAliase
       {option.label && <span className="v3-don-choice-label">{option.label}</span>}
       {tokens.includes(option.token) && <b>{tokens.indexOf(option.token) + 1}</b>}
     </button>;
-  })}</div><button className="test-effect-confirm" disabled={disabled || tokens.length < choice.min || tokens.length > choice.max} onClick={() => onConfirm(tokens)}>{choice.purpose === "order" ? "順番を確定" : choice.purpose !== "action" ? "支払いカードを確定" : "選択を確定"}</button></div>;
+  })}</div><button className="test-effect-confirm" disabled={disabled || tokens.length < choice.min || tokens.length > choice.max} onClick={() => onConfirm(tokens)}>{choice.purpose === "order" ? "順番を確定" : choice.purpose !== "action" ? "支払いカードを確定" : "選択を確定"}</button>
+    {allowSkip && choice.purpose === "action" && choice.min === 0 && <button disabled={disabled} onClick={() => onConfirm([])}>選ばずに続ける</button>}</div>;
 }

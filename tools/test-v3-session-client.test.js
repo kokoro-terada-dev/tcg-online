@@ -42,6 +42,14 @@ test('event MAIN client sends only the current token/effect pair and rejects cou
   for (const details of [{ sourceToken: 'old', effectId: 'main' }, { sourceToken: 'event-token', effectId: 'counter' }, { effectId: 'main' }]) assert.throws(() => v3SessionCommand(v, 'mainEvent', 'bad', details));
 });
 
+test('event selection chooser may differ from the effect controller but cannot execute its work', () => {
+  const v = view(); v.localPlayerIndex = 1; v.resolutionActor = 0; v.gate = 'choice';
+  v.frame = { status: 'waitingForChoice', choice: { chooser: 1, selectionId: 's', min: 0, max: 1, options: [{ token: 'choice' }] } };
+  assert.equal(v3SessionCommand(v, 'answer', 'answer', { tokens: ['choice'] }).selectionId, 's');
+  assert.throws(() => v3SessionCommand(v, 'answer', 'bad', { tokens: ['fake'] }));
+  assert.throws(() => v3SessionCommand(v, 'work', 'foreign-work'));
+});
+
 test('normal play uses only the current approved playable reference and rejects disabled or stale cards', () => {
   const v = view(), card = { instanceId: 'hand-card', generation: 1 }; v.playableCards = [{ card, enabled: true }];
   const play = v3SessionCommand(v, 'play', 'play', { card }); assert.equal(play.card.instanceId, 'hand-card'); assert.equal(play.card.generation, 1);

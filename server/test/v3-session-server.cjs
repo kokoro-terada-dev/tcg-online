@@ -11,14 +11,14 @@ const command = (v, kind, extra = {}) => ({ matchId: v.matchId, requestId: `sess
 async function send(socket, v, kind, extra = {}) {
   const result = await request(socket, 'v3-session:command', command(v, kind, extra)); assert.equal(result.ok, true, JSON.stringify(result)); return result.sessionView;
 }
-async function setup(t, firstPlayer = 0, decks = [deck, deck]) {
+async function setup(t, firstPlayer = 0, decks = [deck, deck], eventMode = 'atomic') {
   const service = await startLocalV3Server(), clients = [];
   t.after(async () => { clients.forEach(socket => socket.disconnect()); await new Promise(resolve => service.io.close(resolve)); });
   for (let i = 0; i < 3; i++) { const socket = io(service.url, { autoConnect: false, reconnection: false }); clients.push(socket); const ready = once(socket, 'connect'); socket.connect(); await ready; }
   const [host, guest] = clients, created = once(host, 'v3-room:state'); await request(host, 'v3-room:create'); const room = await created;
   assert.equal((await request(guest, 'v3-room:join', room.roomId)).ok, true);
   for (const [i, socket] of [host, guest].entries()) { assert.equal((await request(socket, 'v3-room:deck', decks[i])).ok, true); assert.equal((await request(socket, 'v3-room:ready', true)).ok, true); }
-  assert.equal((await request(host, 'v3-session:start', { firstPlayer })).ok, true);
+  assert.equal((await request(host, 'v3-session:start', { firstPlayer, eventMode })).ok, true);
   return { clients, host, guest, roomId: room.roomId, firstPlayer };
 }
 async function complete(socket, v) {
@@ -30,6 +30,31 @@ async function complete(socket, v) {
   }
   throw Error('Session resolution did not complete');
 }
+
+for (const actor of [0, 1]) for (const privateHand of [false, true]) test(`resumable event MAIN publishes use but hides choices until authorized response (seat=${actor}, private=${privateHand})`, async t => {
+  const events = { ...deck, mainDeck: Array(50).fill('EVENT'), cardTypes: { EVENT: 'event' } };
+  const { clients } = await setup(t, actor, [events, events], 'selection'), own = clients[actor], peer = clients[1 - actor];
+  let v = (await request(own, 'v3-session:sync')).sessionView;
+  const e = v.mainEventChoices.find(e => e.effectId === (privateHand ? 'handChoice' : 'targetChoice'));
+  const input = command(v, 'mainEvent', { sourceToken: e.sourceToken, effectId: e.effectId });
+  const result = await request(own, 'v3-session:command', input); assert.equal(result.ok, true); v = result.sessionView;
+  assert.equal(v.frame.status, 'waitingForChoice'); assert.equal(v.mainEvent.paidCost, 1); assert.equal(v.mainEvent.effectId, e.effectId);
+  assert.equal(v.movement.players[actor].restDon.length, 1); assert.equal(v.movement.players[actor].trash[0].cardId, e.cardId);
+  const replay = await request(own, 'v3-session:command', input); assert.equal(replay.ok, true); assert.deepEqual(replay.sessionView.context, v.context);
+  const seen = (await request(peer, 'v3-session:sync')).sessionView; assert.deepEqual(seen.mainEvent, v.mainEvent); assert.deepEqual(seen.frame.choice.options, []);
+  assert.equal(seen.movement.players[actor].hand.every(card => card.ref === null && card.cardId === null), true);
+  const q = v.frame.choice, answer = command(v, 'answer', { selectionId: q.selectionId, tokens: [q.options[0].token] });
+  for (const [socket, bad] of [[peer, answer], [own, { ...answer, tokens: ['made-up-target'] }], [own, command(v, 'endTurn')],
+    [own, command(v, 'mainEvent', { sourceToken: e.sourceToken, effectId: e.effectId })]]) {
+    const rejected = await request(socket, 'v3-session:command', bad); assert.equal(rejected.ok, false); assert.deepEqual(rejected.sessionView.context, v.context);
+  }
+  const accepted = await request(own, 'v3-session:command', answer); assert.equal(accepted.ok, true); v = accepted.sessionView;
+  assert.equal((await request(own, 'v3-session:command', answer)).ok, true);
+  assert.equal((await request(own, 'v3-session:command', { ...answer, requestId: 'stale-answer' })).ok, false);
+  v = await complete(own, v); assert.equal(v.mainEvent, null); assert.equal(v.gate, 'idle'); assert.equal(v.movement.players[actor].restDon.length, 1);
+  if (privateHand) assert.equal(v.movement.players[actor].trash.length, 2);
+  else assert.equal(v.movement.players[1 - actor].leader[0].rotated, true);
+});
 
 for (const actor of [0, 1]) test(`simple event MAIN is atomic over Socket and reveals no unused hand cards (seat=${actor})`, async t => {
   const events = { ...deck, mainDeck: Array(50).fill('EVENT'), cardTypes: { EVENT: 'event' } };

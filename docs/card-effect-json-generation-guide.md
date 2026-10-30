@@ -1,7 +1,8 @@
 # ChatGPT向け カード効果JSON生成ガイド
 
-更新日: 2026-10-30。初回調査`e6ba075`、PR05a実装開始`1dbf700`。
-新19のみ、自己DRAW/SEQUENCEの単純イベントMAINに対応しました。[PR05a](card-effect-pr05a.md)参照。対象選択等は未対応です。
+更新日: 2026-10-30。初回調査`e6ba075`、PR05b実装開始`f3bdb18`。
+新20で限定的なSELECT/IF/対象操作を伴うイベントMAINに対応しました。[PR05b](card-effect-pr05b.md)の許可範囲・公開境界・停止条件を必ず確認してください。
+旧19は自己DRAW/SEQUENCEだけの一括イベントMAINです。[PR05a](card-effect-pr05a.md)参照。対象選択は新20と混ぜずに扱ってください。
 PR04のleader/character/stage MAINの個体別入口は[PR04](card-effect-pr04.md)を参照してください。
 PR03のEXISTS/COUNT/QUERY_CARDSと数値の明示printed/current参照はsubset.18です。[PR03](card-effect-pr03.md)を併読してください。
 PR02a/bの新Predicateはsubset.17です。詳細・全パラメータは[PR02](card-effect-pr02.md)を併読してください。
@@ -22,10 +23,10 @@ PR02a/bの新Predicateはsubset.17です。詳細・全パラメータは[PR02](
 ### ChatGPTに渡す資料
 
 1. このガイド。
-2. `card-effect-json-schema.json`（旧16）、`card-effect-metadata.schema.json`（17）、`card-effect-query.schema.json`（18）、`card-effect-main-event.schema.json`（19）: Draft 2020-12。schemaVersionに合わせます。
+2. `card-effect-json-schema.json`（旧16）、`card-effect-metadata.schema.json`（17）、`card-effect-query.schema.json`（18）、`card-effect-main-event.schema.json`（19）、`card-effect-interactive-event.schema.json`（20）: Draft 2020-12。schemaVersionに合わせます。
 3. `card-effect-types.ts.txt`: 現在の`dsl.ts`の型定義全文の写し。
-4. `card-effect-supported-operations.json`: 18/19の44命令/17の41命令/旧16の38命令のパラメータ、例、profile、実行制約。
-5. `card-effect-json-examples.json`: 従来例14件。`card-effect-query-examples.json`: 集合条件例3件。`card-effect-main-event-examples.json`: 単純イベントMAIN例1件。すべて合成例です。
+4. `card-effect-supported-operations.json`: 18〜20の44命令/17の41命令/旧16の38命令のパラメータ、例、profile、実行制約。
+5. `card-effect-json-examples.json`: 従来例14件。`card-effect-query-examples.json`: 集合例3件。`card-effect-main-event-examples.json`: 一括イベント1件。`card-effect-interactive-event-examples.json`: 選択イベント2件。すべて合成例です。
 6. `card-effect-implementation-status.md`: 実装の層と未対応一覧。
 7. `card-effect-pr02.md`と`card-effect-pr03.md`: メタデータ/能力タグ/集合の意味と互換性。
 8. 入力CSV、差異一覧、タグ/パターン分析、元の代表例。後者は実行仕様ではなく参考資料。
@@ -43,7 +44,7 @@ Zod Schemaはありません。正規の実装バリデータは`compileV3CardJs
 
 | キー | 型・制約 |
 | --- | --- |
-| schemaVersion | 必須。単純イベントMAINは19、集合条件は18/19、メタデータは17〜19。旧16も独立profileとして受理 |
+| schemaVersion | 必須。選択イベントMAINは20、一括イベントは19。集合条件は18〜20、メタデータは17〜20。旧16も独立profileとして受理 |
 | cardId | 必須、カード番号。ASCII識別子、100文字以下 |
 | cardVersion | 必須、定義の版。例`draft.1`。同じ番号の変更時は更新する運用を推奨 |
 | name | 必須、空白だけ不可、300文字以下 |
@@ -77,7 +78,7 @@ Zod Schemaはありません。正規の実装バリデータは`compileV3CardJs
 | id | 識別子。そのカード内の全Effect/node.idと重複不可 |
 | kind | `activated / triggered` |
 | timing | `{type:...}`、下表 |
-| sourceZones | ちょうど1要素。場の効果はカード種類と同じ、event COUNTER/新19 MAINはhand、TRIGGERはlife |
+| sourceZones | ちょうど1要素。場の効果はカード種類と同じ、event COUNTER/19・20 MAINはhand、TRIGGERはlife |
 | optional | boolean。発動前の任意確認。actions内の任意支払いではない |
 | usageLimit | null、または`{type:"PER_TURN",scope:"SOURCE_OBJECT",count:1}`等 |
 | activationConditions | Predicate、発動の前提条件 |
@@ -87,7 +88,7 @@ Zod Schemaはありません。正規の実装バリデータは`compileV3CardJs
 
 | timing | 許可される組合せ |
 | --- | --- |
-| MAIN | activated、leader/character/stage、sourceZonesは同じ種類。新19のeventのみhandでSELF DRAW/SEQUENCE限定 |
+| MAIN | activated、leader/character/stage、sourceZonesは同じ種類。eventはhand。19はSELF DRAW/SEQUENCE、20は限定SELECT/IF/対象操作も可 |
 | ON_PLAY | triggered、character/stage、自身の登場 |
 | ON_ATTACK | triggered、leader/character、自身の攻撃 |
 | ON_OPPONENT_ATTACK | triggered、leader/character/stage、相手攻撃時に場の定義を監視 |

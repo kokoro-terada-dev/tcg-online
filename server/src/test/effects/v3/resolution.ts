@@ -237,6 +237,17 @@ export class V3ResolutionMachine {
       }
       // UNORDERED input is canonicalized to server candidate order, not client token order.
       const cards = choice.purpose === "order" ? tokens.map(token => ({ ...choice.candidates.find(candidate => candidate.token === token)!.ref })) : choice.candidates.filter(candidate => selected.has(candidate.token)).map(candidate => ({ ...candidate.ref }));
+      if (this.#card.definition.schemaVersion === "3.0.0-subset.20" && this.#card.definition.cardType === "event" && this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)?.timing.type === "MAIN" && choice.purpose === "action") {
+        const instruction = this.#code[state.pc]; ensureMove(instruction?.type === "SELECT", "v3-choice-program-mismatch");
+        const selector = instruction.action.selector, rows = this.#environment.candidates(selector, this.#bindings(state));
+        for (const ref of cards) {
+          const original = choice.candidates.find(row => row.ref.instanceId === ref.instanceId && row.ref.generation === ref.generation)!;
+          const current = rows.find(row => row.ref.instanceId === ref.instanceId && row.ref.generation === ref.generation && row.cardId === original.cardId && row.zone === original.zone);
+          ensureMove(current && current.owner === relative(state.identity.actor, selector.owner) && current.controller === relative(state.identity.actor, selector.controller) &&
+            (selector.visibility === "PUBLIC" ? current.faceUp && current.visibleTo.includes(0) && current.visibleTo.includes(1) : current.visibleTo.includes(state.identity.actor) && !current.visibleTo.includes((1 - state.identity.actor) as Seat)) &&
+            selector.cardTypes.some(kind => kind === current.kind) && this.#evaluate(selector.filters, state, ref), "v3-choice-target-stale");
+        }
+      }
       if (choice.purpose === "cost") state.costCards = cards;
       else if (choice.purpose === "returnCost") {
         ensureMove(choice.maxActiveReturn !== null && choice.candidates.filter(candidate => selected.has(candidate.token) && candidate.zone === "activeDon").length <= choice.maxActiveReturn, "v3-return-cost-active-reserved");
