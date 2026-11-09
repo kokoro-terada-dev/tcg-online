@@ -10,7 +10,7 @@ import type { StatEffects } from "./statEffects";
 import { UNKNOWN, createDerivedCardFactsReader, readEventContext, type EventContext } from "./readContext";
 import type { KeywordGrants } from "./keywordEffects";
 import { readRememberedColors, rememberedColors } from "./moveResults";
-import { activationCostSelector, movesActivationSource } from "./activationCosts";
+import { activationCostSelector, filteredCostCandidates, movesActivationSource } from "./activationCosts";
 import { ownerHandCandidates } from "./ownerHand";
 import { protectionDecision } from "./continuousEffects";
 import { hasProtection } from "./protectionRules";
@@ -179,13 +179,9 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       const discardedIds = new Set(discarded?.map(ref => ref.instanceId));
       if (discarded !== null && (discarded.length !== discard || discardedIds.size !== discard || !discarded.every(eligible))) return false;
       if (!filtered) return selected === null || selected.length === 0;
-      const matches = new Map<string, number>();
-      for (const row of environment.candidates(filtered, {})) {
-        if (discardedIds.has(row.ref.instanceId) || filtered.excludeSource && row.ref.instanceId === identity.source.instanceId && row.ref.generation === identity.source.generation) continue;
-        const result = evaluate(filtered.filters, {}, row.ref);
-        if (result === "unknown") return "unknown";
-        if (result) matches.set(row.ref.instanceId, row.ref.generation);
-      }
+      const rows = filteredCostCandidates(environment, filtered, identity.source, discardedIds);
+      if (rows === "unknown") return "unknown";
+      const matches = new Map(rows.map(row => [row.ref.instanceId, row.ref.generation]));
       return matches.size >= pickedCount && (selected === null || selected.length === pickedCount && new Set(selected.map(ref => ref.instanceId)).size === pickedCount &&
         selected.every(ref => matches.get(ref.instanceId) === ref.generation));
     },

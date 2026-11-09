@@ -111,12 +111,12 @@ export class V3SyntheticMatchCoordinator {
     ensureMove(this.#progression.gate.kind === "idle" && (!this.#progression.battle || allowBattleTriggers && (this.#progression.battle.step === "attack" || this.#progression.battle.step === "counter" || this.#progression.battle.step === "block" && this.#progression.battle.decisionComplete || this.#damageSettling && this.#progression.battle.step === "damage")) && !this.#progression.outcome, "v3-match-not-idle");
     ensureMove(allowTriggers || !this.#triggers.length, "v3-match-triggers-pending");
   }
-  #checkNewEvents = (events: readonly MovementEvent[]): void => {
+  #checkNewEvents = (events: readonly MovementEvent[], replacement?: Readonly<{ resolutionId: string; effectId: string }>): void => {
     ensureMove(this.#triggers.length + movementTriggerCandidates(events, this.#cards).length <= 128, "v3-trigger-queue-limit");
     ensureMove(this.#observationDraft !== null, "v3-trigger-observation-transaction-required");
     this.#observationDraft = observeConditionalTriggers(this.#observationDraft, events, this.#cards, this.#progression.activePlayer, this.#statEffects, this.#keywordGrants,
       ref => this.#battleCounters.filter(counter => counter.target.instanceId === ref.instanceId && counter.target.generation === ref.generation).reduce((sum, counter) => sum + counter.amount, 0),
-      this.#active ? { resolutionId: this.#active.resolutionId, effectId: this.#active.effectId } : undefined);
+      replacement ?? (this.#active ? { resolutionId: this.#active.resolutionId, effectId: this.#active.effectId } : undefined));
     const queued = new Set(this.#triggers.flatMap(entry => entry.cause.type === "ON_EVENT" ? [entry.cause.observation.key] : []));
     ensureMove(this.#triggers.length + movementTriggerCandidates(events, this.#cards).length + this.#observationDraft.records.filter(record => record.status === "PENDING" && !queued.has(record.key)).length <= 128, "v3-trigger-queue-limit");
   };
@@ -373,7 +373,7 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
       return card.definition.effects.filter(card.definition.schemaVersion !== "3.0.0-subset.19" ? isInteractiveMainEvent : isSimpleMainEvent).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,

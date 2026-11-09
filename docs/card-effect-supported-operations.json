@@ -1,7 +1,7 @@
 {
-  "basedOnCommit": "8347256",
-  "compilerVersion": "v3-subset-compiler.37.1",
-  "registryHash": "822223dbb3aaf5bae763432e7a4993bdc74da7b558b57eecf1c6b710e6fb8808",
+  "basedOnCommit": "c34e2a0",
+  "compilerVersion": "v3-subset-compiler.38.1",
+  "registryHash": "ad83fc5f516b830359f5bb9980488c75278c453cb275e31429f4ee7afa11b77b",
   "registries": {
     "predicate": [
       "CARD_METADATA@1",
@@ -56,7 +56,7 @@
       "REVEAL_CARDS@1"
     ],
     "replacement": [
-      "REPLACE_EVENT@1"
+      "REPLACE_EVENT@2"
     ],
     "selector": [
       "BOUND_CARDS@1",
@@ -159,7 +159,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -217,7 +218,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -285,7 +287,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -341,7 +344,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -390,7 +394,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -447,7 +452,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -514,7 +520,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -594,7 +601,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -645,7 +653,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -712,7 +721,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -790,7 +800,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -856,7 +867,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -931,7 +943,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -982,7 +995,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1046,7 +1060,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1102,7 +1117,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1177,7 +1193,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1232,7 +1249,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1283,7 +1301,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1332,7 +1351,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1390,7 +1410,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1439,7 +1460,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1481,7 +1503,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1635,7 +1658,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1785,7 +1809,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1827,7 +1852,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1884,7 +1910,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1926,7 +1953,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -1968,7 +1996,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -2010,7 +2039,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -2052,7 +2082,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -2094,7 +2125,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -2136,7 +2168,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -2178,7 +2211,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -2220,7 +2254,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -2262,7 +2297,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -2304,7 +2340,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -2346,7 +2383,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -2375,7 +2413,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -2453,7 +2492,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -2558,7 +2598,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -2637,7 +2678,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-query.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -2705,7 +2747,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-query.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -2789,7 +2832,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-query.schema.json#/$defs/query",
       "requiredParameters": [
@@ -2919,7 +2963,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ]
     },
     {
@@ -3230,7 +3275,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-boundary.schema.json#/$defs/timing",
       "requiredParameters": [],
@@ -3265,7 +3311,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-boundary.schema.json#/$defs/timing",
       "requiredParameters": [
@@ -3310,7 +3357,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-boundary.schema.json#/$defs/timing",
       "requiredParameters": [
@@ -3354,7 +3402,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-expiry.schema.json#/$defs/duration",
       "requiredParameters": [
@@ -3433,7 +3482,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-move-result.schema.json#/$defs/action",
       "optionalParameters": [
@@ -3497,7 +3547,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-move-result.schema.json#/$defs/predicate",
       "optionalParameters": [
@@ -3584,7 +3635,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "optionalParameters": [
         "id",
@@ -3647,7 +3699,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "optionalParameters": [
         "id",
@@ -3671,7 +3724,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "schemaRef": "card-effect-effect-play.schema.json#/$defs/action",
       "requiredParameters": [
@@ -3804,7 +3858,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "optionalParameters": [
         "id",
@@ -3861,7 +3916,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "optionalParameters": [
         "id",
@@ -3932,7 +3988,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "optionalParameters": [
         "id",
@@ -3989,7 +4046,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "optionalParameters": [
         "id",
@@ -4128,7 +4186,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "variants": [
         {
@@ -4232,7 +4291,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "optionalParameters": [
         "id",
@@ -4279,7 +4339,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "optionalParameters": [
         "id",
@@ -4340,7 +4401,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "optionalParameters": [
         "id",
@@ -4390,7 +4452,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "optionalParameters": [
         "id",
@@ -4448,7 +4511,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "optionalParameters": [
         "id",
@@ -4467,7 +4531,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "requiredParameters": [
         "player",
@@ -4511,7 +4576,8 @@
         "3.0.0-subset.34",
         "3.0.0-subset.35",
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "requiredParameters": [
         "player",
@@ -4724,7 +4790,8 @@
       "status": "implemented_limited",
       "availableIn": [
         "3.0.0-subset.36",
-        "3.0.0-subset.37"
+        "3.0.0-subset.37",
+        "3.0.0-subset.38"
       ],
       "placement": "CardDefinition.continuousEffects only",
       "requiredParameters": [
@@ -4826,6 +4893,86 @@
         },
         "substitute": {
           "to": "hand"
+        }
+      }
+    },
+    {
+      "category": "replacement",
+      "name": "REPLACE_EVENT",
+      "handlerVersion": "2",
+      "status": "implemented",
+      "availableIn": [
+        "3.0.0-subset.38"
+      ],
+      "schemaRef": "card-effect-paid-replacement.schema.json#/$defs/replacementEffect",
+      "requiredParameters": [
+        "id",
+        "match",
+        "condition",
+        "substitute"
+      ],
+      "optionalParameters": [
+        "sourceSpan",
+        "optionalPayment"
+      ],
+      "parameterSchemas": {
+        "match": {
+          "$ref": "card-effect-paid-replacement.schema.json#/$defs/replacementEffect/properties/match"
+        },
+        "condition": {
+          "$ref": "card-effect-paid-replacement.schema.json#/$defs/replacementEffect/properties/condition"
+        },
+        "substitute": {
+          "$ref": "card-effect-paid-replacement.schema.json#/$defs/replacementEffect/properties/substitute"
+        },
+        "optionalPayment": {
+          "$ref": "card-effect-paid-replacement.schema.json#/$defs/replacementEffect/properties/optionalPayment"
+        }
+      },
+      "description": "Inherits free replacement and can prevent an effect KO by discarding one eligible event or stage from the protected character controller’s hand.",
+      "runtimeConstraints": "Owner-only exact-one MOVE_AS_COST selector, no extra selector filters. Discard is the replacement effect. Only same-source paid alternatives may share a prompt; mixed, chained, simultaneous, usage-limited and battle replacements remain unsupported.",
+      "example": {
+        "type": "REPLACE_EVENT",
+        "id": "replace-ko",
+        "match": {
+          "cause": "EFFECT_KO",
+          "by": "OPPONENT",
+          "from": "character",
+          "to": "trash"
+        },
+        "condition": {
+          "type": "all",
+          "conditions": []
+        },
+        "substitute": {
+          "type": "PREVENT"
+        },
+        "optionalPayment": {
+          "type": "MOVE_AS_COST",
+          "destination": "trash",
+          "selector": {
+            "type": "CARDS",
+            "owner": "SELF",
+            "controller": "SELF",
+            "chooser": "SELF",
+            "zone": "hand",
+            "visibility": "OWNER_ONLY",
+            "faceUpOnly": false,
+            "cardTypes": [
+              "event",
+              "stage"
+            ],
+            "filters": {
+              "type": "all",
+              "conditions": []
+            },
+            "excludeSource": true,
+            "min": 1,
+            "max": 1,
+            "selectionMode": "SELECT",
+            "order": "UNORDERED",
+            "onInsufficient": "fail"
+          }
         }
       }
     }
@@ -6505,6 +6652,98 @@
         ],
         "replacement": [
           "REPLACE_EVENT@1"
+        ],
+        "selector": [
+          "BOUND_CARDS@1",
+          "CARDS@4"
+        ],
+        "duration": [
+          "BATTLE_END@1",
+          "TURN_END@1",
+          "UNTIL_BOUNDARY@1"
+        ],
+        "timing": [
+          "COUNTER@1",
+          "MAIN@1",
+          "MAIN_START@1",
+          "ON_ATTACK@1",
+          "ON_BLOCK@1",
+          "ON_EVENT@2",
+          "ON_KO@1",
+          "ON_OPPONENT_ATTACK@1",
+          "ON_PLAY@1",
+          "TRIGGER@1",
+          "TURN_END@1"
+        ],
+        "keyword": [
+          "BLOCKER@1",
+          "CANNOT_BE_BLOCKED@1",
+          "RUSH@1",
+          "RUSH_CHARACTER@1"
+        ],
+        "query": [
+          "QUERY_CARDS@1"
+        ]
+      }
+    },
+    "3.0.0-subset.38": {
+      "compilerVersion": "v3-subset-compiler.38.1",
+      "registryHash": "ad83fc5f516b830359f5bb9980488c75278c453cb275e31429f4ee7afa11b77b",
+      "registries": {
+        "predicate": [
+          "CARD_METADATA@1",
+          "CARD_NAME@1",
+          "COUNT@1",
+          "EXISTS@1",
+          "HAS_ABILITY@1",
+          "MOVED_COLORS@1",
+          "REMEMBERED_COLORS@1",
+          "TURN_IS@1",
+          "all@1",
+          "any@1",
+          "compare@3",
+          "not@1"
+        ],
+        "action": [
+          "ADD_DON@1",
+          "ATTACH_DON@1",
+          "BIND_SOURCE@2",
+          "CHOOSE_MODE@1",
+          "CONTINUOUS_EFFECT@3",
+          "DISCARD_BY_OWNER@1",
+          "DRAW@2",
+          "GRANT_KEYWORD@1",
+          "IF@2",
+          "IF_PAYMENT_SUCCEEDED@1",
+          "KO@1",
+          "LOOK_TOP@1",
+          "MODIFY_STAT@1",
+          "MOVE_CARD@2",
+          "MOVE_RESULT@1",
+          "OFFER_PAYMENT@1",
+          "ORDER_CARDS@1",
+          "ORDER_THEN_MOVE@1",
+          "PLAY_BY_EFFECT@1",
+          "REMEMBER_FACTS@1",
+          "REST@1",
+          "RETURN_DON_BY_EFFECT@1",
+          "RETURN_TO_DECK@1",
+          "REVEAL@1",
+          "SELECT@1",
+          "SEQUENCE@1",
+          "SET_ACTIVE@1",
+          "SET_DON_STATE@1"
+        ],
+        "cost": [
+          "DISCARD_HAND@1",
+          "DON_RETURN@2",
+          "MOVE_AS_COST@1",
+          "REST_DON@1",
+          "REST_SOURCE@1",
+          "REVEAL_CARDS@1"
+        ],
+        "replacement": [
+          "REPLACE_EVENT@2"
         ],
         "selector": [
           "BOUND_CARDS@1",

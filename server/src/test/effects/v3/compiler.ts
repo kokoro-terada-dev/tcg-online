@@ -14,6 +14,7 @@ export const ABILITY_TAGS: readonly AbilityTag[] = ["BLOCKER", "RUSH", "RUSH_CHA
 export function compilerVersionForSchema(schema: SchemaVersion): string {
   if (schema === "3.0.0-subset.36") return "v3-subset-compiler.36.1";
   if (schema === "3.0.0-subset.37") return "v3-subset-compiler.37.1";
+  if (schema === "3.0.0-subset.38") return "v3-subset-compiler.38.1";
   if (schema === "3.0.0-subset.35") return "v3-subset-compiler.35.1";
   if (schema === "3.0.0-subset.34") return "v3-subset-compiler.34.1";
   if (schema === "3.0.0-subset.33") return "v3-subset-compiler.33.1";
@@ -153,22 +154,36 @@ function valueType(value: Value): string {
   if (value !== null && typeof value === "object") return value.ref.endsWith(".cardType") ? "string" : value.ref.endsWith(".rotated") ? "boolean" : "number";
   return value === null ? "null" : typeof value;
 }
-export function builtinV3Registries(schema: SchemaVersion = "3.0.0-subset.16"): V3Registries {
-  compilerVersionForSchema(schema);
+export function builtinV3Registries(profile: SchemaVersion = "3.0.0-subset.16"): V3Registries {
+  compilerVersionForSchema(profile);
+  const paidReplacement = profile === "3.0.0-subset.38";
+  const schema = paidReplacement ? "3.0.0-subset.37" : profile;
   const r: V3Registries = { predicate: new V3Registry(), action: new V3Registry(), cost: new V3Registry(), replacement: new V3Registry(), selector: new V3Registry(), duration: new V3Registry(), timing: new V3Registry(), keyword: new V3Registry() };
   const protectionProfile = (schema === "3.0.0-subset.36" || schema === "3.0.0-subset.37");
-  if (schema === "3.0.0-subset.37") r.replacement.register("REPLACE_EVENT", "1", (n, c) => {
-    const meta = c.fields(n, ["match", "condition", "substitute"]);
+  if (schema === "3.0.0-subset.37") r.replacement.register("REPLACE_EVENT", paidReplacement ? "2" : "1", (n, c) => {
+    const paid = paidReplacement && Object.hasOwn(n, "optionalPayment");
+    const meta = c.fields(n, ["match", "condition", "substitute", ...(paid ? ["optionalPayment"] : [])]);
     const match = n.match, substitute = n.substitute;
     dataObject(match, ["cause", "by", "from", "to"]);
-    dataObject(substitute, ["to"]);
-    const { cause, by, from, to } = match, alternate = substitute.to;
+    const { cause, by, from, to } = match;
     ensureMove(meta.id && (cause === "EFFECT_KO" || cause === "EFFECT_MOVE") && (by === "SELF" || by === "OPPONENT" || by === "ANY") &&
-      from === "character" && (to === "trash" || to === "hand" || to === "deck" || to === "public") &&
-      (alternate === "hand" || alternate === "trash") && (cause === "EFFECT_KO" ? to === "trash" : to !== alternate), "v3-replacement-shape");
+      from === "character" && (to === "trash" || to === "hand" || to === "deck" || to === "public"), "v3-replacement-shape");
     const condition = c.read("predicate", n.condition);
     ensureMove(stableContinuousPredicate(condition), "v3-replacement-condition-scope");
-    return { ...meta, id: meta.id, type: "REPLACE_EVENT", match: { cause, by, from, to }, condition, substitute: { to: alternate } };
+    const base = { ...meta, id: meta.id, type: "REPLACE_EVENT", match: { cause, by, from, to }, condition } as const;
+    if (paid) {
+      dataObject(substitute, ["type"]);
+      ensureMove(cause === "EFFECT_KO" && to === "trash" && substitute.type === "PREVENT", "v3-paid-replacement-ko-only");
+      const payment = c.read("cost", n.optionalPayment);
+      ensureMove(payment.type === "MOVE_AS_COST" && payment.selector !== "SOURCE" && payment.selector.zone === "hand" &&
+        payment.selector.min === 1 && payment.selector.max === 1 && payment.selector.cardTypes.every(kind => kind === "event" || kind === "stage") &&
+        payment.selector.filters.type === "all" && payment.selector.filters.conditions.length === 0, "v3-paid-replacement-hand-filter");
+      return { ...base, substitute: { type: "PREVENT" }, optionalPayment: { ...payment, selector: payment.selector } };
+    }
+    dataObject(substitute, ["to"]);
+    const alternate = substitute.to;
+    ensureMove((alternate === "hand" || alternate === "trash") && (cause === "EFFECT_KO" ? to === "trash" : to !== alternate), "v3-replacement-shape");
+    return { ...base, substitute: { to: alternate } };
   });
   const baseProfile = schema === "3.0.0-subset.35" || protectionProfile;
   if (schema === "3.0.0-subset.34" || baseProfile) r.action.register("CONTINUOUS_EFFECT", protectionProfile ? "3" : baseProfile ? "2" : "1", (n, c) => {
@@ -535,11 +550,12 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"], ["continuousEffects", "replacementEffects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19" || input.schemaVersion === "3.0.0-subset.20" || input.schemaVersion === "3.0.0-subset.21" || input.schemaVersion === "3.0.0-subset.22" || (input.schemaVersion === "3.0.0-subset.23" || input.schemaVersion === "3.0.0-subset.24" || input.schemaVersion === "3.0.0-subset.25" || input.schemaVersion === "3.0.0-subset.26" || input.schemaVersion === "3.0.0-subset.27" || input.schemaVersion === "3.0.0-subset.28" || (input.schemaVersion === "3.0.0-subset.29" || (input.schemaVersion === "3.0.0-subset.30" || (input.schemaVersion === "3.0.0-subset.31" || (input.schemaVersion === "3.0.0-subset.32" || (input.schemaVersion === "3.0.0-subset.33" || (input.schemaVersion === "3.0.0-subset.34" || (input.schemaVersion === "3.0.0-subset.35" || (input.schemaVersion === "3.0.0-subset.36" || input.schemaVersion === "3.0.0-subset.37"))))))))), "unsupported-v3-schema-version");
-  const schemaVersion = input.schemaVersion, compilerVersion = compilerVersionForSchema(schemaVersion);
+  ensureMove(input.schemaVersion === "3.0.0-subset.38" || input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19" || input.schemaVersion === "3.0.0-subset.20" || input.schemaVersion === "3.0.0-subset.21" || input.schemaVersion === "3.0.0-subset.22" || (input.schemaVersion === "3.0.0-subset.23" || input.schemaVersion === "3.0.0-subset.24" || input.schemaVersion === "3.0.0-subset.25" || input.schemaVersion === "3.0.0-subset.26" || input.schemaVersion === "3.0.0-subset.27" || input.schemaVersion === "3.0.0-subset.28" || (input.schemaVersion === "3.0.0-subset.29" || (input.schemaVersion === "3.0.0-subset.30" || (input.schemaVersion === "3.0.0-subset.31" || (input.schemaVersion === "3.0.0-subset.32" || (input.schemaVersion === "3.0.0-subset.33" || (input.schemaVersion === "3.0.0-subset.34" || (input.schemaVersion === "3.0.0-subset.35" || (input.schemaVersion === "3.0.0-subset.36" || input.schemaVersion === "3.0.0-subset.37"))))))))), "unsupported-v3-schema-version");
+  const profile = input.schemaVersion, compilerVersion = compilerVersionForSchema(profile);
+  const schemaVersion = profile === "3.0.0-subset.38" ? "3.0.0-subset.37" : profile;
   ensureMove(!Object.hasOwn(input, "continuousEffects") || (schemaVersion === "3.0.0-subset.34" || (schemaVersion === "3.0.0-subset.35" || (schemaVersion === "3.0.0-subset.36" || schemaVersion === "3.0.0-subset.37"))), "v3-continuous-profile-required");
   const interactiveEventProfile = ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37"].includes(schemaVersion);
-  registries ??= builtinV3Registries(schemaVersion);
+  registries ??= builtinV3Registries(profile);
   const cardId = label(input.cardId), cardVersion = label(input.cardVersion);
   ensureMove(typeof input.name === "string" && input.name.trim().length > 0 && input.name.length <= 300, "invalid-v3-card-name");
   ensureMove(input.cardType === "leader" || input.cardType === "character" || input.cardType === "stage" || input.cardType === "event", "unsupported-v3-card-type");
@@ -706,7 +722,7 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
   });
   const triggers = effects.filter(effect => effect.timing.type === "TRIGGER");
   ensureMove(triggers.length <= 1 && (triggers.length === 1) === (source.triggerText.trim().length > 0), "v3-trigger-text-definition-mismatch");
-  const definition: CardDefinition = { schemaVersion, cardId, cardVersion, name: input.name, cardType: input.cardType,
+  const definition: CardDefinition = { schemaVersion: profile, cardId, cardVersion, name: input.name, cardType: input.cardType,
     baseStats: input.baseStats as CardDefinition["baseStats"], colors, traits, attributes, keywords, reviewStatus: input.reviewStatus as CardDefinition["reviewStatus"], source, effects,
     ...(continuousEffects.length ? { continuousEffects } : {}), ...(replacementEffects.length ? { replacementEffects } : {}) };
   inspectData(definition);
