@@ -4,7 +4,7 @@ type ChoiceBase = Readonly<{ selectionId: string; chooser: 0 | 1; min: number; m
 type LabelChoice<P extends string> = Readonly<{ purpose: P; options: readonly Readonly<{ token: string; label: string }>[] }>;
 export type V3Choice = ChoiceBase & (
   LabelChoice<"activation"> | LabelChoice<"mode"> | LabelChoice<"payment"> |
-  Readonly<{ purpose: "action" | "cost" | "returnCost" | "order"; revealCost?: true; options: readonly Readonly<{ token: string; cardId: string; zone: string; label: string | null }>[] }>
+  Readonly<{ purpose: "action" | "cost" | "returnCost" | "order" | "ownerDiscard"; revealCost?: true; options: readonly Readonly<{ token: string; cardId: string; zone: string; label: string | null }>[] }>
 );
 export type V3FixtureView = Readonly<{
   frame: Readonly<{ mode: "work_requests_only"; resolutionId: string; revision: number; worldRevision: number;
@@ -13,7 +13,7 @@ export type V3FixtureView = Readonly<{
   outcome: Readonly<{ winner: 0 | 1 | null; reason: string }> | null;
   movement: MovementView; progression: Readonly<{ revision: number; gate: "idle" | "resolving" | "choice"; chooser: 0 | 1 | null }>;
   matchId: string; roomId: string; localPlayerIndex: 0 | 1; actor: 0 | 1; scenario: V3Scenario;
-  imageAliases: Readonly<Record<string, string>>; workType: "PAY_COSTS" | "DRAW" | "ATTACH_DON" | "RETURN_DON_BY_EFFECT" | "SET_DON_STATE" | "ADD_DON" | "PLAY_BY_EFFECT" | "MOVE_CARD" | "KO" | "REST" | "SET_ACTIVE" | "LOOK_TOP" | "REVEAL" | "RETURN_TO_DECK" | "CLOSE_REVEALS" | "MODIFY_STAT" | "GRANT_KEYWORD" | "FINISH_LIFE_TRIGGER" | null;
+  imageAliases: Readonly<Record<string, string>>; workType: "PAY_COSTS" | "DRAW" | "ATTACH_DON" | "RETURN_DON_BY_EFFECT" | "SET_DON_STATE" | "ADD_DON" | "PLAY_BY_EFFECT" | "MOVE_CARD" | "DISCARD_BY_OWNER" | "KO" | "REST" | "SET_ACTIVE" | "LOOK_TOP" | "REVEAL" | "RETURN_TO_DECK" | "CLOSE_REVEALS" | "MODIFY_STAT" | "GRANT_KEYWORD" | "FINISH_LIFE_TRIGGER" | null;
 }>;
 export type V3FixtureCommand = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number; requestId: string; matchId: string; resolutionId: string }> & (
   { kind: "advance" | "work" } | { kind: "answer"; selectionId: string; tokens: readonly string[] });

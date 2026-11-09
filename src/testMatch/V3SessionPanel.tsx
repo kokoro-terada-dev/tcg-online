@@ -6,7 +6,7 @@ import V3ChoicePanel from "./V3ChoicePanel";
 import TestBoard from "./TestBoard";
 import V3MainEffectDialog from "./V3MainEffectDialog";
 import { getLocalCardImage } from "../utils/localCardImages";
-const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", ATTACH_DON: "DON!!を付与", RETURN_DON_BY_EFFECT: "DON!!を戻す", SET_DON_STATE: "DON!!の状態変更", ADD_DON: "DON!!を追加", PLAY_BY_EFFECT: "効果で登場", MOVE_CARD: "カードを移動", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", GRANT_KEYWORD: "能力を付与", FINISH_LIFE_TRIGGER: "トリガー処理を終了" };
+const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", ATTACH_DON: "DON!!を付与", RETURN_DON_BY_EFFECT: "DON!!を戻す", SET_DON_STATE: "DON!!の状態変更", ADD_DON: "DON!!を追加", PLAY_BY_EFFECT: "効果で登場", MOVE_CARD: "カードを移動", DISCARD_BY_OWNER: "手札の破棄を実行", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", GRANT_KEYWORD: "能力を付与", FINISH_LIFE_TRIGGER: "トリガー処理を終了" };
 export default function V3SessionPanel({ view, busy, needsSync, error, isHost, onAction, onSync, onEnd }: {
   view: V3SessionView; busy: boolean; needsSync: boolean; error: string; isHost: boolean;
   onAction: (kind: V3SessionCommand["kind"], details?: SessionDetails) => void; onSync: () => void; onEnd: () => void;
@@ -93,6 +93,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
             {card.keywords.length > 0 && <small> {card.keywords.map(keyword => ({ BLOCKER: "ブロッカー", RUSH: "速攻", RUSH_CHARACTER: "速攻：キャラ", CANNOT_BE_BLOCKED: "ブロック不可" }[keyword] ?? keyword)).join("・")}</small>}
           </p>)}</div>}
         {frame?.choice?.chooser === view.localPlayerIndex && <V3ChoicePanel key={frame.choice.selectionId} choice={frame.choice} imageAliases={view.imageAliases} disabled={disabled} allowSkip={!!view.mainEvent} onConfirm={tokens => onAction("answer", { tokens })} />}
+        {frame?.choice?.purpose === "ownerDiscard" && frame.choice.chooser !== view.localPlayerIndex && <p role="status">相手が捨てる手札を選択中</p>}
         <div className="test-effect-actions">
           {view.resolutionActor === view.localPlayerIndex && frame?.status === "ready" && <button disabled={disabled} onClick={() => onAction("advance")}>処理を進める</button>}
           {view.resolutionActor === view.localPlayerIndex && frame?.status === "waitingForWork" && <button disabled={disabled} onClick={() => onAction("work")}>{view.workType ? workLabels[view.workType] : "処理を実行"}</button>}
