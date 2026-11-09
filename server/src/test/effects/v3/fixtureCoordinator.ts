@@ -36,10 +36,10 @@ type Receipt = { requestId: string; fingerprint: string };
 type AppliedWork = TransactionResult & { statEffects?: StatEffects; keywordGrants?: KeywordGrants; replaced?: ReplacementPlan;
   replacementMove?: MovementOperation };
 type EffectAttribution = Pick<ResolutionIdentity, "resolutionId" | "effectId">;
-type CheckEvents = (events: readonly MovementEvent[], replacement?: EffectAttribution) => void;
+type CheckEvents = (events: readonly MovementEvent[], effectOverride?: EffectAttribution) => void;
 export type ReplacementTrace = Readonly<{ intent: ReplacementPlan["intent"]; candidateId: string; ruleId: string;
   cause: ReplacementPlan["cause"]; operation: MovementOperation; usageKey?: string }>;
-type WorkDraft = { board: MovementState; events: MovementEvent[]; statEffects: StatEffects; keywordGrants: KeywordGrants; replacement?: ReplacementTrace };
+type WorkDraft = { board: MovementState; events: MovementEvent[]; statEffects: StatEffects; keywordGrants: KeywordGrants; replacement?: ReplacementTrace; effectBody?: EffectAttribution };
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 
 // Isolated, server-only fixture. Never mounted on normal online/solo/test-room endpoints.
@@ -107,7 +107,7 @@ export class V3FixtureCoordinator {
         event.after?.instanceId === source.instanceId && event.after.cardId === source.cardId && event.after.generation === source.generation && event.before.generation + 1 === source.generation, "v3-life-trigger-authorization");
     } else if (eventUse) {
       const event = eventUse.event;
-      ensureMove(effect.kind === "activated" && source.kind === "event" && (mainUse ? (card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent(effect) : ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39"].includes(card.definition.schemaVersion) && isInteractiveMainEvent(effect)) && !battle && checkTiming(progression, identity.actor, "mainEffect").allowed :
+      ensureMove(effect.kind === "activated" && source.kind === "event" && (mainUse ? (card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent(effect) : ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40"].includes(card.definition.schemaVersion) && isInteractiveMainEvent(effect)) && !battle && checkTiming(progression, identity.actor, "mainEffect").allowed :
         effect.timing.type === "COUNTER" && battle?.step === "counter" && battle.battleId === options.counterEventCause!.battleId && battle.defender === identity.actor) &&
         at.zone === "trash" && event.kind === "moved" && event.from?.player === identity.actor && event.from.zone === "hand" && event.to?.player === identity.actor && event.to.zone === "trash" &&
         event.before?.kind === "event" && event.before.owner === identity.actor && event.before.controller === identity.actor && event.before.cardId === source.cardId && event.before.instanceId === source.instanceId &&
@@ -116,7 +116,7 @@ export class V3FixtureCoordinator {
       ensureMove(effect.kind === "triggered" && effect.timing.type === (boundary?.type ?? trigger.type), "v3-fixture-trigger-type");
       if (trigger.type === "ON_EVENT") {
         const record = trigger.observation;
-        ensureMove(["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39"].includes(card.definition.schemaVersion) && isTriggerObservation(record) && record.result === true && record.status === "PENDING" &&
+        ensureMove(["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40"].includes(card.definition.schemaVersion) && isTriggerObservation(record) && record.result === true && record.status === "PENDING" &&
           record.key.length === 64 && record.eventId === trigger.eventId && record.context.effectController === identity.actor &&
           record.effectId === identity.effectId && record.source.instanceId === source.instanceId && record.source.generation === source.generation &&
           validateObservedSource(record, movement, new Map(definitions.map(card => [card.definition.cardId, card]))) === "CURRENT", "v3-fixture-observed-authorization");
@@ -137,7 +137,7 @@ export class V3FixtureCoordinator {
     this.#checkEvents = options.checkEvents;
     this.#replacementUsage = new Set(options.replacementUsage);
     this.#board = freezeMovement(structuredClone(movement)); this.#progression = freezeMovement(structuredClone(progression));
-    if (definitions.some(card => ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39"].includes(card.definition.schemaVersion) || card.definition.effects.some(effect => effect.timing.type === "ON_EVENT"))) trackMovementOccurrences(this.#board);
+    if (definitions.some(card => ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40"].includes(card.definition.schemaVersion) || card.definition.effects.some(effect => effect.timing.type === "ON_EVENT"))) trackMovementOccurrences(this.#board);
     this.#identity = freezeMovement(structuredClone(identity)); this.#card = card; this.#key = Uint8Array.from(options.signingKey); this.#now = options.now ?? Date.now;
     this.#facts = pinMasterFacts(movement, { master: options.master, numericPolicy: "certifiedUnmodified" });
     const sourceEvent = trigger && "event" in trigger ? trigger.event : eventUse?.event ?? lifeUse?.event;
@@ -178,7 +178,7 @@ export class V3FixtureCoordinator {
       const outcome = deckOutOutcome(draft.board);
       if (outcome) progression = applySystemEvent(progression, progression.revision, { kind: "finishGame", winner: outcome.winner, reason: outcome.reason });
       const replacement = draft.replacement;
-      this.#checkEvents?.(draft.events.slice(this.#events.length), replacement ? { resolutionId: replacement.candidateId, effectId: replacement.ruleId } : undefined);
+      this.#checkEvents?.(draft.events.slice(this.#events.length), replacement ? { resolutionId: replacement.candidateId, effectId: replacement.ruleId } : draft.effectBody);
       // Retain all candidate changes only after frame, movement and progression succeeded.
       this.#board = draft.board; this.#progression = progression; this.#machine = machine; this.#events = freezeMovement(draft.events); this.#statEffects = draft.statEffects; this.#keywordGrants = draft.keywordGrants;
       if (replacement) {
@@ -208,10 +208,13 @@ export class V3FixtureCoordinator {
       if ("replacement" in candidate) {
         machine.offerReplacement(requestId, expected.frameRevision, candidate.replacement); return;
       }
-      const result = ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39"].includes(this.#card.definition.schemaVersion) && (work.type === "MOVE_CARD" || work.type === "PLAY_BY_EFFECT") ? captureMoveResult(draft.board, candidate, this.#identity, work.workId, work.cards,
+      const result = ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40"].includes(this.#card.definition.schemaVersion) && (work.type === "MOVE_CARD" || work.type === "PLAY_BY_EFFECT") ? captureMoveResult(draft.board, candidate, this.#identity, work.workId, work.cards,
         (state, ref, viewer) => createDerivedCardFactsReader({ board: () => state, definitions: new Map(this.#definitions.map(card => [card.definition.cardId, card])),
-          master: this.#facts, statEffects: () => draft.statEffects, keywordGrants: () => draft.keywordGrants, activePlayer: this.#progression.activePlayer, counterPower: this.#counterPower })(ref, viewer), ["3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39"].includes(this.#card.definition.schemaVersion), candidate.replaced) : undefined;
+          master: this.#facts, statEffects: () => draft.statEffects, keywordGrants: () => draft.keywordGrants, activePlayer: this.#progression.activePlayer, counterPower: this.#counterPower })(ref, viewer), ["3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40"].includes(this.#card.definition.schemaVersion), candidate.replaced) : undefined;
       draft.board = candidate.state; draft.events.push(...candidate.events);
+      const bodyEffectId = machine.bodyEffectForCoordinator();
+      if (bodyEffectId && work.type !== "FINISH_LIFE_TRIGGER" && work.type !== "CLOSE_REVEALS")
+        draft.effectBody = { resolutionId: this.#identity.resolutionId, effectId: bodyEffectId };
       if (candidate.replaced && candidate.replacementMove) {
         const { intent, candidateId, ruleId, cause, usageKey } = candidate.replaced;
         draft.replacement = { intent, candidateId, ruleId, cause, operation: candidate.replacementMove, ...(usageKey ? { usageKey } : {}) };
@@ -466,7 +469,7 @@ export class V3FixtureCoordinator {
   replacementTraceForCoordinator(): readonly ReplacementTrace[] { return [...this.#replacementTrace]; }
   snapshotForCoordinator() {
     return freezeMovement({ movement: this.#board, progression: this.#progression, frame: this.#machine.exportForStorage(), receipts: structuredClone(this.#receipts), movementEvents: this.#events, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
-      replacementTrace: [...this.#replacementTrace] });
+      replacementTrace: [...this.#replacementTrace], bodyEffectId: this.#machine.bodyEffectForCoordinator() });
   }
   toJSON(): never { throw new Error("v3-fixture-server-only"); }
 }
