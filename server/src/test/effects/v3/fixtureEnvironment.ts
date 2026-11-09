@@ -12,10 +12,13 @@ import type { KeywordGrants } from "./keywordEffects";
 import { readRememberedColors, rememberedColors } from "./moveResults";
 import { activationCostSelector, movesActivationSource } from "./activationCosts";
 import { ownerHandCandidates } from "./ownerHand";
+import { protectionDecision } from "./continuousEffects";
+import { hasProtection } from "./protectionRules";
 
 type Scalar = string | number | boolean | null | typeof UNKNOWN;
 export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext, keywordGrants: () => KeywordGrants = () => [], occurrenceAuthorized = false, includeContinuous = true): ResolutionEnvironment {
   const knownDefinitions = new Map(definitions.map(card => [card.definition.cardId, card]));
+  const hasRestrictions = includeContinuous && hasProtection(knownDefinitions);
   const context = eventContext ?? readEventContext(board(), identity);
   ensureMove(context.effectController === identity.actor && context.source.instanceId === identity.source.instanceId && context.source.generation === identity.source.generation, "v3-read-context-source-mismatch");
   const seat = (side: string): 0 | 1 => side === "SELF" ? context.effectController : (1 - context.effectController) as 0 | 1;
@@ -128,6 +131,11 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
   };
   const environment: ResolutionEnvironment = {
     activationAtOccurrence: () => occurrenceAuthorized ? true : "unknown",
+    targetProtection: (ref) => {
+      if (!hasRestrictions) return false;
+      const info = cardFacts(ref, identity.actor);
+      return info === UNKNOWN ? "unknown" : protectionDecision(info.protections, info.controller, identity.actor, "CANNOT_TARGET");
+    },
     opponentHand: owner => ownerHandCandidates(board(), identity.actor, owner),
     revision: () => board().revision, now, evaluate,
     peekTop: amount => board().players[identity.actor].deck.slice(0, amount).map(id => ({ instanceId: id!, generation: board().cards[id!]!.generation })),

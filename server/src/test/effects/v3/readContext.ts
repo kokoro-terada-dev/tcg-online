@@ -9,7 +9,7 @@ import { statDelta, type StatEffects } from "./statEffects";
 import { ABILITY_TAGS } from "./compiler";
 import type { AbilityTag, MutableStat } from "./dsl";
 import type { KeywordGrants } from "./keywordEffects";
-import { continuousAdjustments, type ContinuousAdjustments } from "./continuousEffects";
+import { continuousAdjustments, protectionDecision, type ContinuousAdjustments, type ProtectionFact } from "./continuousEffects";
 
 export const UNKNOWN: unique symbol = Symbol("v3-unknown-fact");
 export type KnownOrUnknown<T> = T | typeof UNKNOWN;
@@ -64,6 +64,7 @@ export type DerivedCardFacts = Readonly<{
   base: NumericStats;
   current: NumericStats;
   statModifiers: Readonly<Record<"cost" | "power", KnownOrUnknown<number>>>;
+  protections: readonly ProtectionFact[];
   metadata: Readonly<{ printed: CardMetadataFacts; current: CardMetadataFacts }>;
   abilities: Readonly<Record<"PRINTED" | "GRANTED" | "CURRENT", Readonly<Record<AbilityTag, KnownOrUnknown<boolean>>>>>;
 }>;
@@ -109,9 +110,15 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
       const counterGrant = continuous?.counterGrant;
       const base: NumericStats = { power: baseNumber("power"), cost: baseNumber("cost"),
         counter: unmodeled ? UNKNOWN : printed.counter === null && counterGrant !== undefined ? counterGrant === "unknown" ? UNKNOWN : counterGrant : printed.counter };
+      const protections = continuous?.protections ?? [];
+      const immunity = (actor: Player) => protectionDecision(protections, card.controller, actor, "UNAFFECTED_BY");
+      const isTarget = (effect: { target: Ref }) => effect.target.instanceId === ref.instanceId && effect.target.generation === ref.generation;
       const additive = (field: MutableStat): KnownOrUnknown<number> => {
         const permanent = continuous?.add[field] ?? 0;
-        return permanent === "unknown" ? UNKNOWN : numeric((field === "counter" ? 0 : statDelta(options.statEffects(), ref, field)) + permanent);
+        const timed = field === "counter" ? [] : options.statEffects();
+        // A grant resolved before immunity arose is an unresolved precedence case, not a refund.
+        if (permanent === "unknown" || timed.some(effect => isTarget(effect) && effect.stat === field && immunity(effect.actor) !== false)) return UNKNOWN;
+        return numeric((field === "counter" ? 0 : statDelta(timed, ref, field)) + permanent);
       };
       const powerAdd = additive("power"), costAdd = additive("cost"), counterAdd = additive("counter");
       const displayDelta = (field: "power" | "cost", add: KnownOrUnknown<number>): KnownOrUnknown<number> => {
@@ -138,10 +145,9 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
         keywordTags.has(tag) ? definition.keywords.some(keyword => keyword.type === tag) : definition.effects.some(effect => effect.timing.type === tag) : UNKNOWN])) as Record<AbilityTag, KnownOrUnknown<boolean>>;
       const grantedAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => {
         if (!definition || unmodeled || !keywordTags.has(tag)) return [tag, UNKNOWN];
-        const timed = ["leader", "character"].includes(at.zone) && (options.keywordGrants?.() ?? []).some(grant =>
-          grant.target.instanceId === ref.instanceId && grant.target.generation === ref.generation && grant.keyword === tag);
+        const timed = ["leader", "character"].includes(at.zone) ? (options.keywordGrants?.() ?? []).filter(grant => isTarget(grant) && grant.keyword === tag) : [];
         const permanent = continuous?.keywords[tag as keyof ContinuousAdjustments["keywords"]];
-        return [tag, timed || permanent === true ? true : permanent === "unknown" ? UNKNOWN : false];
+        return [tag, permanent === true || timed.some(grant => immunity(grant.actor) === false) ? true : permanent === "unknown" || timed.length ? UNKNOWN : false];
       })) as Record<AbilityTag, KnownOrUnknown<boolean>>;
       // Timing tags cannot be granted by this engine. Keyword union preserves three-valued facts.
       const currentAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => [tag, !definition || unmodeled ? UNKNOWN : !keywordTags.has(tag) ? printedAbilities[tag] :
@@ -149,7 +155,7 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
       return freezeMovement({ cardType: card.kind === "unknown" ? UNKNOWN : card.kind, rotated: card.rotated, owner: card.owner, controller: card.controller,
         printed, base, current: { cost: current("cost"), power: current("power"),
           counter: typeof base.counter !== "number" ? base.counter : counterAdd === UNKNOWN || base.counter + counterAdd < 0 ? UNKNOWN : numeric(base.counter + counterAdd) },
-        statModifiers, metadata: { printed: metadata, current: unmodeled ? unknownMetadata : metadata },
+        statModifiers, protections, metadata: { printed: metadata, current: unmodeled ? unknownMetadata : metadata },
         abilities: { PRINTED: printedAbilities, GRANTED: grantedAbilities, CURRENT: currentAbilities } });
     } catch { return UNKNOWN; }
   };

@@ -10,6 +10,7 @@ import type { ApprovedV3Card } from "./approval";
 import type { StatEffects } from "./statEffects";
 import type { KeywordGrants } from "./keywordEffects";
 import { createDerivedCardFactsReader, UNKNOWN } from "./readContext";
+import { protectionRules } from "./protectionRules";
 
 type Ref = Readonly<CardObjectRef>;
 type Seat = 0 | 1;
@@ -187,9 +188,9 @@ export function damage(board: MovementState, progression: Progression, actor: Se
     if (hits && target.kind === "character") {
       const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
         actor: battle.attacker, effectController: null, source: battle.source, mode: "rule", resolutionId: null,
-        operations: [{ kind: "move", card: battle.target, from: { player: actor, zone: "character" }, to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "BATTLE_KO" }] }, { status: "certifiedNone" });
+        operations: [{ kind: "move", card: battle.target, from: { player: actor, zone: "character" }, to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "BATTLE_KO" }] }, protectionRules(board, definitions, progression.activePlayer, "rule"));
       movement = result.state; events = result.events;
-      deferredKO = deferKoEffects;
+      deferredKO = deferKoEffects && events.some(event => event.isKO);
     }
     if (!deferredKO) next = finishDamageStep(next);
   }

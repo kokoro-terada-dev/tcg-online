@@ -13,6 +13,7 @@ export type MoveResult = Readonly<{
   matchId: string; resolutionId: string; effectId: string; workId: string; transactionId: string | null;
   effectController: 0 | 1; source: Ref;
   beforeRevision: number; afterRevision: number;
+  prevented?: readonly Ref[];
   // Transaction grouping is evidence, not a claim about unresolved simultaneous timing rulings.
   rows: readonly Readonly<{ event: MovementEvent; movement: NonNullable<EventContext["movement"]>; beforeColors: RememberedColors; afterColors: RememberedColors;
     beforePrintedColors?: RememberedColors; afterPrintedColors?: RememberedColors }>[];
@@ -38,9 +39,17 @@ export function captureMoveResult(before: MovementState, result: TransactionResu
     return value === UNKNOWN ? { status: "UNKNOWN" } : { status: "KNOWN", value: [...value] };
   };
   let transactionId: string | undefined;
-  const rows = requested.map(ref => {
+  const indices = new Set(result.prevented), prevented: Ref[] = [];
+  ensureMove(indices.size === result.prevented.length && result.prevented.every(i => Number.isSafeInteger(i) && i >= 0 && i < requested.length), "v3-move-result-prevented-indices");
+  const rows = requested.flatMap((ref, index) => {
     getCard(before, ref);
     const matches = result.events.filter(event => event.kind === "moved" && event.before?.instanceId === ref.instanceId && event.before.generation === ref.generation);
+    if (indices.has(index)) {
+      getCard(result.state, ref);
+      ensureMove(matches.length === 0, "v3-move-result-prevented-moved");
+      prevented.push({ ...ref });
+      return [];
+    }
     ensureMove(matches.length === 1, "v3-move-result-missing-or-ambiguous");
     const event = matches[0]!, occurrence = movementOccurrence(event);
     ensureMove(occurrence && JSON.stringify(occurrence.before) === JSON.stringify(before) && occurrence.after === result.state && occurrence.events.includes(event) &&
@@ -50,11 +59,11 @@ export function captureMoveResult(before: MovementState, result: TransactionResu
       event.cause.source.generation === identity.source.generation && (!transactionId || transactionId === occurrence.transactionId), "v3-move-result-evidence");
     transactionId = occurrence.transactionId;
     const afterRef = { instanceId: event.after.instanceId, generation: event.after.generation };
-    return { event, movement: movementReadContext(event), beforeColors: colors(before, ref), afterColors: colors(result.state, afterRef),
-      ...(includePrinted ? { beforePrintedColors: colors(before, ref, "printed"), afterPrintedColors: colors(result.state, afterRef, "printed") } : {}) };
+    return [{ event, movement: movementReadContext(event), beforeColors: colors(before, ref), afterColors: colors(result.state, afterRef),
+      ...(includePrinted ? { beforePrintedColors: colors(before, ref, "printed"), afterPrintedColors: colors(result.state, afterRef, "printed") } : {}) }];
   });
   const memory = freezeMovement({ matchId: identity.matchId, resolutionId: identity.resolutionId, effectId: identity.effectId, effectController: identity.actor, source: { ...identity.source }, workId,
-    transactionId: transactionId!, beforeRevision: before.revision, afterRevision: result.state.revision, rows });
+    transactionId: transactionId ?? null, beforeRevision: before.revision, afterRevision: result.state.revision, rows, ...(prevented.length ? { prevented } : {}) });
   certified.add(memory); return memory;
 }
 

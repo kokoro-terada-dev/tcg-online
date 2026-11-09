@@ -5,9 +5,16 @@ export type SourceSpan = { start: number; end: number };
 export type NodeMeta = { id?: string; sourceSpan?: SourceSpan };
 export type CardField = "cost" | "power" | "cardType" | "rotated";
 export type MutableStat = "cost" | "power" | "counter";
+export type ProtectionRule =
+  { type: "RESTRICT"; policy: "CANNOT_TARGET" | "PREVENT_MOVE"; by: Player | "ANY" } |
+  { type: "RESTRICT"; policy: "UNAFFECTED_BY"; by: "OPPONENT" } |
+  { type: "RESTRICT"; policy: "CANNOT_KO"; by: Player | "ANY"; cause: "EFFECT" | "BATTLE"; sourceAttribute?: string };
+export type ContinuousOperation = { type: "ADD_STAT"; stat: MutableStat; amount: number } |
+  { type: "SET_BASE_STAT"; stat: "power" | "cost"; value: number } | { type: "GRANT_COUNTER"; value: number } |
+  { type: "GRANT_KEYWORD"; keyword: Node<"keyword"> } | ProtectionRule;
 export type Value = number | string | boolean | null | { ref: "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "base" | "current"}.${MutableStat}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
 export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
@@ -28,9 +35,7 @@ export interface PredicateMap {
   compare: NodeMeta & { type: "compare"; left: Value; op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte"; right: Value };
 }
 export interface ActionMap {
-  CONTINUOUS_EFFECT: NodeMeta & { type: "CONTINUOUS_EFFECT"; condition: Predicate; affectedQuery: Node<"query">; operation:
-    { type: "ADD_STAT"; stat: MutableStat; amount: number } | { type: "SET_BASE_STAT"; stat: "power" | "cost"; value: number } |
-    { type: "GRANT_COUNTER"; value: number } | { type: "GRANT_KEYWORD"; keyword: Node<"keyword"> } };
+  CONTINUOUS_EFFECT: NodeMeta & { type: "CONTINUOUS_EFFECT"; condition: Predicate; affectedQuery: Node<"query">; operation: ContinuousOperation };
   ORDER_THEN_MOVE: NodeMeta & { type: "ORDER_THEN_MOVE"; player: "OPPONENT"; chooser: "OPPONENT"; count: number; destination: "deckBottom" };
   DISCARD_BY_OWNER: NodeMeta & { type: "DISCARD_BY_OWNER"; player: "OPPONENT"; chooser: "OPPONENT"; count: number };
   CHOOSE_MODE: NodeMeta & { type: "CHOOSE_MODE"; modes: { label: string; actions: Action[] }[] };
