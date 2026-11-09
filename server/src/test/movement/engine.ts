@@ -153,7 +153,8 @@ function applyTransaction(state: MovementState, input: MovementTransaction, rule
     const before = getCard(draft, operation.card), from = location(draft, before.instanceId);
     if (operation.kind === "attachDon") {
       const target = getCard(draft, operation.target), at = location(draft, target.instanceId);
-      ensureMove(before.kind === "don" && from.zone === "activeDon" && before.owner === target.owner && before.controller === target.controller && at.player === before.owner && ["leader", "character"].includes(at.zone), "invalid-don-attachment");
+      ensureMove(operation.from === undefined || (before.owner === transaction.actor && transaction.effectController === transaction.actor), "invalid-effect-don-controller");
+      ensureMove(before.kind === "don" && from.zone === (operation.from ?? "activeDon") && before.owner === target.owner && before.controller === target.controller && at.player === before.owner && ["leader", "character"].includes(at.zone), "invalid-don-attachment");
       const to: MoveDestination = { player: before.owner, zone: "attachedDon", position: "append", faceUp: true, rotated: false };
       const after = transitionCard(before, from, to, ref(target));
       if (!check({ operationIndex: index, kind: "attachDon", card: before, from, to, cause: why, automatic: false })) { prevented.push(index); continue; }

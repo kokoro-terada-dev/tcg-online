@@ -14,7 +14,8 @@ import type { Predicate } from "./dsl";
 import type { DeepReadonly } from "../types";
 
 export type TriggerObservation = Readonly<{
-  key: string; eventId: string; groupId: string; transactionId: string; eventType: "CARD_ENTERED" | "CARD_KO" | "CARD_MOVED" | BoundaryEvent["type"];
+  key: string; eventId: string; groupId: string; transactionId: string; eventType: "CARD_ENTERED" | "CARD_KO" | "CARD_MOVED" | "DON_RETURNED" | BoundaryEvent["type"];
+  returnedCount?: number;
   causeEffectId: string | null; source: Readonly<CardObjectRef>; cardId: string;
   effectId: string; definitionHash: string; context: EventContext; target: Readonly<CardObjectRef>;
   snapshot: "TRANSACTION_BEFORE" | "TRANSACTION_AFTER" | "OCCURRENCE"; turnNumber: number; activePlayer: 0 | 1;
@@ -39,12 +40,22 @@ export function hasConditionalTriggers(definitions: ReadonlyMap<string, Approved
   return [...definitions.values()].some(card => card.definition.effects.some(effect => effect.timing.type === "ON_EVENT"));
 }
 export const conditionalTriggersHeld = (ledger: TriggerObservations): boolean => ledger.records.some(record => record.status === "HELD");
-export const hasPhaseBoundaries = (definitions: readonly ApprovedV3Card[]): boolean => definitions.some(card => ["3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28"].includes(card.definition.schemaVersion) &&
+export const hasPhaseBoundaries = (definitions: readonly ApprovedV3Card[]): boolean => definitions.some(card => ["3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29"].includes(card.definition.schemaVersion) &&
   card.definition.effects.some(effect => effect.timing.type === "MAIN_START" || effect.timing.type === "TURN_END"));
 function privateQuery(predicate: DeepReadonly<Predicate>): boolean {
   if (predicate.type === "all" || predicate.type === "any") return predicate.conditions.some(privateQuery);
   if (predicate.type === "not") return privateQuery(predicate.condition);
   return (predicate.type === "EXISTS" || predicate.type === "COUNT") && (predicate.query.visibility !== "PUBLIC" || privateQuery(predicate.query.filters));
+}
+
+function isDonReturn(event: MovementEvent): boolean {
+  const { before, after, from, to, cause } = event;
+  return event.kind === "moved" && before?.kind === "don" && after?.kind === "don" && !!from && !!to &&
+    ["activeDon", "restDon", "attachedDon"].includes(from.zone) && to.zone === "donDeck" &&
+    from.player === to.player && before.owner === to.player && after.owner === to.player && cause.actor === to.player &&
+    cause.effectController === to.player && cause.resolutionId !== null &&
+    (cause.kind === "EFFECT_MOVE" || cause.kind === "COST_PAYMENT") &&
+    event.visibleBefore.includes(0) && event.visibleBefore.includes(1);
 }
 
 // Evaluate immutable transaction evidence, never the board at a later resume/request.
@@ -53,15 +64,21 @@ export function observeConditionalTriggers(ledger: TriggerObservations, events: 
   activePlayer: 0 | 1, statEffects: StatEffects = [], keywordGrants: KeywordGrants = [], counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0,
   resolvingEffect?: Readonly<{ resolutionId: string; effectId: string }>): TriggerObservations {
   if (!hasConditionalTriggers(definitions)) return ledger;
+  const watchesDonReturns = [...definitions.values()].some(card => card.definition.effects.some(effect => effect.timing.type === "ON_EVENT" && effect.timing.event === "DON_RETURNED"));
   const seen = { ...ledger.events }, records = [...ledger.records];
   for (const event of events) {
-    if (event.kind !== "moved" || !event.before || !event.after || !event.from || !event.to || event.after.kind === "don") continue;
+    if (event.kind !== "moved" || !event.before || !event.after || !event.from || !event.to) continue;
+    const returned = watchesDonReturns && isDonReturn(event);
+    if (event.after.kind === "don" && !returned) continue;
     const digest = hash(event);
     if (Object.hasOwn(seen, event.eventId)) { ensureMove(seen[event.eventId] === digest, "v3-trigger-event-conflict"); continue; }
     const occurrence = movementOccurrence(event);
     ensureMove(occurrence && occurrence.events.includes(event), "v3-trigger-occurrence-evidence-required");
+    // One occurrence per committed return batch, not one per physical DON card.
+    const returns = returned ? occurrence.events.filter(row => isDonReturn(row) && row.to?.player === event.to!.player && row.cause.kind === event.cause.kind) : [];
+    if (returned && returns[0] !== event) continue;
     ensureMove(Object.keys(seen).length < 512, "v3-trigger-observation-event-limit"); seen[event.eventId] = digest;
-    const multiMove = occurrence.events.filter(row => row.kind === "moved" && row.after?.kind !== "don").length > 1;
+    const multiMove = !returned && occurrence.events.filter(row => row.kind === "moved" && row.after?.kind !== "don").length > 1;
     for (const basis of ["TRANSACTION_BEFORE", "TRANSACTION_AFTER"] as const) {
       const state = basis === "TRANSACTION_BEFORE" ? occurrence.before : occurrence.after;
       const targetCard = basis === "TRANSACTION_BEFORE" ? event.before : event.after;
@@ -74,30 +91,37 @@ export function observeConditionalTriggers(ledger: TriggerObservations, events: 
         const definition = definitions.get(sourceCard.cardId); if (!definition || definition.definition.cardType !== sourceCard.kind) continue;
         for (const effect of definition.definition.effects) {
           const timing = effect.timing;
-          if (effect.kind !== "triggered" || timing.type !== "ON_EVENT" || timing.snapshot !== basis || !effect.sourceZones.some(zone => zone === sourceAt.zone)) continue;
-          const self = target.instanceId === sourceCard.instanceId;
-          if (timing.relation === "SELF" && !self || timing.relation === "OTHER" && self) continue;
-          if (!timing.fromZones.some(zone => zone === event.from!.zone) || !timing.toZones.some(zone => zone === event.to!.zone)) continue;
-          if (timing.event === "CARD_ENTERED" && !(event.to.zone === "character" || event.to.zone === "stage")) continue;
-          if (timing.event === "CARD_KO" && !(event.isKO && ["BATTLE_KO", "EFFECT_KO"].includes(event.cause.kind) && event.from.zone === "character" && event.to.zone === "trash")) continue;
+          if (effect.kind !== "triggered" || timing.type !== "ON_EVENT" || !effect.sourceZones.some(zone => zone === sourceAt.zone)) continue;
           const actor = sourceCard.controller, seat = (player: string) => player === "SELF" ? actor : 1 - actor;
+          if (timing.event === "DON_RETURNED") {
+            if (!returned || basis !== "TRANSACTION_AFTER" || returns.length < timing.min ||
+              (timing.cause !== "ANY" && timing.cause !== event.cause.kind) || seat(timing.owner) !== event.to.player) continue;
+          } else {
+            if (returned || timing.snapshot !== basis) continue;
+            const self = target.instanceId === sourceCard.instanceId;
+            if (timing.relation === "SELF" && !self || timing.relation === "OTHER" && self) continue;
+            if (!timing.fromZones.some(zone => zone === event.from!.zone) || !timing.toZones.some(zone => zone === event.to!.zone)) continue;
+            if (timing.event === "CARD_ENTERED" && !(event.to.zone === "character" || event.to.zone === "stage")) continue;
+            if (timing.event === "CARD_KO" && !(event.isKO && ["BATTLE_KO", "EFFECT_KO"].includes(event.cause.kind) && event.from.zone === "character" && event.to.zone === "trash")) continue;
+          }
           // A hidden subject never supplies metadata or even a false match to an observer.
-          const authorized = visibleTo(state, targetCard, location(state, target.instanceId), actor);
+          const authorized = returned || visibleTo(state, targetCard, location(state, target.instanceId), actor);
           const source = { instanceId: sourceCard.instanceId, generation: sourceCard.generation };
           const identity = { matchId: state.matchId, resolutionId: "conditional-observation", actor, source, effectId: effect.id };
           const context = readEventContext(state, identity, null, { type: "movement", event });
           const environment = fixtureEnvironment(() => state, identity, definition, pinMasterFacts(state, { master: null, numericPolicy: "certifiedUnmodified" }),
             () => 0, [...definitions.values()], () => statEffects, activePlayer, counterPower, context, () => keywordGrants);
-          const structural = timing.cardTypes.some(kind => kind === targetCard.kind) &&
-            (timing.owner === "ANY" || targetCard.owner === seat(timing.owner)) && (timing.controller === "ANY" || targetCard.controller === seat(timing.controller));
-          const filter = authorized ? environment.evaluate(timing.filters, {}, target) : "unknown";
+          const structural = timing.event === "DON_RETURNED" || (timing.cardTypes.some(kind => kind === targetCard.kind) &&
+            (timing.owner === "ANY" || targetCard.owner === seat(timing.owner)) && (timing.controller === "ANY" || targetCard.controller === seat(timing.controller)));
+          const filter = timing.event === "DON_RETURNED" ? true : authorized ? environment.evaluate(timing.filters, {}, target) : "unknown";
           const activation = environment.evaluate(effect.activationConditions, {});
           // Do not disclose a private-query truth value through the public hold indicator.
-          const result = multiMove || !authorized || targetCard.kind === "unknown" || privateQuery(timing.filters) || privateQuery(effect.activationConditions) ? "unknown" :
+          const result = multiMove || !authorized || targetCard.kind === "unknown" || (timing.event !== "DON_RETURNED" && privateQuery(timing.filters)) || privateQuery(effect.activationConditions) ? "unknown" :
             !structural || filter === false || activation === false ? false : filter === "unknown" || activation === "unknown" ? "unknown" : true;
           ensureMove(records.length < 4096, "v3-trigger-observation-limit");
-          const executable = ["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28"].includes(definition.definition.schemaVersion);
+          const executable = ["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29"].includes(definition.definition.schemaVersion);
           const record: TriggerObservation = { key: hash([state.matchId, event.eventId, source, effect.id, definition.definitionHash]), eventId: event.eventId, groupId: event.groupId,
+            ...(returned ? { returnedCount: returns.length } : {}),
             transactionId: occurrence.transactionId, eventType: timing.event, causeEffectId: resolvingEffect && resolvingEffect.resolutionId === event.cause.resolutionId ? resolvingEffect.effectId : null,
             source, cardId: sourceCard.cardId, effectId: effect.id, definitionHash: definition.definitionHash, context, target, snapshot: basis,
             turnNumber: occurrence.after.turnNumber, activePlayer, result, status: result === false ? "NOT_MATCHED" : result === true && executable ? "PENDING" : "HELD",
@@ -118,7 +142,7 @@ export function observeBoundaryTriggers(ledger: TriggerObservations, event: Boun
   const records = [...ledger.records];
   for (const card of Object.values(state.cards)) {
     const at = location(state, card.instanceId), definition = definitions.get(card.cardId);
-    if (!definition || !["3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28"].includes(definition.definition.schemaVersion) || !["leader", "character", "stage"].includes(at.zone) || card.kind !== at.zone ||
+    if (!definition || !["3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29"].includes(definition.definition.schemaVersion) || !["leader", "character", "stage"].includes(at.zone) || card.kind !== at.zone ||
       card.owner !== card.controller || at.player !== card.controller || !card.faceUp || !visibleTo(state, card, at, 0) || !visibleTo(state, card, at, 1)) continue;
     const source = { instanceId: card.instanceId, generation: card.generation }, actor = card.controller;
     for (const effect of definition.definition.effects) {

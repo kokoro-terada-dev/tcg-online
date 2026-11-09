@@ -27,7 +27,12 @@ export function validateMovementTransaction(value: MovementTransaction): void {
         ensureMove(["BATTLE_KO", "EFFECT_KO", "EFFECT_MOVE", "COST_PAYMENT", "RULE_PROCESSING", "DAMAGE", "OTHER"].includes(operation.cause), "unknown-move-cause"); break;
       }
       case "setRest": dataObject(operation, ["kind", "card", "rotated"]); ensureMove(operation.kind === "setRest" && typeof operation.rotated === "boolean", "invalid-rest-operation"); reference(operation.card); break;
-      case "attachDon": dataObject(operation, ["kind", "card", "target"]); ensureMove(operation.kind === "attachDon", "invalid-attachment-operation"); reference(operation.card); reference(operation.target); break;
+      case "attachDon": {
+        dataObject(operation, ["kind", "card", "target"], ["from"]);
+        ensureMove(operation.kind === "attachDon" && (!Object.hasOwn(operation, "from") ||
+          value.mode === "effect" && (operation.from === "activeDon" || operation.from === "restDon")), "invalid-attachment-operation");
+        reference(operation.card); reference(operation.target); break;
+      }
       case "reorder": {
         dataObject(operation, ["kind", "location", "cards", "conceal"]); ensureMove(operation.kind === "reorder" && typeof operation.conceal === "boolean", "invalid-reorder-operation");
         at(operation.location); dataArray(operation.cards, MOVEMENT_LIMITS.cards); operation.cards.forEach(reference); break;

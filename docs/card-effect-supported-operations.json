@@ -1,7 +1,7 @@
 {
-  "basedOnCommit": "bde8a25",
-  "compilerVersion": "v3-subset-compiler.28.1",
-  "registryHash": "fb4c7be31cdabe9a92906d99fa9e57834f543a772093d1917b6eed204418e6ea",
+  "basedOnCommit": "dc63404",
+  "compilerVersion": "v3-subset-compiler.29.1",
+  "registryHash": "ca3158dc545180dbcbfec7d272b0a34c8ce287f933acea91ea7e9821bbb443e1",
   "registries": {
     "predicate": [
       "CARD_METADATA@1",
@@ -19,6 +19,7 @@
     ],
     "action": [
       "ADD_DON@1",
+      "ATTACH_DON@1",
       "BIND_SOURCE@2",
       "DRAW@2",
       "GRANT_KEYWORD@1",
@@ -32,6 +33,7 @@
       "PLAY_BY_EFFECT@1",
       "REMEMBER_FACTS@1",
       "REST@1",
+      "RETURN_DON_BY_EFFECT@1",
       "RETURN_TO_DECK@1",
       "REVEAL@1",
       "SELECT@1",
@@ -61,7 +63,7 @@
       "MAIN_START@1",
       "ON_ATTACK@1",
       "ON_BLOCK@1",
-      "ON_EVENT@1",
+      "ON_EVENT@2",
       "ON_KO@1",
       "ON_OPPONENT_ATTACK@1",
       "ON_PLAY@1",
@@ -138,7 +140,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -187,7 +190,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -246,7 +250,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -293,7 +298,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -333,7 +339,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -381,7 +388,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -439,7 +447,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -510,7 +519,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -552,7 +562,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -610,7 +621,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -679,7 +691,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -736,7 +749,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -802,7 +816,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -844,7 +859,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -899,7 +915,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -946,7 +963,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1012,7 +1030,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1058,7 +1077,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1100,7 +1120,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1140,7 +1161,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1189,7 +1211,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1229,7 +1252,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1262,7 +1286,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1407,7 +1432,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1548,7 +1574,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1581,7 +1608,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1629,7 +1657,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1662,7 +1691,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1695,7 +1725,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1728,7 +1759,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1761,7 +1793,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1794,7 +1827,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1827,7 +1861,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1860,7 +1895,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1893,7 +1929,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1926,7 +1963,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1959,7 +1997,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -1992,7 +2031,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -2012,7 +2052,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -2081,7 +2122,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -2177,7 +2219,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-metadata.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -2247,7 +2290,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-query.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -2306,7 +2350,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-query.schema.json#/$defs/predicate",
       "requiredParameters": [
@@ -2381,7 +2426,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-query.schema.json#/$defs/query",
       "requiredParameters": [
@@ -2502,7 +2548,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ]
     },
     {
@@ -2804,7 +2851,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-boundary.schema.json#/$defs/timing",
       "requiredParameters": [],
@@ -2830,7 +2878,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-boundary.schema.json#/$defs/timing",
       "requiredParameters": [
@@ -2866,7 +2915,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-boundary.schema.json#/$defs/timing",
       "requiredParameters": [
@@ -2901,7 +2951,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-expiry.schema.json#/$defs/duration",
       "requiredParameters": [
@@ -2971,7 +3022,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-move-result.schema.json#/$defs/action",
       "optionalParameters": [
@@ -3026,7 +3078,8 @@
         "3.0.0-subset.25",
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-move-result.schema.json#/$defs/predicate",
       "optionalParameters": [
@@ -3104,7 +3157,8 @@
       "availableIn": [
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "optionalParameters": [
         "id",
@@ -3158,7 +3212,8 @@
       "availableIn": [
         "3.0.0-subset.26",
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "optionalParameters": [
         "id",
@@ -3173,7 +3228,8 @@
       "status": "implemented_limited",
       "availableIn": [
         "3.0.0-subset.27",
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "schemaRef": "card-effect-effect-play.schema.json#/$defs/action",
       "requiredParameters": [
@@ -3297,7 +3353,8 @@
       "handlerVersion": "1",
       "status": "implemented_limited",
       "availableIn": [
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "optionalParameters": [
         "id",
@@ -3345,13 +3402,306 @@
       "handlerVersion": "1",
       "status": "implemented_limited",
       "availableIn": [
-        "3.0.0-subset.28"
+        "3.0.0-subset.28",
+        "3.0.0-subset.29"
       ],
       "optionalParameters": [
         "id",
         "sourceSpan"
       ],
       "schemaRef": "card-effect-don-effects.schema.json#/$defs/action"
+    },
+    {
+      "status": "implemented_limited",
+      "name": "ATTACH_DON",
+      "category": "action",
+      "handlerVersion": "1",
+      "requiredParameters": [
+        "from",
+        "assignments"
+      ],
+      "parameterSchemas": {
+        "from": {
+          "enum": [
+            "ACTIVE",
+            "REST"
+          ]
+        },
+        "assignments": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "required": [
+              "cards",
+              "target"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "cards": {
+                "$ref": "card-effect-don-transfer.schema.json#/$defs/cardSetRef"
+              },
+              "target": {
+                "$ref": "card-effect-don-transfer.schema.json#/$defs/cardSetRef"
+              }
+            }
+          }
+        }
+      },
+      "description": "Attach selected own active or rested DON to explicit own field targets in one transaction.",
+      "runtimeConstraints": "Distinct DON refs, one target per assignment, no partial application.",
+      "example": {
+        "type": "ATTACH_DON",
+        "from": "REST",
+        "assignments": [
+          {
+            "cards": {
+              "ref": "bindings.don"
+            },
+            "target": {
+              "ref": "bindings.target"
+            }
+          }
+        ]
+      },
+      "availableIn": [
+        "3.0.0-subset.29"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "schemaRef": "card-effect-don-transfer.schema.json#/$defs/action"
+    },
+    {
+      "status": "implemented_limited",
+      "name": "RETURN_DON_BY_EFFECT",
+      "category": "action",
+      "handlerVersion": "1",
+      "requiredParameters": [
+        "cards",
+        "from"
+      ],
+      "parameterSchemas": {
+        "cards": {
+          "$ref": "card-effect-don-transfer.schema.json#/$defs/cardSetRef"
+        },
+        "from": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "activeDon",
+              "restDon",
+              "attachedDon"
+            ]
+          }
+        }
+      },
+      "description": "Return selected own DON to the bottom of the DON deck as an effect.",
+      "runtimeConstraints": "Distinct DON refs; effect provenance, never DON minus cost.",
+      "example": {
+        "type": "RETURN_DON_BY_EFFECT",
+        "cards": {
+          "ref": "bindings.don"
+        },
+        "from": [
+          "activeDon",
+          "restDon",
+          "attachedDon"
+        ]
+      },
+      "availableIn": [
+        "3.0.0-subset.29"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "schemaRef": "card-effect-don-transfer.schema.json#/$defs/action"
+    },
+    {
+      "status": "implemented_limited",
+      "category": "timing",
+      "name": "ON_EVENT",
+      "handlerVersion": "2",
+      "schemaRef": "card-effect-don-transfer.schema.json#/$defs/timing",
+      "requiredParameters": [
+        "event",
+        "owner"
+      ],
+      "optionalParameters": [
+        "id",
+        "sourceSpan"
+      ],
+      "parameterSchemas": {
+        "event": {
+          "enum": [
+            "CARD_ENTERED",
+            "CARD_KO",
+            "CARD_MOVED",
+            "DON_RETURNED"
+          ]
+        },
+        "snapshot": {
+          "enum": [
+            "TRANSACTION_BEFORE",
+            "TRANSACTION_AFTER"
+          ]
+        },
+        "relation": {
+          "enum": [
+            "SELF",
+            "OTHER",
+            "ANY"
+          ]
+        },
+        "owner": {
+          "enum": [
+            "SELF",
+            "OPPONENT",
+            "ANY"
+          ]
+        },
+        "controller": {
+          "enum": [
+            "SELF",
+            "OPPONENT",
+            "ANY"
+          ]
+        },
+        "fromZones": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "hand",
+              "deck",
+              "life",
+              "trash",
+              "public",
+              "character",
+              "stage"
+            ]
+          }
+        },
+        "toZones": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "hand",
+              "deck",
+              "life",
+              "trash",
+              "public",
+              "character",
+              "stage"
+            ]
+          }
+        },
+        "cardTypes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "character",
+              "stage",
+              "event"
+            ]
+          }
+        },
+        "filters": {
+          "$ref": "#/$defs/predicate"
+        },
+        "cause": {
+          "enum": [
+            "EFFECT_MOVE",
+            "COST_PAYMENT",
+            "ANY"
+          ]
+        },
+        "min": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      },
+      "description": "Legacy movement observers plus explicitly scoped DON return-batch observers.",
+      "runtimeConstraints": "Legacy event form unchanged. DON_RETURNED requires owner, cause and min. One candidate per matching observer and committed return batch.",
+      "example": {
+        "type": "ON_EVENT",
+        "event": "DON_RETURNED",
+        "owner": "SELF",
+        "cause": "EFFECT_MOVE",
+        "min": 1
+      },
+      "availableIn": [
+        "3.0.0-subset.29"
+      ],
+      "variants": [
+        {
+          "events": [
+            "CARD_ENTERED",
+            "CARD_KO",
+            "CARD_MOVED"
+          ],
+          "requiredParameters": [
+            "event",
+            "snapshot",
+            "relation",
+            "owner",
+            "controller",
+            "fromZones",
+            "toZones",
+            "cardTypes",
+            "filters"
+          ]
+        },
+        {
+          "events": [
+            "DON_RETURNED"
+          ],
+          "requiredParameters": [
+            "event",
+            "owner",
+            "cause",
+            "min"
+          ],
+          "parameterSchemas": {
+            "event": {
+              "const": "DON_RETURNED"
+            },
+            "owner": {
+              "enum": [
+                "SELF",
+                "OPPONENT"
+              ]
+            },
+            "cause": {
+              "enum": [
+                "EFFECT_MOVE",
+                "COST_PAYMENT",
+                "ANY"
+              ]
+            },
+            "min": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          }
+        }
+      ]
     }
   ],
   "implementationUpdate": "PR05b: subset20 resumable event MAIN, existing handlers only; paid event use is committed before later selections/work. See card-effect-pr05b.md.",
@@ -4254,6 +4604,88 @@
           "ON_ATTACK@1",
           "ON_BLOCK@1",
           "ON_EVENT@1",
+          "ON_KO@1",
+          "ON_OPPONENT_ATTACK@1",
+          "ON_PLAY@1",
+          "TRIGGER@1",
+          "TURN_END@1"
+        ],
+        "keyword": [
+          "BLOCKER@1",
+          "CANNOT_BE_BLOCKED@1",
+          "RUSH@1",
+          "RUSH_CHARACTER@1"
+        ],
+        "query": [
+          "QUERY_CARDS@1"
+        ]
+      }
+    },
+    "3.0.0-subset.29": {
+      "compilerVersion": "v3-subset-compiler.29.1",
+      "registryHash": "ca3158dc545180dbcbfec7d272b0a34c8ce287f933acea91ea7e9821bbb443e1",
+      "registries": {
+        "predicate": [
+          "CARD_METADATA@1",
+          "CARD_NAME@1",
+          "COUNT@1",
+          "EXISTS@1",
+          "HAS_ABILITY@1",
+          "MOVED_COLORS@1",
+          "REMEMBERED_COLORS@1",
+          "TURN_IS@1",
+          "all@1",
+          "any@1",
+          "compare@3",
+          "not@1"
+        ],
+        "action": [
+          "ADD_DON@1",
+          "ATTACH_DON@1",
+          "BIND_SOURCE@2",
+          "DRAW@2",
+          "GRANT_KEYWORD@1",
+          "IF@2",
+          "KO@1",
+          "LOOK_TOP@1",
+          "MODIFY_STAT@1",
+          "MOVE_CARD@2",
+          "MOVE_RESULT@1",
+          "ORDER_CARDS@1",
+          "PLAY_BY_EFFECT@1",
+          "REMEMBER_FACTS@1",
+          "REST@1",
+          "RETURN_DON_BY_EFFECT@1",
+          "RETURN_TO_DECK@1",
+          "REVEAL@1",
+          "SELECT@1",
+          "SEQUENCE@1",
+          "SET_ACTIVE@1",
+          "SET_DON_STATE@1"
+        ],
+        "cost": [
+          "DISCARD_HAND@1",
+          "DON_RETURN@2",
+          "REST_DON@1",
+          "REST_SOURCE@1"
+        ],
+        "replacement": [],
+        "selector": [
+          "BOUND_CARDS@1",
+          "CARDS@4"
+        ],
+        "duration": [
+          "BATTLE_END@1",
+          "TURN_END@1",
+          "UNTIL_BOUNDARY@1"
+        ],
+        "timing": [
+          "COUNTER@1",
+          "MAIN@1",
+          "MAIN_START@1",
+          "ON_ATTACK@1",
+          "ON_BLOCK@1",
+          "ON_EVENT@2",
           "ON_KO@1",
           "ON_OPPONENT_ATTACK@1",
           "ON_PLAY@1",
