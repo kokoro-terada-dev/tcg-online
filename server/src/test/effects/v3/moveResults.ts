@@ -6,6 +6,7 @@ import type { CardObjectRef } from "../types";
 import type { DerivedCardFacts, EventContext, KnownOrUnknown } from "./readContext";
 import { movementReadContext, UNKNOWN } from "./readContext";
 import type { ResolutionIdentity } from "./resolution";
+import { verifyReplacementOutcome, type ReplacementPlan } from "./replacementPlans";
 
 type Ref = Readonly<CardObjectRef>;
 export type RememberedColors = Readonly<{ status: "KNOWN"; value: readonly string[] }> | Readonly<{ status: "UNKNOWN" }>;
@@ -14,6 +15,7 @@ export type MoveResult = Readonly<{
   effectController: 0 | 1; source: Ref;
   beforeRevision: number; afterRevision: number;
   prevented?: readonly Ref[];
+  replaced?: readonly Ref[];
   // Transaction grouping is evidence, not a claim about unresolved simultaneous timing rulings.
   rows: readonly Readonly<{ event: MovementEvent; movement: NonNullable<EventContext["movement"]>; beforeColors: RememberedColors; afterColors: RememberedColors;
     beforePrintedColors?: RememberedColors; afterPrintedColors?: RememberedColors }>[];
@@ -28,9 +30,17 @@ export function emptyMoveResult(identity: ResolutionIdentity, workId: string, re
 }
 
 export function captureMoveResult(before: MovementState, result: TransactionResult, identity: ResolutionIdentity, workId: string,
-  requested: readonly Ref[], facts: (state: MovementState, ref: Ref, viewer: 0 | 1) => KnownOrUnknown<DerivedCardFacts>, includePrinted = false): MoveResult {
+  requested: readonly Ref[], facts: (state: MovementState, ref: Ref, viewer: 0 | 1) => KnownOrUnknown<DerivedCardFacts>, includePrinted = false, replacement?: ReplacementPlan): MoveResult {
   ensureMove(before.matchId === identity.matchId && result.state.matchId === identity.matchId && result.state.revision === before.revision + 1 &&
     requested.length > 0 && requested.length <= 50 && new Set(requested.map(ref => ref.instanceId)).size === requested.length, "v3-move-result-context");
+  if (replacement) {
+    const ref = replacement.intent.operation.card;
+    ensureMove(replacement.intent.workId === workId && requested.length === 1 && requested[0]?.instanceId === ref.instanceId &&
+      requested[0].generation === ref.generation, "v3-replacement-result-mismatch");
+    const memory = freezeMovement({ ...emptyMoveResult(identity, workId, before.revision), afterRevision: result.state.revision,
+      transactionId: verifyReplacementOutcome(before, result, replacement), replaced: [{ ...ref }] });
+    certified.add(memory); return memory;
+  }
   const colors = (state: MovementState, ref: Ref, basis: "printed" | "current" = "current"): RememberedColors => {
     const card = getCard(state, ref), at = location(state, ref.instanceId);
     if (!visibleTo(state, card, at, 0) || !visibleTo(state, card, at, 1)) return { status: "UNKNOWN" };

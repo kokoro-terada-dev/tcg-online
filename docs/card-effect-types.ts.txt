@@ -14,7 +14,7 @@ export type ContinuousOperation = { type: "ADD_STAT"; stat: MutableStat; amount:
   { type: "GRANT_KEYWORD"; keyword: Node<"keyword"> } | ProtectionRule;
 export type Value = number | string | boolean | null | { ref: "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "base" | "current"}.${MutableStat}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
 export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
@@ -73,7 +73,14 @@ export interface CostMap {
   REST_DON: NodeMeta & { type: "REST_DON"; count: number };
   DISCARD_HAND: NodeMeta & { type: "DISCARD_HAND"; count: number };
 }
-export interface ReplacementMap {}
+export interface ReplacementMap {
+  REPLACE_EVENT: NodeMeta & {
+    type: "REPLACE_EVENT"; id: string;
+    match: { cause: "EFFECT_KO" | "EFFECT_MOVE"; by: "SELF" | "OPPONENT" | "ANY"; from: "character"; to: "trash" | "hand" | "deck" | "public" };
+    condition: Predicate;
+    substitute: { to: "hand" | "trash" };
+  };
+}
 export interface QueryMap {
   QUERY_CARDS: NodeMeta & { type: "QUERY_CARDS"; owner: Player; controller: Player;
     cardTypes: ("leader" | "character" | "stage" | "event")[]; filters: Predicate; excludeSource: boolean;
@@ -142,6 +149,7 @@ export type CardDefinition = {
   reviewStatus: "needs_review" | "unsupported" | "approved";
   source: { text: string; triggerText: string; displayIds: string[]; datasetSha256: string }; effects: Effect[];
   continuousEffects?: ActionMap["CONTINUOUS_EFFECT"][];
+  replacementEffects?: Node<"replacement">[];
 };
 export type CompiledCard = DeepReadonly<{
   status: "compiled_not_executable"; compilerVersion: string; registryHash: string;

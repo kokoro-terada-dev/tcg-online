@@ -3,7 +3,7 @@ export type V3Scenario = "bounce" | "payDraw" | "ko" | "rest" | "active" | "disc
 type ChoiceBase = Readonly<{ selectionId: string; chooser: 0 | 1; min: number; max: number; maxActiveReturn: number | null; expiresAt: number }>;
 type LabelChoice<P extends string> = Readonly<{ purpose: P; options: readonly Readonly<{ token: string; label: string }>[] }>;
 export type V3Choice = ChoiceBase & (
-  LabelChoice<"activation"> | LabelChoice<"mode"> | LabelChoice<"payment"> |
+  LabelChoice<"activation"> | LabelChoice<"mode"> | LabelChoice<"payment"> | LabelChoice<"replacement"> |
   Readonly<{ purpose: "action" | "cost" | "returnCost" | "order" | "ownerDiscard" | "ownerDeckBottom"; revealCost?: true; options: readonly Readonly<{ token: string; cardId: string; zone: string; label: string | null }>[] }>
 );
 export type V3FixtureView = Readonly<{

@@ -3,7 +3,7 @@ import type { V3Choice } from "../../server/src/test/effects/v3/fixtureProtocol"
 import { getLocalCardImage } from "../utils/localCardImages";
 export default function V3ChoicePanel({ choice, disabled, onConfirm, imageAliases = {}, allowSkip = false }: { choice: V3Choice; disabled: boolean; onConfirm: (tokens: string[]) => void; imageAliases?: Readonly<Record<string, string>>; allowSkip?: boolean }) {
   const [tokens, setTokens] = useState<string[]>([]), [failed, setFailed] = useState<string[]>([]);
-  if (choice.purpose === "activation" || choice.purpose === "mode" || choice.purpose === "payment") return <div><p>{choice.purpose === "mode" ? "効果を1つ選択" : choice.purpose === "payment" ? "追加のコストを支払いますか？" : "効果を発動しますか？"}</p><div className="test-effect-actions v3-activation-actions">{choice.options.map(option =>
+  if (choice.purpose === "activation" || choice.purpose === "mode" || choice.purpose === "payment" || choice.purpose === "replacement") return <div><p>{choice.purpose === "mode" ? "効果を1つ選択" : choice.purpose === "payment" ? "追加のコストを支払いますか？" : choice.purpose === "replacement" ? "代わりの処理を適用しますか？" : "効果を発動しますか？"}</p><div className="test-effect-actions v3-activation-actions">{choice.options.map(option =>
     <button key={option.token} disabled={disabled} onClick={() => onConfirm([option.token])}>{option.label}</button>
   )}</div></div>;
   const activeSelected = choice.options.filter(option => option.zone === "activeDon" && tokens.includes(option.token)).length;
