@@ -24,6 +24,9 @@ export function isInteractiveMainEvent(effect: DeepReadonly<Effect>): boolean {
     switch (action.type) {
       case "SEQUENCE": return action.actions.length > 0 && action.actions.every(supported);
       case "IF": return action.then.every(supported) && action.else.every(supported);
+      case "CHOOSE_MODE": return action.modes.every(mode => mode.actions.every(supported));
+      case "OFFER_PAYMENT": return action.costs.every(cost => cost.type !== "REST_SOURCE" && !(cost.type === "MOVE_AS_COST" && cost.selector === "SOURCE"));
+      case "IF_PAYMENT_SUCCEEDED": return action.then.every(supported) && action.else.every(supported);
       case "SELECT": return action.selector.type === "CARDS" && ["leader", "character", "stage", "hand"].includes(action.selector.zone as string) && !action.selector.cardTypes.includes("don");
       case "DRAW": return action.player === "SELF";
       case "KO": case "REST": case "SET_ACTIVE": case "REVEAL": return true;

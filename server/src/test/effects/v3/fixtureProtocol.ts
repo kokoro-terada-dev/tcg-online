@@ -1,9 +1,10 @@
 import type { MovementView } from "../../movement/types";
 export type V3Scenario = "bounce" | "payDraw" | "ko" | "rest" | "active" | "discardDraw" | "discardCostDraw" | "sourceCostDraw" | "returnCostDraw" | "mixedReturnCostDraw" | "optionalCostDraw";
 type ChoiceBase = Readonly<{ selectionId: string; chooser: 0 | 1; min: number; max: number; maxActiveReturn: number | null; expiresAt: number }>;
+type LabelChoice<P extends string> = Readonly<{ purpose: P; options: readonly Readonly<{ token: string; label: string }>[] }>;
 export type V3Choice = ChoiceBase & (
-  Readonly<{ purpose: "activation"; options: readonly Readonly<{ token: string; label: string }>[] }> |
-  Readonly<{ purpose: "action" | "cost" | "returnCost" | "order"; options: readonly Readonly<{ token: string; cardId: string; zone: string; label: string | null }>[] }>
+  LabelChoice<"activation"> | LabelChoice<"mode"> | LabelChoice<"payment"> |
+  Readonly<{ purpose: "action" | "cost" | "returnCost" | "order"; revealCost?: true; options: readonly Readonly<{ token: string; cardId: string; zone: string; label: string | null }>[] }>
 );
 export type V3FixtureView = Readonly<{
   frame: Readonly<{ mode: "work_requests_only"; resolutionId: string; revision: number; worldRevision: number;

@@ -6,7 +6,7 @@ export type NodeMeta = { id?: string; sourceSpan?: SourceSpan };
 export type CardField = "cost" | "power" | "cardType" | "rotated";
 export type Value = number | string | boolean | null | { ref: "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "current"}.${"cost" | "power"}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
 export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
@@ -27,6 +27,9 @@ export interface PredicateMap {
   compare: NodeMeta & { type: "compare"; left: Value; op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte"; right: Value };
 }
 export interface ActionMap {
+  CHOOSE_MODE: NodeMeta & { type: "CHOOSE_MODE"; modes: { label: string; actions: Action[] }[] };
+  OFFER_PAYMENT: NodeMeta & { type: "OFFER_PAYMENT"; costs: Node<"cost">[]; bindAs: string };
+  IF_PAYMENT_SUCCEEDED: NodeMeta & { type: "IF_PAYMENT_SUCCEEDED"; payment: string; then: Action[]; else: Action[] };
   ATTACH_DON: NodeMeta & { type: "ATTACH_DON"; from: "ACTIVE" | "REST"; assignments: { cards: CardSetRef; target: CardSetRef }[] };
   RETURN_DON_BY_EFFECT: NodeMeta & { type: "RETURN_DON_BY_EFFECT"; cards: CardSetRef; from: DonZone[] };
   SET_DON_STATE: NodeMeta & { type: "SET_DON_STATE"; cards: CardSetRef; from: "ACTIVE" | "REST"; to: "ACTIVE" | "REST" };

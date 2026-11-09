@@ -3,11 +3,11 @@ import type { V3Choice } from "../../server/src/test/effects/v3/fixtureProtocol"
 import { getLocalCardImage } from "../utils/localCardImages";
 export default function V3ChoicePanel({ choice, disabled, onConfirm, imageAliases = {}, allowSkip = false }: { choice: V3Choice; disabled: boolean; onConfirm: (tokens: string[]) => void; imageAliases?: Readonly<Record<string, string>>; allowSkip?: boolean }) {
   const [tokens, setTokens] = useState<string[]>([]), [failed, setFailed] = useState<string[]>([]);
-  if (choice.purpose === "activation") return <div><p>効果を発動しますか？</p><div className="test-effect-actions v3-activation-actions">{choice.options.map(option =>
+  if (choice.purpose === "activation" || choice.purpose === "mode" || choice.purpose === "payment") return <div><p>{choice.purpose === "mode" ? "効果を1つ選択" : choice.purpose === "payment" ? "追加のコストを支払いますか？" : "効果を発動しますか？"}</p><div className="test-effect-actions v3-activation-actions">{choice.options.map(option =>
     <button key={option.token} disabled={disabled} onClick={() => onConfirm([option.token])}>{option.label}</button>
   )}</div></div>;
   const activeSelected = choice.options.filter(option => option.zone === "activeDon" && tokens.includes(option.token)).length;
-  return <div><p>{choice.purpose === "cost" ? "コストで捨てる手札" : choice.purpose === "returnCost" ? "DONデッキへ戻すDON" : choice.purpose === "order" ? "戻す順番" : "カード選択"} {tokens.length} / {choice.max}</p><div className="test-effect-candidates">{choice.options.map(option => {
+  return <div><p>{choice.purpose === "cost" ? choice.revealCost ? "コストで公開する手札" : "コストで捨てる手札" : choice.purpose === "returnCost" ? "DONデッキへ戻すDON" : choice.purpose === "order" ? "戻す順番" : "カード選択"} {tokens.length} / {choice.max}</p><div className="test-effect-candidates">{choice.options.map(option => {
     const cardId = imageAliases[option.cardId] ?? option.cardId, image = getLocalCardImage(cardId)?.imageUrl;
     const activeReserved = choice.purpose === "returnCost" && option.zone === "activeDon" && activeSelected >= (choice.maxActiveReturn ?? 0);
     return <button key={option.token} role="checkbox" aria-checked={tokens.includes(option.token)} aria-label={option.label ? `${option.label} ${cardId}` : cardId} disabled={disabled || !tokens.includes(option.token) && (tokens.length >= choice.max || activeReserved)}
