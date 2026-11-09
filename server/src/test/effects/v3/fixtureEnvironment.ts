@@ -32,8 +32,8 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     if (derived === UNKNOWN) return UNKNOWN;
     if (field === "rotated") return derived.rotated;
     if (field === "cardType") return derived.cardType;
-    if (field === "printed" || field === "current") {
-      const stat = parts[2]; return stat === "cost" || stat === "power" ? derived[field][stat] : UNKNOWN;
+    if (field === "printed" || field === "base" || field === "current") {
+      const stat = parts[2]; return stat === "cost" || stat === "power" || stat === "counter" ? derived[field][stat] : UNKNOWN;
     }
     return field === "cost" || field === "power" ? derived.current[field] : UNKNOWN;
   };

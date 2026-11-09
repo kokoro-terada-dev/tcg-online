@@ -134,10 +134,13 @@ export function battlePower(board: MovementState, progression: Progression, defi
 }
 export function counterCandidates(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>) {
   if (!checkTiming(progression, actor, "counterEffect").allowed) return [];
+  const facts = createDerivedCardFactsReader({ board: () => board, definitions, statEffects: () => [], activePlayer: progression.activePlayer });
   return board.players[actor].hand.flatMap(id => {
-    const card = board.cards[id!]!, known = definitions.get(card.cardId)?.definition, amount = known?.baseStats.counter;
-    if (card.kind !== "character" || card.owner !== actor || card.controller !== actor || known?.cardType !== "character" || typeof amount !== "number" || amount <= 0) return [];
-    return [{ card: { instanceId: card.instanceId, generation: card.generation }, cardId: card.cardId, amount }];
+    const card = board.cards[id!]!, ref = { instanceId: card.instanceId, generation: card.generation };
+    if (card.kind !== "character" || card.owner !== actor || card.controller !== actor) return [];
+    const info = facts(ref, actor), amount = info === UNKNOWN ? UNKNOWN : info.current.counter;
+    if (typeof amount !== "number" || amount <= 0) return [];
+    return [{ card: ref, cardId: card.cardId, amount }];
   });
 }
 export function useCounter(board: MovementState, progression: Progression, actor: Seat, card: Ref, target: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, counters: BattleCounters, effects: StatEffects, transactionId: string) {

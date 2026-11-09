@@ -300,10 +300,9 @@ export class V3SyntheticMatchCoordinator {
       this.#settled(); ensureMove(checkTiming(this.#progression, actor, "attachDon").allowed && Number.isSafeInteger(count) && count >= 1 && count <= 10 && this.#board.players[actor].activeDon.length >= count, "v3-don-attachment-unavailable");
       const object = getCard(this.#board, target), definition = this.#cards.get(object.cardId)?.definition;
       ensureMove(definition && definition.cardType === object.kind && definition.baseStats.power !== null, "v3-don-attachment-unregistered-target");
-      const existing = this.#board.players[actor].attachedDon.filter(id => { const parent = this.#board.cards[id!]!.attachedTo; return parent?.instanceId === target.instanceId && parent.generation === target.generation; }).length;
       const facts = this.#fieldFacts()(target, actor);
-      ensureMove(facts !== UNKNOWN && facts.statModifiers.power !== UNKNOWN &&
-        Number.isSafeInteger(definition.baseStats.power + facts.statModifiers.power + (existing + count) * 1000), "v3-don-power-overflow");
+      ensureMove(facts !== UNKNOWN && facts.current.power !== UNKNOWN &&
+        Number.isSafeInteger(facts.current.power + count * 1000), "v3-don-power-overflow");
       const result = new MovementStore(this.#board).commit({ transactionId: hash(`${this.#board.matchId}:${requestId}:attach`), matchId: this.#board.matchId, expectedRevision: this.#board.revision,
         turnNumber: this.#board.turnNumber, actor, effectController: null, source: null, mode: "rule", resolutionId: null,
         operations: this.#board.players[actor].activeDon.slice(0, count).map(id => ({ kind: "attachDon", card: { instanceId: id!, generation: this.#board.cards[id!]!.generation }, target })) }, { status: "certifiedNone" });
@@ -374,7 +373,7 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
       return card.definition.effects.filter(card.definition.schemaVersion !== "3.0.0-subset.19" ? isInteractiveMainEvent : isSimpleMainEvent).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
@@ -603,8 +602,14 @@ export class V3SyntheticMatchCoordinator {
         const cost = facts.current.cost === UNKNOWN ? null : facts.current.cost;
         const keywords = zone === "stage" ? [] : FIELD_KEYWORDS.filter(keyword => facts.abilities.CURRENT[keyword] === true);
         const keywordsUnknown = zone !== "stage" && FIELD_KEYWORDS.some(keyword => facts.abilities.CURRENT[keyword] === UNKNOWN);
+        const basePower = facts.base.power !== UNKNOWN && facts.base.power !== facts.printed.power ? facts.base.power : undefined;
+        const baseCost = facts.base.cost !== UNKNOWN && facts.base.cost !== facts.printed.cost ? facts.base.cost : undefined;
+        const counter = zone === "character" && facts.current.counter !== facts.printed.counter ?
+          facts.current.counter === UNKNOWN ? "unknown" as const : facts.current.counter : undefined;
         return [{ card: ref, cardId: object.cardId, player: player as Seat, zone, slot, power, cost,
-          powerDelta, costDelta, keywords, ...(keywordsUnknown ? { keywordsUnknown: true as const } : {}) }];
+          powerDelta, costDelta, keywords, ...(keywordsUnknown ? { keywordsUnknown: true as const } : {}),
+          ...(basePower === undefined ? {} : { basePower }), ...(baseCost === undefined ? {} : { baseCost }),
+          ...(counter === undefined ? {} : { counter }) }];
       }))) });
   }
   effectsFor(actor: Seat, source: Readonly<CardObjectRef>) {

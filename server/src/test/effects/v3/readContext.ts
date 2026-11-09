@@ -7,7 +7,7 @@ import type { ApprovedV3Card } from "./approval";
 import type { ResolutionIdentity } from "./resolution";
 import { statDelta, type StatEffects } from "./statEffects";
 import { ABILITY_TAGS } from "./compiler";
-import type { AbilityTag } from "./dsl";
+import type { AbilityTag, MutableStat } from "./dsl";
 import type { KeywordGrants } from "./keywordEffects";
 import { continuousAdjustments, type ContinuousAdjustments } from "./continuousEffects";
 
@@ -57,10 +57,12 @@ export function readEventContext(state: MovementState, identity: ResolutionIdent
 
 export type CardMetadataFacts = Readonly<{ name: KnownOrUnknown<string>; traits: KnownOrUnknown<readonly string[]>;
   colors: KnownOrUnknown<readonly string[]>; attributes: KnownOrUnknown<readonly string[]> }>;
+type NumericStats = Readonly<Record<"cost" | "power", KnownOrUnknown<number>> & { counter: KnownOrUnknown<number | null> }>;
 export type DerivedCardFacts = Readonly<{
   cardType: KnownOrUnknown<string>; rotated: boolean; owner: Player; controller: Player;
-  printed: Readonly<Record<"cost" | "power" | "counter" | "life", KnownOrUnknown<number>>>;
-  current: Readonly<Record<"cost" | "power", KnownOrUnknown<number>>>;
+  printed: NumericStats & Readonly<{ life: KnownOrUnknown<number> }>;
+  base: NumericStats;
+  current: NumericStats;
   statModifiers: Readonly<Record<"cost" | "power", KnownOrUnknown<number>>>;
   metadata: Readonly<{ printed: CardMetadataFacts; current: CardMetadataFacts }>;
   abilities: Readonly<Record<"PRINTED" | "GRANTED" | "CURRENT", Readonly<Record<AbilityTag, KnownOrUnknown<boolean>>>>>;
@@ -87,9 +89,9 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
       const state = options.board(), card = getCard(state, ref), at = location(state, card.instanceId);
       if (at.zone === "resolving" || !visibleTo(state, card, at, viewer)) return UNKNOWN;
       const known = options.definitions.get(card.cardId), matching = known?.definition.cardType === card.kind;
-      const base = known ? matching ? known.definition.baseStats : undefined : options.master?.cards[card.cardId];
-      const printed: DerivedCardFacts["printed"] = { cost: numeric(base?.cost), power: numeric(base?.power), counter: numeric(known && matching ? known.definition.baseStats.counter : undefined),
-        life: numeric(known && matching ? known.definition.baseStats.life : undefined) };
+      const printedData = known ? matching ? known.definition.baseStats : undefined : options.master?.cards[card.cardId];
+      const printed: DerivedCardFacts["printed"] = { cost: numeric(printedData?.cost), power: numeric(printedData?.power),
+        counter: known && matching ? known.definition.baseStats.counter : UNKNOWN, life: numeric(known && matching ? known.definition.baseStats.life : undefined) };
       let continuous: ContinuousAdjustments | undefined;
       if (hasContinuous) {
         let rows = Object.isFrozen(state) ? cache.get(state) : undefined;
@@ -97,26 +99,40 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
         continuous = rows?.get(card.instanceId) ?? continuousAdjustments(state, card, at, options.activePlayer, options.definitions, options.master);
         rows?.set(card.instanceId, continuous);
       }
-      const modifier = (field: "power" | "cost"): KnownOrUnknown<number> => {
-        const permanent = continuous?.[field] ?? 0;
-        return permanent === "unknown" ? UNKNOWN : numeric(statDelta(options.statEffects(), ref, field) + permanent);
+      const unmodeled = card.modifierIds.length > 0 || card.grantIds.length > 0;
+      const baseNumber = (field: "power" | "cost"): KnownOrUnknown<number> => {
+        const original = known ? matching && !unmodeled ? printed[field] : UNKNOWN : numeric(masterCardFacts(state, card, options.master)[field]);
+        const set = continuous?.base[field];
+        if (original === UNKNOWN || set === "unknown") return UNKNOWN;
+        return set ?? original;
       };
-      const statModifiers: DerivedCardFacts["statModifiers"] = { power: modifier("power"), cost: modifier("cost") };
+      const counterGrant = continuous?.counterGrant;
+      const base: NumericStats = { power: baseNumber("power"), cost: baseNumber("cost"),
+        counter: unmodeled ? UNKNOWN : printed.counter === null && counterGrant !== undefined ? counterGrant === "unknown" ? UNKNOWN : counterGrant : printed.counter };
+      const additive = (field: MutableStat): KnownOrUnknown<number> => {
+        const permanent = continuous?.add[field] ?? 0;
+        return permanent === "unknown" ? UNKNOWN : numeric((field === "counter" ? 0 : statDelta(options.statEffects(), ref, field)) + permanent);
+      };
+      const powerAdd = additive("power"), costAdd = additive("cost"), counterAdd = additive("counter");
+      const displayDelta = (field: "power" | "cost", add: KnownOrUnknown<number>): KnownOrUnknown<number> => {
+        if (continuous?.base[field] === undefined) return add;
+        const printedValue = printed[field], baseValue = base[field];
+        return printedValue === UNKNOWN || baseValue === UNKNOWN || add === UNKNOWN ? UNKNOWN : numeric(baseValue - printedValue + add);
+      };
+      const statModifiers: DerivedCardFacts["statModifiers"] = { power: displayDelta("power", powerAdd), cost: displayDelta("cost", costAdd) };
       const current = (field: "power" | "cost"): KnownOrUnknown<number> => {
-        const baseNumber: KnownOrUnknown<number> = known ? matching && !card.modifierIds.length && !card.grantIds.length ? printed[field] : UNKNOWN : numeric(masterCardFacts(state, card, options.master)[field]);
-        const delta = statModifiers[field];
-        if (baseNumber === UNKNOWN || delta === UNKNOWN) return UNKNOWN;
+        const original = base[field], delta = field === "power" ? powerAdd : costAdd;
+        if (original === UNKNOWN || delta === UNKNOWN) return UNKNOWN;
         const don = field === "power" && card.controller === options.activePlayer ? state.players[options.activePlayer].attachedDon.filter(id => {
           const attached = state.cards[id!]!.attachedTo; return attached?.instanceId === ref.instanceId && attached.generation === ref.generation;
         }).length * 1000 : 0;
         const counter = field === "power" ? options.counterPower?.(ref) ?? 0 : 0;
-        const result = numeric(baseNumber + delta + don + counter);
+        const result = numeric(original + delta + don + counter);
         return result === UNKNOWN ? UNKNOWN : field === "cost" ? Math.max(0, result) : result;
       };
       const definition = known && matching ? known.definition : null;
       const metadata: CardMetadataFacts = { name: definition?.name ?? UNKNOWN, traits: definition ? [...definition.traits] : UNKNOWN,
         colors: definition ? [...definition.colors] : UNKNOWN, attributes: definition ? [...definition.attributes] : UNKNOWN };
-      const unmodeled = card.modifierIds.length > 0 || card.grantIds.length > 0;
       const unknownMetadata: CardMetadataFacts = { name: UNKNOWN, traits: UNKNOWN, colors: UNKNOWN, attributes: UNKNOWN };
       const printedAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => [tag, definition ?
         keywordTags.has(tag) ? definition.keywords.some(keyword => keyword.type === tag) : definition.effects.some(effect => effect.timing.type === tag) : UNKNOWN])) as Record<AbilityTag, KnownOrUnknown<boolean>>;
@@ -131,7 +147,9 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
       const currentAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => [tag, !definition || unmodeled ? UNKNOWN : !keywordTags.has(tag) ? printedAbilities[tag] :
         printedAbilities[tag] === true || grantedAbilities[tag] === true ? true : printedAbilities[tag] === UNKNOWN || grantedAbilities[tag] === UNKNOWN ? UNKNOWN : false])) as Record<AbilityTag, KnownOrUnknown<boolean>>;
       return freezeMovement({ cardType: card.kind === "unknown" ? UNKNOWN : card.kind, rotated: card.rotated, owner: card.owner, controller: card.controller,
-        printed, current: { cost: current("cost"), power: current("power") }, statModifiers, metadata: { printed: metadata, current: unmodeled ? unknownMetadata : metadata },
+        printed, base, current: { cost: current("cost"), power: current("power"),
+          counter: typeof base.counter !== "number" ? base.counter : counterAdd === UNKNOWN || base.counter + counterAdd < 0 ? UNKNOWN : numeric(base.counter + counterAdd) },
+        statModifiers, metadata: { printed: metadata, current: unmodeled ? unknownMetadata : metadata },
         abilities: { PRINTED: printedAbilities, GRANTED: grantedAbilities, CURRENT: currentAbilities } });
     } catch { return UNKNOWN; }
   };

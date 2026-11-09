@@ -2,11 +2,14 @@ import { visibleTo } from "../../movement/engine";
 import type { Location, MovementCard, MovementState, Player } from "../../movement/types";
 import { pinMasterFacts, type PinnedMasterFacts } from "../masterFacts";
 import type { ApprovedV3Card } from "./approval";
-import type { Node } from "./dsl";
+import type { MutableStat, Node } from "./dsl";
 import { fixtureEnvironment } from "./fixtureEnvironment";
 
+type Adjustment = number | "unknown";
 export type ContinuousAdjustments = {
-  power: number | "unknown"; cost: number | "unknown";
+  add: Record<MutableStat, Adjustment>;
+  base: Partial<Record<"power" | "cost", Adjustment>>;
+  counterGrant?: Adjustment;
   keywords: Partial<Record<Node<"keyword">["type"], true | "unknown">>;
 };
 
@@ -14,9 +17,11 @@ export type ContinuousAdjustments = {
 // same evaluator as actions, with continuous adjustments disabled for their fact reads.
 export function continuousAdjustments(board: MovementState, target: MovementCard, at: Location, activePlayer: Player,
   definitions: ReadonlyMap<string, ApprovedV3Card>, master?: PinnedMasterFacts): ContinuousAdjustments {
-  const result: ContinuousAdjustments = { power: 0, cost: 0, keywords: {} };
-  if (target.kind !== at.zone || !["leader", "character", "stage"].includes(at.zone) ||
-    !target.faceUp || !visibleTo(board, target, at, 0) || !visibleTo(board, target, at, 1)) return result;
+  const result: ContinuousAdjustments = { add: { power: 0, cost: 0, counter: 0 }, base: {}, keywords: {} };
+  const publicField = target.kind === at.zone && ["leader", "character", "stage"].includes(at.zone) &&
+    target.faceUp && visibleTo(board, target, at, 0) && visibleTo(board, target, at, 1);
+  const privateHand = at.zone === "hand" && target.kind === "character" && target.owner === at.player && target.controller === at.player;
+  if (!publicField && !privateHand) return result;
   const all = [...definitions.values()], targetRef = { instanceId: target.instanceId, generation: target.generation };
   let facts = master;
   for (const actor of [0, 1] as const) for (const zone of ["leader", "character", "stage"] as const) for (const id of board.players[actor][zone]) {
@@ -41,8 +46,14 @@ export function continuousAdjustments(board: MovementState, target: MovementCard
       const known = condition === true && matches === true && !source.modifierIds.length && !source.grantIds.length;
       const op = effect.operation;
       if (op.type === "ADD_STAT") {
-        const previous = result[op.stat];
-        result[op.stat] = known && previous !== "unknown" ? previous + op.amount : "unknown";
+        const previous = result.add[op.stat];
+        result.add[op.stat] = known && previous !== "unknown" ? previous + op.amount : "unknown";
+      } else if (op.type === "SET_BASE_STAT") {
+        const previous = result.base[op.stat];
+        // Rules 4-9-2-1/2: take the highest applicable setter, not the highest printed value.
+        result.base[op.stat] = !known || previous === "unknown" ? "unknown" : previous === undefined ? op.value : Math.max(previous, op.value);
+      } else if (op.type === "GRANT_COUNTER") {
+        result.counterGrant = known && result.counterGrant === undefined ? op.value : "unknown";
       } else if (result.keywords[op.keyword.type] !== true) result.keywords[op.keyword.type] = known ? true : "unknown";
     }
   }

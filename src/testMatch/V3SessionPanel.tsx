@@ -6,6 +6,8 @@ import V3ChoicePanel from "./V3ChoicePanel";
 import TestBoard from "./TestBoard";
 import V3MainEffectDialog from "./V3MainEffectDialog";
 import { getLocalCardImage } from "../utils/localCardImages";
+const hasStatSummary = (card: V3SessionView["publicStats"][number]) => card.powerDelta !== 0 || card.costDelta !== 0 ||
+  card.basePower !== undefined || card.baseCost !== undefined || card.counter !== undefined || card.keywords.length > 0 || card.keywordsUnknown === true;
 const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", ATTACH_DON: "DON!!を付与", RETURN_DON_BY_EFFECT: "DON!!を戻す", SET_DON_STATE: "DON!!の状態変更", ADD_DON: "DON!!を追加", PLAY_BY_EFFECT: "効果で登場", MOVE_CARD: "カードを移動", DISCARD_BY_OWNER: "手札の破棄を実行", ORDER_THEN_MOVE: "手札をデッキ下へ戻す", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", GRANT_KEYWORD: "能力を付与", FINISH_LIFE_TRIGGER: "トリガー処理を終了" };
 export default function V3SessionPanel({ view, busy, needsSync, error, isHost, onAction, onSync, onEnd }: {
   view: V3SessionView; busy: boolean; needsSync: boolean; error: string; isHost: boolean;
@@ -86,10 +88,11 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
           return <button key={`${card.cardId}:${index}`} onClick={() => setRevealPreview(id)}>{image ? <img src={image} alt={id} draggable={false} /> : id}</button>;
         })}</div>}
         {frame && <p role="status">{frame.status === "completed" ? frame.interruptedByGameEnd ? "勝敗確定により処理終了" : frame.activationDecision === "declined" ? "発動せず終了" : "処理完了" : frame.status === "blocked" ? "未対応または処理不可・停止中" : view.resolutionActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち"}</p>}
-        {view.publicStats.some(card => card.powerDelta !== 0 || card.costDelta !== 0 || card.keywords.length || card.keywordsUnknown) && <div className="v3-stat-summary" aria-label="数値修正と能力">{view.publicStats.filter(card => card.powerDelta !== 0 || card.costDelta !== 0 || card.keywords.length || card.keywordsUnknown).map(card =>
+        {view.publicStats.some(hasStatSummary) && <div className="v3-stat-summary" aria-label="数値修正と能力">{view.publicStats.filter(hasStatSummary).map(card =>
           <p key={card.card.instanceId}>{card.player === view.localPlayerIndex ? "自分" : "相手"}・{card.zone === "leader" ? "リーダー" : card.zone === "stage" ? "ステージ" : `キャラ${card.slot + 1}`}
-            {card.powerDelta !== 0 && <b> パワー {card.power ?? "?"}{card.powerDelta !== null && `（${card.powerDelta > 0 ? "+" : ""}${card.powerDelta}）`}</b>}
-            {card.costDelta !== 0 && <b> コスト {card.cost ?? "?"}{card.costDelta !== null && `（${card.costDelta > 0 ? "+" : ""}${card.costDelta}）`}</b>}
+            {(card.powerDelta !== 0 || card.basePower !== undefined) && <b> パワー {card.power ?? "?"}{card.basePower !== undefined ? `（基礎 ${card.basePower}）` : card.powerDelta !== null && `（${card.powerDelta > 0 ? "+" : ""}${card.powerDelta}）`}</b>}
+            {(card.costDelta !== 0 || card.baseCost !== undefined) && <b> コスト {card.cost ?? "?"}{card.baseCost !== undefined ? `（基礎 ${card.baseCost}）` : card.costDelta !== null && `（${card.costDelta > 0 ? "+" : ""}${card.costDelta}）`}</b>}
+            {card.counter !== undefined && <b> カウンター {card.counter === "unknown" ? "?" : card.counter ?? "なし"}</b>}
             {card.keywords.length > 0 && <small> {card.keywords.map(keyword => ({ BLOCKER: "ブロッカー", RUSH: "速攻", RUSH_CHARACTER: "速攻：キャラ", CANNOT_BE_BLOCKED: "ブロック不可" }[keyword] ?? keyword)).join("・")}</small>}
             {card.keywordsUnknown && <small> 能力未確定</small>}
           </p>)}</div>}
