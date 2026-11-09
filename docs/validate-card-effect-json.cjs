@@ -41,6 +41,7 @@ function main() {
       ['3.0.0-subset.31', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-mode-payment.schema.json'), 'utf8')))],
       ['3.0.0-subset.32', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-owner-discard.schema.json'), 'utf8')))],
       ['3.0.0-subset.33', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-owner-deck-bottom.schema.json'), 'utf8')))],
+      ['3.0.0-subset.34', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-continuous.schema.json'), 'utf8')))],
     ]);
     validate = card => {
       const checker = validators.get(card?.schemaVersion);

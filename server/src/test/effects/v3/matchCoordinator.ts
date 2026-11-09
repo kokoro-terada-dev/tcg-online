@@ -11,11 +11,11 @@ import { applyPlayerIntent, applySystemEvent } from "../../progression/transitio
 import { isApprovedV3Card, type ApprovedV3Card } from "./approval";
 import { label } from "./compiler";
 import { V3FixtureCoordinator } from "./fixtureCoordinator";
-import { endTurnStatEffects, pruneStatEffects, retainBattleStatEffects, statDelta, type StatEffects } from "./statEffects";
+import { endTurnStatEffects, pruneStatEffects, retainBattleStatEffects, type StatEffects } from "./statEffects";
 import { availableTriggers, enqueueAttackTriggers, enqueueMovementTriggers, enqueueObservedTriggers, movementTriggerCandidates, triggerChooser, SYNTHETIC_TRIGGER_POLICY, type ScheduledTrigger } from "./triggerScheduler";
 import { decideLocalBattle } from "../../localBattle";
 import { attackOptions, declareAttack, finishAttackStep, finishCounterStep, finishDamageStep, blockerOptions, declareBlock, battlePower, counterCandidates, useCounter, damage, takeLife, V3_BASE_BATTLE_RULES, type BattleCounters, type LifeDecision } from "./battle";
-import { effectiveKeywords, endTurnKeywordGrants, pruneKeywordGrants, retainBattleKeywordGrants, type KeywordGrants } from "./keywordEffects";
+import { endTurnKeywordGrants, pruneKeywordGrants, retainBattleKeywordGrants, type KeywordGrants } from "./keywordEffects";
 import { deckOutOutcome, DECK_OUT_POLICY } from "./ruleOutcomes";
 import { counterEventChoices, prepareCounterEvent, prepareEventFromHand } from "./counterEvents";
 import { isSimpleMainEvent, isInteractiveMainEvent } from "./simpleMainEvent";
@@ -25,7 +25,7 @@ import { pinMasterFacts } from "../masterFacts";
 import { fixtureEnvironment } from "./fixtureEnvironment";
 import { trackMovementOccurrences } from "../../movement/occurrence";
 import { conditionalTriggersHeld, conditionalTriggersWaiting, emptyTriggerObservations, hasConditionalTriggers, hasPhaseBoundaries, observeBoundaryTriggers, observeConditionalTriggers, updateTriggerObservation, validateObservedSource, type TriggerObservations } from "./conditionalTriggers";
-import type { BoundaryEvent } from "./readContext";
+import { createDerivedCardFactsReader, FIELD_KEYWORDS, UNKNOWN, type BoundaryEvent } from "./readContext";
 import { finishBlockStep } from "./battle";
 import { expireAtBoundary, expiryCheckpoint, hasBoundaryDurations } from "./effectExpiry";
 
@@ -301,7 +301,9 @@ export class V3SyntheticMatchCoordinator {
       const object = getCard(this.#board, target), definition = this.#cards.get(object.cardId)?.definition;
       ensureMove(definition && definition.cardType === object.kind && definition.baseStats.power !== null, "v3-don-attachment-unregistered-target");
       const existing = this.#board.players[actor].attachedDon.filter(id => { const parent = this.#board.cards[id!]!.attachedTo; return parent?.instanceId === target.instanceId && parent.generation === target.generation; }).length;
-      ensureMove(Number.isSafeInteger(definition.baseStats.power + statDelta(this.#statEffects, target, "power") + (existing + count) * 1000), "v3-don-power-overflow");
+      const facts = this.#fieldFacts()(target, actor);
+      ensureMove(facts !== UNKNOWN && facts.statModifiers.power !== UNKNOWN &&
+        Number.isSafeInteger(definition.baseStats.power + facts.statModifiers.power + (existing + count) * 1000), "v3-don-power-overflow");
       const result = new MovementStore(this.#board).commit({ transactionId: hash(`${this.#board.matchId}:${requestId}:attach`), matchId: this.#board.matchId, expectedRevision: this.#board.revision,
         turnNumber: this.#board.turnNumber, actor, effectController: null, source: null, mode: "rule", resolutionId: null,
         operations: this.#board.players[actor].activeDon.slice(0, count).map(id => ({ kind: "attachDon", card: { instanceId: id!, generation: this.#board.cards[id!]!.generation }, target })) }, { status: "certifiedNone" });
@@ -372,7 +374,7 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
       return card.definition.effects.filter(card.definition.schemaVersion !== "3.0.0-subset.19" ? isInteractiveMainEvent : isSimpleMainEvent).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
@@ -560,12 +562,17 @@ export class V3SyntheticMatchCoordinator {
     }
     throw new Error("V3_MATCH_PHASE_LIMIT");
   }
+  #fieldFacts() {
+    return createDerivedCardFactsReader({ board: () => this.#board, definitions: this.#cards, statEffects: () => this.#statEffects,
+      activePlayer: this.#progression.activePlayer, keywordGrants: () => this.#keywordGrants });
+  }
   viewFor(viewer: Seat) {
     ensureMove(viewer === 0 || viewer === 1, "v3-match-viewer");
     const active = this.#active?.coordinator.viewFor(viewer);
     const waitingTriggers = !conditionalTriggersHeld(this.#observations) && this.#triggers.length > 0 && (!active || active.frame.status === "completed");
     const chooser = waitingTriggers ? triggerChooser(this.#triggers, this.#progression.activePlayer) : null;
     const battle = this.#progression.battle, life = this.#lifeDecision;
+    const fieldFacts = this.#fieldFacts();
     let powers: ReturnType<typeof battlePower> = null;
     try { powers = battlePower(this.#board, this.#progression, this.#cards, this.#statEffects, this.#battleCounters); } catch { /* Unknown facts must not be displayed as zero. */ }
     const revealIds = [...new Set(this.#board.reveals.filter(grant => grant.viewers.includes(0) && grant.viewers.includes(1)).map(grant => grant.card.instanceId))];
@@ -588,11 +595,16 @@ export class V3SyntheticMatchCoordinator {
       publicStats: this.#board.players.flatMap((zones, player) => (["leader", "character", "stage"] as const).flatMap(zone => zones[zone].flatMap((id, slot) => {
         if (!id) return []; const object = this.#board.cards[id]!, definition = this.#cards.get(object.cardId)?.definition;
         if (!object.faceUp || !definition || definition.cardType !== object.kind) return [];
-        const ref = { instanceId: id, generation: object.generation }, powerDelta = statDelta(this.#statEffects, ref, "power"), costDelta = statDelta(this.#statEffects, ref, "cost");
-        const dons = player === this.#progression.activePlayer ? zones.attachedDon.filter(id => { const parent = this.#board.cards[id!]!.attachedTo; return parent?.instanceId === ref.instanceId && parent.generation === ref.generation; }).length * 1000 : 0;
-        const power = definition.baseStats.power === null ? null : definition.baseStats.power + powerDelta + dons;
-        return [{ card: ref, cardId: object.cardId, player: player as Seat, zone, slot, power: power !== null && Number.isSafeInteger(power) ? power : null,
-          cost: definition.baseStats.cost === null ? null : Math.max(0, definition.baseStats.cost + costDelta), powerDelta, costDelta, keywords: zone === "stage" ? [] : effectiveKeywords(this.#board, this.#cards, this.#keywordGrants, ref) }];
+        const ref = { instanceId: id, generation: object.generation }, facts = fieldFacts(ref, viewer);
+        if (facts === UNKNOWN) return [];
+        const powerDelta = facts.statModifiers.power === UNKNOWN ? null : facts.statModifiers.power;
+        const costDelta = facts.statModifiers.cost === UNKNOWN ? null : facts.statModifiers.cost;
+        const power = facts.current.power === UNKNOWN ? null : facts.current.power;
+        const cost = facts.current.cost === UNKNOWN ? null : facts.current.cost;
+        const keywords = zone === "stage" ? [] : FIELD_KEYWORDS.filter(keyword => facts.abilities.CURRENT[keyword] === true);
+        const keywordsUnknown = zone !== "stage" && FIELD_KEYWORDS.some(keyword => facts.abilities.CURRENT[keyword] === UNKNOWN);
+        return [{ card: ref, cardId: object.cardId, player: player as Seat, zone, slot, power, cost,
+          powerDelta, costDelta, keywords, ...(keywordsUnknown ? { keywordsUnknown: true as const } : {}) }];
       }))) });
   }
   effectsFor(actor: Seat, source: Readonly<CardObjectRef>) {

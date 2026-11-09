@@ -9,6 +9,7 @@ import { statDelta, type StatEffects } from "./statEffects";
 import { ABILITY_TAGS } from "./compiler";
 import type { AbilityTag } from "./dsl";
 import type { KeywordGrants } from "./keywordEffects";
+import { continuousAdjustments, type ContinuousAdjustments } from "./continuousEffects";
 
 export const UNKNOWN: unique symbol = Symbol("v3-unknown-fact");
 export type KnownOrUnknown<T> = T | typeof UNKNOWN;
@@ -60,6 +61,7 @@ export type DerivedCardFacts = Readonly<{
   cardType: KnownOrUnknown<string>; rotated: boolean; owner: Player; controller: Player;
   printed: Readonly<Record<"cost" | "power" | "counter" | "life", KnownOrUnknown<number>>>;
   current: Readonly<Record<"cost" | "power", KnownOrUnknown<number>>>;
+  statModifiers: Readonly<Record<"cost" | "power", KnownOrUnknown<number>>>;
   metadata: Readonly<{ printed: CardMetadataFacts; current: CardMetadataFacts }>;
   abilities: Readonly<Record<"PRINTED" | "GRANTED" | "CURRENT", Readonly<Record<AbilityTag, KnownOrUnknown<boolean>>>>>;
 }>;
@@ -68,13 +70,17 @@ type ReaderOptions = Readonly<{
   board: () => MovementState; definitions: ReadonlyMap<string, ApprovedV3Card>; master?: PinnedMasterFacts;
   statEffects: () => StatEffects; activePlayer: Player; counterPower?: (ref: Ref) => number;
   keywordGrants?: () => KeywordGrants;
+  includeContinuous?: boolean;
 }>;
 const numeric = (value: unknown): KnownOrUnknown<number> => typeof value === "number" && Number.isSafeInteger(value) ? value : UNKNOWN;
-const keywordTags = new Set<AbilityTag>(["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"]);
+export const FIELD_KEYWORDS = ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"] as const;
+const keywordTags = new Set<AbilityTag>(FIELD_KEYWORDS);
 
 // A hidden card yields no facts, even when its definition happens to be in the catalog.
 export function createDerivedCardFactsReader(options: ReaderOptions) {
   player(options.activePlayer);
+  const hasContinuous = options.includeContinuous !== false && [...options.definitions.values()].some(card => card.definition.continuousEffects?.length);
+  const cache = new WeakMap<MovementState, Map<string, ContinuousAdjustments>>();
   return (ref: Ref, viewer: Player): KnownOrUnknown<DerivedCardFacts> => {
     player(viewer);
     try {
@@ -84,14 +90,27 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
       const base = known ? matching ? known.definition.baseStats : undefined : options.master?.cards[card.cardId];
       const printed: DerivedCardFacts["printed"] = { cost: numeric(base?.cost), power: numeric(base?.power), counter: numeric(known && matching ? known.definition.baseStats.counter : undefined),
         life: numeric(known && matching ? known.definition.baseStats.life : undefined) };
+      let continuous: ContinuousAdjustments | undefined;
+      if (hasContinuous) {
+        let rows = Object.isFrozen(state) ? cache.get(state) : undefined;
+        if (!rows && Object.isFrozen(state)) { rows = new Map(); cache.set(state, rows); }
+        continuous = rows?.get(card.instanceId) ?? continuousAdjustments(state, card, at, options.activePlayer, options.definitions, options.master);
+        rows?.set(card.instanceId, continuous);
+      }
+      const modifier = (field: "power" | "cost"): KnownOrUnknown<number> => {
+        const permanent = continuous?.[field] ?? 0;
+        return permanent === "unknown" ? UNKNOWN : numeric(statDelta(options.statEffects(), ref, field) + permanent);
+      };
+      const statModifiers: DerivedCardFacts["statModifiers"] = { power: modifier("power"), cost: modifier("cost") };
       const current = (field: "power" | "cost"): KnownOrUnknown<number> => {
         const baseNumber: KnownOrUnknown<number> = known ? matching && !card.modifierIds.length && !card.grantIds.length ? printed[field] : UNKNOWN : numeric(masterCardFacts(state, card, options.master)[field]);
-        if (baseNumber === UNKNOWN) return UNKNOWN;
+        const delta = statModifiers[field];
+        if (baseNumber === UNKNOWN || delta === UNKNOWN) return UNKNOWN;
         const don = field === "power" && card.controller === options.activePlayer ? state.players[options.activePlayer].attachedDon.filter(id => {
           const attached = state.cards[id!]!.attachedTo; return attached?.instanceId === ref.instanceId && attached.generation === ref.generation;
         }).length * 1000 : 0;
         const counter = field === "power" ? options.counterPower?.(ref) ?? 0 : 0;
-        const result = numeric(baseNumber + statDelta(options.statEffects(), ref, field) + don + counter);
+        const result = numeric(baseNumber + delta + don + counter);
         return result === UNKNOWN ? UNKNOWN : field === "cost" ? Math.max(0, result) : result;
       };
       const definition = known && matching ? known.definition : null;
@@ -101,13 +120,18 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
       const unknownMetadata: CardMetadataFacts = { name: UNKNOWN, traits: UNKNOWN, colors: UNKNOWN, attributes: UNKNOWN };
       const printedAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => [tag, definition ?
         keywordTags.has(tag) ? definition.keywords.some(keyword => keyword.type === tag) : definition.effects.some(effect => effect.timing.type === tag) : UNKNOWN])) as Record<AbilityTag, KnownOrUnknown<boolean>>;
-      const grantedAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => [tag, !definition || unmodeled || !keywordTags.has(tag) ? UNKNOWN :
-        ["leader", "character"].includes(at.zone) && (options.keywordGrants?.() ?? []).some(grant => grant.target.instanceId === ref.instanceId && grant.target.generation === ref.generation && grant.keyword === tag)])) as Record<AbilityTag, KnownOrUnknown<boolean>>;
+      const grantedAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => {
+        if (!definition || unmodeled || !keywordTags.has(tag)) return [tag, UNKNOWN];
+        const timed = ["leader", "character"].includes(at.zone) && (options.keywordGrants?.() ?? []).some(grant =>
+          grant.target.instanceId === ref.instanceId && grant.target.generation === ref.generation && grant.keyword === tag);
+        const permanent = continuous?.keywords[tag as keyof ContinuousAdjustments["keywords"]];
+        return [tag, timed || permanent === true ? true : permanent === "unknown" ? UNKNOWN : false];
+      })) as Record<AbilityTag, KnownOrUnknown<boolean>>;
       // Timing tags cannot be granted by this engine. Keyword union preserves three-valued facts.
       const currentAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => [tag, !definition || unmodeled ? UNKNOWN : !keywordTags.has(tag) ? printedAbilities[tag] :
         printedAbilities[tag] === true || grantedAbilities[tag] === true ? true : printedAbilities[tag] === UNKNOWN || grantedAbilities[tag] === UNKNOWN ? UNKNOWN : false])) as Record<AbilityTag, KnownOrUnknown<boolean>>;
       return freezeMovement({ cardType: card.kind === "unknown" ? UNKNOWN : card.kind, rotated: card.rotated, owner: card.owner, controller: card.controller,
-        printed, current: { cost: current("cost"), power: current("power") }, metadata: { printed: metadata, current: unmodeled ? unknownMetadata : metadata },
+        printed, current: { cost: current("cost"), power: current("power") }, statModifiers, metadata: { printed: metadata, current: unmodeled ? unknownMetadata : metadata },
         abilities: { PRINTED: printedAbilities, GRANTED: grantedAbilities, CURRENT: currentAbilities } });
     } catch { return UNKNOWN; }
   };

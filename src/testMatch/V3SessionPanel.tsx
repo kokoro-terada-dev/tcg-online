@@ -86,11 +86,12 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
           return <button key={`${card.cardId}:${index}`} onClick={() => setRevealPreview(id)}>{image ? <img src={image} alt={id} draggable={false} /> : id}</button>;
         })}</div>}
         {frame && <p role="status">{frame.status === "completed" ? frame.interruptedByGameEnd ? "勝敗確定により処理終了" : frame.activationDecision === "declined" ? "発動せず終了" : "処理完了" : frame.status === "blocked" ? "未対応または処理不可・停止中" : view.resolutionActor === view.localPlayerIndex ? "自分が操作" : "相手の操作待ち"}</p>}
-        {view.publicStats.some(card => card.powerDelta || card.costDelta || card.keywords.length) && <div className="v3-stat-summary" aria-label="数値修正と能力">{view.publicStats.filter(card => card.powerDelta || card.costDelta || card.keywords.length).map(card =>
+        {view.publicStats.some(card => card.powerDelta !== 0 || card.costDelta !== 0 || card.keywords.length || card.keywordsUnknown) && <div className="v3-stat-summary" aria-label="数値修正と能力">{view.publicStats.filter(card => card.powerDelta !== 0 || card.costDelta !== 0 || card.keywords.length || card.keywordsUnknown).map(card =>
           <p key={card.card.instanceId}>{card.player === view.localPlayerIndex ? "自分" : "相手"}・{card.zone === "leader" ? "リーダー" : card.zone === "stage" ? "ステージ" : `キャラ${card.slot + 1}`}
-            {card.powerDelta !== 0 && <b> パワー {card.power ?? "?"}（{card.powerDelta > 0 ? "+" : ""}{card.powerDelta}）</b>}
-            {card.costDelta !== 0 && <b> コスト {card.cost ?? "?"}（{card.costDelta > 0 ? "+" : ""}{card.costDelta}）</b>}
+            {card.powerDelta !== 0 && <b> パワー {card.power ?? "?"}{card.powerDelta !== null && `（${card.powerDelta > 0 ? "+" : ""}${card.powerDelta}）`}</b>}
+            {card.costDelta !== 0 && <b> コスト {card.cost ?? "?"}{card.costDelta !== null && `（${card.costDelta > 0 ? "+" : ""}${card.costDelta}）`}</b>}
             {card.keywords.length > 0 && <small> {card.keywords.map(keyword => ({ BLOCKER: "ブロッカー", RUSH: "速攻", RUSH_CHARACTER: "速攻：キャラ", CANNOT_BE_BLOCKED: "ブロック不可" }[keyword] ?? keyword)).join("・")}</small>}
+            {card.keywordsUnknown && <small> 能力未確定</small>}
           </p>)}</div>}
         {frame?.choice?.chooser === view.localPlayerIndex && <V3ChoicePanel key={frame.choice.selectionId} choice={frame.choice} imageAliases={view.imageAliases} disabled={disabled} allowSkip={!!view.mainEvent} onConfirm={tokens => onAction("answer", { tokens })} />}
         {frame?.choice?.purpose === "ownerDiscard" && frame.choice.chooser !== view.localPlayerIndex && <p role="status">相手が捨てる手札を選択中</p>}

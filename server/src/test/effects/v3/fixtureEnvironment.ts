@@ -14,12 +14,12 @@ import { activationCostSelector, movesActivationSource } from "./activationCosts
 import { ownerHandCandidates } from "./ownerHand";
 
 type Scalar = string | number | boolean | null | typeof UNKNOWN;
-export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext, keywordGrants: () => KeywordGrants = () => [], occurrenceAuthorized = false): ResolutionEnvironment {
+export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext, keywordGrants: () => KeywordGrants = () => [], occurrenceAuthorized = false, includeContinuous = true): ResolutionEnvironment {
   const knownDefinitions = new Map(definitions.map(card => [card.definition.cardId, card]));
   const context = eventContext ?? readEventContext(board(), identity);
   ensureMove(context.effectController === identity.actor && context.source.instanceId === identity.source.instanceId && context.source.generation === identity.source.generation, "v3-read-context-source-mismatch");
   const seat = (side: string): 0 | 1 => side === "SELF" ? context.effectController : (1 - context.effectController) as 0 | 1;
-  const cardFacts = createDerivedCardFactsReader({ board, definitions: knownDefinitions, master: facts, statEffects, activePlayer, counterPower, keywordGrants });
+  const cardFacts = createDerivedCardFactsReader({ board, definitions: knownDefinitions, master: facts, statEffects, activePlayer, counterPower, keywordGrants, includeContinuous });
   const read = (value: DeepReadonly<Value>, bindings: Readonly<Record<string, readonly Readonly<CardObjectRef>[]>>, candidate?: Readonly<CardObjectRef>): Scalar => {
     if (value === null || typeof value !== "object") return value;
     const state = board(), parts = value.ref.split(".");

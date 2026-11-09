@@ -7,8 +7,9 @@ import { checkTiming } from "../../progression/state";
 import { applyPlayerIntent, applySystemEvent } from "../../progression/transitions";
 import type { CardObjectRef } from "../types";
 import type { ApprovedV3Card } from "./approval";
-import { statDelta, type StatEffects } from "./statEffects";
-import { effectiveKeywords, type KeywordGrants } from "./keywordEffects";
+import type { StatEffects } from "./statEffects";
+import type { KeywordGrants } from "./keywordEffects";
+import { createDerivedCardFactsReader, UNKNOWN } from "./readContext";
 
 type Ref = Readonly<CardObjectRef>;
 type Seat = 0 | 1;
@@ -32,14 +33,14 @@ function fieldRows(board: MovementState, player: Seat, definitions: ReadonlyMap<
 }
 export function attackOptions(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants) {
   if (!checkTiming(progression, actor, "attack").allowed) return { sources: [], targets: [], pairs: [] };
-  const sources = fieldRows(board, actor, definitions).filter(row => {
-    const card = board.cards[row.card.instanceId]!, keywords = effectiveKeywords(board, definitions, grants, row.card);
-    return !card.rotated && (card.kind === "leader" || card.enteredTurn !== progression.turnNumber || keywords.includes("RUSH") || keywords.includes("RUSH_CHARACTER"));
-  });
+  const facts = createDerivedCardFactsReader({ board: () => board, definitions, statEffects: () => [], activePlayer: progression.activePlayer, keywordGrants: () => grants });
+  const sources = fieldRows(board, actor, definitions).filter(row => !board.cards[row.card.instanceId]!.rotated);
   const targets = fieldRows(board, (1 - actor) as Seat, definitions).filter(row => { const card = board.cards[row.card.instanceId]!; return card.kind === "leader" || card.rotated; });
   const pairs = sources.flatMap(source => {
-    const card = board.cards[source.card.instanceId]!, keywords = effectiveKeywords(board, definitions, grants, source.card);
-    const characterOnly = card.kind === "character" && card.enteredTurn === progression.turnNumber && !keywords.includes("RUSH");
+    const card = board.cards[source.card.instanceId]!, info = facts(source.card, actor);
+    const recent = card.kind === "character" && card.enteredTurn === progression.turnNumber;
+    if (recent && (info === UNKNOWN || info.abilities.CURRENT.RUSH !== true && info.abilities.CURRENT.RUSH_CHARACTER !== true)) return [];
+    const characterOnly = recent && (info === UNKNOWN || info.abilities.CURRENT.RUSH !== true);
     return targets.filter(target => !characterOnly || board.cards[target.card.instanceId]!.kind === "character").map(target => ({ sourceId: source.card.instanceId, targetId: target.card.instanceId }));
   });
   return { sources: sources.filter(row => pairs.some(pair => pair.sourceId === row.card.instanceId)), targets: targets.filter(row => pairs.some(pair => pair.targetId === row.card.instanceId)), pairs };
@@ -99,8 +100,14 @@ export function finishCounterStep(board: MovementState, progression: Progression
 }
 export function blockerOptions(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants) {
   const battle = progression.battle;
-  if (!battle || !checkTiming(progression, actor, "passBlock").allowed || effectiveKeywords(board, definitions, grants, battle.source).includes("CANNOT_BE_BLOCKED")) return [];
-  return fieldRows(board, actor, definitions).filter(row => !board.cards[row.card.instanceId]!.rotated && row.card.instanceId !== battle.target.instanceId && effectiveKeywords(board, definitions, grants, row.card).includes("BLOCKER"));
+  if (!battle || !checkTiming(progression, actor, "passBlock").allowed) return [];
+  const facts = createDerivedCardFactsReader({ board: () => board, definitions, statEffects: () => [], activePlayer: progression.activePlayer, keywordGrants: () => grants });
+  const attacker = facts(battle.source, actor);
+  if (attacker === UNKNOWN || attacker.abilities.CURRENT.CANNOT_BE_BLOCKED !== false) return [];
+  return fieldRows(board, actor, definitions).filter(row => {
+    const card = facts(row.card, actor);
+    return !board.cards[row.card.instanceId]!.rotated && row.card.instanceId !== battle.target.instanceId && card !== UNKNOWN && card.abilities.CURRENT.BLOCKER === true;
+  });
 }
 export function declareBlock(board: MovementState, progression: Progression, actor: Seat, card: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants, transactionId: string, deferCounter = false) {
   field(board, card, actor); const battle = progression.battle!;
@@ -115,15 +122,13 @@ export function declareBlock(board: MovementState, progression: Progression, act
 }
 export function battlePower(board: MovementState, progression: Progression, definitions: ReadonlyMap<string, ApprovedV3Card>, effects: StatEffects, counters: BattleCounters) {
   const battle = progression.battle; if (!battle) return null;
+  const facts = createDerivedCardFactsReader({ board: () => board, definitions, statEffects: () => effects, activePlayer: progression.activePlayer,
+    counterPower: ref => counters.filter(entry => entry.target.instanceId === ref.instanceId && entry.target.generation === ref.generation).reduce((sum, entry) => sum + entry.amount, 0) });
   const power = (ref: Ref, player: Seat) => {
-    const object = field(board, ref, player), known = definitions.get(object.cardId)?.definition;
-    ensureMove(known && known.cardType === object.kind && known.baseStats.power !== null && !object.modifierIds.length && !object.grantIds.length, "v3-battle-power-unknown");
-    const attached = player === progression.activePlayer ? board.players[player].attachedDon.filter(id => {
-      const target = board.cards[id!]!.attachedTo; return target?.instanceId === ref.instanceId && target.generation === ref.generation;
-    }).length * 1000 : 0;
-    const bonus = counters.filter(entry => entry.target.instanceId === ref.instanceId && entry.target.generation === ref.generation).reduce((sum, entry) => sum + entry.amount, 0);
-    const result = known.baseStats.power + statDelta(effects, ref, "power") + attached + bonus;
-    ensureMove(Number.isSafeInteger(result), "v3-battle-power-overflow"); return result;
+    field(board, ref, player);
+    const info = facts(ref, player);
+    ensureMove(info !== UNKNOWN && info.current.power !== UNKNOWN, "v3-battle-power-unknown");
+    return info.current.power;
   };
   return { attack: power(battle.source, battle.attacker), defense: power(battle.target, battle.defender) };
 }
@@ -137,9 +142,10 @@ export function counterCandidates(board: MovementState, progression: Progression
 }
 export function useCounter(board: MovementState, progression: Progression, actor: Seat, card: Ref, target: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, counters: BattleCounters, effects: StatEffects, transactionId: string) {
   const option = counterCandidates(board, progression, actor, definitions).find(choice => choice.card.instanceId === card.instanceId && choice.card.generation === card.generation);
-  ensureMove(option && counters.length < 100, "v3-battle-counter-unavailable"); const targetObject = field(board, target, actor), known = definitions.get(targetObject.cardId)?.definition;
+  ensureMove(option && counters.length < 100, "v3-battle-counter-unavailable"); field(board, target, actor);
   const bonus = counters.filter(entry => entry.target.instanceId === target.instanceId && entry.target.generation === target.generation).reduce((sum, entry) => sum + entry.amount, option.amount);
-  ensureMove(known && known.cardType === targetObject.kind && known.baseStats.power !== null && Number.isSafeInteger(known.baseStats.power + statDelta(effects, target, "power") + bonus), "v3-counter-target-power-unknown-or-overflow");
+  const facts = createDerivedCardFactsReader({ board: () => board, definitions, statEffects: () => effects, activePlayer: progression.activePlayer })(target, actor);
+  ensureMove(facts !== UNKNOWN && facts.current.power !== UNKNOWN && Number.isSafeInteger(facts.current.power + bonus), "v3-counter-target-power-unknown-or-overflow");
   const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
     actor, effectController: actor, source: card, mode: "rule", resolutionId: null, operations: [{ kind: "move", card, from: { player: actor, zone: "hand" },
       to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "OTHER" }] }, { status: "certifiedNone" });
