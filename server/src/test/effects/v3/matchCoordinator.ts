@@ -10,7 +10,7 @@ import { checkTiming, phaseWork } from "../../progression/state";
 import { applyPlayerIntent, applySystemEvent } from "../../progression/transitions";
 import { isApprovedV3Card, type ApprovedV3Card } from "./approval";
 import { label } from "./compiler";
-import { V3FixtureCoordinator } from "./fixtureCoordinator";
+import { V3FixtureCoordinator, type ReplacementTrace } from "./fixtureCoordinator";
 import { endTurnStatEffects, pruneStatEffects, retainBattleStatEffects, type StatEffects } from "./statEffects";
 import { availableTriggers, enqueueAttackTriggers, enqueueMovementTriggers, enqueueObservedTriggers, movementTriggerCandidates, triggerChooser, SYNTHETIC_TRIGGER_POLICY, type ScheduledTrigger } from "./triggerScheduler";
 import { decideLocalBattle } from "../../localBattle";
@@ -40,6 +40,8 @@ const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 export class V3SyntheticMatchCoordinator {
   #board: MovementState; #progression: Progression; #cards = new Map<string, ApprovedV3Card>();
   #usage = new Map<string, number>();
+  #replacementUsage: readonly string[] = [];
+  #replacementHistory: ReplacementTrace[] = [];
   #active: Active | null = null; #history: History[] = []; #receipts: Receipt[] = [];
   #ruleEvents: readonly MovementEvent[] = [];
   #statEffects: StatEffects = [];
@@ -95,8 +97,10 @@ export class V3SyntheticMatchCoordinator {
     const resuming = ["advance", "answer", "work"].includes((body as { kind?: string }).kind ?? "") && this.#active && this.#active.coordinator.viewFor(this.#active.actor).frame.status !== "completed";
     ensureMove(!held || resuming, "v3-conditional-trigger-held-pr06b");
     this.#busy = true; this.#observationDraft = this.#observations;
+    const turn = this.#board.turnNumber;
     try {
       apply();
+      if (this.#board.turnNumber !== turn) this.#replacementUsage = [];
       const battleId = this.#progression.outcome ? null : this.#progression.battle?.battleId ?? null;
       this.#statEffects = retainBattleStatEffects(this.#statEffects, battleId);
       this.#keywordGrants = retainBattleKeywordGrants(this.#keywordGrants, battleId);
@@ -140,6 +144,7 @@ export class V3SyntheticMatchCoordinator {
     const frame = this.#active.coordinator.viewFor(this.#active.actor).frame;
     this.#history.push(freezeMovement({ turnNumber: this.#board.turnNumber, actor: this.#active.actor, cardId: this.#active.cardId, effectId: this.#active.effectId,
       resolutionId: frame.resolutionId, committed: frame.activationCommitted, declined: frame.activationDecision === "declined", triggerEventId: this.#active.triggerEventId }));
+    this.#replacementHistory.push(...this.#active.coordinator.replacementTraceForCoordinator());
     this.#active = null;
   }
   activate(actor: Seat, requestId: string, expected: V3MatchContext, source: Readonly<CardObjectRef>, effectId: string) {
@@ -167,7 +172,7 @@ export class V3SyntheticMatchCoordinator {
     ensureMove(limit === null || (this.#usage.get(usageKey) ?? 0) < limit, "v3-match-usage-exhausted");
     const resolutionId = randomUUID(), coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
       identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: this.#board, progression: this.#progression,
-      signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, checkEvents: this.#checkNewEvents });
+      signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage });
     this.#archive(); this.#active = { coordinator, actor, cardId: object.cardId, effectId, source: { ...source }, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: null };
     this.#progression = coordinator.snapshotForCoordinator().progression;
   }
@@ -188,7 +193,7 @@ export class V3SyntheticMatchCoordinator {
       const resolutionId = randomUUID(), coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: this.#board, progression: this.#progression,
         signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
-        triggerCause: pending.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents });
+        triggerCause: pending.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage });
       this.#archive(); this.#triggers = this.#triggers.filter(entry => entry.token !== token);
       this.#active = { coordinator, actor, cardId: pending.cardId, effectId, source, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: pending.cause.eventId };
       if (pending.cause.type === "ON_EVENT") {
@@ -202,6 +207,7 @@ export class V3SyntheticMatchCoordinator {
     return this.#run(actor, requestId, expected, body, () => {
       ensureMove(this.#active, "v3-match-no-resolution"); const active = this.#active;
       action(active.coordinator); const snapshot = active.coordinator.snapshotForCoordinator(), frame = active.coordinator.viewFor(active.actor).frame;
+      this.#replacementUsage = active.coordinator.replacementUsageForCoordinator();
       const triggers = enqueueMovementTriggers(snapshot.movementEvents.slice(active.eventCount), this.#cards);
       this.#triggers = freezeMovement([...this.#triggers, ...triggers]); active.eventCount = snapshot.movementEvents.length;
       this.#board = snapshot.movement; this.#progression = snapshot.progression; this.#statEffects = snapshot.statEffects; this.#keywordGrants = snapshot.keywordGrants;
@@ -359,7 +365,7 @@ export class V3SyntheticMatchCoordinator {
       const coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source: candidate.source }, movement: candidate.movement, progression: this.#progression,
         signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
-        counterEventCause: candidate.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents });
+        counterEventCause: candidate.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage });
       const usageKey = JSON.stringify([this.#board.turnNumber, actor, candidate.source.instanceId, candidate.source.generation, effectId]);
       this.#board = candidate.movement; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...candidate.events]);
       this.#active = { coordinator, actor, cardId: object.cardId, effectId, source: candidate.source, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: null };
@@ -373,7 +379,7 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
       return card.definition.effects.filter(card.definition.schemaVersion !== "3.0.0-subset.19" ? isInteractiveMainEvent : isSimpleMainEvent).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
@@ -392,7 +398,7 @@ export class V3SyntheticMatchCoordinator {
       const coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source: prepared.source }, movement: prepared.movement, progression: this.#progression,
         signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
-        mainEventCause: { event: prepared.event }, checkEvents: this.#checkNewEvents });
+        mainEventCause: { event: prepared.event }, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage });
       if (card.definition.schemaVersion !== "3.0.0-subset.19") {
         // First selection is validated privately. Publication commits use, not future choices/work.
         for (let step = 0; step < 32 && coordinator.viewFor(actor).frame.status === "ready"; step++) coordinator.advance(actor, `event-declaration-${step}`, coordinator.context());
@@ -456,7 +462,7 @@ export class V3SyntheticMatchCoordinator {
       const coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card: candidate.card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: candidate.movement, progression: candidate.progression,
         signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
-        lifeTriggerCause: candidate.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents });
+        lifeTriggerCause: candidate.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage });
       const usageKey = JSON.stringify([this.#board.turnNumber, actor, source.instanceId, source.generation, effectId]);
       this.#board = candidate.movement; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...candidate.events]);
       this.#active = { coordinator, actor, cardId: candidate.card.definition.cardId, effectId, source, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: null };
@@ -648,7 +654,7 @@ export class V3SyntheticMatchCoordinator {
   }
   snapshotForCoordinator() {
     return freezeMovement({ context: this.context(), movement: this.#board, progression: this.#progression, active: this.#active?.coordinator.snapshotForCoordinator() ?? null,
-      usage: [...this.#usage.entries()], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, pendingTriggers: this.#triggers, triggerObservations: this.#observations, boundaryTokens: this.#boundaryTokens, expiryTokens: this.#expiryTokens, phaseContinuation: this.#phaseContinuation, battleCounters: this.#battleCounters, pendingLife: this.#lifeDecision, damageEffectsPending: this.#damageSettling });
+      usage: [...this.#usage.entries()], replacementUsage: [...this.#replacementUsage], replacementHistory: [...this.#replacementHistory], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, pendingTriggers: this.#triggers, triggerObservations: this.#observations, boundaryTokens: this.#boundaryTokens, expiryTokens: this.#expiryTokens, phaseContinuation: this.#phaseContinuation, battleCounters: this.#battleCounters, pendingLife: this.#lifeDecision, damageEffectsPending: this.#damageSettling });
   }
   toJSON(): never { throw new Error("v3-match-server-only"); }
 }

@@ -3,11 +3,12 @@ import type { V3Choice } from "../../server/src/test/effects/v3/fixtureProtocol"
 import { getLocalCardImage } from "../utils/localCardImages";
 export default function V3ChoicePanel({ choice, disabled, onConfirm, imageAliases = {}, allowSkip = false }: { choice: V3Choice; disabled: boolean; onConfirm: (tokens: string[]) => void; imageAliases?: Readonly<Record<string, string>>; allowSkip?: boolean }) {
   const [tokens, setTokens] = useState<string[]>([]), [failed, setFailed] = useState<string[]>([]);
+  const replacement = choice.purpose === "replacementPayment" || choice.purpose === "replacementPriority";
   if (choice.purpose === "activation" || choice.purpose === "mode" || choice.purpose === "payment" || choice.purpose === "replacement") return <div><p>{choice.purpose === "mode" ? "効果を1つ選択" : choice.purpose === "payment" ? "追加のコストを支払いますか？" : choice.purpose === "replacement" ? "代わりの処理を適用しますか？" : "効果を発動しますか？"}</p><div className="test-effect-actions v3-activation-actions">{choice.options.map(option =>
     <button key={option.token} disabled={disabled} onClick={() => onConfirm([option.token])}>{option.label}</button>
   )}</div></div>;
   const activeSelected = choice.options.filter(option => option.zone === "activeDon" && tokens.includes(option.token)).length;
-  return <div><p>{choice.purpose === "replacementPayment" ? choice.options.length ? "代わりに捨てる手札を1枚選択" : "選べる支払いカードがありません" : choice.purpose === "ownerDeckBottom" ? "デッキ下へ戻す手札と順番（1番が上）" : choice.purpose === "ownerDiscard" ? "捨てる手札を選択" : choice.purpose === "cost" ? choice.revealCost ? "コストで公開する手札" : "コストで捨てる手札" : choice.purpose === "returnCost" ? "DONデッキへ戻すDON" : choice.purpose === "order" ? "戻す順番" : "カード選択"} {tokens.length} / {choice.max}</p><div className="test-effect-candidates">{choice.options.map(option => {
+  return <div><p>{choice.purpose === "replacementPriority" ? "置換効果を選択" : choice.purpose === "replacementPayment" ? choice.options.length ? "代わりに捨てる手札を1枚選択" : "選べる支払いカードがありません" : choice.purpose === "ownerDeckBottom" ? "デッキ下へ戻す手札と順番（1番が上）" : choice.purpose === "ownerDiscard" ? "捨てる手札を選択" : choice.purpose === "cost" ? choice.revealCost ? "コストで公開する手札" : "コストで捨てる手札" : choice.purpose === "returnCost" ? "DONデッキへ戻すDON" : choice.purpose === "order" ? "戻す順番" : "カード選択"} {tokens.length} / {choice.max}</p><div className="test-effect-candidates">{choice.options.map(option => {
     const cardId = imageAliases[option.cardId] ?? option.cardId, image = getLocalCardImage(cardId)?.imageUrl;
     const activeReserved = choice.purpose === "returnCost" && option.zone === "activeDon" && activeSelected >= (choice.maxActiveReturn ?? 0);
     return <button key={option.token} role="checkbox" aria-checked={tokens.includes(option.token)} aria-label={option.label ? `${option.label} ${cardId}` : cardId} disabled={disabled || !tokens.includes(option.token) && (tokens.length >= choice.max || activeReserved)}
@@ -16,7 +17,7 @@ export default function V3ChoicePanel({ choice, disabled, onConfirm, imageAliase
       {option.label && <span className="v3-don-choice-label">{option.label}</span>}
       {tokens.includes(option.token) && <b>{tokens.indexOf(option.token) + 1}</b>}
     </button>;
-  })}</div><button className="test-effect-confirm" disabled={disabled || tokens.length < (choice.purpose === "replacementPayment" ? 1 : choice.min) || tokens.length > choice.max} onClick={() => onConfirm(tokens)}>{choice.purpose === "replacementPayment" ? "捨ててKOを防ぐ" : choice.purpose === "order" || choice.purpose === "ownerDeckBottom" ? "順番を確定" : choice.purpose === "ownerDiscard" ? "捨てるカードを確定" : choice.purpose !== "action" ? "支払いカードを確定" : "選択を確定"}</button>
-    {choice.purpose === "replacementPayment" && <button disabled={disabled} onClick={() => onConfirm([])}>置換しない</button>}
+  })}</div><button className="test-effect-confirm" disabled={disabled || tokens.length < (replacement ? 1 : choice.min) || tokens.length > choice.max} onClick={() => onConfirm(tokens)}>{choice.purpose === "replacementPriority" ? "置換を適用" : choice.purpose === "replacementPayment" ? "捨ててKOを防ぐ" : choice.purpose === "order" || choice.purpose === "ownerDeckBottom" ? "順番を確定" : choice.purpose === "ownerDiscard" ? "捨てるカードを確定" : choice.purpose !== "action" ? "支払いカードを確定" : "選択を確定"}</button>
+    {replacement && <button disabled={disabled} onClick={() => onConfirm([])}>この候補を見送る</button>}
     {allowSkip && choice.purpose === "action" && choice.min === 0 && <button disabled={disabled} onClick={() => onConfirm([])}>選ばずに続ける</button>}</div>;
 }

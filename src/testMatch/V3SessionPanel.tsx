@@ -99,7 +99,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
         {frame?.choice?.chooser === view.localPlayerIndex && <V3ChoicePanel key={frame.choice.selectionId} choice={frame.choice} imageAliases={view.imageAliases} disabled={disabled} allowSkip={!!view.mainEvent} onConfirm={tokens => onAction("answer", { tokens })} />}
         {frame?.choice?.purpose === "ownerDiscard" && frame.choice.chooser !== view.localPlayerIndex && <p role="status">相手が捨てる手札を選択中</p>}
         {frame?.choice?.purpose === "ownerDeckBottom" && frame.choice.chooser !== view.localPlayerIndex && <p role="status">相手がデッキ下に戻す手札を選択中</p>}
-        {(frame?.choice?.purpose === "replacement" || frame?.choice?.purpose === "replacementPayment") && frame.choice.chooser !== view.localPlayerIndex && <p role="status">相手が置換効果を選択中</p>}
+        {(frame?.choice?.purpose === "replacement" || frame?.choice?.purpose === "replacementPayment" || frame?.choice?.purpose === "replacementPriority") && frame.choice.chooser !== view.localPlayerIndex && <p role="status">相手が置換効果を選択中</p>}
         <div className="test-effect-actions">
           {view.resolutionActor === view.localPlayerIndex && frame?.status === "ready" && <button disabled={disabled} onClick={() => onAction("advance")}>処理を進める</button>}
           {view.resolutionActor === view.localPlayerIndex && frame?.status === "waitingForWork" && <button disabled={disabled} onClick={() => onAction("work")}>{view.workType ? workLabels[view.workType] : "処理を実行"}</button>}

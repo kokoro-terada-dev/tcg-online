@@ -38,7 +38,7 @@ type Instruction = { type: "CHECK"; predicate: DeepReadonly<Predicate> } | { typ
   { type: "OFFER_PAYMENT"; action: PaymentOffer } | { type: "MODE"; branches: ModeBranch[] } |
   { type: "ENTER" } | { type: "EXIT" } | { type: "JUMP"; to: number } | { type: "TRIGGER_END" } | { type: "END" };
 type ChoiceBase = { kind: "choice"; selectionId: string; chooser: Seat; expiresAt: number };
-type CardChoice = ChoiceBase & { purpose: "action" | "cost" | "returnCost" | "order" | "ownerDiscard" | "ownerDeckBottom" | "replacementPayment"; filteredCost?: true; min: number; max: number; maxActiveReturn: number | null; bindAs: string | null; candidates: { token: string; cardId: string; zone: string; label: string | null; ref: CardObjectRef; candidateId?: string }[] };
+type CardChoice = ChoiceBase & { purpose: "action" | "cost" | "returnCost" | "order" | "ownerDiscard" | "ownerDeckBottom" | "replacementPayment" | "replacementPriority"; filteredCost?: true; min: number; max: number; maxActiveReturn: number | null; bindAs: string | null; candidates: { token: string; cardId: string; zone: string; label: string | null; ref: CardObjectRef; candidateId?: string }[] };
 type SingleChoice = ChoiceBase & { min: 1; max: 1; maxActiveReturn: null };
 type DecisionChoice<P extends "activation" | "payment" | "replacement"> = SingleChoice & { purpose: P; candidates: { token: string; decision: "accepted" | "declined"; label: string }[] };
 type Choice = CardChoice | DecisionChoice<"activation"> | DecisionChoice<"payment"> | DecisionChoice<"replacement"> | (SingleChoice & { purpose: "mode"; candidates: (ModeBranch & { token: string })[] });
@@ -61,7 +61,8 @@ type State = {
   version: "v3-frame.9"; identity: ResolutionIdentity; definitionHash: string; compilerVersion: string; registryHash: string; rulesetVersion: string;
   revision: number; worldRevision: number; pc: number; status: "ready" | "waitingForChoice" | "waitingForWork" | "completed" | "blocked";
   scopes: Record<string, CardObjectRef[]>[]; pending: Choice | WorkRequest | null;
-  replacement?: { work: WorkRequest } & (ReplacementAnswer | { plan: ReplacementPlan; decision: null } | { plans: readonly ReplacementPlan[]; decision: null });
+  replacement?: { work: WorkRequest } & (ReplacementAnswer | { plan: ReplacementPlan; decision: null } |
+    { plans: readonly ReplacementPlan[]; remaining?: readonly ReplacementPlan[]; decision: null });
   appliedReplacements?: { intentId: string; candidateId: string }[];
   costCards: CardObjectRef[] | null; costReturned: CardObjectRef[] | null; paidCostWorkId: string | null;
   costSelected?: CardObjectRef[];
@@ -80,7 +81,7 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 const relative = (actor: Seat, player: "SELF" | "OPPONENT"): Seat => player === "SELF" ? actor : (1 - actor) as Seat;
 function program(card: ApprovedV3Card, effectId: string): Instruction[] {
   const effect = card.definition.effects.find(effect => effect.id === effectId); ensureMove(effect, "v3-effect-not-found");
-  ensureMove(effect.timing.type !== "ON_EVENT" || ["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38"].includes(card.definition.schemaVersion), "v3-conditional-trigger-resolution-deferred-pr06b");
+  ensureMove(effect.timing.type !== "ON_EVENT" || ["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39"].includes(card.definition.schemaVersion), "v3-conditional-trigger-resolution-deferred-pr06b");
   const occurrence = ["ON_EVENT", "ON_BLOCK", "MAIN_START", "TURN_END"].includes(effect.timing.type);
   const code: Instruction[] = [occurrence ? { type: "OCCURRENCE_CHECK" } : { type: "CHECK", predicate: effect.activationConditions }];
   if (effect.optional) code.push({ type: "OPTIONAL" });
@@ -320,7 +321,7 @@ export class V3ResolutionMachine {
           else {
             const cards = this.#bindings(state)[action.cards.ref.slice("bindings.".length)]; ensureMove(cards, "v3-missing-runtime-binding");
             if (!cards.length) {
-              if ((action.type === "MOVE_CARD" || action.type === "PLAY_BY_EFFECT") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38"].includes(this.#card.definition.schemaVersion)) state.lastMoveResult = emptyMoveResult(state.identity, workId, state.worldRevision);
+              if ((action.type === "MOVE_CARD" || action.type === "PLAY_BY_EFFECT") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39"].includes(this.#card.definition.schemaVersion)) state.lastMoveResult = emptyMoveResult(state.identity, workId, state.worldRevision);
               state.pc++; continue;
             }
             if (action.type === "PLAY_BY_EFFECT") {
@@ -386,10 +387,28 @@ export class V3ResolutionMachine {
       min: purpose === "order" ? candidates.length : selector.min, max: purpose === "order" ? candidates.length : selector.max, maxActiveReturn, bindAs, candidates, ...(filteredCost ? { filteredCost: true } : {}) };
     state.status = "waitingForChoice";
   }
+  #offerReplacementTier(state: State, work: WorkRequest, plans: readonly ReplacementPlan[]): void {
+    const priority = Math.min(...plans.map(plan => plan.priority ?? Infinity));
+    const current = plans.filter(plan => plan.priority === priority), first = current[0];
+    ensureMove(first && current.every(plan => plan.chooser === first.chooser), "v3-replacement-tier-mismatch");
+    const candidates: CardChoice["candidates"] = current.flatMap(plan => {
+      const payment = plan.payment, source = plan.cause.source;
+      ensureMove(source, "v3-replacement-source-required");
+      if (!payment) return [{ token: randomUUID(), cardId: plan.sourceCardId, ref: { ...source }, zone: plan.intent.operation.from.zone,
+        candidateId: plan.candidateId, label: plan.sourceLabel + (plan.substitute.to.zone === "hand" ? "：手札へ戻す" : "：トラッシュへ置く") }];
+      return payment.candidates === "unknown" ? [] : payment.candidates.map(row => ({
+        token: randomUUID(), cardId: row.cardId, ref: { ...row.ref }, zone: row.zone, candidateId: plan.candidateId,
+        label: `${plan.sourceLabel}：${row.label ?? payment.label}`
+      }));
+    });
+    state.replacement = { work, plans: structuredClone(current), remaining: structuredClone(plans.filter(plan => plan.priority !== priority)), decision: null };
+    state.pending = { ...this.#singleChoice(state), chooser: first.chooser, purpose: "replacementPriority", min: 0, bindAs: null, candidates };
+    state.status = "waitingForChoice";
+  }
   offerReplacement(requestId: string, expectedRevision: number, plans: readonly ReplacementPlan[]): { replayed: boolean } {
     return this.#command(requestId, expectedRevision, { kind: "offerReplacement", plans }, state => {
       const plan = plans[0];
-      ensureMove(plan && plans.length <= 8 && plans.every(other => other.intent.id === plan.intent.id && other.chooser === plan.chooser) &&
+      ensureMove(plan && plans.length <= 64 && plans.every(other => other.intent.id === plan.intent.id && other.chooser === plan.chooser) &&
         new Set(plans.map(other => other.candidateId)).size === plans.length, "v3-replacement-offer-mismatch");
       const work = state.pending, intent = plan.intent, target = intent.operation.card;
       ensureMove(state.status === "waitingForWork" && work?.kind === "work" && (work.type === "KO" || work.type === "MOVE_CARD") &&
@@ -397,6 +416,7 @@ export class V3ResolutionMachine {
         work.cards[0].generation === target.generation && JSON.stringify(state.identity) === JSON.stringify(intent.identity) &&
         state.worldRevision === intent.worldRevision && this.#environment.revision() === state.worldRevision &&
         !state.replacement && !state.appliedReplacements?.some(row => row.intentId === intent.id), "v3-replacement-intent-mismatch");
+      if (plan.priority !== undefined) { this.#offerReplacementTier(state, work, plans); return; }
       const choice = { ...this.#singleChoice(state), chooser: plan.chooser };
       if (plan.payment) {
         ensureMove(work.type === "KO" && plans.every(option => option.payment), "v3-paid-replacement-ko-only");
@@ -441,16 +461,17 @@ export class V3ResolutionMachine {
         state.replacement = { ...replacement, decision: choice.candidates.find(candidate => selected.has(candidate.token))!.decision };
         state.pending = replacement.work; state.status = "waitingForWork"; return;
       }
-      if (choice.purpose === "replacementPayment") {
+      if (choice.purpose === "replacementPayment" || choice.purpose === "replacementPriority") {
         const replacement = state.replacement, selectedCard = choice.candidates.find(candidate => selected.has(candidate.token));
         ensureMove(replacement && "plans" in replacement, "v3-replacement-intent-mismatch");
+        if (!selectedCard && replacement.remaining?.length) { this.#offerReplacementTier(state, replacement.work, replacement.remaining); return; }
         const plan = selectedCard ? replacement.plans.find(row => row.candidateId === selectedCard.candidateId) : replacement.plans[0];
         const cards = plan?.payment?.candidates;
-        ensureMove(plan && plan.payment && plan.chooser === actor && plan.intent.worldRevision === state.worldRevision &&
-          (!selectedCard || cards !== "unknown" && cards?.some(row => row.ref.instanceId === selectedCard.ref.instanceId &&
+        ensureMove(plan && plan.chooser === actor && plan.intent.worldRevision === state.worldRevision &&
+          (!plan.payment || !selectedCard || cards !== "unknown" && cards?.some(row => row.ref.instanceId === selectedCard.ref.instanceId &&
             row.ref.generation === selectedCard.ref.generation && row.cardId === selectedCard.cardId)), "v3-replacement-payment-mismatch");
         state.replacement = { work: replacement.work, plan, decision: selectedCard ? "accepted" : "declined",
-          ...(selectedCard ? { paymentCard: { ...selectedCard.ref } } : {}) };
+          ...(selectedCard && plan.payment ? { paymentCard: { ...selectedCard.ref } } : {}) };
         state.pending = replacement.work; state.status = "waitingForWork"; return;
       }
       if (choice.purpose === "mode") {
@@ -498,7 +519,7 @@ export class V3ResolutionMachine {
         if (instruction.action.selector.visibility === "PUBLIC") ensureMove(
           cards.every(ref => (this.#environment.targetProtection?.(ref) ?? false) === false), "v3-choice-target-protected");
       }
-      if (choice.purpose === "action" && (["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38"].includes(this.#card.definition.schemaVersion) || ["3.0.0-subset.20", "3.0.0-subset.21"].includes(this.#card.definition.schemaVersion) && this.#card.definition.cardType === "event" && this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)?.timing.type === "MAIN")) {
+      if (choice.purpose === "action" && (["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39"].includes(this.#card.definition.schemaVersion) || ["3.0.0-subset.20", "3.0.0-subset.21"].includes(this.#card.definition.schemaVersion) && this.#card.definition.cardType === "event" && this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)?.timing.type === "MAIN")) {
         const instruction = this.#code[state.pc]; ensureMove(instruction?.type === "SELECT", "v3-choice-program-mismatch");
         const selector = instruction.action.selector, rows = this.#environment.candidates(selector, this.#bindings(state));
         for (const ref of cards) {
@@ -550,7 +571,7 @@ export class V3ResolutionMachine {
           result.rows.some(row => row.event.before?.instanceId === ref.instanceId && row.event.before.generation === ref.generation) ||
           result.prevented?.some(row => row.instanceId === ref.instanceId && row.generation === ref.generation) ||
           result.replaced?.some(row => row.instanceId === ref.instanceId && row.generation === ref.generation)), "v3-move-result-work-mismatch");
-      if (outcome === "applied" && (work.type === "MOVE_CARD" || work.type === "PLAY_BY_EFFECT") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38"].includes(this.#card.definition.schemaVersion)) {
+      if (outcome === "applied" && (work.type === "MOVE_CARD" || work.type === "PLAY_BY_EFFECT") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39"].includes(this.#card.definition.schemaVersion)) {
         ensureMove(result, "v3-move-result-required"); state.lastMoveResult = result;
       }
       if (outcome === "applied") {
