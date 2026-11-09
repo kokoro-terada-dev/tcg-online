@@ -10,6 +10,7 @@ import type { StatEffects } from "./statEffects";
 import { UNKNOWN, createDerivedCardFactsReader, readEventContext, type EventContext } from "./readContext";
 import type { KeywordGrants } from "./keywordEffects";
 import { readRememberedColors, rememberedColors } from "./moveResults";
+import { activationCostSelector, movesActivationSource } from "./activationCosts";
 
 type Scalar = string | number | boolean | null | typeof UNKNOWN;
 export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext, keywordGrants: () => KeywordGrants = () => [], occurrenceAuthorized = false): ResolutionEnvironment {
@@ -128,17 +129,18 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     activationAtOccurrence: () => occurrenceAuthorized ? true : "unknown",
     revision: () => board().revision, now, evaluate,
     peekTop: amount => board().players[identity.actor].deck.slice(0, amount).map(id => ({ instanceId: id!, generation: board().cards[id!]!.generation })),
-    canPayCosts: (costs, discarded, returned) => {
+    canPayCosts: (costs, discarded, returned, selected = null) => {
       const state = board(), actor = identity.actor; let rest = 0, discard = 0, restSource = 0;
       const returns = costs.filter(cost => cost.type === "DON_RETURN");
       if (returns.length > 1) return "unknown";
       const returnCost = returns[0], returnCount = returnCost?.count ?? 0;
-      for (const cost of costs) { if (cost.type === "REST_DON") rest += cost.count; else if (cost.type === "DISCARD_HAND") discard += cost.count; else if (cost.type === "REST_SOURCE") restSource++; else if (cost.type !== "DON_RETURN") return "unknown"; }
-      if (restSource) {
+      const filtered = activationCostSelector(costs), moveSource = movesActivationSource(costs);
+      for (const cost of costs) { if (cost.type === "REST_DON") rest += cost.count; else if (cost.type === "DISCARD_HAND") discard += cost.count; else if (cost.type === "REST_SOURCE") restSource++; }
+      if (restSource || moveSource) {
         try {
           const card = getCard(state, identity.source), at = location(state, card.instanceId);
-          if (restSource !== 1 || card.rotated || !card.faceUp || card.owner !== actor || card.controller !== actor || at.player !== actor ||
-            !["leader", "character", "stage"].includes(at.zone) || card.kind !== at.zone || !visibleTo(state, card, at, 0) || !visibleTo(state, card, at, 1)) return false;
+          if (restSource > 1 || restSource && (card.rotated || moveSource) || !card.faceUp || card.owner !== actor || card.controller !== actor || at.player !== actor ||
+            !(moveSource ? ["character", "stage"] : ["leader", "character", "stage"]).includes(at.zone) || card.kind !== at.zone || !visibleTo(state, card, at, 0) || !visibleTo(state, card, at, 1)) return false;
         } catch { return false; }
       }
       const eligible = (ref: Readonly<CardObjectRef>) => {
@@ -149,6 +151,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       const eligibleDon = (ref: Readonly<CardObjectRef>) => {
         try {
           const card = getCard(state, ref), at = location(state, ref.instanceId);
+          if (moveSource && card.attachedTo?.instanceId === identity.source.instanceId && card.attachedTo.generation === identity.source.generation) return false;
           return !!returnCost && returnCost.from.some(zone => zone === at.zone) && at.player === actor && card.kind === "don" && card.owner === actor && card.controller === actor && card.faceUp &&
             visibleTo(state, card, at, 0) && visibleTo(state, card, at, 1);
         } catch { return false; }
@@ -159,10 +162,22 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       const activeReturned = returned === null ? Math.max(0, returnCount - nonActive) : returned.filter(ref => {
         try { return location(state, getCard(state, ref).instanceId).zone === "activeDon"; } catch { return false; }
       }).length;
-      if (rest + discard + restSource + returnCount > 64 || discard > 50 || active < rest + activeReturned || candidates.length < returnCount) return false;
+      const pickedCount = filtered?.min ?? 0;
+      if (rest + discard + restSource + returnCount + pickedCount + Number(moveSource) > 64 || discard > 50 || active < rest + activeReturned || candidates.length < returnCount) return false;
       if (returned !== null && (returned.length !== returnCount || new Set(returned.map(ref => ref.instanceId)).size !== returnCount || !returned.every(eligibleDon))) return false;
-      if (state.players[actor].hand.filter(id => eligible({ instanceId: id!, generation: state.cards[id!]!.generation })).length < discard) return false;
-      return discarded === null || discarded.length === discard && new Set(discarded.map(ref => ref.instanceId)).size === discard && discarded.every(eligible);
+      if (state.players[actor].hand.filter(id => eligible({ instanceId: id!, generation: state.cards[id!]!.generation })).length < discard + pickedCount) return false;
+      const discardedIds = new Set(discarded?.map(ref => ref.instanceId));
+      if (discarded !== null && (discarded.length !== discard || discardedIds.size !== discard || !discarded.every(eligible))) return false;
+      if (!filtered) return selected === null || selected.length === 0;
+      const matches = new Map<string, number>();
+      for (const row of environment.candidates(filtered, {})) {
+        if (discardedIds.has(row.ref.instanceId) || filtered.excludeSource && row.ref.instanceId === identity.source.instanceId && row.ref.generation === identity.source.generation) continue;
+        const result = evaluate(filtered.filters, {}, row.ref);
+        if (result === "unknown") return "unknown";
+        if (result) matches.set(row.ref.instanceId, row.ref.generation);
+      }
+      return matches.size >= pickedCount && (selected === null || selected.length === pickedCount && new Set(selected.map(ref => ref.instanceId)).size === pickedCount &&
+        selected.every(ref => matches.get(ref.instanceId) === ref.generation));
     },
     candidates: (selector, bindings) => {
       const state = board();
@@ -192,7 +207,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
           const parentAt = location(state, card.attachedTo.instanceId);
           label = parentAt.zone === "leader" ? "リーダー付与DON" : `キャラ${state.players[at.player].character.indexOf(card.attachedTo.instanceId) + 1}付与DON`;
         }
-        return [{ ref: { instanceId: id, generation: card.generation }, cardId: card.cardId, owner: card.owner, controller: card.controller, zone: at.zone, kind: card.kind, faceUp: card.faceUp, visibleTo: viewers, ...(label ? { label } : {}) }];
+        return [{ ref: { instanceId: id, generation: card.generation }, cardId: card.cardId, owner: card.owner, controller: card.controller, zone: at.zone, kind: card.kind, faceUp: card.faceUp, visibleTo: viewers, ...(label ? { label } : {}), ...(card.attachedTo ? { attachedTo: { ...card.attachedTo } } : {}) }];
       });
     },
   };

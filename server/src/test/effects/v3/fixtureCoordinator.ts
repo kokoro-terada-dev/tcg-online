@@ -12,6 +12,7 @@ import type { ApprovedV3Card } from "./approval";
 import { isApprovedV3Card } from "./approval";
 import { label, supportsV3RuntimeProfile } from "./compiler";
 import { fixtureEnvironment } from "./fixtureEnvironment";
+import { activationCostSelector, movesActivationSource } from "./activationCosts";
 import { V3ResolutionMachine, type ResolutionIdentity, type WorkRequest } from "./resolution";
 import { addStatEffects, pruneStatEffects, validateStatEffects, type StatEffects } from "./statEffects";
 import { addKeywordGrants, pruneKeywordGrants, validateKeywordGrants, type KeywordGrants } from "./keywordEffects";
@@ -94,7 +95,7 @@ export class V3FixtureCoordinator {
         event.after?.instanceId === source.instanceId && event.after.cardId === source.cardId && event.after.generation === source.generation && event.before.generation + 1 === source.generation, "v3-life-trigger-authorization");
     } else if (eventUse) {
       const event = eventUse.event;
-      ensureMove(effect.kind === "activated" && source.kind === "event" && (mainUse ? (card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent(effect) : ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29"].includes(card.definition.schemaVersion) && isInteractiveMainEvent(effect)) && !battle && checkTiming(progression, identity.actor, "mainEffect").allowed :
+      ensureMove(effect.kind === "activated" && source.kind === "event" && (mainUse ? (card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent(effect) : ["3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30"].includes(card.definition.schemaVersion) && isInteractiveMainEvent(effect)) && !battle && checkTiming(progression, identity.actor, "mainEffect").allowed :
         effect.timing.type === "COUNTER" && battle?.step === "counter" && battle.battleId === options.counterEventCause!.battleId && battle.defender === identity.actor) &&
         at.zone === "trash" && event.kind === "moved" && event.from?.player === identity.actor && event.from.zone === "hand" && event.to?.player === identity.actor && event.to.zone === "trash" &&
         event.before?.kind === "event" && event.before.owner === identity.actor && event.before.controller === identity.actor && event.before.cardId === source.cardId && event.before.instanceId === source.instanceId &&
@@ -103,7 +104,7 @@ export class V3FixtureCoordinator {
       ensureMove(effect.kind === "triggered" && effect.timing.type === (boundary?.type ?? trigger.type), "v3-fixture-trigger-type");
       if (trigger.type === "ON_EVENT") {
         const record = trigger.observation;
-        ensureMove(["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29"].includes(card.definition.schemaVersion) && isTriggerObservation(record) && record.result === true && record.status === "PENDING" &&
+        ensureMove(["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30"].includes(card.definition.schemaVersion) && isTriggerObservation(record) && record.result === true && record.status === "PENDING" &&
           record.key.length === 64 && record.eventId === trigger.eventId && record.context.effectController === identity.actor &&
           record.effectId === identity.effectId && record.source.instanceId === source.instanceId && record.source.generation === source.generation &&
           validateObservedSource(record, movement, new Map(definitions.map(card => [card.definition.cardId, card]))) === "CURRENT", "v3-fixture-observed-authorization");
@@ -123,7 +124,7 @@ export class V3FixtureCoordinator {
     } else ensureMove(effect.kind === "activated" && effect.timing.type === "MAIN" && source.kind !== "event" && !battle, "v3-fixture-main-authorization");
     this.#checkEvents = options.checkEvents;
     this.#board = freezeMovement(structuredClone(movement)); this.#progression = freezeMovement(structuredClone(progression));
-    if (definitions.some(card => ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29"].includes(card.definition.schemaVersion) || card.definition.effects.some(effect => effect.timing.type === "ON_EVENT"))) trackMovementOccurrences(this.#board);
+    if (definitions.some(card => ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30"].includes(card.definition.schemaVersion) || card.definition.effects.some(effect => effect.timing.type === "ON_EVENT"))) trackMovementOccurrences(this.#board);
     this.#identity = freezeMovement(structuredClone(identity)); this.#card = card; this.#key = Uint8Array.from(options.signingKey); this.#now = options.now ?? Date.now;
     this.#facts = pinMasterFacts(movement, { master: options.master, numericPolicy: "certifiedUnmodified" });
     const sourceEvent = trigger && "event" in trigger ? trigger.event : eventUse?.event ?? lifeUse?.event;
@@ -186,9 +187,9 @@ export class V3FixtureCoordinator {
         if (!(error instanceof MovementError)) throw error;
         machine.settleWork(requestId, expected.frameRevision, work.workId, "rejected", draft.board.revision); return;
       }
-      const result = ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29"].includes(this.#card.definition.schemaVersion) && (work.type === "MOVE_CARD" || work.type === "PLAY_BY_EFFECT") ? captureMoveResult(draft.board, candidate, this.#identity, work.workId, work.cards,
+      const result = ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30"].includes(this.#card.definition.schemaVersion) && (work.type === "MOVE_CARD" || work.type === "PLAY_BY_EFFECT") ? captureMoveResult(draft.board, candidate, this.#identity, work.workId, work.cards,
         (state, ref, viewer) => createDerivedCardFactsReader({ board: () => state, definitions: new Map(this.#definitions.map(card => [card.definition.cardId, card])),
-          master: this.#facts, statEffects: () => draft.statEffects, keywordGrants: () => draft.keywordGrants, activePlayer: this.#progression.activePlayer, counterPower: this.#counterPower })(ref, viewer), ["3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29"].includes(this.#card.definition.schemaVersion)) : undefined;
+          master: this.#facts, statEffects: () => draft.statEffects, keywordGrants: () => draft.keywordGrants, activePlayer: this.#progression.activePlayer, counterPower: this.#counterPower })(ref, viewer), ["3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30"].includes(this.#card.definition.schemaVersion)) : undefined;
       draft.board = candidate.state; draft.events.push(...candidate.events);
       draft.statEffects = pruneStatEffects(candidate.state, candidate.statEffects ?? draft.statEffects);
       draft.keywordGrants = pruneKeywordGrants(candidate.state, candidate.keywordGrants ?? draft.keywordGrants);
@@ -212,18 +213,24 @@ export class V3FixtureCoordinator {
       return { ...result, ...next };
     } else if (work.type === "PAY_COSTS") {
       let amount = 0, discardCount = 0, restSource = 0;
+      const filtered = activationCostSelector(work.costs), moveSource = movesActivationSource(work.costs), picked = work.selected ?? [];
+      if (filtered || moveSource) {
+        const environment = fixtureEnvironment(() => board, this.#identity, this.#card, this.#facts, this.#now, this.#definitions, () => statEffects, this.#progression.activePlayer, this.#counterPower, this.#readContext, () => keywordGrants, this.#occurrenceAuthorized);
+        ensureMove(picked.length === (filtered?.min ?? 0) && environment.canPayCosts?.(work.costs, work.discarded, work.returned, picked) === true, "v3-fixture-unpayable");
+      }
       const returnCosts = work.costs.filter(cost => cost.type === "DON_RETURN"), returnCost = returnCosts[0], returnCount = returnCost?.count ?? 0;
       ensureMove(returnCosts.length <= 1, "v3-fixture-multiple-don-return-costs");
       for (const cost of work.costs) {
         if (cost.type === "REST_DON") amount += cost.count;
         else if (cost.type === "DISCARD_HAND") discardCount += cost.count;
         else if (cost.type === "REST_SOURCE") restSource++;
-        else if (cost.type === "DON_RETURN") continue;
+        else if (cost.type === "DON_RETURN" || cost.type === "REVEAL_CARDS" || cost.type === "MOVE_AS_COST") continue;
         else ensureMove(false, "v3-fixture-unsupported-cost");
       }
       const returned = new Set(work.returned.map(ref => ref.instanceId));
       const activeDon = board.players[actor].activeDon.filter(id => !returned.has(id!));
-      ensureMove(Number.isSafeInteger(amount + discardCount) && amount + discardCount + restSource + returnCount > 0 && amount + discardCount + restSource + returnCount <= 64 && restSource <= 1 && activeDon.length >= amount &&
+      const operationCount = amount + discardCount + restSource + returnCount + picked.length + Number(moveSource);
+      ensureMove(Number.isSafeInteger(operationCount) && operationCount > 0 && operationCount <= 64 && restSource <= 1 && activeDon.length >= amount &&
         returned.size === returnCount && work.returned.length === returnCount &&
         work.discarded.length === discardCount && new Set(work.discarded.map(ref => ref.instanceId)).size === discardCount, "v3-fixture-unpayable");
       if (restSource) {
@@ -236,7 +243,8 @@ export class V3FixtureCoordinator {
         const card = board.cards[id!]!; ensureMove(card.kind === "don" && card.owner === actor && card.controller === actor && !card.rotated, "v3-fixture-don-unavailable");
         operations.push({ kind: "setRest", card: { instanceId: card.instanceId, generation: card.generation }, rotated: true });
       }
-      for (const ref of work.discarded) {
+      const reveal = work.costs.some(cost => cost.type === "REVEAL_CARDS");
+      for (const ref of [...work.discarded, ...(reveal ? [] : picked)]) {
         const card = getCard(board, ref), from = location(board, card.instanceId);
         ensureMove(from.zone === "hand" && from.player === actor && card.owner === actor && card.controller === actor && ["character", "stage", "event"].includes(card.kind) && visibleTo(board, card, from, actor) && !visibleTo(board, card, from, (1 - actor) as 0 | 1), "v3-fixture-discard-cost-unavailable");
         operations.push({ kind: "move", card: ref, from, to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "COST_PAYMENT" });
@@ -247,6 +255,8 @@ export class V3FixtureCoordinator {
           visibleTo(board, card, from, 0) && visibleTo(board, card, from, 1), "v3-fixture-return-cost-unavailable");
         operations.push({ kind: "move", card: ref, from, to: { player: actor, zone: "donDeck", position: "bottom", faceUp: false, rotated: false }, cause: "COST_PAYMENT" });
       }
+      if (moveSource) operations.push({ kind: "move", card: this.#identity.source, from: location(board, this.#identity.source.instanceId), to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "COST_PAYMENT" });
+      if (reveal) for (const ref of picked) operations.push({ kind: "reveal", card: ref, scopeId: this.#identity.resolutionId, viewers: [0, 1] });
     } else if (work.type === "LOOK_TOP") {
       ensureMove(work.cards.length > 0 && work.cards.length <= 50 && work.cards.every((ref, index) => board.players[actor].deck[index] === ref.instanceId), "v3-fixture-look-top-only");
       for (const ref of work.cards) {
