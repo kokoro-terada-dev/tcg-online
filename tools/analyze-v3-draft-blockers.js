@@ -4,12 +4,10 @@ import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { ledgerFromCsv } from "./build-v3-review-ledger.js";
 import { normalizeV3Gap } from "./analyze-v3-draft-gaps.js";
-import { collectProbes } from "./analyze-v3-coverage.js";
+import { collectProbes, v3DraftRegistry } from "./analyze-v3-coverage.js";
 import { csv } from "./audit-effect-cards.js";
 import { resolveReviewOutput } from "./review-v3-catalog.js";
 
-// The findings below describe the audited implementation, not any future Registry.
-const registry = "731fa079caef72803c33c5221aa0d423c61196b3752102408985cd6c2510e852";
 const categories = ["generator", "runtime", "interpretation", "data", "unknown"];
 const statuses = ["complete", "partial", "unconvertible", "unassessed"];
 const fields = ["text", "triggerText"];
@@ -20,7 +18,7 @@ const printedRequired = { CHARACTER: ["コスト", "パワー"], LEADER: ["パ�
 
 function indexTrace(trace, ledger, version) {
   assert(trace.version === `v3-draft-generator.${version}` && trace.sourceCsvSha256 === ledger.sourceSha256 &&
-    trace.registryHash === registry && trace.cards.length === ledger.cards.length &&
+    trace.registryHash === v3DraftRegistry(trace.version) && trace.cards.length === ledger.cards.length &&
     trace.totals.sourceCards === ledger.cards.length && trace.totals.selectedCards === ledger.cards.length, "Expected a full pinned CSV and Registry trace");
   const index = new Map(trace.cards.map(card => [card.cardId, card]));
   const counts = Object.fromEntries(statuses.map(status => [status, 0]));
@@ -68,7 +66,7 @@ function spanFindings(variant, span, probes) {
   }
   if (span.field === "triggerText" && variant.cardType === "character" && label === "トリガー" &&
     /(?:の場合、|[：:])このカードを登場させる。$/u.test(body)) {
-    add("runtime", "trigger-self-play", "Trigger source is in resolving, but PLAY_BY_EFFECT requires hand; prefix not classified");
+    add("runtime", "trigger-self-play", "Conditional or paid self-play is not admitted by PLAY_TRIGGER_SOURCE; prefix not classified");
   }
   if (/(?:^|[、：:。】〗])ドン[!！]{2}デッキからドン[!！]{2}(?:[1-9]|10)枚までを、?(?:アクティブ|レスト)で追加する。/u.test(raw)) {
     add("runtime", "optional-add-don", "ADD_DON is fixed-count and fails on shortage; no DON-deck count ref or selectable DON-deck source");
@@ -129,7 +127,8 @@ function tally(rows, key) {
 
 export function analyzeV3DraftBlockers(bytes, previous, current) {
   const ledger = ledgerFromCsv(bytes);
-  const before = indexTrace(previous, ledger, 2), after = indexTrace(current, ledger, 3);
+  const prior = current.version === "v3-draft-generator.4" ? 3 : 2;
+  const before = indexTrace(previous, ledger, prior), after = indexTrace(current, ledger, prior + 1);
   const byCard = new Map();
   for (const row of ledger.rows) {
     if (!byCard.has(row.cardId)) byCard.set(row.cardId, []);
@@ -171,7 +170,7 @@ export function analyzeV3DraftBlockers(bytes, previous, current) {
     const [id] = features;
     soloFeatures.set(id, (soloFeatures.get(id) ?? 0) + 1);
   }
-  const summary = { version: "v3-draft-blockers.1", executable: false, sourceCsvSha256: ledger.sourceSha256, registryHash: registry,
+  const summary = { version: "v3-draft-blockers.1", executable: false, sourceCsvSha256: ledger.sourceSha256, registryHash: current.registryHash,
     cohort: Object.fromEntries(statuses.slice(1).map(status => [status, current.totals.counts[status]])), spans,
     categories: categories.map(id => byCategory.find(row => row.id === id) ?? { id, spans: 0, cardRecords: 0, cards: 0 }),
     features: tally(findings, row => row.feature).map(row => ({ ...row, onlyFindingCards: soloFeatures.get(row.id) ?? 0 })), newlyUnassessed,
@@ -184,7 +183,7 @@ export function analyzeV3DraftBlockers(bytes, previous, current) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const [source, before, current, output] = process.argv.slice(2);
-    assert(process.argv.length === 6, "Usage: analyze-v3-draft-blockers.js <source.csv> <pr20-generation.json> <pr21-generation.json> <new-report-dir>");
+    assert(process.argv.length === 6, "Usage: analyze-v3-draft-blockers.js <source.csv> <baseline-generation.json> <current-generation.json> <new-report-dir>");
     const trace = file => {
       assert(fs.statSync(file).size <= 64 * 1024 * 1024, "Trace exceeds 64 MiB");
       return JSON.parse(fs.readFileSync(file, "utf8"));

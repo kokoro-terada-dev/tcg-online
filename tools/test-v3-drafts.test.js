@@ -22,6 +22,29 @@ const csv = rows => Buffer.from([SOURCE_COLUMNS, ...rows.map(row => SOURCE_COLUM
 const entry = (generated, id) => generated.candidates.cards.find(card => card.cardId === id);
 const trace = (generated, id) => generated.trace.cards.find(card => card.cardId === id);
 
+test("only exact unconditional character or stage self-play receives the new profile", () => {
+  const rows = [
+    card("SELF-PLAY", "【登場時】カード1枚を引く。", { "トリガー": "【トリガー】このカードを登場させる。" }),
+    card("SELF-STAGE", "-", { "種類": "STAGE", "パワー": "-", "属性": "-", "トリガー": "〖トリガー〗このカードを登場させる。" }),
+    card("SELF-PAID", "-", { "トリガー": "【トリガー】ドン!!-1：このカードを登場させる。" }),
+    card("SELF-CONDITIONAL", "-", { "トリガー": "【トリガー】自分のライフが2枚以下の場合、このカードを登場させる。" }),
+    card("SELF-MULTILINE", "-", { "トリガー": "【トリガー】このカードを登場させる。\n未解釈処理。" }),
+    card("UNCHANGED", "【登場時】カード1枚を引く。")
+  ];
+  const bytes = csv(rows), generated = generateV3Drafts(ledgerFromCsv(bytes));
+  for (const id of ["SELF-PLAY", "SELF-STAGE"]) {
+    const { definition } = entry(generated, id);
+    assert.equal(definition.schemaVersion, "3.0.0-subset.45");
+    assert.deepEqual(definition.effects.at(-1).actions.map(a => a.type), ["PLAY_TRIGGER_SOURCE"]);
+    assert.equal(definition.reviewStatus, "needs_review");
+  }
+  for (const id of ["SELF-PAID", "SELF-CONDITIONAL", "SELF-MULTILINE"]) assert.equal(entry(generated, id).definition, undefined);
+  assert.equal(entry(generated, "UNCHANGED").definition.schemaVersion, "3.0.0-subset.44");
+  const coverage = analyzeV3Coverage(loadReviewedV3Catalog(), bytes, { candidates: generated.candidates });
+  assert.equal(coverage.counts.candidate, 3);
+  assert.equal(coverage.counts.approved, 0);
+});
+
 test("exact keywords and independent draws preserve every body and trigger span without granting approval", () => {
   const text = "【ブロッカー】\r\n【登場時】カード1枚を引く。\n〖KO時〗カード2枚を引く。";
   const trigger = "【トリガー】カード1枚を引く。";

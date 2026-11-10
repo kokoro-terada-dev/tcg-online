@@ -14,7 +14,9 @@ function fixture(...rows) {
   const bytes = Buffer.from([SOURCE_COLUMNS, ...rows.map(r => SOURCE_COLUMNS.map(field => r[field] ?? ""))]
     .map(values => values.map(v => `"${v.replaceAll('"', '""')}"`).join(",")).join("\n"));
   const current = generateV3Drafts(ledgerFromCsv(bytes)).trace;
-  return { bytes, previous: { ...structuredClone(current), version: "v3-draft-generator.2" }, current };
+  const previous = { ...structuredClone(current), version: "v3-draft-generator.3",
+    registryHash: "731fa079caef72803c33c5221aa0d423c61196b3752102408985cd6c2510e852" };
+  return { bytes, previous, current };
 }
 
 test("counts only audited mechanics, keeps unknown compounds and distinguishes cards from spans and prints", () => {

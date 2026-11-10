@@ -13,13 +13,16 @@ const { compileV3CardJson, supportsV3RuntimeProfile } = require("../server/dist/
 const { dataArray, dataObject } = require("../server/dist/test/movement/state.js");
 const inventory = require("../docs/card-effect-supported-operations.json");
 const probeRegistry = "731fa079caef72803c33c5221aa0d423c61196b3752102408985cd6c2510e852";
-const probesEnabled = inventory.registryHash === probeRegistry && supportsV3RuntimeProfile({
-  definition: { schemaVersion: "3.0.0-subset.44" }, compilerVersion: inventory.compilerVersion, registryHash: probeRegistry
+const probesEnabled = inventory.profiles["3.0.0-subset.44"]?.registryHash === probeRegistry && supportsV3RuntimeProfile({
+  definition: { schemaVersion: "3.0.0-subset.44" }, compilerVersion: inventory.profiles["3.0.0-subset.44"]?.compilerVersion, registryHash: probeRegistry
 });
+export const v3DraftRegistry = version => version === "v3-draft-generator.4" ? inventory.profiles["3.0.0-subset.45"].registryHash : probeRegistry;
+const bareTriggerSelfPlay = ["【トリガー】このカードを登場させる。", "〖トリガー〗このカードを登場させる。"];
+export const isBareTriggerSelfPlay = raw => bareTriggerSelfPlay.includes(raw.trim());
 const probes = [
   { feature: "trigger-self-play", label: "ライフトリガーから自身を登場",
-    quotes: ["【トリガー】このカードを登場させる。", "〖トリガー〗このカードを登場させる。"], wholeTrigger: true,
-    evidence: "dsl.ts PLAY_BY_EFFECT: hand only; fixtureCoordinator.ts FINISH_LIFE_TRIGGER: sends resolving card to trash" },
+    quotes: bareTriggerSelfPlay, wholeTrigger: true,
+    evidence: "Through subset.44, PLAY_BY_EFFECT accepts hand only and FINISH_LIFE_TRIGGER trashes the resolving card" },
   { feature: "effect-deck-shuffle", label: "効果によるデッキのシャッフル",
     quotes: ["デッキをシャッフルする。", "デッキに戻しシャッフルする。"],
     evidence: "dsl.ts ActionMap / resolution.ts WORK: setup shuffling is not an effect action" },
@@ -43,7 +46,7 @@ function candidatesFor(input, ledger) {
   if (input === undefined) return new Map();
   dataObject(input, ["version", "sourceCsvSha256", "registryHash", "cards"]);
   assert(input.version === "v3-coverage-candidates.1" && input.sourceCsvSha256 === ledger.sourceSha256, "Candidate CSV SHA-256 mismatch");
-  assert(input.registryHash === inventory.registryHash, "Candidate Registry SHA-256 mismatch");
+  assert([probeRegistry, inventory.registryHash].includes(input.registryHash), "Candidate Registry SHA-256 mismatch");
   dataArray(input.cards, ledger.cards.length);
   const source = new Map(ledger.cards.map(card => [card.cardId, card]));
   const entries = new Map();
@@ -55,7 +58,7 @@ function candidatesFor(input, ledger) {
     if (Object.hasOwn(entry, "generation")) {
       const info = entry.generation;
       dataObject(info, ["version", "status", "noEffect", "recognized", "unresolved"]);
-      assert(["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3"].includes(info.version) && ["complete", "partial", "unconvertible", "unassessed"].includes(info.status) &&
+      assert(["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3", "v3-draft-generator.4"].includes(info.version) && ["complete", "partial", "unconvertible", "unassessed"].includes(info.status) &&
         typeof info.noEffect === "boolean" && [info.recognized, info.unresolved].every(n => Number.isSafeInteger(n) && n >= 0) &&
         (info.status === "complete") === Object.hasOwn(entry, "definition") &&
         (info.status !== "complete" || info.unresolved === 0) &&
@@ -111,6 +114,7 @@ export function analyzeV3Coverage(reviewed, sourceBytes, { auditLedger, candidat
   const ledger = ledgerFromCsv(sourceBytes);
   if (auditLedger !== undefined) assert(isDeepStrictEqual(ledger, auditLedger), "Audit ledger does not match regenerated CSV ledger");
   const entries = candidatesFor(candidates, ledger);
+  const registryHash = candidates?.registryHash ?? inventory.registryHash;
   const diff = compareReviewedV3Ledger(reviewed, ledger), rowsByCard = new Map();
   for (const row of ledger.rows) {
     if (!rowsByCard.has(row.cardId)) rowsByCard.set(row.cardId, []);
@@ -126,7 +130,8 @@ export function analyzeV3Coverage(reviewed, sourceBytes, { auditLedger, candidat
       approval.displayIds.every(id => displayIds.includes(id));
     if (approval && !currentApproval) reasons.push("approval-source-unconfirmed");
     const unapprovedDisplays = displayIds.filter(id => !approval?.displayIds.includes(id));
-    const findings = [...collectProbes(variants), ...(entry?.findings ?? [])];
+    const findings = [...collectProbes(variants).filter(finding => finding.feature !== "trigger-self-play" || registryHash === probeRegistry ||
+      !raw.every(line => ["CHARACTER", "STAGE"].includes(line.raw["種類"]))), ...(entry?.findings ?? [])];
     const draft = checkDraft(entry, raw, candidate);
     if (draft.conversion === "source_mismatch") reasons.push("candidate-source-mismatch");
     if (draft.runtime === "profile_mismatch") reasons.push("runtime-profile-mismatch");
@@ -152,7 +157,7 @@ export function analyzeV3Coverage(reviewed, sourceBytes, { auditLedger, candidat
   }
   const gaps = [...impact].map(([feature, count]) => ({ feature, label: labels.get(feature) ?? feature, count }))
     .sort((a, b) => b.count - a.count || lexical(a.feature, b.feature));
-  return { sourceCsvSha256: ledger.sourceSha256, registryHash: inventory.registryHash, total: cards.length, counts, gaps, cards, ledgerVerified: auditLedger !== undefined,
+  return { sourceCsvSha256: ledger.sourceSha256, registryHash, total: cards.length, counts, gaps, cards, ledgerVerified: auditLedger !== undefined,
     reviewedMissingFromCsv: diff.cards.filter(row => !row.candidate).length, probesEnabled };
 }
 

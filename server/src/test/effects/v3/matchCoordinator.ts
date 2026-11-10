@@ -55,6 +55,7 @@ export class V3SyntheticMatchCoordinator {
   #expiryTokens: readonly string[] = [];
   #battleCounters: BattleCounters = []; #lifeDecision: LifeDecision | null = null;
   #damageSettling = false;
+  #lifePlayTriggers: readonly ScheduledTrigger[] = [];
   #reviewed: boolean;
   #revision = 0; #busy = false; #key: Uint8Array; #master: MasterSnapshot | null; #now: () => number;
   constructor(options: Readonly<{ mode: "syntheticNoAbilities" | "reviewedLimited"; movement: MovementState; progression: Progression; cards: readonly ApprovedV3Card[];
@@ -101,6 +102,16 @@ export class V3SyntheticMatchCoordinator {
     const turn = this.#board.turnNumber;
     try {
       apply();
+      if (!this.#progression.battle || this.#progression.outcome) {
+        if (!this.#progression.outcome && this.#lifePlayTriggers.length) {
+          this.#triggers = freezeMovement([...this.#triggers, ...this.#lifePlayTriggers.filter(({ source, actor }) => {
+            const card = this.#board.cards[source.instanceId];
+            return card?.generation === source.generation && (card.kind === "character" || card.kind === "stage") &&
+              this.#board.players[actor][card.kind].includes(source.instanceId);
+          })]);
+        }
+        this.#lifePlayTriggers = [];
+      }
       if (this.#board.turnNumber !== turn) this.#replacementUsage = [];
       const battleId = this.#progression.outcome ? null : this.#progression.battle?.battleId ?? null;
       this.#statEffects = retainBattleStatEffects(this.#statEffects, battleId);
@@ -117,13 +128,13 @@ export class V3SyntheticMatchCoordinator {
     ensureMove(allowTriggers || !this.#triggers.length, "v3-match-triggers-pending");
   }
   #checkNewEvents = (events: readonly MovementEvent[], effectOverride?: Readonly<{ resolutionId: string; effectId: string }>): void => {
-    ensureMove(this.#triggers.length + movementTriggerCandidates(events, this.#cards).length <= 128, "v3-trigger-queue-limit");
+    ensureMove(this.#triggers.length + this.#lifePlayTriggers.length + movementTriggerCandidates(events, this.#cards).length <= 128, "v3-trigger-queue-limit");
     ensureMove(this.#observationDraft !== null, "v3-trigger-observation-transaction-required");
     this.#observationDraft = observeConditionalTriggers(this.#observationDraft, events, this.#cards, this.#progression.activePlayer, this.#statEffects, this.#keywordGrants,
       ref => this.#battleCounters.filter(counter => counter.target.instanceId === ref.instanceId && counter.target.generation === ref.generation).reduce((sum, counter) => sum + counter.amount, 0),
       effectOverride ?? (this.#active ? { resolutionId: this.#active.resolutionId, effectId: this.#active.effectId } : undefined));
     const queued = new Set(this.#triggers.flatMap(entry => entry.cause.type === "ON_EVENT" ? [entry.cause.observation.key] : []));
-    ensureMove(this.#triggers.length + movementTriggerCandidates(events, this.#cards).length + this.#observationDraft.records.filter(record => record.status === "PENDING" && !queued.has(record.key)).length <= 128, "v3-trigger-queue-limit");
+    ensureMove(this.#triggers.length + this.#lifePlayTriggers.length + movementTriggerCandidates(events, this.#cards).length + this.#observationDraft.records.filter(record => record.status === "PENDING" && !queued.has(record.key)).length <= 128, "v3-trigger-queue-limit");
   };
   #reconcileObserved(): void {
     let ledger = this.#observationDraft!;
@@ -212,7 +223,10 @@ export class V3SyntheticMatchCoordinator {
       if (bodyUse) this.#usage.set(bodyUse, 1);
       this.#replacementUsage = active.coordinator.replacementUsageForCoordinator();
       const triggers = enqueueMovementTriggers(snapshot.movementEvents.slice(active.eventCount), this.#cards);
-      this.#triggers = freezeMovement([...this.#triggers, ...triggers]); active.eventCount = snapshot.movementEvents.length;
+      // Resolve the life trigger during damage, but not its newly triggered ON_PLAY.
+      const fromLife = (entry: ScheduledTrigger) => entry.cause.type === "ON_PLAY" && entry.cause.event.from?.zone === "resolving";
+      this.#lifePlayTriggers = freezeMovement([...this.#lifePlayTriggers, ...triggers.filter(fromLife)]);
+      this.#triggers = freezeMovement([...this.#triggers, ...triggers.filter(entry => !fromLife(entry))]); active.eventCount = snapshot.movementEvents.length;
       this.#board = snapshot.movement; this.#progression = snapshot.progression; this.#statEffects = snapshot.statEffects; this.#keywordGrants = snapshot.keywordGrants;
       if (frame.activationCommitted && !active.counted) {
         this.#usage.set(active.usageKey, (this.#usage.get(active.usageKey) ?? 0) + 1); active.counted = true;
@@ -382,10 +396,10 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
-      const supported = ["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
+      const supported = ["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
         card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent : isInteractiveMainEvent;
       return card.definition.effects.filter(supported).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
         enabled: this.#board.players[actor].activeDon.length >= cost && (!effect.usageLimit ||
@@ -664,6 +678,7 @@ export class V3SyntheticMatchCoordinator {
   }
   snapshotForCoordinator() {
     return freezeMovement({ context: this.context(), movement: this.#board, progression: this.#progression, active: this.#active?.coordinator.snapshotForCoordinator() ?? null,
+      ...(this.#lifePlayTriggers.length ? { deferredLifePlayTriggers: this.#lifePlayTriggers } : {}),
       usage: [...this.#usage.entries()], replacementUsage: [...this.#replacementUsage], replacementHistory: [...this.#replacementHistory], receipts: structuredClone(this.#receipts), history: [...this.#history], ruleEvents: this.#ruleEvents, statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, pendingTriggers: this.#triggers, triggerObservations: this.#observations, boundaryTokens: this.#boundaryTokens, expiryTokens: this.#expiryTokens, phaseContinuation: this.#phaseContinuation, battleCounters: this.#battleCounters, pendingLife: this.#lifeDecision, damageEffectsPending: this.#damageSettling });
   }
   toJSON(): never { throw new Error("v3-match-server-only"); }

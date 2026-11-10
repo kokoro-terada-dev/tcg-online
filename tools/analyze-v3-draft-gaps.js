@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { parseCsv } from "./build-card-master.js";
 import { csv } from "./audit-effect-cards.js";
 import { resolveReviewOutput } from "./review-v3-catalog.js";
+import { v3DraftRegistry } from "./analyze-v3-coverage.js";
 
 const lexical = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const assert = (condition, message) => { if (!condition) throw Error(message); };
@@ -47,10 +48,12 @@ function diagnosis(group) {
 }
 
 export function compareV3DraftRuns(before, after, beforeCsv, afterCsv) {
-  const versions = ["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3"];
+  const versions = ["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3", "v3-draft-generator.4"];
   const baseline = versions.indexOf(before.version);
+  const compatible = after.version === versions[3] ? before.registryHash === v3DraftRegistry(before.version) &&
+    after.registryHash === v3DraftRegistry(after.version) : before.registryHash === after.registryHash;
   assert(baseline >= 0 && versions.indexOf(after.version) > baseline &&
-    before.sourceCsvSha256 === after.sourceCsvSha256 && before.registryHash === after.registryHash &&
+    before.sourceCsvSha256 === after.sourceCsvSha256 && compatible &&
     before.totals.sourceCards === after.totals.sourceCards && before.cards.length === before.totals.sourceCards &&
     after.cards.length === after.totals.sourceCards, "Compare complete reports from the same CSV and Registry");
   const current = indexCards(after.cards), oldCoverage = coverage(beforeCsv, before.sourceCsvSha256), newCoverage = coverage(afterCsv, after.sourceCsvSha256);
