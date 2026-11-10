@@ -45,10 +45,20 @@ function candidatesFor(input, ledger) {
   const source = new Map(ledger.cards.map(card => [card.cardId, card]));
   const entries = new Map();
   for (const entry of input.cards) {
-    dataObject(entry, ["cardId", "variantSha256"], ["definition", "findings", "supportedEvidence"]);
+    dataObject(entry, ["cardId", "variantSha256"], ["definition", "findings", "supportedEvidence", "generation"]);
     const card = source.get(entry.cardId);
     const variant = card?.variants.find(row => row.pairSha256 === entry.variantSha256);
     assert(variant && !entries.has(entry.cardId), "Unknown or duplicate candidate card/variant");
+    if (Object.hasOwn(entry, "generation")) {
+      const info = entry.generation;
+      dataObject(info, ["version", "status", "noEffect", "recognized", "unresolved"]);
+      assert(info.version === "v3-draft-generator.1" && ["complete", "partial", "unconvertible", "unassessed"].includes(info.status) &&
+        typeof info.noEffect === "boolean" && [info.recognized, info.unresolved].every(n => Number.isSafeInteger(n) && n >= 0) &&
+        (info.status === "complete") === Object.hasOwn(entry, "definition") &&
+        (info.status !== "complete" || info.unresolved === 0) &&
+        (!info.noEffect || info.status === "complete" && info.recognized === 0 &&
+          [variant.text, variant.triggerText].every(text => absence(text) === "")), "Invalid generated coverage metadata");
+    }
     if (entry.supportedEvidence !== undefined) {
       assert(typeof entry.supportedEvidence === "string" && entry.supportedEvidence.trim() && entry.supportedEvidence.length <= 1000, "Invalid supported evidence");
     }
@@ -66,7 +76,7 @@ function candidatesFor(input, ledger) {
   return entries;
 }
 
-function collectProbes(variants) {
+export function collectProbes(variants) {
   if (!probesEnabled) return [];
   return variants.flatMap(variant => probes.flatMap(probe => Object.keys(fields).flatMap(field => {
     const quote = probe.quotes.find(value => variant[field].includes(value));
@@ -125,7 +135,8 @@ export function analyzeV3Coverage(reviewed, sourceBytes, { auditLedger, candidat
       sourceCsvSha256: ledger.sourceSha256, variants, sourceUrls: sorted(raw.map(line => line.raw["出典URL"]).filter(Boolean)),
       approval: approval ? { ...approval, sourceConfirmed: Boolean(currentApproval), compiler: "verified_by_catalog",
         runtime: supportsV3RuntimeProfile(reviewed.catalog.get(row.cardId)) ? "profile_compatible_not_executed" : "profile_mismatch" } : null, unapprovedDisplays,
-      draft, findings, reasons: sorted(reasons), supportedEvidence: entry?.supportedEvidence ?? null }];
+      draft, findings, reasons: sorted(reasons), supportedEvidence: entry?.supportedEvidence ?? null,
+      ...(entry?.generation ? { generation: entry.generation } : {}) }];
   });
   const counts = Object.fromEntries(Object.keys(classes).map(key => [key, 0])), impact = new Map();
   for (const card of cards) {
@@ -143,13 +154,13 @@ export function analyzeV3Coverage(reviewed, sourceBytes, { auditLedger, candidat
 export function renderV3Coverage(report) {
   const json = value => JSON.stringify(value);
   const table = [["card_id", "card_names", "display_ids", "classification", "source_csv_sha256", "raw_variants", "source_urls",
-    "approval", "unapproved_display_ids", "dsl_conversion", "compiler", "runtime", "draft_details", "findings", "review_reasons", "supported_evidence"],
+    "approval", "unapproved_display_ids", "dsl_conversion", "compiler", "runtime", "draft_details", "findings", "review_reasons", "supported_evidence", "generation"],
     ...report.cards.map(card => [card.cardId, json(card.names), json(card.displayIds), classes[card.classification], card.sourceCsvSha256,
       json(card.variants), json(card.sourceUrls), json(card.approval), json(card.unapprovedDisplays),
       card.draft.conversion === "not_supplied" && card.approval?.sourceConfirmed ? "reviewed_definition" : card.draft.conversion,
       card.draft.compiler === "not_checked" && card.approval?.sourceConfirmed ? card.approval.compiler : card.draft.compiler,
       card.draft.runtime === "not_checked" && card.approval?.sourceConfirmed ? card.approval.runtime : card.draft.runtime,
-      json(card.draft), json(card.findings), json(card.reasons), card.supportedEvidence ?? ""])];
+      json(card.draft), json(card.findings), json(card.reasons), card.supportedEvidence ?? "", card.generation ? json(card.generation) : ""])];
   const markdown = ["# カード効果対応状況", "", `- CSV SHA-256: \`${report.sourceCsvSha256}\``,
     `- Registry SHA-256: \`${report.registryHash}\``,
     `- カード番号: ${report.total}件。入力にない既存承認: ${report.reviewedMissingFromCsv}件。`,
