@@ -101,7 +101,8 @@ export class ReviewedV3Setup {
           if (progression.phase === "main") break;
           progression = applySystemEvent(progression, progression.revision, { kind: "advancePhase", phaseToken: work.token });
         }
-        game = new V3SyntheticMatchCoordinator({ mode: "reviewedLimited", reviewed: this.#reviewed, cards: this.#reviewed.cards,
+        const deckIds = new Set(Object.values(board.cards).filter(card => card.kind !== "don").map(card => card.cardId));
+        game = new V3SyntheticMatchCoordinator({ mode: "reviewedLimited", reviewed: this.#reviewed, cards: this.#reviewed.cards.filter(card => deckIds.has(card.definition.cardId)),
           movement: board, progression, signingKey: this.#key, master: null });
       }
       this.#board = board; this.#decisions = decisions; this.#game = game;

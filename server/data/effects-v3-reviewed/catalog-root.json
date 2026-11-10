@@ -1,0 +1,11 @@
+{
+  "version": "v3-reviewed-root.1",
+  "rulesetVersion": "reviewed-limited.20261029.1",
+  "legacy": {
+    "file": "manifest.json",
+    "sha256": "410327e1ebbc2f04fca646d6c406fbaf7b7b3ab921e754ccb9fbb4b7d8a45777",
+    "cardCount": 14
+  },
+  "shards": [],
+  "rootHash": "4125c3c1f649373204da9e1096284858a36e8153455816ca2f46d221d6c1b6ed"
+}
