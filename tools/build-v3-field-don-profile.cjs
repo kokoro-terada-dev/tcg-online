@@ -23,14 +23,15 @@ emit("schemas/effect-v3-subset47.schema.json", definition);
 const file = "docs/card-effect-supported-operations.json", inventory = read(file), registries = builtinV3Registries(schema);
 const profile = { compilerVersion: compilerVersionForSchema(schema), registryHash: v3RegistryHash(registries),
   registries: Object.fromEntries(Object.entries(registries).map(([key, registry]) => [key, registry.manifest()])) };
+const newer = Object.keys(inventory.profiles).some(version => Number(version.split(".").at(-1)) > 47);
 inventory.profiles[schema] = profile;
-Object.assign(inventory, { basedOnCommit: "ca7c063", ...profile });
+if (!newer) Object.assign(inventory, { basedOnCommit: "ca7c063", ...profile });
 const legacyCompare = inventory.operations.find(op => op.category === "predicate" && op.name === "compare" && op.availableIn.includes(previous));
 for (const op of inventory.operations) if (op !== legacyCompare && op.availableIn.includes(previous) && !op.availableIn.includes(schema)) op.availableIn.push(schema);
-const compare = { ...legacyCompare, handlerVersion: "4", availableIn: [schema],
+const index = inventory.operations.findIndex(op => op.category === "predicate" && op.name === "compare" && op.availableIn.includes(schema));
+const compare = { ...legacyCompare, handlerVersion: "4", availableIn: inventory.operations[index]?.availableIn ?? [schema],
   schemaRef: "../schemas/effect-v3-subset47.schema.json#/$defs/predicate", valueReferences: references,
   runtimeConstraints: "DON count references read public state only. Field includes cost area plus given DON; given DON is neither active nor rested. Unavailable or inconsistent counts are UNKNOWN. Continuous and replacement conditions remain out of scope.",
   example: { type: "compare", left: { ref: "SELF.don.fieldCount" }, op: "lte", right: { ref: "OPPONENT.don.fieldCount" } } };
-inventory.operations = inventory.operations.filter(op => !(op.category === "predicate" && op.name === "compare" && op.availableIn.includes(schema)));
-inventory.operations.push(compare);
+if (index < 0) inventory.operations.push(compare); else inventory.operations[index] = compare;
 emit(file, inventory);

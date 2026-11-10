@@ -58,7 +58,7 @@ function indexTrace(trace, ledger, version) {
 const timings = "(?:登場時|アタック時|相手のアタック時|KO時|起動メイン|メイン|カウンター|トリガー)";
 const parseTiming = new RegExp(`^(?:【(${timings})】|〖(${timings})〗)(.*)$`, "u");
 const optionalDon = new RegExp(`(?:^|[、：:。】〗])${optionalDonBody}`, "u");
-function spanFindings(variant, span, probes, optionalDonSupported) {
+function spanFindings(variant, span, probes, optionalDonSupported, conditionalTriggerPlay) {
   const raw = span.text.trim(), timing = parseTiming.exec(raw), body = timing?.[3];
   const label = timing?.[1] ?? timing?.[2];
   const out = [];
@@ -68,7 +68,10 @@ function spanFindings(variant, span, probes, optionalDonSupported) {
   }
   if (span.field === "triggerText" && variant.cardType === "character" && label === "トリガー" &&
     /(?:の場合、|[：:])このカードを登場させる。$/u.test(body)) {
-    add("runtime", "trigger-self-play", "Conditional or paid self-play is not admitted by PLAY_TRIGGER_SOURCE; prefix not classified");
+    const held = conditionalTriggerPlay && !/[:：]/u.test(body);
+    add(held ? "unknown" : "runtime", "trigger-self-play", held ?
+      "Standalone public conditions are supported; the full printed span is still unresolved" :
+      "PLAY_TRIGGER_SOURCE does not support this trigger prefix; check payment separately");
   }
   if (optionalDonSupported ? optionalDon.test(raw) :
     /(?:^|[、：:。】〗])ドン[!！]{2}デッキからドン[!！]{2}(?:[1-9]|10)枚までを、?(?:アクティブ|レスト)で追加する。/u.test(raw)) {
@@ -132,7 +135,7 @@ function tally(rows, key) {
 
 export function analyzeV3DraftBlockers(bytes, previous, current) {
   const ledger = ledgerFromCsv(bytes);
-  const prior = current.version === "v3-draft-generator.7" ? 6 : current.version === "v3-draft-generator.6" ? 5 : current.version === "v3-draft-generator.5" ? 4 : current.version === "v3-draft-generator.4" ? 3 : 2;
+  const prior = current.version === "v3-draft-generator.8" ? 7 : current.version === "v3-draft-generator.7" ? 6 : current.version === "v3-draft-generator.6" ? 5 : current.version === "v3-draft-generator.5" ? 4 : current.version === "v3-draft-generator.4" ? 3 : 2;
   const optionalDonSupported = prior >= 4;
   const before = indexTrace(previous, ledger, prior), after = indexTrace(current, ledger, prior + 1);
   const byCard = new Map();
@@ -159,7 +162,7 @@ export function analyzeV3DraftBlockers(bytes, previous, current) {
         spans++;
         const { field, start, end, text: raw } = span, variantSha256 = variant.pairSha256;
         const at = { cardId, status: draft.status, variantSha256, field, start, end, raw, location: `${cardId}:${variantSha256}:${field}:${start}:${end}` };
-        for (const finding of spanFindings(variant, span, probes, optionalDonSupported)) findings.push({ ...at, ...finding });
+        for (const finding of spanFindings(variant, span, probes, optionalDonSupported, prior >= 7)) findings.push({ ...at, ...finding });
       }
     }
   }

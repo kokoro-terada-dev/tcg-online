@@ -130,12 +130,16 @@ test("field DON generation keeps subject, exact boundaries, conjunctions and unr
   assert.equal(held.slice(unparsed.start, unparsed.end), "未確認処理。");
 });
 
-test("only exact unconditional character or stage self-play receives the new profile", () => {
+test("unconditional self-play retains its old profile; only exact safe conditions use the new profile", () => {
   const rows = [
     card("SELF-PLAY", "【登場時】カード1枚を引く。", { "トリガー": "【トリガー】このカードを登場させる。" }),
     card("SELF-STAGE", "-", { "種類": "STAGE", "パワー": "-", "属性": "-", "トリガー": "〖トリガー〗このカードを登場させる。" }),
     card("SELF-PAID", "-", { "トリガー": "【トリガー】ドン!!-1：このカードを登場させる。" }),
     card("SELF-CONDITIONAL", "-", { "トリガー": "【トリガー】自分のライフが2枚以下の場合、このカードを登場させる。" }),
+    card("SELF-TRAIT-LIFE", "-", { "トリガー": "【トリガー】自分のリーダーが特徴《魚人族》か《人魚族》を持ち、相手のライフが3枚以下の場合、このカードを登場させる。" }),
+    card("SELF-DON", "-", { "トリガー": "【トリガー】自分の場のドン‼が相手の場のドン‼の枚数以下の場合、このカードを登場させる。" }),
+    card("SELF-UNCONFIRMED", "-", { "トリガー": "【トリガー】お互いのライフの合計枚数が5枚以下の場合、このカードを登場させる。" }),
+    card("SELF-DRAW-FIRST", "-", { "トリガー": "【トリガー】カード1枚を引く。その後、自分のライフが1枚以下の場合、このカードを登場させる。" }),
     card("SELF-MULTILINE", "-", { "トリガー": "【トリガー】このカードを登場させる。\n未解釈処理。" }),
     card("UNCHANGED", "【登場時】カード1枚を引く。")
   ];
@@ -146,10 +150,21 @@ test("only exact unconditional character or stage self-play receives the new pro
     assert.deepEqual(definition.effects.at(-1).actions.map(a => a.type), ["PLAY_TRIGGER_SOURCE"]);
     assert.equal(definition.reviewStatus, "needs_review");
   }
-  for (const id of ["SELF-PAID", "SELF-CONDITIONAL", "SELF-MULTILINE"]) assert.equal(entry(generated, id).definition, undefined);
+  const conditional = entry(generated, "SELF-CONDITIONAL").definition;
+  assert.equal(conditional.schemaVersion, "3.0.0-subset.48");
+  assert.deepEqual(conditional.effects[0].activationConditions, { type: "all", conditions: [] });
+  assert.deepEqual(conditional.effects[0].resolutionConditions, { type: "compare", left: { ref: "SELF.lifeCount" }, op: "lte", right: 2 });
+  const [trait, life] = entry(generated, "SELF-TRAIT-LIFE").definition.effects[0].resolutionConditions.conditions;
+  assert.deepEqual(trait.query.filters.values, ["魚人族", "人魚族"]);
+  assert.equal(trait.query.filters.match, "ANY");
+  assert.deepEqual(life, { type: "compare", left: { ref: "OPPONENT.lifeCount" }, op: "lte", right: 3 });
+  assert.deepEqual(entry(generated, "SELF-DON").definition.effects[0].resolutionConditions, {
+    type: "compare", left: { ref: "SELF.don.fieldCount" }, op: "lte", right: { ref: "OPPONENT.don.fieldCount" }
+  });
+  for (const id of ["SELF-PAID", "SELF-UNCONFIRMED", "SELF-DRAW-FIRST", "SELF-MULTILINE"]) assert.equal(entry(generated, id).definition, undefined);
   assert.equal(entry(generated, "UNCHANGED").definition.schemaVersion, "3.0.0-subset.44");
   const coverage = analyzeV3Coverage(loadReviewedV3Catalog(), bytes, { candidates: generated.candidates });
-  assert.equal(coverage.counts.candidate, 3);
+  assert.equal(coverage.counts.candidate, 6);
   assert.equal(coverage.counts.approved, 0);
 });
 

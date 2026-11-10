@@ -83,6 +83,7 @@ export const contracts = {
   "field-don-comparison": ["runtime", ["query:QUERY_CARDS", "predicate:COUNT", "action:ADD_DON_UP_TO", "timing:ON_EVENT"], "dsl.ts Value and QueryMap cannot read field DON totals. ADD_DON_UP_TO reads the DON deck only; DON_RETURNED is a separate event."],
   "field-don-context-unconfirmed": ["unknown", ["predicate:compare"], "Subset.47 reads field DON totals. Review the full comparison, timing, other conditions and actions before treating this remaining span as representable."],
   "trigger-self-play-condition": ["runtime", ["timing:TRIGGER", "action:PLAY_TRIGGER_SOURCE"], "compiler.ts v3-trigger-play-must-be-unconditional excludes conditional self-play; the unqualified form is already implemented."],
+  "trigger-self-play-condition-unconfirmed": ["unknown", ["timing:TRIGGER", "action:PLAY_TRIGGER_SOURCE"], "Subset.48 supports a standalone self-play with a public condition. Remaining condition shapes, preceding actions or variant differences need separate verification."],
   "trigger-self-play-payment": ["runtime", ["timing:TRIGGER", "action:PLAY_TRIGGER_SOURCE", "cost:DON_RETURN"], "compiler.ts v3-trigger-additional-activation-unresolved rejects TRIGGER activation costs; do not move the cost into the body."],
   "counter-hand-payment": ["runtime", ["timing:COUNTER", "cost:MOVE_AS_COST", "action:OFFER_PAYMENT"], "compiler.ts and counterEvents.ts allow additional activation DON_RETURN only; in-effect OFFER_PAYMENT has different timing."],
   "complex-payment-sequence": ["unknown", ["action:SEQUENCE", "action:IF", "action:OFFER_PAYMENT"], "A payment prefix and sequential/conditional operations are visible. Existing building blocks do not prove the whole sentence is expressible."],
@@ -94,7 +95,7 @@ export const contracts = {
   "other-trigger-body": ["runtime", ["action:CALL_EFFECT_BODY", "timing:TRIGGER"], "compiler.ts restricts same-card life-trigger body calls to an event's MAIN; the printed ON_PLAY/ON_KO/COUNTER body is a different timing."]
 };
 
-export function diagnoseV3DraftSpan({ field, cardType, raw, structure, reason, inherited = [], fieldDonSupported = false }) {
+export function diagnoseV3DraftSpan({ field, cardType, raw, structure, reason, inherited = [], fieldDonSupported = false, conditionalTriggerPlay = false }) {
   const { head, body, signals, multipleTimings } = structure;
   const out = inherited.filter(row => row.category !== "unknown" || row.feature === "optional-add-don");
   const add = feature => {
@@ -111,7 +112,8 @@ export function diagnoseV3DraftSpan({ field, cardType, raw, structure, reason, i
       const inheritedIndex = out.findIndex(row => row.feature === "trigger-self-play");
       if (inheritedIndex >= 0) out.splice(inheritedIndex, 1);
     }
-    if (/場合、/u.test(body)) add("trigger-self-play-condition");
+      if (/場合、/u.test(body) && !(conditionalTriggerPlay && pay))
+        add(conditionalTriggerPlay ? "trigger-self-play-condition-unconfirmed" : "trigger-self-play-condition");
     if (pay) add("trigger-self-play-payment");
   }
   if (multipleTimings) {

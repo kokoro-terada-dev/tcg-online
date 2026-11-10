@@ -26,6 +26,11 @@ test("counts only audited mechanics, keeps unknown compounds and distinguishes c
     { "トリガー": "【トリガー】自分のライフが2枚以下の場合、このカードを登場させる。" });
   const b = row("SYN-B", "【登場時】コスト4以下のキャラ1枚までを、持ち主の手札に戻す。\n【登場時】カード1枚を引く。その後、未解釈処理。");
   const { bytes, current: trace, generated } = fixture(a, { ...a, "表示ID": "SYN-A_p1" }, b);
+  // This fixture represents traces before PR28, when the trigger condition was still unresolved.
+  const pre28 = generated.cards.find(card => card.cardId === "SYN-A");
+  const life = pre28.variants[0].spans.find(span => span.field === "triggerText");
+  Object.assign(life, { status: "unknown" }); delete life.pattern;
+  pre28.recognized--; pre28.unresolved++; generated.totals.unresolvedSpans++;
   const current = structuredClone(trace), draft = current.cards.find(card => card.cardId === "SYN-A");
   const span = draft.variants[0].spans[1];
   // PR23 and PR24 did not recognize the cost modifier; keep that baseline explicit.

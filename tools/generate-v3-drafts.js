@@ -7,12 +7,13 @@ import { analyzeV3Coverage, collectProbes, isBareTriggerSelfPlay, v3DraftRegistr
 import { reviewedPrintedDifferences } from "./review-v3-catalog.js";
 import { csv } from "./audit-effect-cards.js";
 import { draftSelect as select, emitV3Structure, parseV3Structure, structurePattern } from "./v3-draft-structure.js";
+import { classifyTriggerSelfPlay } from "./v3-trigger-self-play.js";
 
 const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
 const { compileV3CardJson, supportsV3RuntimeProfile } = require("../server/dist/test/effects/v3/compiler.js");
 const { isInteractiveMainEvent } = require("../server/dist/test/effects/v3/simpleMainEvent.js");
-const version = "v3-draft-generator.7";
+const version = "v3-draft-generator.8";
 const registryHash = v3DraftRegistry(version);
 const keywords = new Map([
   ["ブロッカー", ["BLOCKER", "(相手のアタックの後、このカードをレストにし、アタックの対象をこのカードにできる)"]],
@@ -96,6 +97,12 @@ function parseSpan(span, cardType, gaps, previous, raw) {
     if (type === "TRIGGER" && (cardType === "character" || cardType === "stage") && isBareTriggerSelfPlay(raw)) {
       return { ...span, status: "recognized", pattern: "trigger-self-play", effect: { ...effect, actions: [{ type: "PLAY_TRIGGER_SOURCE", sourceSpan }] } };
     }
+    if (type === "TRIGGER" && (cardType === "character" || cardType === "stage") && raw.trim() === text.trim()) {
+      const { predicate, pattern } = classifyTriggerSelfPlay(body);
+      if (predicate) return { ...span, status: "recognized", pattern: `pr28-trigger-self-play-${pattern}`, effect: {
+        ...effect, resolutionConditions: predicate, actions: [{ type: "PLAY_TRIGGER_SOURCE", sourceSpan }]
+      } };
+    }
     if (parsed) return { ...span, status: "recognized", ...(parsed.pattern ? { pattern: parsed.pattern } : {}), effect: { ...effect, actions: parsed.actions } };
     if (type === "TRIGGER" && cardType === "event" && /^(?:このカードの【メイン】効果を発動する。|このカードの〖メイン〗効果を発動する。)$/u.test(body)) {
       return { ...span, status: "unknown", features: [], unparsed: [{ ...sourceSpan, reason: "main-body-unconfirmed" }], pendingMainCall: effect };
@@ -158,10 +165,11 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const triggerPlay = variant.spans.some(span => span.pattern === "trigger-self-play");
   const optionalDon = variant.spans.some(span => span.structure?.operations.some(node => node.kind === "optional-don"));
   const fieldDon = variant.spans.some(span => span.pattern?.startsWith("pr27-field-don-"));
+  const conditionalTriggerPlay = variant.spans.some(span => span.pattern?.startsWith("pr28-trigger-self-play-"));
   const newTargets = variant.spans.some(span => span.pattern?.startsWith("pr25-"));
   return {
-    schemaVersion: fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
-    cardVersion: fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
+    schemaVersion: conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
+    cardVersion: conditionalTriggerPlay ? "draft.pr28.1" : fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
       variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",
     keywords: variant.spans.flatMap(span => span.keyword ? [span.keyword] : []),

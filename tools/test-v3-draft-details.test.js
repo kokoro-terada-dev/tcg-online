@@ -25,7 +25,7 @@ const ids = tokens => tokens.map(token => token.id);
 test("PR27 classifies the same held comparison as unconfirmed context, not a missing count primitive", () => {
   const { bytes, previous, current } = fixture(row("SYN-DON", "【登場時】自分の場のドン‼が3枚以上ある場合、自分のデッキをシャッフルする。"));
   const before = analyzeV3DraftDetails(bytes, previous, current);
-  const newer = generateV3Drafts(ledgerFromCsv(bytes)).trace;
+  const newer = { ...generateV3Drafts(ledgerFromCsv(bytes)).trace, version: "v3-draft-generator.7", registryHash: v3DraftRegistry("v3-draft-generator.7") };
   const after = analyzeV3DraftDetails(bytes, current, newer);
   assert.ok(before.spans[0].findings.some(f => f.category === "runtime" && f.feature === "field-don-comparison"));
   assert.ok(after.spans[0].findings.some(f => f.category === "unknown" && f.feature === "field-don-context-unconfirmed"));
