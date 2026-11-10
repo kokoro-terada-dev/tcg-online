@@ -9,6 +9,8 @@ export type Gate =
   | Readonly<{ kind: "choice"; resolutionId: string; controller: Player; selectionId: string; chooser: Player }>;
 export type Battle = Readonly<{
   battleId: string; attacker: Player; defender: Player; source: Readonly<CardObjectRef>; target: Readonly<CardObjectRef>;
+  blocker?: Readonly<CardObjectRef>;
+  lastRetarget?: Readonly<{ previousTarget: Readonly<CardObjectRef>; source: Readonly<CardObjectRef>; effectId: string; actor: Player }>;
   step: BattleStep; decisionComplete: boolean; settled: boolean;
 }>;
 export type Progression = Readonly<{
@@ -25,7 +27,8 @@ export type SystemEvent =
   | { kind: "settlePhase"; phaseToken: string }
   | { kind: "advancePhase"; phaseToken: string }
   | { kind: "startBattle"; battleId: string; source: CardObjectRef; target: CardObjectRef }
-  | { kind: "redirectBattle"; battleId: string; target: CardObjectRef }
+  | { kind: "redirectBattle"; battleId: string; target: CardObjectRef; recordBlocker?: true }
+  | { kind: "retargetBattleByEffect"; battleId: string; step: "attack" | "counter"; resolutionId: string; actor: Player; source: CardObjectRef; effectId: string; target: CardObjectRef }
   | { kind: "settleBattleStep"; battleId: string; step: BattleStep }
   | { kind: "advanceBattle"; battleId: string; step: BattleStep; participantsPresent: boolean }
   | { kind: "beginResolution"; resolutionId: string; controller: Player }

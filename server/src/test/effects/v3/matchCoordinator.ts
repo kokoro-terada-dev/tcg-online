@@ -382,10 +382,10 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
-      const supported = card.definition.schemaVersion === "3.0.0-subset.41" ? isShareableMainEvent :
+      const supported = ["3.0.0-subset.41", "3.0.0-subset.42"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
         card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent : isInteractiveMainEvent;
       return card.definition.effects.filter(supported).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
         enabled: this.#board.players[actor].activeDon.length >= cost && (!effect.usageLimit ||
@@ -448,7 +448,7 @@ export class V3SyntheticMatchCoordinator {
   }
   resolveDamage(actor: Seat, requestId: string, expected: V3MatchContext) {
     return this.#run(actor, requestId, expected, { kind: "damage" }, () => {
-      this.#battleIdle(); const result = damage(this.#board, this.#progression, actor, this.#cards, this.#statEffects, this.#battleCounters, hash(`${this.#board.matchId}:${requestId}:damage`), this.#now(), true);
+      this.#battleIdle(); const result = damage(this.#board, this.#progression, actor, this.#cards, this.#statEffects, this.#battleCounters, hash(`${this.#board.matchId}:${requestId}:damage`), this.#now(), true, this.#keywordGrants);
       this.#acceptBattle(result, this.#battleCounters, result.pendingLife);
     });
   }

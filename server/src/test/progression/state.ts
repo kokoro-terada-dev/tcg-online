@@ -12,7 +12,14 @@ export function requireId(value: unknown): asserts value is string {
 export function phaseToken(turn: number, phase: Phase): string { return `turn:${turn}:${phase}`; }
 export function freezeState(value: Progression): Progression {
   if (value.battle) {
-    Object.freeze(value.battle.source); Object.freeze(value.battle.target); Object.freeze(value.battle);
+    Object.freeze(value.battle.source); Object.freeze(value.battle.target);
+    if (value.battle.blocker) Object.freeze(value.battle.blocker);
+    if (value.battle.lastRetarget) {
+      Object.freeze(value.battle.lastRetarget.previousTarget);
+      Object.freeze(value.battle.lastRetarget.source);
+      Object.freeze(value.battle.lastRetarget);
+    }
+    Object.freeze(value.battle);
   }
   Object.freeze(value.gate);
   if (value.outcome) Object.freeze(value.outcome);

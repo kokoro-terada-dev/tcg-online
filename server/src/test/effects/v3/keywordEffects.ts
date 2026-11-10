@@ -15,7 +15,7 @@ export function validateKeywordGrants(board: MovementState, grants: KeywordGrant
     const card = getCard(board, grant.target), at = location(board, card.instanceId);
     ensureMove(typeof grant.id === "string" && /^[a-f0-9]{64}$/.test(grant.id) && !ids.has(grant.id) && card.faceUp && card.kind === at.zone &&
       (card.kind === "character" || card.kind === "leader") && (grant.actor === 0 || grant.actor === 1) &&
-      ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"].includes(grant.keyword) &&
+      ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED", "BANISH"].includes(grant.keyword) &&
       (card.kind === "character" || grant.keyword !== "RUSH" && grant.keyword !== "RUSH_CHARACTER"), "v3-invalid-keyword-grant"); ids.add(grant.id);
   }
   return freezeMovement(structuredClone(grants));

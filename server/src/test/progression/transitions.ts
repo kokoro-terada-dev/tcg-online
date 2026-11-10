@@ -60,6 +60,17 @@ export function applySystemEvent(state: Progression, expectedRevision: number, e
     ensure(state.gate.kind === "resolving" && state.gate.resolutionId === event.resolutionId, "Wrong or unfinished resolution");
     return commit(state, { gate: { kind: "idle" } });
   }
+  if (event.kind === "retargetBattleByEffect") {
+    const battle = battleAt(state, event.battleId, event.step);
+    ensure(state.phase === "main" && state.phaseSettled && !battle.settled && battle.defender === event.actor &&
+      (event.step === "attack" || !battle.decisionComplete) &&
+      state.gate.kind === "resolving" && state.gate.controller === event.actor && state.gate.resolutionId === event.resolutionId,
+    "Effect cannot change this battle target");
+    const target = cardRef(event.target), source = cardRef(event.source);
+    requireId(event.effectId);
+    ensure(target.instanceId !== battle.source.instanceId, "Source and target must differ");
+    return commit(state, { battle: { ...battle, target, lastRetarget: { previousTarget: battle.target, source, effectId: event.effectId, actor: event.actor } } });
+  }
   idle(state);
   if (event.kind === "settlePhase" || event.kind === "advancePhase") {
     ensure(!state.battle && event.phaseToken === state.phaseToken, "Wrong phase checkpoint");
@@ -91,7 +102,7 @@ export function applySystemEvent(state: Progression, expectedRevision: number, e
     ensure(!battle.decisionComplete && !battle.settled, "Block decision already completed");
     const target = cardRef(event.target);
     ensure(target.instanceId !== battle.source.instanceId, "Source and target must differ");
-    return commit(state, { battle: { ...battle, target, decisionComplete: true } });
+    return commit(state, { battle: { ...battle, target, ...(event.recordBlocker ? { blocker: target } : {}), decisionComplete: true } });
   }
   if (event.kind === "advanceBattle") {
     const battle = battleAt(state, event.battleId, event.step);

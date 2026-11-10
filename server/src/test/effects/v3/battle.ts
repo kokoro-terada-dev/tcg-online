@@ -10,15 +10,16 @@ import type { ApprovedV3Card } from "./approval";
 import type { StatEffects } from "./statEffects";
 import type { KeywordGrants } from "./keywordEffects";
 import { createDerivedCardFactsReader, UNKNOWN } from "./readContext";
-import { protectionRules } from "./protectionRules";
+import { hasProtection, protectionReader, protectionRules } from "./protectionRules";
+import type { ResolutionIdentity } from "./resolution";
 
 type Ref = Readonly<CardObjectRef>;
 type Seat = 0 | 1;
 export type BattleCounters = readonly Readonly<{ target: Ref; amount: number }>[];
 export type LifeDecision = Readonly<{ battleId: string; resolutionId: string; selectionId: string; token: string; defender: Seat; card: Ref; expiresAt: number }>;
 export const V3_BASE_BATTLE_RULES = {
-  version: "v3-base-battle.6", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
-  reviewedAt: "2026-10-29", clauses: ["6-5-5", "6-5-6", "7-1", "7-1-1-3", "7-1-1-4", "7-1-3", "7-1-4", "7-1-5", "8-4-5", "8-6-1", "10-1-1", "10-1-4", "10-1-5", "10-1-6", "10-1-7", "10-2-1", "10-2-5", "10-2-16", "10-2-17"],
+  version: "v3-base-battle.7", source: "https://www.onepiece-cardgame.com/pdf/rule_comprehensive.pdf?20260828=",
+  reviewedAt: "2026-11-10", clauses: ["6-5-5", "6-5-6", "7-1", "7-1-1-3", "7-1-1-4", "7-1-3", "7-1-4", "7-1-5", "8-4-5", "8-6-1", "10-1-1", "10-1-3", "10-1-4", "10-1-5", "10-1-6", "10-1-7", "10-2-1", "10-2-5", "10-2-16", "10-2-17"],
 } as const;
 function field(board: MovementState, ref: Ref, player: Seat) {
   const card = getCard(board, ref), at = location(board, card.instanceId);
@@ -31,6 +32,30 @@ function fieldRows(board: MovementState, player: Seat, definitions: ReadonlyMap<
     if (!card.faceUp || card.owner !== player || card.controller !== player || !definition || definition.cardType !== card.kind || definition.baseStats.power === null) return [];
     return [{ card: { instanceId: id, generation: card.generation }, cardId: card.cardId }];
   });
+}
+export function retargetBattle(board: MovementState, progression: Progression, identity: ResolutionIdentity, timing: string,
+  target: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>): Progression {
+  const battle = progression.battle;
+  const step = timing === "ON_OPPONENT_ATTACK" ? "attack" : timing === "COUNTER" ? "counter" : null;
+  ensureMove(step && battle?.step === step && battle.defender === identity.actor && board.turnNumber === progression.turnNumber &&
+    identity.matchId === board.matchId && !battle.settled && (step === "attack" || !battle.decisionComplete) &&
+    progression.gate.kind === "resolving" && progression.gate.resolutionId === identity.resolutionId &&
+    progression.gate.controller === identity.actor, "v3-battle-retarget-window");
+  field(board, battle.source, battle.attacker);
+  field(board, battle.target, battle.defender);
+  field(board, target, battle.defender);
+  const source = getCard(board, identity.source), at = location(board, source.instanceId);
+  ensureMove(source.owner === identity.actor && source.controller === identity.actor && source.faceUp && at.player === identity.actor &&
+    (step === "counter" ? source.kind === "event" && at.zone === "trash" : (at.zone === "leader" || at.zone === "character") && at.zone === source.kind),
+  "v3-battle-retarget-source");
+  if (hasProtection(definitions)) {
+    const reader = protectionReader(board, definitions, progression.activePlayer);
+    ensureMove(reader(target, identity.actor, "CANNOT_TARGET") === false && reader(target, identity.actor, "UNAFFECTED_BY") === false, "v3-battle-retarget-protected");
+  }
+  ensureMove(fieldRows(board, battle.defender, definitions).some(row => row.card.instanceId === target.instanceId && row.card.generation === target.generation),
+    "v3-battle-retarget-target-unknown");
+  return applySystemEvent(progression, progression.revision, { kind: "retargetBattleByEffect", battleId: battle.battleId,
+    step, actor: identity.actor, resolutionId: identity.resolutionId, source: identity.source, effectId: identity.effectId, target });
 }
 export function attackOptions(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants) {
   if (!checkTiming(progression, actor, "attack").allowed) return { sources: [], targets: [], pairs: [] };
@@ -113,7 +138,7 @@ export function blockerOptions(board: MovementState, progression: Progression, a
 export function declareBlock(board: MovementState, progression: Progression, actor: Seat, card: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants, transactionId: string, deferCounter = false) {
   field(board, card, actor); const battle = progression.battle!;
   ensureMove(blockerOptions(board, progression, actor, definitions, grants).some(option => option.card.instanceId === card.instanceId && option.card.generation === card.generation), "v3-blocker-unavailable");
-  let next = applySystemEvent(progression, progression.revision, { kind: "redirectBattle", battleId: battle.battleId, target: card });
+  let next = applySystemEvent(progression, progression.revision, { kind: "redirectBattle", battleId: battle.battleId, target: card, recordBlocker: true });
   const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
     actor, effectController: actor, source: card, mode: "cost", resolutionId: `block:${battle.battleId}`, operations: [{ kind: "setRest", card, rotated: true }] }, { status: "certifiedNone" });
   if (deferCounter) return { movement: result.state, progression: next, events: result.events };
@@ -162,7 +187,7 @@ export function finishDamageStep(progression: Progression): Progression {
   next = applySystemEvent(next, next.revision, { kind: "settleBattleStep", battleId: battle.battleId, step: "end" });
   return applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "end", participantsPresent: false });
 }
-export function damage(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, effects: StatEffects, counters: BattleCounters, transactionId: string, now: number, deferKoEffects = false) {
+export function damage(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, effects: StatEffects, counters: BattleCounters, transactionId: string, now: number, deferKoEffects = false, grants: KeywordGrants = []) {
   const battle = progression.battle;
   ensureMove(battle && actor === battle.defender && battle.step === "damage" && battle.decisionComplete && !battle.settled && progression.gate.kind === "idle" && !progression.outcome, "v3-battle-damage-window");
   const powers = battlePower(board, progression, definitions, effects, counters)!;
@@ -173,7 +198,19 @@ export function damage(board: MovementState, progression: Progression, actor: Se
   if (hits && target.kind === "leader" && board.players[actor].life.length === 0) {
     next = applySystemEvent(next, next.revision, { kind: "finishGame", winner: battle.attacker, reason: "leader-damage-at-zero-life" });
   } else if (hits && target.kind === "leader") {
-    const id = board.players[actor].life[0]!, card = board.cards[id]!, known = definitions.get(card.cardId)?.definition;
+    const id = board.players[actor].life[0]!, card = board.cards[id]!;
+    const facts = createDerivedCardFactsReader({ board: () => board, definitions, statEffects: () => effects,
+      activePlayer: progression.activePlayer, keywordGrants: () => grants })(battle.source, battle.attacker);
+    ensureMove(facts !== UNKNOWN && facts.abilities.CURRENT.BANISH !== UNKNOWN, "v3-banish-unknown");
+    if (facts.abilities.CURRENT.BANISH) {
+      const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
+        actor: battle.attacker, effectController: null, source: battle.source, mode: "rule", resolutionId: null, operations: [{
+          kind: "move", card: { instanceId: id, generation: card.generation }, from: { player: actor, zone: "life" },
+          to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "DAMAGE"
+        }] }, { status: "certifiedNone" });
+      return { movement: result.state, progression: finishDamageStep(next), events: result.events, pendingLife, deferredKO };
+    }
+    const known = definitions.get(card.cardId)?.definition;
     ensureMove(known && known.cardType === card.kind && (known.source.triggerText.trim() === "" || known.effects.some(effect => effect.timing.type === "TRIGGER")), "v3-life-trigger-definition-unresolved");
     ensureMove(Number.isSafeInteger(now) && now >= 0 && Number.isSafeInteger(now + 120000), "v3-life-clock-invalid");
     pendingLife = { battleId: battle.battleId, resolutionId: randomUUID(), selectionId: randomUUID(), token: randomUUID(), defender: actor,

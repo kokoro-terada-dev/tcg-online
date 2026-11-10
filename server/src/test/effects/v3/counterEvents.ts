@@ -14,10 +14,18 @@ export function counterEventChoices(board: MovementState, progression: Progressi
     const card = board.cards[id!]!, definition = cards.get(card.cardId)?.definition;
     if (card.kind !== "event" || card.owner !== actor || card.controller !== actor || definition?.cardType !== "event") return [];
     const cost = definition.baseStats.cost;
-    return definition.effects.filter(effect => effect.kind === "activated" && effect.timing.type === "COUNTER").map(effect => ({
-      card: { instanceId: card.instanceId, generation: card.generation }, cardId: card.cardId, effectId: effect.id, cost,
-      enabled: cost !== null && board.players[actor].activeDon.length >= cost,
-    }));
+    return definition.effects.filter(effect => effect.kind === "activated" && effect.timing.type === "COUNTER").map(effect => {
+      const additional = effect.costs.find(node => node.type === "DON_RETURN"), zones = board.players[actor];
+      // The printed payment rests DON first; it may be used by a subsequent printed DON-return cost.
+      const resources = additional && cost !== null ? additional.from.flatMap(zone =>
+        zone === "activeDon" ? zones.activeDon.slice(cost) : zone === "restDon" ? [...zones.restDon, ...zones.activeDon.slice(0, cost)] : zones.attachedDon
+      ).filter(id => {
+        const object = id && board.cards[id];
+        return object && object.kind === "don" && object.owner === actor && object.controller === actor && object.faceUp;
+      }) : [];
+      return { card: { instanceId: card.instanceId, generation: card.generation }, cardId: card.cardId, effectId: effect.id, cost,
+        enabled: cost !== null && zones.activeDon.length >= cost && (!additional || resources.length >= additional.count) };
+    });
   });
 }
 // Both candidate transactions stay local until the caller also constructs a valid resolution.

@@ -76,7 +76,7 @@ type ReaderOptions = Readonly<{
   includeContinuous?: boolean;
 }>;
 const numeric = (value: unknown): KnownOrUnknown<number> => typeof value === "number" && Number.isSafeInteger(value) ? value : UNKNOWN;
-export const FIELD_KEYWORDS = ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED"] as const;
+export const FIELD_KEYWORDS = ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED", "BANISH"] as const;
 const keywordTags = new Set<AbilityTag>(FIELD_KEYWORDS);
 
 // A hidden card yields no facts, even when its definition happens to be in the catalog.
