@@ -14,7 +14,7 @@ const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
 const { compileV3CardJson, supportsV3RuntimeProfile } = require("../server/dist/test/effects/v3/compiler.js");
 const { isInteractiveMainEvent } = require("../server/dist/test/effects/v3/simpleMainEvent.js");
-const latest = "v3-draft-generator.9";
+const latest = "v3-draft-generator.10";
 const keywords = new Map([
   ["ブロッカー", ["BLOCKER", "(相手のアタックの後、このカードをレストにし、アタックの対象をこのカードにできる)"]],
   ["速攻", ["RUSH", "(このカードは登場したターンにアタックできる)"]],
@@ -71,7 +71,7 @@ function targetedActions(body, type, start, sourceSpan) {
     actions: [select(binding, "character", "OPPONENT", 0, Number(max), filter), action] };
 }
 
-function parseSpan(span, cardType, gaps, previous, raw, extended) {
+function parseSpan(span, cardType, gaps, previous, raw, extended, recipes) {
   const { field, start, end, text } = span;
   const tag = header(text);
   const keyword = keywords.get(tag?.[1] ?? tag?.[2]);
@@ -90,6 +90,9 @@ function parseSpan(span, cardType, gaps, previous, raw, extended) {
   }
   const label = tag?.[1] ?? tag?.[2];
   const regular = timings.get(label), timing = regular ?? boundaryTimings.get(label);
+  if (recipes && field === "text" && cardType === "character" && label === "速攻：キャラ" &&
+      /^[（(]このカードは登場したターンにキャラへアタックできる[）)]$/u.test(body))
+    return { ...span, status: "recognized", pattern: "recipe-rush-character-reminder", keyword: { type: "RUSH_CHARACTER", sourceSpan } };
   let reason = "timing-or-keyword-unconfirmed", unparsed = [{ ...sourceSpan, reason }];
   const secondTag = field === "text" && body?.startsWith("/") ? header(body.slice(1)) : null;
   if (extended && timing && secondTag) {
@@ -98,13 +101,15 @@ function parseSpan(span, cardType, gaps, previous, raw, extended) {
     const shared = secondTag[3].trim();
     if (["ON_PLAY/ON_ATTACK", "ON_PLAY/ON_KO", "MAIN/COUNTER"].includes(pair) &&
         timing[2].includes(cardType) && second[2].includes(cardType) && !/^[【〖]/u.test(shared)) {
-      const parsed = [timing, second].map(t => parseCompoundEffect(shared, t[0], cardType, sourceSpan, false));
+      const parsed = [timing, second].map(t => parseCompoundEffect(shared, t[0], cardType, sourceSpan, false) ??
+        (recipes ? parseCompoundEffect(shared, t[0], cardType, sourceSpan, false, true) : null));
       if (parsed.every(Boolean)) {
         const effects = [timing, second].map((t, index) => {
           const { pattern, structure, ...program } = parsed[index];
           return { ...effectFor(field, start, cardType, t, `-${index + 1}`), ...program };
         });
-        return { ...span, status: "recognized", pattern: "pr29-multiple-timings", effects };
+        return { ...span, status: "recognized", pattern: parsed.some(p => p.pattern.startsWith("recipe-")) ?
+          "recipe-multiple-timings" : "pr29-multiple-timings", effects };
       }
     }
   }
@@ -129,7 +134,9 @@ function parseSpan(span, cardType, gaps, previous, raw, extended) {
     const { structure, issues } = parseV3Structure(body, type);
     if (structure) return { ...span, status: "recognized", pattern: structurePattern(structure, !regular), structure,
       effect: { ...effect, actions: emitV3Structure(structure, sourceSpan) } };
-    const compound = extended && parseCompoundEffect(body, type, cardType, sourceSpan, raw.trim() === text.trim());
+    const fullTrigger = raw.trim() === text.trim();
+    const compound = extended && (parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger) ??
+      (recipes ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true) : null));
     if (compound) {
       const { pattern, structure, ...program } = compound;
       return { ...span, status: "recognized", pattern, ...(structure ? { structure } : {}), effect: { ...effect, ...program } };
@@ -144,7 +151,7 @@ function parseSpan(span, cardType, gaps, previous, raw, extended) {
   return { ...span, status: features.length ? "unsupported" : "unknown", features, reason, unparsed };
 }
 
-function analyzeVariant(variant, rows, extended) {
+function analyzeVariant(variant, rows, extended, recipes) {
   const selected = rows.filter(row => variant.recordNumbers.includes(row.recordNumber));
   const types = sorted(selected.map(row => row.raw["種類"]));
   const cardType = types.length === 1 ? types[0].toLowerCase() : null;
@@ -153,7 +160,7 @@ function analyzeVariant(variant, rows, extended) {
   for (const field of ["text", "triggerText"]) {
     if (absent(variant[field])) continue;
     for (const match of variant[field].matchAll(/[^\r\n]+/g)) {
-      if (match[0].trim()) spans.push(parseSpan({ field, start: match.index, end: match.index + match[0].length, text: match[0] }, cardType, gaps, spans.at(-1), variant[field], extended));
+      if (match[0].trim()) spans.push(parseSpan({ field, start: match.index, end: match.index + match[0].length, text: match[0] }, cardType, gaps, spans.at(-1), variant[field], extended, recipes));
     }
   }
   const body = spans.filter(span => span.field === "text");
@@ -191,10 +198,11 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const fieldDon = variant.spans.some(span => span.pattern?.startsWith("pr27-field-don-"));
   const conditionalTriggerPlay = variant.spans.some(span => span.pattern?.startsWith("pr28-trigger-self-play-"));
   const compound = variant.spans.some(span => span.pattern?.startsWith("pr29-"));
+  const recipes = variant.spans.some(span => span.pattern?.startsWith("recipe-"));
   const newTargets = variant.spans.some(span => span.pattern?.startsWith("pr25-"));
   return {
-    schemaVersion: compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
-    cardVersion: compound ? "draft.pr29.1" : conditionalTriggerPlay ? "draft.pr28.1" : fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
+    schemaVersion: recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
+    cardVersion: recipes ? "draft.recipes.1" : compound ? "draft.pr29.1" : conditionalTriggerPlay ? "draft.pr28.1" : fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
       variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",
     keywords: variant.spans.flatMap(span => span.keyword ? [span.keyword] : []),
@@ -204,8 +212,8 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   };
 }
 
-function generateCard(card, rows, sourceCsvSha256, extended) {
-  const variants = card.variants.map(variant => analyzeVariant(variant, rows, extended));
+function generateCard(card, rows, sourceCsvSha256, extended, recipes) {
+  const variants = card.variants.map(variant => analyzeVariant(variant, rows, extended, recipes));
   const spans = variants.flatMap(variant => variant.spans);
   const recognized = spans.filter(span => span.status === "recognized").length;
   const unresolved = spans.length - recognized;
@@ -231,7 +239,7 @@ function generateCard(card, rows, sourceCsvSha256, extended) {
 }
 
 export function generateV3Drafts(ledger, cardIds = [], version = latest) {
-  if (version !== latest && version !== "v3-draft-generator.8") throw Error("Unsupported draft generation baseline");
+  if (![latest, "v3-draft-generator.9", "v3-draft-generator.8"].includes(version)) throw Error("Unsupported draft generation baseline");
   const registryHash = v3DraftRegistry(version);
   const selected = new Set(cardIds), rows = new Map();
   for (const row of ledger.rows) {
@@ -241,7 +249,8 @@ export function generateV3Drafts(ledger, cardIds = [], version = latest) {
   }
   if ([...selected].some(id => !rows.has(id))) throw Error("Requested card ID does not exist in this CSV");
   const counts = { complete: 0, partial: 0, unconvertible: 0, unassessed: 0 };
-  const cards = ledger.cards.filter(card => rows.has(card.cardId)).map(card => generateCard(card, rows.get(card.cardId), ledger.sourceSha256, version === latest))
+  const cards = ledger.cards.filter(card => rows.has(card.cardId)).map(card =>
+    generateCard(card, rows.get(card.cardId), ledger.sourceSha256, version !== "v3-draft-generator.8", version === latest))
     .sort((a, b) => lexical(a.cardId, b.cardId));
   const totals = { sourceCards: ledger.cards.length, selectedCards: cards.length, counts, noEffect: 0, compilerPassed: 0, compilerFailed: 0, unresolvedSpans: 0 };
   for (const card of cards) {
@@ -259,31 +268,66 @@ export function generateV3Drafts(ledger, cardIds = [], version = latest) {
     cards: cards.map(({ definition: _draft, ...card }) => card) } };
 }
 
-function writeDraftResults(directory, { candidates, trace }) {
+export function reviewableDefinitionFiles(candidates, report) {
+  const reviewable = new Set(report.cards.filter(card => card.classification === "candidate" && !card.approval).map(card => card.cardId));
+  const ids = new Set();
+  return candidates.cards.flatMap(({ cardId, generation, definition }) => {
+    if (!reviewable.has(cardId) || generation.status !== "complete" || !definition) return [];
+    const portable = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/u.test(cardId) &&
+      !/^(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$/iu.test(cardId);
+    if (!portable || ids.has(cardId.toLowerCase()) || definition.cardId !== cardId || definition.reviewStatus !== "needs_review")
+      throw Error("Unsafe or duplicate candidate definition");
+    ids.add(cardId.toLowerCase());
+    return [{ file: `${cardId}.json`, definition }];
+  });
+}
+
+function writeDraftResults(directory, { candidates, trace }, definitionExport) {
   const write = (name, data) => fs.writeFileSync(path.join(directory, name), data, { flag: "wx" });
   write("candidates.json", JSON.stringify(candidates, null, 2) + "\n");
   write("generation.json", JSON.stringify(trace, null, 2) + "\n");
   write("generation.csv", csv([["card_id", "generation", "no_effect", "compiler", "recognized_spans", "unresolved_spans", "definition_sha256", "reasons"],
     ...trace.cards.map(card => [card.cardId, card.status, card.noEffect, card.compiler, card.recognized, card.unresolved, card.definitionHash ?? "", JSON.stringify(card.reasons)])]));
+  if (definitionExport) {
+    const { files, holds } = definitionExport;
+    fs.mkdirSync(path.join(directory, "definitions"));
+    for (const { file, definition } of files) write(path.join("definitions", file), JSON.stringify(definition, null, 2) + "\n");
+    write("definition-export.json", JSON.stringify({ executable: false, sourceCsvSha256: trace.sourceCsvSha256,
+      schemaValidated: files.length, holds }, null, 2) + "\n");
+  }
+}
+
+function validateDefinitionExport(files) {
+  const validate = require("../docs/validate-card-effect-json.cjs").createSchemaValidator();
+  const holds = [];
+  const accepted = files.filter(({ definition }) => {
+    if (validate(definition)) return true;
+    holds.push({ cardId: definition.cardId, schemaVersion: definition.schemaVersion, errors: structuredClone(validate.errors) });
+    return false;
+  });
+  return { files: accepted, holds };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const [root, source, output, ...flags] = process.argv.slice(2), cardIds = [];
-    if (!root || !source || !output || flags.length % 2) throw Error("Usage: generate-v3-drafts.js <catalog-dir> <source.csv> <new-output-dir> [--ledger file.json] [--card ID]");
-    let auditLedger;
+    if (!root || !source || !output || flags.length % 2) throw Error("Usage: generate-v3-drafts.js <catalog-dir> <source.csv> <new-output-dir> [--ledger file.json] [--card ID] [--definitions validated]");
+    let auditLedger, exportDefinitions = false;
     for (let i = 0; i < flags.length; i += 2) {
       if (flags[i] === "--card") cardIds.push(flags[i + 1]);
       else if (flags[i] === "--ledger" && auditLedger === undefined) {
         if (fs.statSync(flags[i + 1]).size > 64 * 1024 * 1024) throw Error("Input ledger exceeds 64 MiB");
         auditLedger = JSON.parse(fs.readFileSync(flags[i + 1], "utf8"));
-      } else throw Error("Unknown or duplicate option");
+      } else if (flags[i] === "--definitions" && flags[i + 1] === "validated" && !exportDefinitions) exportDefinitions = true;
+      else throw Error("Unknown or duplicate option");
     }
     if (fs.statSync(source).size > 25 * 1024 * 1024) throw Error("Input CSV exceeds 25 MiB");
     const bytes = fs.readFileSync(source), generated = generateV3Drafts(ledgerFromCsv(bytes), cardIds);
     const report = analyzeV3Coverage(loadReviewedV3Catalog(root), bytes, { auditLedger, candidates: generated.candidates });
+    const definitionExport = exportDefinitions ? validateDefinitionExport(reviewableDefinitionFiles(generated.candidates, report)) : null;
     writeV3Coverage(root, output, report);
-    writeDraftResults(output, generated);
-    console.log(JSON.stringify({ ...generated.trace.totals, coverage: report.counts, gaps: report.gaps.slice(0, 10) }));
+    writeDraftResults(output, generated, definitionExport);
+    console.log(JSON.stringify({ ...generated.trace.totals, ...(definitionExport ? { reviewableDefinitionFiles: definitionExport.files.length,
+      schemaHolds: definitionExport.holds.length } : {}), coverage: report.counts, gaps: report.gaps.slice(0, 10) }));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

@@ -3,6 +3,55 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { compileV3CardJson, compilerVersionForSchema, builtinV3Registries, v3RegistryHash } = require('../server/dist/test/effects/v3/compiler.js');
 
+function createSchemaValidator() {
+  let Ajv;
+  try { Ajv = require('ajv/dist/2020'); }
+  catch { throw Error('Schema validation requires Ajv 8 (ajv/dist/2020). Install in a separate temporary directory and set NODE_PATH; see guide. No fallback to Draft 7.'); }
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  const validators = new Map([
+    ['3.0.0-subset.16', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-json-schema.json'), 'utf8')))],
+    ['3.0.0-subset.17', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-metadata.schema.json'), 'utf8')))],
+    ['3.0.0-subset.18', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-query.schema.json'), 'utf8')))],
+    ['3.0.0-subset.19', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-main-event.schema.json'), 'utf8')))],
+    ['3.0.0-subset.20', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-interactive-event.schema.json'), 'utf8')))],
+    ['3.0.0-subset.21', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-conditional-trigger.schema.json'), 'utf8')))],
+    ['3.0.0-subset.22', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-resolving-trigger.schema.json'), 'utf8')))],
+    ['3.0.0-subset.23', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-boundary.schema.json'), 'utf8')))],
+    ['3.0.0-subset.24', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-expiry.schema.json'), 'utf8')))],
+    ['3.0.0-subset.25', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-move-result.schema.json'), 'utf8')))],
+    ['3.0.0-subset.26', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-remembered-facts.schema.json'), 'utf8')))],
+    ['3.0.0-subset.27', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-effect-play.schema.json'), 'utf8')))],
+    ['3.0.0-subset.28', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-don-effects.schema.json'), 'utf8')))],
+    ['3.0.0-subset.29', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-don-transfer.schema.json'), 'utf8')))],
+    ['3.0.0-subset.30', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-activation-costs.schema.json'), 'utf8')))],
+    ['3.0.0-subset.31', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-mode-payment.schema.json'), 'utf8')))],
+    ['3.0.0-subset.32', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-owner-discard.schema.json'), 'utf8')))],
+    ['3.0.0-subset.33', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-owner-deck-bottom.schema.json'), 'utf8')))],
+    ['3.0.0-subset.34', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-continuous.schema.json'), 'utf8')))],
+    ['3.0.0-subset.35', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-base-counter.schema.json'), 'utf8')))],
+    ['3.0.0-subset.36', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-protection.schema.json'), 'utf8')))],
+    ['3.0.0-subset.37', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-replacement.schema.json'), 'utf8')))],
+    ['3.0.0-subset.38', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-paid-replacement.schema.json'), 'utf8')))],
+    ['3.0.0-subset.39', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-replacement-priority.schema.json'), 'utf8')))],
+    ['3.0.0-subset.40', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-body.schema.json'), 'utf8')))],
+    ['3.0.0-subset.41', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-external-body.schema.json'), 'utf8')))],
+    ['3.0.0-subset.42', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-battle-effects.schema.json'), 'utf8')))],
+    ['3.0.0-subset.43', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-damage.schema.json'), 'utf8')))],
+    ['3.0.0-subset.44', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-extra-turn.schema.json'), 'utf8')))],
+    ['3.0.0-subset.45', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset45.schema.json'), 'utf8')))],
+    ['3.0.0-subset.46', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset46.schema.json'), 'utf8')))],
+    ['3.0.0-subset.47', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset47.schema.json'), 'utf8')))],
+    ['3.0.0-subset.48', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset48.schema.json'), 'utf8')))],
+    ['3.0.0-subset.49', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset49.schema.json'), 'utf8')))],
+  ]);
+  const validate = card => {
+    const checker = validators.get(card?.schemaVersion);
+    if (!checker) { validate.errors = [{ message: 'Unsupported schemaVersion' }]; return false; }
+    const result = checker(card); validate.errors = checker.errors; return result;
+  };
+  return validate;
+}
+
 function main() {
   const args = process.argv.slice(2), files = [], definitions = [], unsupported = [], results = [];
   let schema = false, sourceReview = null, examples = false;
@@ -16,54 +65,7 @@ function main() {
     else files.push(args[i]);
   }
   if (!files.length) throw Error('Usage: node docs/validate-card-effect-json.cjs [--schema] [--examples] [--source-review review.json] <files/directories...>');
-  let validate = null;
-  if (schema) {
-    let Ajv;
-    try { Ajv = require('ajv/dist/2020'); }
-    catch { throw Error('Schema validation requires Ajv 8 (ajv/dist/2020). Install in a separate temporary directory and set NODE_PATH; see guide. No fallback to Draft 7.'); }
-    const ajv = new Ajv({ allErrors: true, strict: false });
-    const validators = new Map([
-      ['3.0.0-subset.16', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-json-schema.json'), 'utf8')))],
-      ['3.0.0-subset.17', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-metadata.schema.json'), 'utf8')))],
-      ['3.0.0-subset.18', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-query.schema.json'), 'utf8')))],
-      ['3.0.0-subset.19', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-main-event.schema.json'), 'utf8')))],
-      ['3.0.0-subset.20', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-interactive-event.schema.json'), 'utf8')))],
-      ['3.0.0-subset.21', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-conditional-trigger.schema.json'), 'utf8')))],
-      ['3.0.0-subset.22', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-resolving-trigger.schema.json'), 'utf8')))],
-      ['3.0.0-subset.23', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-boundary.schema.json'), 'utf8')))],
-      ['3.0.0-subset.24', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-expiry.schema.json'), 'utf8')))],
-      ['3.0.0-subset.25', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-move-result.schema.json'), 'utf8')))],
-      ['3.0.0-subset.26', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-remembered-facts.schema.json'), 'utf8')))],
-      ['3.0.0-subset.27', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-effect-play.schema.json'), 'utf8')))],
-      ['3.0.0-subset.28', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-don-effects.schema.json'), 'utf8')))],
-      ['3.0.0-subset.29', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-don-transfer.schema.json'), 'utf8')))],
-      ['3.0.0-subset.30', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-activation-costs.schema.json'), 'utf8')))],
-      ['3.0.0-subset.31', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-mode-payment.schema.json'), 'utf8')))],
-      ['3.0.0-subset.32', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-owner-discard.schema.json'), 'utf8')))],
-      ['3.0.0-subset.33', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-owner-deck-bottom.schema.json'), 'utf8')))],
-      ['3.0.0-subset.34', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-continuous.schema.json'), 'utf8')))],
-      ['3.0.0-subset.35', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-base-counter.schema.json'), 'utf8')))],
-      ['3.0.0-subset.36', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-protection.schema.json'), 'utf8')))],
-      ['3.0.0-subset.37', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-replacement.schema.json'), 'utf8')))],
-      ['3.0.0-subset.38', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-paid-replacement.schema.json'), 'utf8')))],
-      ['3.0.0-subset.39', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-replacement-priority.schema.json'), 'utf8')))],
-      ['3.0.0-subset.40', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-body.schema.json'), 'utf8')))],
-      ['3.0.0-subset.41', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-external-body.schema.json'), 'utf8')))],
-      ['3.0.0-subset.42', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-battle-effects.schema.json'), 'utf8')))],
-      ['3.0.0-subset.43', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-damage.schema.json'), 'utf8')))],
-      ['3.0.0-subset.44', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-extra-turn.schema.json'), 'utf8')))],
-      ['3.0.0-subset.45', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset45.schema.json'), 'utf8')))],
-      ['3.0.0-subset.46', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset46.schema.json'), 'utf8')))],
-      ['3.0.0-subset.47', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset47.schema.json'), 'utf8')))],
-      ['3.0.0-subset.48', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset48.schema.json'), 'utf8')))],
-      ['3.0.0-subset.49', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset49.schema.json'), 'utf8')))],
-    ]);
-    validate = card => {
-      const checker = validators.get(card?.schemaVersion);
-      if (!checker) { validate.errors = [{ message: 'Unsupported schemaVersion' }]; return false; }
-      const result = checker(card); validate.errors = checker.errors; return result;
-    };
-  }
+  const validate = schema ? createSchemaValidator() : null;
   const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'));
   let sourceCards = null;
   if (sourceReview) {
@@ -116,4 +118,7 @@ function main() {
     semanticRulesAndRuntimeApproval: 'not_performed', count: results.length, failures: failures.length, unsupported, results }, null, 2));
   if (failures.length || !definitions.length) process.exitCode = 1;
 }
-try { main(); } catch (error) { console.error(error.message); process.exitCode = 1; }
+module.exports = { createSchemaValidator };
+if (require.main === module) {
+  try { main(); } catch (error) { console.error(error.message); process.exitCode = 1; }
+}

@@ -200,8 +200,8 @@ function emitOperation(node, prefix, sourceSpan, compound) {
   })) }];
 }
 
-export function emitV3Structure(structure, sourceSpan, compound = false) {
-  const actions = structure.operations.flatMap((node, i) => emitOperation(node, `structure_${sourceSpan.start}_${i}`, sourceSpan, compound));
+export function emitV3Structure(structure, sourceSpan, compound = false, prefix = `structure_${sourceSpan.start}`) {
+  const actions = structure.operations.flatMap((node, i) => emitOperation(node, `${prefix}_${i}`, sourceSpan, compound));
   return structure.conditions.length ? [{ type: "IF", condition: { type: "all", conditions: structure.conditions }, then: actions, else: [] }] : actions;
 }
 
