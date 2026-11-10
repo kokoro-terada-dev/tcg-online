@@ -9,7 +9,7 @@ const absence = value => value === "-" ? "" : value;
 const sorted = values => [...values].sort();
 const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
-function differences(raw, d) {
+export function reviewedPrintedDifferences(raw, d) {
   const numeric = v => ["", "-", "null", "NULL"].includes(v.trim()) ? null : /^\d+$/.test(v.trim()) ? Number(v) : v;
   const labels = v => v === "-" || v === "" ? [] : v.split("/");
   const fields = {
@@ -23,7 +23,11 @@ function differences(raw, d) {
 }
 
 export function compareReviewedV3Source(reviewed, bytes) {
-  const ledger = ledgerFromCsv(bytes), incoming = new Map(ledger.cards.map(card => [card.cardId, card]));
+  return compareReviewedV3Ledger(reviewed, ledgerFromCsv(bytes));
+}
+
+export function compareReviewedV3Ledger(reviewed, ledger) {
+  const incoming = new Map(ledger.cards.map(card => [card.cardId, card]));
   const ids = sorted(new Set([...incoming.keys(), ...reviewed.cards.map(card => card.definition.cardId)]));
   const rowsByCard = new Map();
   for (const row of ledger.rows) {
@@ -33,7 +37,7 @@ export function compareReviewedV3Source(reviewed, bytes) {
   const cards = ids.map(cardId => {
     const approved = reviewed.catalog.get(cardId), candidate = incoming.get(cardId), rows = rowsByCard.get(cardId) ?? [];
     const raw = rows[0]?.raw;
-    const changedFields = approved && raw ? sorted(new Set(rows.flatMap(row => differences(row.raw, approved.definition)))) : [];
+    const changedFields = approved && raw ? sorted(new Set(rows.flatMap(row => reviewedPrintedDifferences(row.raw, approved.definition)))) : [];
     const displayIds = sorted(new Set(rows.map(row => row.displayId)));
     if (approved && candidate && !equal(displayIds, sorted(approved.definition.source.displayIds))) changedFields.push("displayIds");
     const status = !candidate ? "missing_from_input" : candidate.disposition === "quarantine" ? "quarantine" :
@@ -46,11 +50,15 @@ export function compareReviewedV3Source(reviewed, bytes) {
   return { version: "v3-reviewed-diff.1", executable: false, sourceCsvSha256: ledger.sourceSha256, cards };
 }
 
-export function writeProposal(root, output, data) {
+export function resolveReviewOutput(root, output) {
   const dest = path.resolve(fs.realpathSync(path.dirname(path.resolve(output))), path.basename(output));
   const relative = path.relative(fs.realpathSync(root), dest);
   if (!relative || (!relative.startsWith(".." + path.sep) && !path.isAbsolute(relative))) throw Error("Output must be outside the trusted catalog directory");
-  fs.writeFileSync(dest, JSON.stringify(data, null, 2) + "\n", { flag: "wx" });
+  return dest;
+}
+
+export function writeProposal(root, output, data) {
+  fs.writeFileSync(resolveReviewOutput(root, output), JSON.stringify(data, null, 2) + "\n", { flag: "wx" });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

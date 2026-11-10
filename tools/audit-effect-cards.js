@@ -61,7 +61,7 @@ export function auditCards(raw, sourceSha256 = sha(Buffer.from(raw))) {
     summary: { sourceRows: variants.length, uniqueCards: cards.length, rawDifferingFields: differences.length, normalizedDifferingFields: differences.filter(v => v.normalizedValueCount > 1).length,
       anomalyRows: new Set(anomalies.map(v => v.recordNumber)).size, parsed: 0, needs_review: cards.filter(v => v.reviewStatus === "needs_review").length, unsupported: cards.filter(v => v.reviewStatus === "unsupported").length, approved: 0, semanticApprovalRate: 0, executable: false } };
 }
-const csv = rows => "\uFEFF" + rows.map(row => row.map(value => {
+export const csv = rows => "\uFEFF" + rows.map(row => row.map(value => {
   const raw = String(value ?? ""), text = /^[\s]*[=+\-@]/.test(raw) ? `'${raw}` : raw;
   return `"${text.replaceAll('"', '""')}"`;
 }).join(",")).join("\r\n") + "\r\n";
