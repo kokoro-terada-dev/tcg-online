@@ -92,9 +92,20 @@ export function applySystemEvent(state: Progression, expectedRevision: number, e
     ensure(source.instanceId !== target.instanceId, "Source and target must differ");
     return commit(state, { battle: { battleId: event.battleId, attacker: state.activePlayer, defender: (1 - state.activePlayer) as Player, source, target, step: "attack", decisionComplete: true, settled: false } });
   }
+  if (event.kind === "recordRemainingDamage" || event.kind === "consumeRemainingDamage") {
+    const battle = battleAt(state, event.battleId, "damage");
+    ensure(state.gate.kind === "idle" && battle.decisionComplete && !battle.settled, "Damage continuation unavailable");
+    if (event.kind === "recordRemainingDamage") {
+      ensure(!battle.remainingDamage && typeof event.banish === "boolean", "Invalid damage continuation");
+      return commit(state, { battle: { ...battle, remainingDamage: { banish: event.banish } } });
+    }
+    ensure(battle.remainingDamage, "No remaining damage");
+    const { remainingDamage: _applied, ...rest } = battle;
+    return commit(state, { battle: rest });
+  }
   if (event.kind === "settleBattleStep") {
     const battle = battleAt(state, event.battleId, event.step);
-    ensure(battle.decisionComplete && !battle.settled, "Battle decision pending or already settled");
+    ensure(battle.decisionComplete && !battle.settled && !battle.remainingDamage, "Battle decision pending or already settled");
     return commit(state, { battle: { ...battle, settled: true } });
   }
   if (event.kind === "redirectBattle") {

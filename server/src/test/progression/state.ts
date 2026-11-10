@@ -14,6 +14,7 @@ export function freezeState(value: Progression): Progression {
   if (value.battle) {
     Object.freeze(value.battle.source); Object.freeze(value.battle.target);
     if (value.battle.blocker) Object.freeze(value.battle.blocker);
+    if (value.battle.remainingDamage) Object.freeze(value.battle.remainingDamage);
     if (value.battle.lastRetarget) {
       Object.freeze(value.battle.lastRetarget.previousTarget);
       Object.freeze(value.battle.lastRetarget.source);

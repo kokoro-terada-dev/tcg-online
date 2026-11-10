@@ -139,6 +139,11 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     opponentHand: owner => ownerHandCandidates(board(), identity.actor, owner),
     revision: () => board().revision, now, evaluate,
     peekTop: amount => board().players[identity.actor].deck.slice(0, amount).map(id => ({ instanceId: id!, generation: board().cards[id!]!.generation })),
+    lifeMoveCard: (player, from) => {
+      const state = board(), zones = state.players[player];
+      const id = from === "DECK_TOP" ? zones.deck[0] : from === "LIFE_TOP" ? zones.life[0] : zones.life.at(-1);
+      return id ? { instanceId: id, generation: state.cards[id]!.generation } : null;
+    },
     canPayCosts: (costs, discarded, returned, selected = null) => {
       const state = board(), actor = identity.actor; let rest = 0, discard = 0, restSource = 0;
       const returns = costs.filter(cost => cost.type === "DON_RETURN");

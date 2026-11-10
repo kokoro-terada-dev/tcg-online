@@ -10,6 +10,7 @@ export type Gate =
 export type Battle = Readonly<{
   battleId: string; attacker: Player; defender: Player; source: Readonly<CardObjectRef>; target: Readonly<CardObjectRef>;
   blocker?: Readonly<CardObjectRef>;
+  remainingDamage?: Readonly<{ banish: boolean }>;
   lastRetarget?: Readonly<{ previousTarget: Readonly<CardObjectRef>; source: Readonly<CardObjectRef>; effectId: string; actor: Player }>;
   step: BattleStep; decisionComplete: boolean; settled: boolean;
 }>;
@@ -30,6 +31,8 @@ export type SystemEvent =
   | { kind: "redirectBattle"; battleId: string; target: CardObjectRef; recordBlocker?: true }
   | { kind: "retargetBattleByEffect"; battleId: string; step: "attack" | "counter"; resolutionId: string; actor: Player; source: CardObjectRef; effectId: string; target: CardObjectRef }
   | { kind: "settleBattleStep"; battleId: string; step: BattleStep }
+  | { kind: "recordRemainingDamage"; battleId: string; banish: boolean }
+  | { kind: "consumeRemainingDamage"; battleId: string }
   | { kind: "advanceBattle"; battleId: string; step: BattleStep; participantsPresent: boolean }
   | { kind: "beginResolution"; resolutionId: string; controller: Player }
   | { kind: "waitForChoice"; resolutionId: string; selectionId: string; chooser: Player }

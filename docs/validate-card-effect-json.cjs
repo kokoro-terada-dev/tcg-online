@@ -50,6 +50,7 @@ function main() {
       ['3.0.0-subset.40', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-body.schema.json'), 'utf8')))],
       ['3.0.0-subset.41', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-external-body.schema.json'), 'utf8')))],
       ['3.0.0-subset.42', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-battle-effects.schema.json'), 'utf8')))],
+      ['3.0.0-subset.43', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-damage.schema.json'), 'utf8')))],
     ]);
     validate = card => {
       const checker = validators.get(card?.schemaVersion);

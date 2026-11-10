@@ -14,10 +14,10 @@ export type ContinuousOperation = { type: "ADD_STAT"; stat: MutableStat; amount:
   { type: "GRANT_KEYWORD"; keyword: Node<"keyword"> } | ProtectionRule;
 export type Value = number | string | boolean | null | { ref: "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "base" | "current"}.${MutableStat}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42" | "3.0.0-subset.43";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
-export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "BANISH" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
+export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "BANISH" | "DOUBLE_ATTACK" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
 // Declaration merging extends the typed vocabulary; parsers must also be registered.
 export interface PredicateMap {
   REMEMBERED_COLORS: NodeMeta & { type: "REMEMBERED_COLORS"; memory: string; subject: CardSubject; basis: MetadataBasis; match: "OVERLAP" | "DISJOINT" };
@@ -35,6 +35,11 @@ export interface PredicateMap {
   compare: NodeMeta & { type: "compare"; left: Value; op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte"; right: Value };
 }
 export interface ActionMap {
+  KO_STAGE: NodeMeta & { type: "KO_STAGE"; cards: CardSetRef };
+  MOVE_LIFE: NodeMeta & { type: "MOVE_LIFE"; player: Player } &
+    ({ from: "DECK_TOP"; to: "LIFE_TOP" | "LIFE_BOTTOM"; faceUp: boolean } |
+      { from: "BOUND"; cards: CardSetRef; to: "LIFE_TOP" | "LIFE_BOTTOM"; faceUp: boolean } |
+      { from: "LIFE_TOP" | "LIFE_BOTTOM"; to: "HAND" | "TRASH" | "DECK_BOTTOM" });
   RETARGET_BATTLE: NodeMeta & { type: "RETARGET_BATTLE"; cards: CardSetRef };
   CALL_EFFECT_BODY: NodeMeta & { type: "CALL_EFFECT_BODY" } &
     ({ effectId: string; from?: never } | { from: "OWN_TRASH"; maxPrintedCost: number; effectId?: never });
@@ -136,6 +141,7 @@ export interface KeywordMap {
   RUSH_CHARACTER: NodeMeta & { type: "RUSH_CHARACTER" };
   CANNOT_BE_BLOCKED: NodeMeta & { type: "CANNOT_BE_BLOCKED" };
   BANISH: NodeMeta & { type: "BANISH" };
+  DOUBLE_ATTACK: NodeMeta & { type: "DOUBLE_ATTACK" };
 }
 export interface Categories { predicate: PredicateMap; action: ActionMap; cost: CostMap; replacement: ReplacementMap; selector: SelectorMap; duration: DurationMap; timing: TimingMap; keyword: KeywordMap; query: QueryMap }
 export type Category = keyof Categories;

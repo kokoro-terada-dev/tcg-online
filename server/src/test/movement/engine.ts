@@ -101,7 +101,9 @@ function applyTransaction(state: MovementState, input: MovementTransaction, rule
     const before = getCard(draft, operation.card), from = location(draft, before.instanceId);
     ensureMove(sameLocation(from, operation.from), "card-not-at-expected-source");
     ensureMove(operation.to.zone !== "attachedDon", "attachment-needs-attach-operation");
-    if (operation.cause === "EFFECT_KO" || operation.cause === "BATTLE_KO") ensureMove(before.kind === "character" && from.zone === "character" && operation.to.zone === "trash", "invalid-ko-move");
+    if (operation.cause === "EFFECT_KO" || operation.cause === "BATTLE_KO") ensureMove(
+      operation.to.zone === "trash" && ((before.kind === "character" && from.zone === "character") ||
+        (operation.cause === "EFFECT_KO" && before.kind === "stage" && from.zone === "stage")), "invalid-ko-move");
     if (operation.cause === "DAMAGE") ensureMove(from.zone === "life" && draft.players[from.player].life[0] === before.instanceId, "damage-must-use-top-life");
     const after = transitionCard(before, from, operation.to), eventId = nextId(), why = cause(operation.cause);
     if (!check({ operationIndex: index, kind: "move", card: before, from, to: operation.to, cause: why, automatic: false })) { prevented.push(index); return; }

@@ -38,7 +38,7 @@ function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean)
       case "SELECT": return action.selector.type === "CARDS" && ["leader", "character", "stage", "hand"].includes(action.selector.zone as string) && !action.selector.cardTypes.includes("don");
       case "DRAW": return action.player === "SELF";
       case "DISCARD_BY_OWNER": case "ORDER_THEN_MOVE": return true;
-      case "KO": case "REST": case "SET_ACTIVE": case "REVEAL": return true;
+      case "KO": case "KO_STAGE": case "MOVE_LIFE": case "REST": case "SET_ACTIVE": case "REVEAL": return true;
       case "MODIFY_STAT": case "GRANT_KEYWORD": return action.duration.type === "TURN_END";
       case "MOVE_CARD": return ["hand", "trash", "public"].includes(action.destination.zone) && action.destination.position === "append";
       case "PLAY_BY_EFFECT": return true;

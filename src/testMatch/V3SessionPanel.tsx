@@ -8,7 +8,7 @@ import V3MainEffectDialog from "./V3MainEffectDialog";
 import { getLocalCardImage } from "../utils/localCardImages";
 const hasStatSummary = (card: V3SessionView["publicStats"][number]) => card.powerDelta !== 0 || card.costDelta !== 0 ||
   card.basePower !== undefined || card.baseCost !== undefined || card.counter !== undefined || card.keywords.length > 0 || card.keywordsUnknown === true;
-const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", ATTACH_DON: "DON!!を付与", RETURN_DON_BY_EFFECT: "DON!!を戻す", SET_DON_STATE: "DON!!の状態変更", ADD_DON: "DON!!を追加", PLAY_BY_EFFECT: "効果で登場", MOVE_CARD: "カードを移動", DISCARD_BY_OWNER: "手札の破棄を実行", ORDER_THEN_MOVE: "手札をデッキ下へ戻す", KO: "KOを実行", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", RETARGET_BATTLE: "攻撃先を変更", GRANT_KEYWORD: "能力を付与", FINISH_LIFE_TRIGGER: "トリガー処理を終了" };
+const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", ATTACH_DON: "DON!!を付与", RETURN_DON_BY_EFFECT: "DON!!を戻す", SET_DON_STATE: "DON!!の状態変更", ADD_DON: "DON!!を追加", PLAY_BY_EFFECT: "効果で登場", MOVE_CARD: "カードを移動", DISCARD_BY_OWNER: "手札の破棄を実行", ORDER_THEN_MOVE: "手札をデッキ下へ戻す", KO: "KOを実行", KO_STAGE: "ステージをKO", MOVE_LIFE: "ライフを移動", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", RETARGET_BATTLE: "攻撃先を変更", GRANT_KEYWORD: "能力を付与", FINISH_LIFE_TRIGGER: "トリガー処理を終了" };
 export default function V3SessionPanel({ view, busy, needsSync, error, isHost, onAction, onSync, onEnd }: {
   view: V3SessionView; busy: boolean; needsSync: boolean; error: string; isHost: boolean;
   onAction: (kind: V3SessionCommand["kind"], details?: SessionDetails) => void; onSync: () => void; onEnd: () => void;
@@ -53,7 +53,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
             {battle.step === "block" && view.blockerChoices.map(choice => <button key={choice.card.instanceId} disabled={disabled} onClick={() => onAction("block", { card: choice.card })}>ブロック・{view.imageAliases[choice.cardId] ?? choice.cardId}</button>)}
             {battle.step === "block" && <button disabled={disabled} onClick={() => onAction("passBlock")}>ブロックしない</button>}
             {battle.step === "counter" && <button disabled={disabled} onClick={() => onAction("endCounter")}>カウンター終了</button>}
-            {battle.step === "damage" && <button disabled={disabled} onClick={() => onAction("damage")}>バトル結果を確定</button>}
+            {battle.step === "damage" && <button disabled={disabled} onClick={() => onAction("damage")}>{battle.remainingDamage ? "残りのダメージを解決" : "バトル結果を確定"}</button>}
           </div>}
           {defending && battle.step === "counter" && view.gate === "idle" && <>
             <select aria-label="カウンターの対象" value={counterTarget?.instanceId ?? ""} onChange={event => setCounterTargetId(event.target.value)}>{counterTargets.map(card =>

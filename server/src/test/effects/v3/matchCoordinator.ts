@@ -14,7 +14,7 @@ import { V3FixtureCoordinator, type ReplacementTrace } from "./fixtureCoordinato
 import { endTurnStatEffects, pruneStatEffects, retainBattleStatEffects, type StatEffects } from "./statEffects";
 import { availableTriggers, enqueueAttackTriggers, enqueueMovementTriggers, enqueueObservedTriggers, movementTriggerCandidates, triggerChooser, SYNTHETIC_TRIGGER_POLICY, type ScheduledTrigger } from "./triggerScheduler";
 import { decideLocalBattle } from "../../localBattle";
-import { attackOptions, declareAttack, finishAttackStep, finishCounterStep, finishDamageStep, blockerOptions, declareBlock, battlePower, counterCandidates, useCounter, damage, takeLife, V3_BASE_BATTLE_RULES, type BattleCounters, type LifeDecision } from "./battle";
+import { attackOptions, declareAttack, finishAttackStep, finishCounterStep, finishDamagePoint, blockerOptions, declareBlock, battlePower, counterCandidates, useCounter, damage, takeLife, V3_BASE_BATTLE_RULES, type BattleCounters, type LifeDecision } from "./battle";
 import { endTurnKeywordGrants, pruneKeywordGrants, retainBattleKeywordGrants, type KeywordGrants } from "./keywordEffects";
 import { deckOutOutcome, DECK_OUT_POLICY } from "./ruleOutcomes";
 import { counterEventChoices, prepareCounterEvent, prepareEventFromHand } from "./counterEvents";
@@ -227,7 +227,7 @@ export class V3SyntheticMatchCoordinator {
         this.#archive(); this.#progression = finishBlockStep(this.#board, this.#progression); return;
       }
       if (frame.status === "completed" && !this.#triggers.length && (this.#progression.battle?.step === "attack" || this.#damageSettling)) {
-        const progression = this.#damageSettling ? finishDamageStep(this.#progression) : finishAttackStep(this.#board, this.#progression);
+        const progression = this.#damageSettling ? finishDamagePoint(this.#board, this.#progression) : finishAttackStep(this.#board, this.#progression);
         this.#archive(); this.#progression = progression; this.#damageSettling = false; if (!progression.battle) this.#battleCounters = [];
       }
       if (frame.status === "completed" && !this.#triggers.length && this.#progression.battle?.step === "counter") this.#archive();
@@ -320,22 +320,22 @@ export class V3SyntheticMatchCoordinator {
     });
   }
   #battleIdle(): void {
-    ensureMove(!this.#triggers.length && !this.#active && !this.#lifeDecision && this.#progression.gate.kind === "idle" && !this.#progression.outcome, "v3-battle-operation-pending");
+    ensureMove(!this.#triggers.length && !this.#active && !this.#lifeDecision && !this.#damageSettling && this.#progression.gate.kind === "idle" && !this.#progression.outcome, "v3-battle-operation-pending");
   }
   #observeBoundary(event: BoundaryEvent, board: MovementState, stats = this.#statEffects, grants = this.#keywordGrants): void {
     this.#observationDraft = observeBoundaryTriggers(this.#observationDraft!, event, board, this.#cards, stats, grants);
     const queued = new Set(this.#triggers.flatMap(entry => entry.cause.type === "ON_EVENT" ? [entry.cause.observation.key] : []));
     ensureMove(this.#triggers.length + this.#observationDraft.records.filter(record => record.status === "PENDING" && !queued.has(record.key)).length <= 128, "v3-trigger-queue-limit");
   }
-  #acceptBattle(result: { movement: MovementState; progression: Progression; events: readonly MovementEvent[]; deferredKO?: boolean }, counters: BattleCounters, pendingLife: LifeDecision | null) {
+  #acceptBattle(result: { movement: MovementState; progression: Progression; events: readonly MovementEvent[]; deferredEffects?: boolean }, counters: BattleCounters, pendingLife: LifeDecision | null) {
     ensureMove(this.#ruleEvents.length + result.events.length <= 512, "v3-match-rule-event-limit"); this.#checkNewEvents(result.events);
     const triggers = enqueueMovementTriggers(result.events, this.#cards);
     const held = conditionalTriggersWaiting(this.#observationDraft!);
-    const progression = result.deferredKO && !triggers.length && !held ? finishDamageStep(result.progression) : result.progression;
+    const progression = result.deferredEffects && !triggers.length && !held ? finishDamagePoint(result.movement, result.progression) : result.progression;
     this.#board = result.movement; this.#progression = progression; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...result.events]);
     this.#statEffects = pruneStatEffects(this.#board, this.#statEffects); this.#triggers = freezeMovement([...this.#triggers, ...triggers]);
     this.#keywordGrants = pruneKeywordGrants(this.#board, this.#keywordGrants);
-    this.#battleCounters = progression.battle ? counters : []; this.#lifeDecision = pendingLife; this.#damageSettling = !!result.deferredKO && (triggers.length > 0 || held);
+    this.#battleCounters = progression.battle ? counters : []; this.#lifeDecision = pendingLife; this.#damageSettling = !!result.deferredEffects && (triggers.length > 0 || held);
   }
   battleDecision(actor: Seat, requestId: string, expected: V3MatchContext, decision: "passBlock" | "endCounter") {
     return this.#run(actor, requestId, expected, { kind: decision }, () => {
@@ -382,10 +382,10 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
-      const supported = ["3.0.0-subset.41", "3.0.0-subset.42"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
+      const supported = ["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
         card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent : isInteractiveMainEvent;
       return card.definition.effects.filter(supported).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
         enabled: this.#board.players[actor].activeDon.length >= cost && (!effect.usageLimit ||
@@ -456,7 +456,7 @@ export class V3SyntheticMatchCoordinator {
     label(selectionId); label(token);
     return this.#run(actor, requestId, expected, { kind: "life", selectionId, token }, () => {
       ensureMove(this.#lifeDecision, "v3-life-decision-required");
-      const result = takeLife(this.#board, this.#progression, actor, this.#lifeDecision, selectionId, token, hash(`${this.#board.matchId}:${requestId}:life`), this.#now());
+      const result = takeLife(this.#board, this.#progression, actor, this.#lifeDecision, selectionId, token, hash(`${this.#board.matchId}:${requestId}:life`), this.#now(), true);
       this.#acceptBattle(result, this.#battleCounters, null);
     });
   }
