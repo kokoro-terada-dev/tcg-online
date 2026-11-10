@@ -17,6 +17,9 @@ const probesEnabled = inventory.registryHash === probeRegistry && supportsV3Runt
   definition: { schemaVersion: "3.0.0-subset.44" }, compilerVersion: inventory.compilerVersion, registryHash: probeRegistry
 });
 const probes = [
+  { feature: "trigger-self-play", label: "ライフトリガーから自身を登場",
+    quotes: ["【トリガー】このカードを登場させる。", "〖トリガー〗このカードを登場させる。"], wholeTrigger: true,
+    evidence: "dsl.ts PLAY_BY_EFFECT: hand only; fixtureCoordinator.ts FINISH_LIFE_TRIGGER: sends resolving card to trash" },
   { feature: "effect-deck-shuffle", label: "効果によるデッキのシャッフル",
     quotes: ["デッキをシャッフルする。", "デッキに戻しシャッフルする。"],
     evidence: "dsl.ts ActionMap / resolution.ts WORK: setup shuffling is not an effect action" },
@@ -52,7 +55,7 @@ function candidatesFor(input, ledger) {
     if (Object.hasOwn(entry, "generation")) {
       const info = entry.generation;
       dataObject(info, ["version", "status", "noEffect", "recognized", "unresolved"]);
-      assert(info.version === "v3-draft-generator.1" && ["complete", "partial", "unconvertible", "unassessed"].includes(info.status) &&
+      assert(["v3-draft-generator.1", "v3-draft-generator.2"].includes(info.version) && ["complete", "partial", "unconvertible", "unassessed"].includes(info.status) &&
         typeof info.noEffect === "boolean" && [info.recognized, info.unresolved].every(n => Number.isSafeInteger(n) && n >= 0) &&
         (info.status === "complete") === Object.hasOwn(entry, "definition") &&
         (info.status !== "complete" || info.unresolved === 0) &&
@@ -79,7 +82,9 @@ function candidatesFor(input, ledger) {
 export function collectProbes(variants) {
   if (!probesEnabled) return [];
   return variants.flatMap(variant => probes.flatMap(probe => Object.keys(fields).flatMap(field => {
-    const quote = probe.quotes.find(value => variant[field].includes(value));
+    const quote = probe.quotes.find(value => probe.wholeTrigger
+      ? field === "triggerText" && variant[field].trim() === value
+      : variant[field].includes(value));
     return quote ? [{ kind: "unsupported", feature: probe.feature, field, quote, evidence: probe.evidence,
       variantSha256: variant.pairSha256, origin: "literal-probe" }] : [];
   })));

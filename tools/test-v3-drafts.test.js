@@ -97,3 +97,74 @@ test("a card regenerated from the same CSV has identical hashes and partial meta
   entry(single, "SYN-Z").generation.status = "partial";
   assert.throws(() => analyzeV3Coverage(loadReviewedV3Catalog(), bytes, { candidates: single.candidates }), /generated coverage metadata/);
 });
+
+test("a split reminder is recognized only when adjacent to the same standalone keyword", () => {
+  const note = "(このカードは登場したターンにアタックできる)";
+  const generated = generateV3Drafts(ledgerFromCsv(csv([
+    card("NOTE-VALID", `【速攻】\r\n${note}`),
+    card("NOTE-ORPHAN", note),
+    card("NOTE-MISMATCH", `【ブロッカー】\n${note}`),
+    card("NOTE-NOT-ADJACENT", `【速攻】\n\n${note}`),
+    card("NOTE-SUFFIX", `【速攻】\n${note}ほかの効果。`)
+  ])));
+  assert.deepEqual(entry(generated, "NOTE-VALID").definition.keywords.map(keyword => keyword.type), ["RUSH"]);
+  assert.equal(trace(generated, "NOTE-VALID").variants[0].spans[1].pattern, "keyword-reminder-next-line");
+  for (const id of ["NOTE-ORPHAN", "NOTE-MISMATCH", "NOTE-NOT-ADJACENT", "NOTE-SUFFIX"]) {
+    assert.equal(entry(generated, id).definition, undefined);
+  }
+});
+
+test("threshold effects retain current value, rest condition, chooser and maximum", () => {
+  const rows = [
+    card("TARGET-KO", "【登場時】相手のレストのコスト4以下のキャラ2枚までを、KOする。", {
+      "トリガー": "【トリガー】相手のパワー3000以下のキャラ1枚までを、レストにする。"
+    }),
+    card("TARGET-RETURN", "【登場時】相手のコスト3以下のキャラ1枚までを、持ち主の手札に戻す。"),
+    card("TARGET-REQUIRED", "【登場時】相手のコスト4以下のキャラ1枚を、KOする。"),
+    card("TARGET-UNSCOPED", "【登場時】コスト4以下のキャラ1枚までを、KOする。")
+  ];
+  const g = generateV3Drafts(ledgerFromCsv(csv(rows)));
+  const [entryEffect, trigger] = entry(g, "TARGET-KO").definition.effects;
+  const [select, ko] = entryEffect.actions;
+  assert.deepEqual([select.selector.owner, select.selector.controller, select.selector.chooser, select.selector.min, select.selector.max],
+    ["OPPONENT", "OPPONENT", "SELF", 0, 2]);
+  assert.deepEqual(select.selector.filters.conditions.map(condition => [condition.left.ref, condition.op, condition.right]), [
+    ["CANDIDATE.rotated", "eq", true], ["CANDIDATE.current.cost", "lte", 4]
+  ]);
+  assert.equal(ko.type, "KO");
+  assert.equal(trigger.actions[0].selector.filters.left.ref, "CANDIDATE.current.power");
+  assert.equal(trigger.actions[1].type, "REST");
+  assert.equal(entry(g, "TARGET-RETURN").definition.effects[0].actions[1].destination.owner, "OPPONENT");
+  assert.equal(entry(g, "TARGET-REQUIRED").definition, undefined);
+  assert.equal(entry(g, "TARGET-UNSCOPED").definition, undefined);
+});
+
+test("counter buffs only the own leader for the battle; costs and a broader target are not guessed", () => {
+  const event = { "種類": "EVENT", "パワー": "-", "属性": "-" };
+  const g = generateV3Drafts(ledgerFromCsv(csv([
+    card("COUNT-POWER", "【カウンター】自分のリーダーを、このバトル中、パワー+2000。", event),
+    card("COUNT-COST", "【カウンター】手札1枚を捨てる：自分のリーダーを、このバトル中、パワー+2000。", event),
+    card("COUNT-TARGET", "【カウンター】自分のリーダーかキャラ1枚までを、このバトル中、パワー+2000。", event)
+  ])));
+  const [select, buff] = entry(g, "COUNT-POWER").definition.effects[0].actions;
+  assert.deepEqual([select.selector.zone, select.selector.owner, select.selector.min, select.selector.max], ["leader", "SELF", 1, 1]);
+  assert.deepEqual([buff.type, buff.amount, buff.duration.type], ["MODIFY_STAT", 2000, "BATTLE_END"]);
+  assert.equal(entry(g, "COUNT-COST").definition, undefined);
+  assert.equal(entry(g, "COUNT-TARGET").definition, undefined);
+});
+
+test("a life trigger calls the fully interpreted unique MAIN on the same card or remains unresolved", () => {
+  const event = { "種類": "EVENT", "パワー": "-", "属性": "-", "トリガー": "【トリガー】このカードの【メイン】効果を発動する。" };
+  const g = generateV3Drafts(ledgerFromCsv(csv([
+    card("CALL-OK", "【メイン】カード2枚を引く。", event),
+    card("CALL-UNKNOWN", "【メイン】カード2枚を引く。その後、条件を確認する。", event),
+    card("CALL-DUP", "【メイン】カード2枚を引く。\n【メイン】カード1枚を引く。", event)
+  ])));
+  const [main, trigger] = entry(g, "CALL-OK").definition.effects;
+  assert.equal(trigger.actions[0].type, "CALL_EFFECT_BODY");
+  assert.equal(trigger.actions[0].effectId, main.id);
+  assert.equal(trigger.costs.length, 0);
+  assert.equal(entry(g, "CALL-UNKNOWN").definition, undefined);
+  assert.equal(entry(g, "CALL-DUP").definition, undefined);
+  assert.equal(trace(g, "CALL-UNKNOWN").variants[0].spans.at(-1).reason, "main-body-unconfirmed");
+});
