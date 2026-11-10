@@ -18,7 +18,8 @@ import { attackOptions, declareAttack, finishAttackStep, finishCounterStep, fini
 import { endTurnKeywordGrants, pruneKeywordGrants, retainBattleKeywordGrants, type KeywordGrants } from "./keywordEffects";
 import { deckOutOutcome, DECK_OUT_POLICY } from "./ruleOutcomes";
 import { counterEventChoices, prepareCounterEvent, prepareEventFromHand } from "./counterEvents";
-import { isSimpleMainEvent, isInteractiveMainEvent } from "./simpleMainEvent";
+import { isSimpleMainEvent, isInteractiveMainEvent, isShareableMainEvent } from "./simpleMainEvent";
+import { effectUsageKey } from "./effectBodyCalls";
 import { prepareLifeTrigger } from "./lifeTriggers";
 import { isReviewedV3Catalog, type ReviewedV3Catalog } from "./reviewedCatalog";
 import { pinMasterFacts } from "../masterFacts";
@@ -172,7 +173,7 @@ export class V3SyntheticMatchCoordinator {
     ensureMove(limit === null || (this.#usage.get(usageKey) ?? 0) < limit, "v3-match-usage-exhausted");
     const resolutionId = randomUUID(), coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
       identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: this.#board, progression: this.#progression,
-      signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage });
+      signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage, usedEffect: key => this.#usage.get(key) ?? 0 });
     this.#archive(); this.#active = { coordinator, actor, cardId: object.cardId, effectId, source: { ...source }, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: null };
     this.#progression = coordinator.snapshotForCoordinator().progression;
   }
@@ -193,7 +194,7 @@ export class V3SyntheticMatchCoordinator {
       const resolutionId = randomUUID(), coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: this.#board, progression: this.#progression,
         signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
-        triggerCause: pending.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage });
+        triggerCause: pending.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage, usedEffect: key => this.#usage.get(key) ?? 0 });
       this.#archive(); this.#triggers = this.#triggers.filter(entry => entry.token !== token);
       this.#active = { coordinator, actor, cardId: pending.cardId, effectId, source, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: pending.cause.eventId };
       if (pending.cause.type === "ON_EVENT") {
@@ -207,6 +208,8 @@ export class V3SyntheticMatchCoordinator {
     return this.#run(actor, requestId, expected, body, () => {
       ensureMove(this.#active, "v3-match-no-resolution"); const active = this.#active;
       action(active.coordinator); const snapshot = active.coordinator.snapshotForCoordinator(), frame = active.coordinator.viewFor(active.actor).frame;
+      const bodyUse = active.coordinator.bodyUsageKeyForCoordinator();
+      if (bodyUse) this.#usage.set(bodyUse, 1);
       this.#replacementUsage = active.coordinator.replacementUsageForCoordinator();
       const triggers = enqueueMovementTriggers(snapshot.movementEvents.slice(active.eventCount), this.#cards);
       this.#triggers = freezeMovement([...this.#triggers, ...triggers]); active.eventCount = snapshot.movementEvents.length;
@@ -365,7 +368,7 @@ export class V3SyntheticMatchCoordinator {
       const coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source: candidate.source }, movement: candidate.movement, progression: this.#progression,
         signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
-        counterEventCause: candidate.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage });
+        counterEventCause: candidate.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage, usedEffect: key => this.#usage.get(key) ?? 0 });
       const usageKey = JSON.stringify([this.#board.turnNumber, actor, candidate.source.instanceId, candidate.source.generation, effectId]);
       this.#board = candidate.movement; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...candidate.events]);
       this.#active = { coordinator, actor, cardId: object.cardId, effectId, source: candidate.source, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: null };
@@ -379,11 +382,14 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
-      return card.definition.effects.filter(card.definition.schemaVersion !== "3.0.0-subset.19" ? isInteractiveMainEvent : isSimpleMainEvent).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
-        enabled: this.#board.players[actor].activeDon.length >= cost,
+      const supported = card.definition.schemaVersion === "3.0.0-subset.41" ? isShareableMainEvent :
+        card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent : isInteractiveMainEvent;
+      return card.definition.effects.filter(supported).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
+        enabled: this.#board.players[actor].activeDon.length >= cost && (!effect.usageLimit ||
+          (this.#usage.get(effectUsageKey(this.#board.turnNumber, actor, { ...source, generation: source.generation + 1 }, effect.id)) ?? 0) < effect.usageLimit.count),
         sourceToken: createHmac("sha256", this.#key).update(JSON.stringify(["v3-main-event.1", this.#board.matchId, actor, this.context(), source, "hand", effect.id, cost, card.definitionHash])).digest("hex") }));
     }));
   }
@@ -398,7 +404,7 @@ export class V3SyntheticMatchCoordinator {
       const coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source: prepared.source }, movement: prepared.movement, progression: this.#progression,
         signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
-        mainEventCause: { event: prepared.event }, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage });
+        mainEventCause: { event: prepared.event }, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage, usedEffect: key => this.#usage.get(key) ?? 0 });
       if (card.definition.schemaVersion !== "3.0.0-subset.19") {
         // First selection is validated privately. Publication commits use, not future choices/work.
         for (let step = 0; step < 32 && coordinator.viewFor(actor).frame.status === "ready"; step++) coordinator.advance(actor, `event-declaration-${step}`, coordinator.context());
@@ -407,8 +413,10 @@ export class V3SyntheticMatchCoordinator {
         this.#checkNewEvents(prepared.events);
         this.#archive(); this.#board = prepared.movement; this.#progression = coordinator.snapshotForCoordinator().progression;
         this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...prepared.events]);
+        const usageKey = effectUsageKey(this.#board.turnNumber, actor, prepared.source, effectId);
+        if (card.definition.effects.find(effect => effect.id === effectId)?.usageLimit) this.#usage.set(usageKey, 1);
         this.#active = { coordinator, actor, cardId: choice.cardId, effectId, source: prepared.source, resolutionId,
-          usageKey: JSON.stringify([this.#board.turnNumber, actor, prepared.source.instanceId, prepared.source.generation, effectId]), counted: true, eventCount: 0, triggerEventId: null, mainEventCost: choice.cost };
+          usageKey, counted: true, eventCount: 0, triggerEventId: null, mainEventCost: choice.cost };
         return;
       }
       // Drive the shared machine on an unpublished draft; never keep a partial payment or draw.
@@ -462,7 +470,7 @@ export class V3SyntheticMatchCoordinator {
       const coordinator = new V3FixtureCoordinator({ mode: "syntheticNoAbilities", card: candidate.card,
         identity: { matchId: this.#board.matchId, resolutionId, effectId, actor, source }, movement: candidate.movement, progression: candidate.progression,
         signingKey: this.#key, master: this.#master, now: this.#now, definitions: [...this.#cards.values()], statEffects: this.#statEffects, keywordGrants: this.#keywordGrants,
-        lifeTriggerCause: candidate.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage });
+        lifeTriggerCause: candidate.cause, battleCounters: this.#battleCounters, checkEvents: this.#checkNewEvents, replacementUsage: this.#replacementUsage, usedEffect: key => this.#usage.get(key) ?? 0 });
       const usageKey = JSON.stringify([this.#board.turnNumber, actor, source.instanceId, source.generation, effectId]);
       this.#board = candidate.movement; this.#ruleEvents = freezeMovement([...this.#ruleEvents, ...candidate.events]);
       this.#active = { coordinator, actor, cardId: candidate.card.definition.cardId, effectId, source, resolutionId, usageKey, counted: false, eventCount: 0, triggerEventId: null };

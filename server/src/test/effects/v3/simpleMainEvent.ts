@@ -13,6 +13,14 @@ export function isSimpleMainEvent(effect: DeepReadonly<Effect>): boolean {
 }
 
 export function isInteractiveMainEvent(effect: DeepReadonly<Effect>): boolean {
+  return interactiveMainEvent(effect, false);
+}
+
+export function isShareableMainEvent(effect: DeepReadonly<Effect>): boolean {
+  return interactiveMainEvent(effect, true);
+}
+
+function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean): boolean {
   const sourceFree = (value: unknown): boolean => {
     if (!value || typeof value !== "object") return true;
     if (Array.isArray(value)) return value.every(sourceFree);
@@ -38,7 +46,7 @@ export function isInteractiveMainEvent(effect: DeepReadonly<Effect>): boolean {
     }
   };
   return effect.kind === "activated" && effect.timing.type === "MAIN" && effect.sourceZones.length === 1 && effect.sourceZones[0] === "hand" &&
-    !effect.optional && effect.usageLimit === null && effect.costs.length === 0 &&
+    !effect.optional && (effect.usageLimit === null || allowLimit && effect.usageLimit.count === 1) && effect.costs.length === 0 &&
     effect.activationConditions.type === "all" && effect.activationConditions.conditions.length === 0 &&
     effect.resolutionConditions.type === "all" && effect.resolutionConditions.conditions.length === 0 && effect.actions.length > 0 && effect.actions.every(supported);
 }
