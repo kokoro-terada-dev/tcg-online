@@ -36,3 +36,17 @@ test("grouping merges cosmetic and numeric differences while preserving the raw 
   stale.cards[0].variants[0].text = "modified";
   assert.throws(() => compareV3DraftRuns(before, stale, oldCoverage, newCoverage), /Raw variant changed/);
 });
+
+test("PR21 comparisons flag a dropped complete card or changed definition hash against either baseline", () => {
+  const a = { ...row("A", "-", "complete", []), definitionHash: "a" };
+  const b = { ...row("B", "-", "complete", []), definitionHash: "b" };
+  const oldCoverage = coverage([["A", "対応候補"], ["B", "対応候補"]]);
+  const newCoverage = coverage([["A", "対応候補"], ["B", "未判定"]]);
+  const after = trace(3, [{ ...a, definitionHash: "changed" }, { ...b, status: "unassessed", compiler: "not_checked", reasons: ["withheld"] }]);
+  for (const version of [1, 2]) {
+    const diff = compareV3DraftRuns(trace(version, [a, b]), after, oldCoverage, newCoverage);
+    assert.deepEqual(diff.regressions, ["A", "B"]);
+    assert.equal(diff.cardChanges[0].definitionHashBefore, "a");
+    assert.deepEqual(diff.cardChanges[1].reasonsAfter, ["withheld"]);
+  }
+});

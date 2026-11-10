@@ -10,6 +10,8 @@ const { SOURCE_COLUMNS } = require("../server/dist/test/effects/v3/cardData.js")
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
 const { ApprovedV3Catalog } = require("../server/dist/test/effects/v3/approval.js");
 const { compileV3CardJson } = require("../server/dist/test/effects/v3/compiler.js");
+const { setup: eventFixture } = require("../server/test/helpers/v3-event.cjs");
+const { finish, id } = require("../server/test/helpers/v3-observed.cjs");
 const quote = value => `"${value.replaceAll('"', '""')}"`;
 const card = (id, body, patch = {}) => ({
   "表示ID": id, "カード番号": id, "カード名": id, "種類": "CHARACTER", "コスト": "1", "パワー": "2000",
@@ -139,18 +141,113 @@ test("threshold effects retain current value, rest condition, chooser and maximu
   assert.equal(entry(g, "TARGET-UNSCOPED").definition, undefined);
 });
 
-test("counter buffs only the own leader for the battle; costs and a broader target are not guessed", () => {
+test("counter distinguishes fixed leader, a single optional target across zones, and unsupported payments or totals", () => {
   const event = { "種類": "EVENT", "パワー": "-", "属性": "-" };
   const g = generateV3Drafts(ledgerFromCsv(csv([
     card("COUNT-POWER", "【カウンター】自分のリーダーを、このバトル中、パワー+2000。", event),
     card("COUNT-COST", "【カウンター】手札1枚を捨てる：自分のリーダーを、このバトル中、パワー+2000。", event),
-    card("COUNT-TARGET", "【カウンター】自分のリーダーかキャラ1枚までを、このバトル中、パワー+2000。", event)
+    card("COUNT-TARGET", "【カウンター】自分のリーダーかキャラ1枚までを、このバトル中、パワー+2000。", event),
+    card("COUNT-TOTAL", "【カウンター】自分のリーダーかキャラ2枚までを、このバトル中、パワー+2000。", event)
   ])));
   const [select, buff] = entry(g, "COUNT-POWER").definition.effects[0].actions;
   assert.deepEqual([select.selector.zone, select.selector.owner, select.selector.min, select.selector.max], ["leader", "SELF", 1, 1]);
   assert.deepEqual([buff.type, buff.amount, buff.duration.type], ["MODIFY_STAT", 2000, "BATTLE_END"]);
   assert.equal(entry(g, "COUNT-COST").definition, undefined);
-  assert.equal(entry(g, "COUNT-TARGET").definition, undefined);
+  const [mode] = entry(g, "COUNT-TARGET").definition.effects[0].actions;
+  assert.equal(mode.type, "CHOOSE_MODE");
+  assert.deepEqual(mode.modes.map(({ actions: [pick, modify] }) =>
+    [pick.selector.zone, pick.selector.owner, pick.selector.chooser, pick.selector.min, pick.selector.max, modify.duration.type]), [
+    ["leader", "SELF", "SELF", 0, 1, "BATTLE_END"], ["character", "SELF", "SELF", 0, 1, "BATTLE_END"]
+  ]);
+  assert.equal(entry(g, "COUNT-TOTAL").definition, undefined);
+});
+
+test("structured clauses retain conjunctive conditions, current target bounds, quantities and independent sequential bindings", () => {
+  const body = "【登場時】自分のライフが2枚以下でかつ、相手の手札が3枚以上の場合、相手のレストのコスト4以下かつパワー3000以上のキャラ2枚までを、KOする。その後、相手のアクティブのキャラ1枚までを、このターン中、パワー-1000。";
+  const g = generateV3Drafts(ledgerFromCsv(csv([card("STRUCTURE-AND", body)])));
+  const [effect] = entry(g, "STRUCTURE-AND").definition.effects;
+  const [condition] = effect.actions;
+  assert.deepEqual(condition.condition.conditions.map(x => [x.left.ref, x.op, x.right]), [
+    ["SELF.lifeCount", "lte", 2], ["OPPONENT.handCount", "gte", 3]
+  ]);
+  const [pick, ko, second, duration] = condition.then;
+  assert.deepEqual([pick.selector.owner, pick.selector.chooser, pick.selector.min, pick.selector.max], ["OPPONENT", "SELF", 0, 2]);
+  assert.deepEqual(pick.selector.filters.conditions.map(x => [x.left.ref, x.op, x.right]), [
+    ["CANDIDATE.rotated", "eq", true], ["CANDIDATE.current.cost", "lte", 4], ["CANDIDATE.current.power", "gte", 3000]
+  ]);
+  assert.equal(ko.type, "KO");
+  assert.notEqual(pick.bindAs, second.bindAs);
+  assert.equal(second.selector.filters.conditions[0].right, false);
+  assert.deepEqual(duration.condition, { type: "TURN_IS", player: "SELF" });
+  for (const [branch, player] of [[duration.then, "SELF"], [duration.else, "OPPONENT"]]) {
+    assert.deepEqual([branch[0].cards.ref, branch[0].amount, branch[0].duration], [
+      `bindings.${second.bindAs}`, -1000, { type: "TURN_END", player, occurrence: 1 }
+    ]);
+  }
+});
+
+test("a structured MAIN draw then discard resolves against the post-draw hand, with private and exact selection", () => {
+  const body = "【メイン】カード2枚を引き、自分の手札3枚を捨てる。";
+  const g = generateV3Drafts(ledgerFromCsv(csv([card("STRUCTURE-EVENT", body, { "種類": "EVENT", "パワー": "-", "属性": "-" })])));
+  const { schemaVersion, effects } = entry(g, "STRUCTURE-EVENT").definition;
+  const [draw, discard] = effects[0].actions;
+  assert.equal(draw.type, "DRAW");
+  assert.deepEqual([discard.then[0].selector.min, discard.else[0].then[0].selector.min, discard.else[0].else[0].then[0].selector.min], [3, 2, 1]);
+  assert.deepEqual(discard.else[0].else[0].else, []);
+  const { c } = eventFixture({ mutate(d) { d.schemaVersion = schemaVersion; d.effects = effects; } });
+  const use = c.mainEventChoicesFor(0)[0];
+  const before = c.snapshotForCoordinator().movement.players[0];
+  c.useMainEvent(0, id(), c.context(), use.sourceToken, use.effectId);
+  finish(c, 0);
+  const q = c.viewFor(0).frame.choice;
+  assert.equal(q.options.length, before.hand.length - 1 + 2);
+  assert.deepEqual(c.viewFor(1).frame.choice.options, []);
+  assert.throws(() => c.answer(0, id(), c.context(), q.selectionId, q.options.slice(0, 2).map(o => o.token)));
+  c.answer(0, id(), c.context(), q.selectionId, q.options.slice(0, 3).map(o => o.token));
+  finish(c, 0);
+  const after = c.snapshotForCoordinator().movement.players[0];
+  assert.equal(after.hand.length, before.hand.length - 2);
+  assert.equal(after.trash.length, before.trash.length + 4);
+});
+
+test("sequential exact discard resolves as many as possible if earlier work reduces the hand", () => {
+  const body = "【メイン】自分の手札3枚を捨てる。その後、自分の手札3枚を捨てる。";
+  const g = generateV3Drafts(ledgerFromCsv(csv([card("STRUCTURE-SHORT", body, { "種類": "EVENT", "パワー": "-", "属性": "-" })])));
+  const { schemaVersion, effects } = entry(g, "STRUCTURE-SHORT").definition;
+  const { c } = eventFixture({ mutate(d) { d.schemaVersion = schemaVersion; d.effects = effects; } });
+  const use = c.mainEventChoicesFor(0)[0];
+  c.useMainEvent(0, id(), c.context(), use.sourceToken, use.effectId);
+  finish(c, 0);
+  const first = c.viewFor(0).frame.choice;
+  assert.equal(first.options.length, 4);
+  c.answer(0, id(), c.context(), first.selectionId, first.options.slice(0, 3).map(o => o.token));
+  finish(c, 0);
+  const second = c.viewFor(0).frame.choice;
+  assert.equal(second.options.length, 1);
+  c.answer(0, id(), c.context(), second.selectionId, [second.options[0].token]);
+  finish(c, 0);
+  assert.equal(c.snapshotForCoordinator().movement.players[0].hand.length, 0);
+});
+
+test("uncertain selectors, scope and payment retain precise raw offsets without leaking a partial definition", () => {
+  const bodies = [
+    ["  【登場時】カード1枚を引く。その後、相手のキャラ2枚を、KOする。  ", "相手のキャラ2枚を、KOする。", "target-or-operation-unconfirmed"],
+    ["【登場時】自分のライフが2枚以下または相手の手札が3枚以上の場合、カード1枚を引く。", "自分のライフが2枚以下または相手の手札が3枚以上の場合、", "resolution-condition-unconfirmed"],
+    ["【登場時】ドン!!−1：カード1枚を引く。", "ドン!!−1：カード1枚を引く。", "payment-or-unmodeled-declaration"],
+    ["【登場時】自分のリーダーを、このバトル中、パワー+1000。", "自分のリーダーを、このバトル中、パワー+1000。", "target-or-operation-unconfirmed"]
+  ];
+  const g = generateV3Drafts(ledgerFromCsv(csv(bodies.map(([body], i) => card(`HELD-${i}`, body)))));
+  for (const [i, [body, unresolved, reason]] of bodies.entries()) {
+    assert.equal(entry(g, `HELD-${i}`).definition, undefined);
+    const [span] = trace(g, `HELD-${i}`).variants[0].spans;
+    assert.equal(span.reason, reason);
+    assert.deepEqual(span.unparsed.map(({ start, end, reason }) => [body.slice(start, end), reason]), [[unresolved, reason]]);
+  }
+  const multi = "【登場時】カード1枚を引く。その後、カードを選ぶ。その後、ドン!!を追加する。";
+  const second = generateV3Drafts(ledgerFromCsv(csv([card("HELD-SEQUENCE", multi)])));
+  const [span] = trace(second, "HELD-SEQUENCE").variants[0].spans;
+  assert.deepEqual(span.unparsed.map(({ start, end }) => multi.slice(start, end)), ["カードを選ぶ。", "ドン!!を追加する。"]);
+  assert.equal(entry(second, "HELD-SEQUENCE").definition, undefined);
 });
 
 test("a life trigger calls the fully interpreted unique MAIN on the same card or remains unresolved", () => {

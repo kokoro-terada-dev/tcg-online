@@ -43,20 +43,19 @@ function diagnosis(group) {
   if (group.field === "triggerText" && /^【トリガー】ドン!!デッキからドン!!#枚までを、/.test(group.pattern)) {
     return ["held", "固定枚数のDON追加では任意枚数・不足時の選択を保証できない"];
   }
-  if (/カード#枚を引き、自分の手札#枚を捨てる。$/.test(group.pattern)) {
-    return ["held", "ドロー後の手札不足・選択枚数と処理順の確認が必要"];
-  }
-  return ["unknown", "完全一致する検証済みの変換がなく、既存DSLでの表現可否は未判定"];
+  return ["unknown", "原文を安全に変換できず、既存DSLでの表現可否は未判定"];
 }
 
 export function compareV3DraftRuns(before, after, beforeCsv, afterCsv) {
-  assert(before.version === "v3-draft-generator.1" && after.version === "v3-draft-generator.2" &&
+  const versions = ["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3"];
+  const baseline = versions.indexOf(before.version);
+  assert(baseline >= 0 && versions.indexOf(after.version) > baseline &&
     before.sourceCsvSha256 === after.sourceCsvSha256 && before.registryHash === after.registryHash &&
     before.totals.sourceCards === after.totals.sourceCards && before.cards.length === before.totals.sourceCards &&
-    after.cards.length === after.totals.sourceCards, "Compare full PR19 and PR20 reports from the same CSV and Registry");
+    after.cards.length === after.totals.sourceCards, "Compare complete reports from the same CSV and Registry");
   const current = indexCards(after.cards), oldCoverage = coverage(beforeCsv, before.sourceCsvSha256), newCoverage = coverage(afterCsv, after.sourceCsvSha256);
   assert(indexCards(before.cards).size === current.size && oldCoverage.size === current.size && newCoverage.size === current.size, "Report card counts differ");
-  const groups = new Map(), patterns = new Map(), approvedOverlap = [], cardChanges = [];
+  const groups = new Map(), patterns = new Map(), approvedOverlap = [], cardChanges = [], regressions = [];
   let unresolved = 0;
   for (const previous of before.cards) {
     const next = current.get(previous.cardId), old = oldCoverage.get(previous.cardId), fresh = newCoverage.get(previous.cardId);
@@ -69,7 +68,12 @@ export function compareV3DraftRuns(before, after, beforeCsv, afterCsv) {
     if (previous.status !== next.status || previous.compiler !== next.compiler || previous.unresolved !== next.unresolved ||
       old.classification !== fresh.classification || previous.definitionHash !== next.definitionHash) {
       cardChanges.push({ cardId: previous.cardId, before: previous.status, after: next.status, compilerBefore: previous.compiler, compilerAfter: next.compiler,
-        coverageBefore: old.classification, coverageAfter: fresh.classification, unresolvedBefore: previous.unresolved, unresolvedAfter: next.unresolved });
+        coverageBefore: old.classification, coverageAfter: fresh.classification, unresolvedBefore: previous.unresolved, unresolvedAfter: next.unresolved,
+        definitionHashBefore: previous.definitionHash ?? "", definitionHashAfter: next.definitionHash ?? "",
+        reasonsBefore: previous.reasons ?? [], reasonsAfter: next.reasons ?? [] });
+    }
+    if (previous.status === "complete" && (next.status !== "complete" || next.compiler !== previous.compiler || next.definitionHash !== previous.definitionHash)) {
+      regressions.push(previous.cardId);
     }
     for (const variant of previous.variants) {
       const updated = now.get(variant.pairSha256);
@@ -100,7 +104,7 @@ export function compareV3DraftRuns(before, after, beforeCsv, afterCsv) {
       }
     }
   }
-  assert(unresolved === before.totals.unresolvedSpans, "PR19 unresolved span total mismatch");
+  assert(unresolved === before.totals.unresolvedSpans, "Baseline unresolved span total mismatch");
   const grouped = [...groups.values()].map(group => {
     const [expressibility, reason] = diagnosis(group), { ids, resolvedIds, unsupported: _unsupported, mainUnconfirmed: _main, ...rest } = group;
     return { ...rest, cards: ids.size, resolvedCards: resolvedIds.size, expressibility, reason };
@@ -108,13 +112,13 @@ export function compareV3DraftRuns(before, after, beforeCsv, afterCsv) {
   const improvements = [...patterns].map(([pattern, row]) => ({ pattern, spans: row.spans, cards: row.ids.size, newCompleteCards: row.newComplete.size })).sort(positive);
   const counts = rows => Object.fromEntries(classifications.map(status => [status, [...rows.values()].filter(row => row.classification === status).length]));
   return { sourceCsvSha256: before.sourceCsvSha256, before: before.totals, after: after.totals, coverageBefore: counts(oldCoverage), coverageAfter: counts(newCoverage),
-    groups: grouped, improvements, approvedOverlap, cardChanges };
+    groups: grouped, improvements, approvedOverlap, cardChanges, regressions };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const [before, after, output] = process.argv.slice(2);
-    assert(process.argv.length === 5, "Usage: analyze-v3-draft-gaps.js <PR19-report> <PR20-report> <new-output-dir>");
+    assert(process.argv.length === 5, "Usage: analyze-v3-draft-gaps.js <baseline-report> <newer-report> <new-output-dir>");
     const read = (directory, file) => {
       const source = path.join(directory, file);
       assert(fs.statSync(source).size <= 64 * 1024 * 1024, "Input report exceeds 64 MiB");
@@ -128,9 +132,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     write("gap-diff.json", JSON.stringify(report, null, 2) + "\n");
     write("gap-groups.csv", csv([["field", "normalized", "occurrences", "cards", "resolved", "resolved_cards", "expressibility", "reason", "example_card", "example_raw"],
       ...report.groups.map(row => [row.field, row.pattern, row.spans, row.cards, row.resolved, row.resolvedCards, row.expressibility, row.reason, row.exampleCard, row.example])]));
-    const columns = ["cardId", "before", "after", "compilerBefore", "compilerAfter", "coverageBefore", "coverageAfter", "unresolvedBefore", "unresolvedAfter"];
-    write("card-diff.csv", csv([columns, ...report.cardChanges.map(row => columns.map(column => row[column]))]));
+    const columns = ["cardId", "before", "after", "compilerBefore", "compilerAfter", "coverageBefore", "coverageAfter", "unresolvedBefore", "unresolvedAfter",
+      "definitionHashBefore", "definitionHashAfter", "reasonsBefore", "reasonsAfter"];
+    write("card-diff.csv", csv([columns, ...report.cardChanges.map(row => columns.map(column =>
+      Array.isArray(row[column]) ? JSON.stringify(row[column]) : row[column]))]));
     console.log(JSON.stringify({ before: report.before, after: report.after, coverageAfter: report.coverageAfter,
-      groupCount: report.groups.length, improvements: report.improvements, approvedOverlap: report.approvedOverlap.length }));
+      groupCount: report.groups.length, improvements: report.improvements, approvedOverlap: report.approvedOverlap.length, regressions: report.regressions.length }));
+    if (report.regressions.length) process.exitCode = 1;
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

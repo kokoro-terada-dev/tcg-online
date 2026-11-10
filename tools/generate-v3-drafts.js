@@ -6,13 +6,14 @@ import { ledgerFromCsv } from "./build-v3-review-ledger.js";
 import { analyzeV3Coverage, collectProbes, writeV3Coverage } from "./analyze-v3-coverage.js";
 import { reviewedPrintedDifferences } from "./review-v3-catalog.js";
 import { csv } from "./audit-effect-cards.js";
+import { draftSelect as select, emitV3Structure, parseV3Structure, structurePattern } from "./v3-draft-structure.js";
 
 const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
 const { compileV3CardJson, supportsV3RuntimeProfile } = require("../server/dist/test/effects/v3/compiler.js");
 const { isInteractiveMainEvent } = require("../server/dist/test/effects/v3/simpleMainEvent.js");
 const { registryHash } = require("../docs/card-effect-supported-operations.json");
-const version = "v3-draft-generator.2", schemaVersion = "3.0.0-subset.44";
+const version = "v3-draft-generator.3", schemaVersion = "3.0.0-subset.44";
 const keywords = new Map([
   ["ブロッカー", ["BLOCKER", "(相手のアタックの後、このカードをレストにし、アタックの対象をこのカードにできる)"]],
   ["速攻", ["RUSH", "(このカードは登場したターンにアタックできる)"]],
@@ -31,6 +32,11 @@ const timings = new Map([
   ["カウンター", ["COUNTER", "activated", ["event"]]],
   ["トリガー", ["TRIGGER", "triggered", ["character", "event", "stage"]]]
 ]);
+const boundaryTimings = new Map([
+  ["ブロック時", ["ON_BLOCK", "triggered", ["character"]]],
+  ["自分のターン終了時", ["TURN_END", "triggered", ["character", "stage", "leader"], "SELF"]],
+  ["相手のターン終了時", ["TURN_END", "triggered", ["character", "stage", "leader"], "OPPONENT"]]
+]);
 const absent = value => value === "-" || value === "";
 const lexical = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const sorted = values => [...new Set(values)].sort(lexical);
@@ -39,10 +45,6 @@ const header = text => /^(?:【([^】]+)】|〖([^〗]+)〗)(.*)$/u.exec(text.tr
 const reminder = (body, keyword) => keyword.length > 1 && /^[（(].+[）)]$/u.test(body) &&
   keyword.slice(1).some(value => value.slice(1, -1) === body.slice(1, -1));
 const compare = (ref, op, right) => ({ type: "compare", left: { ref }, op, right });
-const select = (bindAs, zone, player, min, max, filters) => ({ type: "SELECT", bindAs, selector: {
-  type: "CARDS", owner: player, controller: player, chooser: "SELF", zone, cardTypes: [zone], filters, excludeSource: false,
-  faceUpOnly: true, min, max, visibility: "PUBLIC", selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail"
-} });
 
 function targetedActions(body, type, start, sourceSpan) {
   const binding = `target_${start}`, cards = { ref: `bindings.${binding}` };
@@ -80,22 +82,32 @@ function parseSpan(span, cardType, gaps, previous, raw) {
       return { ...span, status: "recognized", pattern: "keyword-reminder-next-line", attachedTo: previous.start };
     }
   }
-  const timing = timings.get(tag?.[1] ?? tag?.[2]);
+  const label = tag?.[1] ?? tag?.[2];
+  const regular = timings.get(label), timing = regular ?? boundaryTimings.get(label);
+  let reason = "timing-or-keyword-unconfirmed", unparsed = [{ ...sourceSpan, reason }];
   if (timing && (field === "triggerText") === (timing[0] === "TRIGGER") && timing[2].includes(cardType)) {
-    const [type, kind] = timing;
+    const [type, kind, , player] = timing;
     const draw = /^カード([1-9]|[1-4][0-9]|50)枚を引く。$/u.exec(body);
-    const parsed = draw ? { actions: [{ type: "DRAW", player: "SELF", count: Number(draw[1]), sourceSpan }] } : targetedActions(body, type, start, sourceSpan);
+    const parsed = regular && (draw ? { actions: [{ type: "DRAW", player: "SELF", count: Number(draw[1]), sourceSpan }] } : targetedActions(body, type, start, sourceSpan));
     const effect = {
-      id: `${field === "text" ? "body" : "trigger"}-${start}`, kind, timing: { type }, sourceZones: [type === "TRIGGER" ? "life" : cardType === "event" ? "hand" : cardType],
+      id: `${field === "text" ? "body" : "trigger"}-${start}`, kind, timing: { type, ...(player ? { player } : {}) }, sourceZones: [type === "TRIGGER" ? "life" : cardType === "event" ? "hand" : cardType],
       optional: false, usageLimit: null, activationConditions: always(), resolutionConditions: always(), costs: []
     };
     if (parsed) return { ...span, status: "recognized", ...(parsed.pattern ? { pattern: parsed.pattern } : {}), effect: { ...effect, actions: parsed.actions } };
     if (type === "TRIGGER" && cardType === "event" && /^(?:このカードの【メイン】効果を発動する。|このカードの〖メイン〗効果を発動する。)$/u.test(body)) {
-      return { ...span, status: "unknown", features: [], pendingMainCall: effect };
+      return { ...span, status: "unknown", features: [], unparsed: [{ ...sourceSpan, reason: "main-body-unconfirmed" }], pendingMainCall: effect };
     }
+    const { structure, issues } = parseV3Structure(body, type);
+    if (structure) return { ...span, status: "recognized", pattern: structurePattern(structure, !regular), structure,
+      effect: { ...effect, actions: emitV3Structure(structure, sourceSpan) } };
+    reason = issues[0].reason;
+    const bodyStart = start + text.trimEnd().length - body.length;
+    unparsed = issues.map(({ reason, start, end }) => ({
+      ...(end > start ? { start: bodyStart + start, end: bodyStart + end } : sourceSpan), reason
+    }));
   }
   const features = sorted(gaps.filter(gap => gap.field === field && text.includes(gap.quote)).map(gap => gap.feature));
-  return { ...span, status: features.length ? "unsupported" : "unknown", features };
+  return { ...span, status: features.length ? "unsupported" : "unknown", features, reason, unparsed };
 }
 
 function analyzeVariant(variant, rows) {
@@ -121,6 +133,7 @@ function analyzeVariant(variant, rows) {
         actions: [{ type: "CALL_EFFECT_BODY", effectId: main[0].effect.id, sourceSpan: { start: origin.start, end: origin.end } }] } });
       delete span.reason;
       delete span.features;
+      delete span.unparsed;
     }
   }
   return { ...variant, cardType, spans };
@@ -140,7 +153,8 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
     required.some(key => baseStats[key] === null) ||
     Object.entries(baseStats).some(([key, value]) => value === undefined || value !== null && !possible.includes(key))) return null;
   return {
-    schemaVersion, cardId: card.cardId, cardVersion: variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
+    schemaVersion, cardId: card.cardId, cardVersion: variant.spans.some(span => span.structure) ? "draft.pr21.1" :
+      variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",
     keywords: variant.spans.flatMap(span => span.keyword ? [span.keyword] : []),
     effects: variant.spans.flatMap(span => span.effect ? [span.effect] : []),

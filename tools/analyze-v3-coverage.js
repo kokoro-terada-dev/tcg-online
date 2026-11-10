@@ -55,7 +55,7 @@ function candidatesFor(input, ledger) {
     if (Object.hasOwn(entry, "generation")) {
       const info = entry.generation;
       dataObject(info, ["version", "status", "noEffect", "recognized", "unresolved"]);
-      assert(["v3-draft-generator.1", "v3-draft-generator.2"].includes(info.version) && ["complete", "partial", "unconvertible", "unassessed"].includes(info.status) &&
+      assert(["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3"].includes(info.version) && ["complete", "partial", "unconvertible", "unassessed"].includes(info.status) &&
         typeof info.noEffect === "boolean" && [info.recognized, info.unresolved].every(n => Number.isSafeInteger(n) && n >= 0) &&
         (info.status === "complete") === Object.hasOwn(entry, "definition") &&
         (info.status !== "complete" || info.unresolved === 0) &&
