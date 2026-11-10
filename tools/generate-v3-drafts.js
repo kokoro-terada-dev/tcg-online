@@ -14,7 +14,7 @@ const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
 const { compileV3CardJson, supportsV3RuntimeProfile } = require("../server/dist/test/effects/v3/compiler.js");
 const { isInteractiveMainEvent } = require("../server/dist/test/effects/v3/simpleMainEvent.js");
-const latest = "v3-draft-generator.10";
+const latest = "v3-draft-generator.11";
 const keywords = new Map([
   ["ブロッカー", ["BLOCKER", "(相手のアタックの後、このカードをレストにし、アタックの対象をこのカードにできる)"]],
   ["速攻", ["RUSH", "(このカードは登場したターンにアタックできる)"]],
@@ -71,7 +71,7 @@ function targetedActions(body, type, start, sourceSpan) {
     actions: [select(binding, "character", "OPPONENT", 0, Number(max), filter), action] };
 }
 
-function parseSpan(span, cardType, gaps, previous, raw, extended, recipes) {
+function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch) {
   const { field, start, end, text } = span;
   const tag = header(text);
   const keyword = keywords.get(tag?.[1] ?? tag?.[2]);
@@ -102,7 +102,8 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes) {
     if (["ON_PLAY/ON_ATTACK", "ON_PLAY/ON_KO", "MAIN/COUNTER"].includes(pair) &&
         timing[2].includes(cardType) && second[2].includes(cardType) && !/^[【〖]/u.test(shared)) {
       const parsed = [timing, second].map(t => parseCompoundEffect(shared, t[0], cardType, sourceSpan, false) ??
-        (recipes ? parseCompoundEffect(shared, t[0], cardType, sourceSpan, false, true) : null));
+        (recipes ? parseCompoundEffect(shared, t[0], cardType, sourceSpan, false, true) : null) ??
+        (batch ? parseCompoundEffect(shared, t[0], cardType, sourceSpan, false, true, true) : null));
       if (parsed.every(Boolean)) {
         const effects = [timing, second].map((t, index) => {
           const { pattern, structure, ...program } = parsed[index];
@@ -136,7 +137,8 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes) {
       effect: { ...effect, actions: emitV3Structure(structure, sourceSpan) } };
     const fullTrigger = raw.trim() === text.trim();
     const compound = extended && (parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger) ??
-      (recipes ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true) : null));
+      (recipes ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true) : null) ??
+      (batch ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true, true) : null));
     if (compound) {
       const { pattern, structure, ...program } = compound;
       return { ...span, status: "recognized", pattern, ...(structure ? { structure } : {}), effect: { ...effect, ...program } };
@@ -151,7 +153,7 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes) {
   return { ...span, status: features.length ? "unsupported" : "unknown", features, reason, unparsed };
 }
 
-function analyzeVariant(variant, rows, extended, recipes) {
+function analyzeVariant(variant, rows, extended, recipes, batch) {
   const selected = rows.filter(row => variant.recordNumbers.includes(row.recordNumber));
   const types = sorted(selected.map(row => row.raw["種類"]));
   const cardType = types.length === 1 ? types[0].toLowerCase() : null;
@@ -159,8 +161,37 @@ function analyzeVariant(variant, rows, extended, recipes) {
   const spans = [];
   for (const field of ["text", "triggerText"]) {
     if (absent(variant[field])) continue;
-    for (const match of variant[field].matchAll(/[^\r\n]+/g)) {
-      if (match[0].trim()) spans.push(parseSpan({ field, start: match.index, end: match.index + match[0].length, text: match[0] }, cardType, gaps, spans.at(-1), variant[field], extended, recipes));
+    const lines = [...variant[field].matchAll(/[^\r\n]+/g)];
+    for (let i = 0; i < lines.length; i++) {
+      const match = lines[i], span = { field, start: match.index, end: match.index + match[0].length, text: match[0] };
+      if (!span.text.trim()) continue;
+      const parsed = parseSpan(span, cardType, gaps, spans.at(-1), variant[field], extended, recipes, batch);
+      if (batch && field === "text" && parsed.status !== "recognized" && span.text.endsWith("以下から1つを選ぶ。")) {
+        const tag = header(span.text), timing = timings.get(tag?.[1] ?? tag?.[2]) ?? boundaryTimings.get(tag?.[1] ?? tag?.[2]);
+        const branches = [];
+        let end = span.end;
+        for (let j = i + 1; j < lines.length; j++) {
+          const line = lines[j];
+          if (!line[0].startsWith("・") || !/^(?:\r\n|\r|\n)$/u.test(variant[field].slice(end, line.index))) break;
+          end = line.index + line[0].length;
+          branches.push({ label: line[0].slice(1), sourceSpan: { start: line.index + 1, end } });
+        }
+        const program = timing?.[2].includes(cardType) && branches.length >= 2 && branches.length <= 8 &&
+          branches.every(branch => branch.label.length <= 80) && new Set(branches.map(branch => branch.label)).size === branches.length &&
+          parseCompoundEffect(tag[3], timing[0], cardType, { start: span.start, end }, false, true, true, branches);
+        if (program) {
+          const { pattern, ...effect } = program;
+          spans.push({ ...span, status: "recognized", pattern,
+            effect: { ...effectFor(field, span.start, cardType, timing), ...effect } });
+          for (const { sourceSpan: { start, end } } of branches) {
+            spans.push({ field, start: start - 1, end, text: variant[field].slice(start - 1, end),
+              status: "recognized", pattern, attachedTo: span.start });
+          }
+          i += branches.length;
+          continue;
+        }
+      }
+      spans.push(parsed);
     }
   }
   const body = spans.filter(span => span.field === "text");
@@ -212,8 +243,8 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   };
 }
 
-function generateCard(card, rows, sourceCsvSha256, extended, recipes) {
-  const variants = card.variants.map(variant => analyzeVariant(variant, rows, extended, recipes));
+function generateCard(card, rows, sourceCsvSha256, extended, recipes, batch) {
+  const variants = card.variants.map(variant => analyzeVariant(variant, rows, extended, recipes, batch));
   const spans = variants.flatMap(variant => variant.spans);
   const recognized = spans.filter(span => span.status === "recognized").length;
   const unresolved = spans.length - recognized;
@@ -239,7 +270,7 @@ function generateCard(card, rows, sourceCsvSha256, extended, recipes) {
 }
 
 export function generateV3Drafts(ledger, cardIds = [], version = latest) {
-  if (![latest, "v3-draft-generator.9", "v3-draft-generator.8"].includes(version)) throw Error("Unsupported draft generation baseline");
+  if (![latest, "v3-draft-generator.10", "v3-draft-generator.9", "v3-draft-generator.8"].includes(version)) throw Error("Unsupported draft generation baseline");
   const registryHash = v3DraftRegistry(version);
   const selected = new Set(cardIds), rows = new Map();
   for (const row of ledger.rows) {
@@ -250,7 +281,8 @@ export function generateV3Drafts(ledger, cardIds = [], version = latest) {
   if ([...selected].some(id => !rows.has(id))) throw Error("Requested card ID does not exist in this CSV");
   const counts = { complete: 0, partial: 0, unconvertible: 0, unassessed: 0 };
   const cards = ledger.cards.filter(card => rows.has(card.cardId)).map(card =>
-    generateCard(card, rows.get(card.cardId), ledger.sourceSha256, version !== "v3-draft-generator.8", version === latest))
+    generateCard(card, rows.get(card.cardId), ledger.sourceSha256, version !== "v3-draft-generator.8",
+      version === latest || version === "v3-draft-generator.10", version === latest))
     .sort((a, b) => lexical(a.cardId, b.cardId));
   const totals = { sourceCards: ledger.cards.length, selectedCards: cards.length, counts, noEffect: 0, compilerPassed: 0, compilerFailed: 0, unresolvedSpans: 0 };
   for (const card of cards) {

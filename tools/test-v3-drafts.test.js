@@ -22,6 +22,26 @@ const csv = rows => Buffer.from([SOURCE_COLUMNS, ...rows.map(row => SOURCE_COLUM
 const entry = (generated, id) => generated.candidates.cards.find(card => card.cardId === id);
 const trace = (generated, id) => generated.trace.cards.find(card => card.cardId === id);
 
+test("multiline modes retain the declaration, option source offsets, and every branch or remain unconverted", () => {
+  const mode = "【起動メイン】【ターン1回】自分の手札が5枚以下ある場合、以下から1つを選ぶ。\r\n・カード1枚を引く。\r\n・相手のキャラ1枚までを、このターン中、コスト-1。";
+  const generated = generateV3Drafts(ledgerFromCsv(csv([
+    card("MODE", mode), card("MODE-UNKNOWN", mode + "\r\n・自分のデッキをシャッフルする。"),
+    card("MODE-EVENT", mode.replace("【起動メイン】【ターン1回】", "【メイン】"), { "種類": "EVENT", "パワー": "-", "属性": "-" })
+  ])));
+  const d = entry(generated, "MODE").definition;
+  const [effect] = d.effects, [guard] = effect.actions, [choice] = guard.then;
+  assert.deepEqual([effect.timing.type, effect.usageLimit.count, guard.condition.left.ref, guard.condition.op, choice.type],
+    ["MAIN", 1, "SELF.handCount", "lte", "CHOOSE_MODE"]);
+  assert.deepEqual(choice.modes.map(m => m.actions[0].type), ["DRAW", "SELECT"]);
+  const { start, end } = choice.modes[0].actions[0].sourceSpan;
+  assert.equal(d.source.text.slice(start, end), "カード1枚を引く。");
+  const spans = trace(generated, "MODE").variants[0].spans;
+  assert.deepEqual(spans.map(s => s.text), mode.split("\r\n"));
+  assert.deepEqual(spans.map(s => s.attachedTo ?? null), [null, 0, 0]);
+  assert.equal(entry(generated, "MODE-UNKNOWN").definition, undefined);
+  assert.equal(entry(generated, "MODE-EVENT").definition, undefined);
+});
+
 test("base-value filters, current-value filters, and turn cost modifiers preserve the condition and operation order", () => {
   const text = "【登場時】自分のライフが2枚以下の場合、相手のレストの元々のコスト4以下かつパワー3000以上のキャラ2枚までを、KOする。その後、相手のキャラ1枚までを、このターン中、コスト-2。";
   const g = generateV3Drafts(ledgerFromCsv(csv([card("BASE-THEN-COST", text)])));
