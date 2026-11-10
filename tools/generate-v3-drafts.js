@@ -3,7 +3,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { ledgerFromCsv } from "./build-v3-review-ledger.js";
-import { analyzeV3Coverage, collectProbes, isBareTriggerSelfPlay, writeV3Coverage } from "./analyze-v3-coverage.js";
+import { analyzeV3Coverage, collectProbes, isBareTriggerSelfPlay, v3DraftRegistry, writeV3Coverage } from "./analyze-v3-coverage.js";
 import { reviewedPrintedDifferences } from "./review-v3-catalog.js";
 import { csv } from "./audit-effect-cards.js";
 import { draftSelect as select, emitV3Structure, parseV3Structure, structurePattern } from "./v3-draft-structure.js";
@@ -12,8 +12,8 @@ const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
 const { compileV3CardJson, supportsV3RuntimeProfile } = require("../server/dist/test/effects/v3/compiler.js");
 const { isInteractiveMainEvent } = require("../server/dist/test/effects/v3/simpleMainEvent.js");
-const { registryHash } = require("../docs/card-effect-supported-operations.json");
-const version = "v3-draft-generator.6";
+const version = "v3-draft-generator.7";
+const registryHash = v3DraftRegistry(version);
 const keywords = new Map([
   ["ブロッカー", ["BLOCKER", "(相手のアタックの後、このカードをレストにし、アタックの対象をこのカードにできる)"]],
   ["速攻", ["RUSH", "(このカードは登場したターンにアタックできる)"]],
@@ -157,10 +157,11 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
     Object.entries(baseStats).some(([key, value]) => value === undefined || value !== null && !possible.includes(key))) return null;
   const triggerPlay = variant.spans.some(span => span.pattern === "trigger-self-play");
   const optionalDon = variant.spans.some(span => span.structure?.operations.some(node => node.kind === "optional-don"));
+  const fieldDon = variant.spans.some(span => span.pattern?.startsWith("pr27-field-don-"));
   const newTargets = variant.spans.some(span => span.pattern?.startsWith("pr25-"));
   return {
-    schemaVersion: optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
-    cardVersion: newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
+    schemaVersion: fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
+    cardVersion: fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
       variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",
     keywords: variant.spans.flatMap(span => span.keyword ? [span.keyword] : []),

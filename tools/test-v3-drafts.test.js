@@ -90,7 +90,8 @@ test("optional DON preserves the count, state and order without dropping a cost 
     card("DON-DRAW", "【メイン】カード1枚を引き、ドン!!デッキからドン!!1枚までをアクティブで追加する。", { "種類": "EVENT", "パワー": "-", "属性": "-" }),
     card("DON-LIFE", "【アタック時】自分のライフが2枚以下の場合、ドン!!デッキからドン!!2枚までを、レストで追加する。"),
     card("DON-PAID", "【登場時】自分の手札1枚を捨てることができる：ドン!!デッキからドン!!2枚までを、レストで追加する。"),
-    card("DON-UNKNOWN", "【登場時】自分の場のドン!!が相手の場のドン!!の枚数以下の場合、ドン!!デッキからドン!!1枚までを、レストで追加する。"),
+    card("DON-RELATIVE", "【登場時】自分の場のドン!!が相手の場のドン!!の枚数以下の場合、ドン!!デッキからドン!!1枚までを、レストで追加する。"),
+    card("DON-UNKNOWN", "【登場時】自分の場のドン!!が相手の場のドン!!の枚数より6枚以上少ない場合、ドン!!デッキからドン!!1枚までを、レストで追加する。"),
     card("DON-EXACT", "【登場時】ドン!!デッキからドン!!2枚を、レストで追加する。")
   ];
   const g = generateV3Drafts(ledgerFromCsv(csv(rows)));
@@ -102,7 +103,31 @@ test("optional DON preserves the count, state and order without dropping a cost 
   assert.deepEqual(details(actions("DON-DRAW")[1]), ["ADD_DON_UP_TO", "SELF", 1, "ACTIVE"]);
   assert.equal(actions("DON-LIFE")[0].condition.conditions[0].left.ref, "SELF.lifeCount");
   assert.deepEqual(details(actions("DON-LIFE")[0].then[0]), ["ADD_DON_UP_TO", "SELF", 2, "REST"]);
+  assert.equal(entry(g, "DON-RELATIVE").definition.schemaVersion, "3.0.0-subset.47");
+  assert.deepEqual(actions("DON-RELATIVE")[0].condition.conditions[0], {
+    type: "compare", left: { ref: "SELF.don.fieldCount" }, op: "lte", right: { ref: "OPPONENT.don.fieldCount" }
+  });
+  assert.deepEqual(details(actions("DON-RELATIVE")[0].then[0]), ["ADD_DON_UP_TO", "SELF", 1, "REST"]);
   for (const id of ["DON-PAID", "DON-UNKNOWN", "DON-EXACT"]) assert.equal(entry(g, id).definition, undefined);
+});
+
+test("field DON generation keeps subject, exact boundaries, conjunctions and unresolved original text", () => {
+  const combined = "【登場時】相手の場にドン‼が8枚以上あるかつ自分のライフが2枚以下の場合、カード1枚を引く。";
+  const held = "【登場時】自分の場のドン‼が8枚以上ある場合、カード1枚を引く。その後、未確認処理。";
+  const g = generateV3Drafts(ledgerFromCsv(csv([
+    card("FIELD-ALL", combined), card("FIELD-HELD", held),
+    card("FIELD-EXACT", "【登場時】自分の場のドン!!が10枚ある場合、カード1枚を引く。"),
+    card("FIELD-STRICT", "【登場時】相手の場のドン!!の枚数が自分の場のドン!!の枚数より多い場合、カード1枚を引く。")
+  ])));
+  const predicates = id => entry(g, id).definition.effects[0].actions[0].condition.conditions;
+  assert.deepEqual(predicates("FIELD-ALL").map(p => [p.left.ref, p.op, p.right]),
+    [["OPPONENT.don.fieldCount", "gte", 8], ["SELF.lifeCount", "lte", 2]]);
+  assert.deepEqual(predicates("FIELD-EXACT").map(p => [p.left.ref, p.op, p.right]), [["SELF.don.fieldCount", "eq", 10]]);
+  assert.deepEqual(predicates("FIELD-STRICT").map(p => [p.left.ref, p.op, p.right.ref]),
+    [["OPPONENT.don.fieldCount", "gt", "SELF.don.fieldCount"]]);
+  assert.equal(entry(g, "FIELD-HELD").definition, undefined);
+  const [unparsed] = trace(g, "FIELD-HELD").variants[0].spans[0].unparsed;
+  assert.equal(held.slice(unparsed.start, unparsed.end), "未確認処理。");
 });
 
 test("only exact unconditional character or stage self-play receives the new profile", () => {

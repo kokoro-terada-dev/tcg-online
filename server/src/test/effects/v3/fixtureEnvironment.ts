@@ -3,7 +3,7 @@ import { ensureMove, getCard, location } from "../../movement/state";
 import type { MovementState } from "../../movement/types";
 import type { CardObjectRef, DeepReadonly } from "../types";
 import type { PinnedMasterFacts } from "../masterFacts";
-import type { Value } from "./dsl";
+import { DON_COUNT_SCOPES, type DonCountScope, type Value } from "./dsl";
 import type { ApprovedV3Card } from "./approval";
 import type { ResolutionEnvironment, ResolutionIdentity } from "./resolution";
 import type { StatEffects } from "./statEffects";
@@ -16,6 +16,40 @@ import { protectionDecision } from "./continuousEffects";
 import { hasProtection } from "./protectionRules";
 
 type Scalar = string | number | boolean | null | typeof UNKNOWN;
+
+function readDonCount(state: MovementState, seat: 0 | 1, scope: DonCountScope): number | typeof UNKNOWN {
+  const zones = state.players[seat], opponent = state.players[1 - seat];
+  const field = ["activeDon", "restDon", "attachedDon"] as const;
+  const buckets = [...field, "donDeck"] as const;
+  if (!zones || !opponent || !buckets.every(zone => Array.isArray(zones[zone]) && Array.isArray(opponent[zone]))) return UNKNOWN;
+  if (buckets.some(zone => zones[zone].length > 10)) return UNKNOWN;
+  const inventory = buckets.flatMap(zone => [...zones[zone]]);
+  if (inventory.length > 10 || inventory.some(id => typeof id !== "string") || new Set(inventory).size !== inventory.length) return UNKNOWN;
+  for (const zone of field) for (const id of zones[zone]) {
+    const card = id && Object.hasOwn(state.cards, id) ? state.cards[id] : undefined;
+    if (!card || card.instanceId !== id || !Number.isSafeInteger(card.generation) || card.generation < 0 ||
+        card.kind !== "don" || card.owner !== seat || card.controller !== seat || card.faceUp !== true ||
+        card.rotated !== (zone === "restDon") || buckets.some(bucket => opponent[bucket].includes(id))) return UNKNOWN;
+    if (zone !== "attachedDon") {
+      if (card.attachedTo !== null) return UNKNOWN;
+      continue;
+    }
+    if (!card.attachedTo) return UNKNOWN;
+    try {
+      const parent = getCard(state, card.attachedTo);
+      if ((parent.kind !== "leader" && parent.kind !== "character") || parent.owner !== seat || parent.controller !== seat ||
+          !parent.faceUp || !zones[parent.kind].includes(parent.instanceId)) return UNKNOWN;
+    } catch { return UNKNOWN; }
+  }
+  switch (scope) {
+    case "fieldCount": return zones.activeDon.length + zones.restDon.length + zones.attachedDon.length;
+    case "costAreaCount": return zones.activeDon.length + zones.restDon.length;
+    case "activeCount": return zones.activeDon.length;
+    case "restCount": return zones.restDon.length;
+    case "attachedCount": return zones.attachedDon.length;
+  }
+}
+
 export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext, keywordGrants: () => KeywordGrants = () => [], occurrenceAuthorized = false, includeContinuous = true): ResolutionEnvironment {
   const knownDefinitions = new Map(definitions.map(card => [card.definition.cardId, card]));
   const hasRestrictions = includeContinuous && hasProtection(knownDefinitions);
@@ -28,6 +62,8 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     const state = board(), parts = value.ref.split(".");
     if (parts[0] === "bindings") return bindings[parts[1]!]?.length ?? UNKNOWN;
     if (parts[0] === "SELF" || parts[0] === "OPPONENT") {
+      if (parts[1] === "don" && parts.length === 3 && DON_COUNT_SCOPES.includes(parts[2] as DonCountScope))
+        return readDonCount(state, seat(parts[0]), parts[2] as DonCountScope);
       const zones = state.players[seat(parts[0])]; return parts[1] === "lifeCount" ? zones.life.length : parts[1] === "handCount" ? zones.hand.length : UNKNOWN;
     }
     const ref = parts[0] === "SOURCE" ? identity.source : candidate; if (!ref) return UNKNOWN;

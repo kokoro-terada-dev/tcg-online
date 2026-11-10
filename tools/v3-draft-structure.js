@@ -7,6 +7,20 @@ const issue = (reason, start, end) => ({ reason, start, end });
 const fail = (...args) => ({ issues: [issue(...args)] });
 export const optionalDonBody = String.raw`ドン(?:[!！]{2}|‼)デッキからドン(?:[!！]{2}|‼)([1-9]|10)枚までを、?(アクティブ|レスト)で追加する。`;
 const optionalDon = new RegExp(`^${optionalDonBody}$`, "u");
+const don = String.raw`ドン(?:[!！]{2}|‼)`;
+const fieldDon = `(自分|相手)の場の${don}`;
+const fixedDonCount = new RegExp(`^(自分|相手)の場(?:の|に)${don}が(0|[1-9]|10)枚(以上|以下|未満|より多い|より少ない)?(ある)?$`, "u");
+const relativeDonCount = new RegExp(`^${fieldDon}(?:の枚数)?が${fieldDon}の枚数(と同じ|と等しい|以上|以下|未満|より多い|より少ない)$`, "u");
+const donOp = { "以上": "gte", "以下": "lte", "未満": "lt", "より多い": "gt", "より少ない": "lt", "と同じ": "eq", "と等しい": "eq" };
+const fieldDonRef = side => `${player(side)}.don.fieldCount`;
+
+export function fieldDonCondition(term) {
+  const relative = relativeDonCount.exec(term);
+  if (relative && relative[1] !== relative[2]) return compare(fieldDonRef(relative[1]), donOp[relative[3]], { ref: fieldDonRef(relative[2]) });
+  const fixed = fixedDonCount.exec(term);
+  if (!fixed || (!fixed[3] && !fixed[4]) || (fixed[4] && fixed[3] && !["以上", "以下"].includes(fixed[3]))) return null;
+  return compare(fieldDonRef(fixed[1]), fixed[3] ? donOp[fixed[3]] : "eq", Number(fixed[2]));
+}
 
 export function draftSelect(bindAs, zone, owner, min, max, filters, { visibility = "PUBLIC", chooser = "SELF" } = {}) {
   return { type: "SELECT", bindAs, selector: {
@@ -20,6 +34,8 @@ function countConditions(text) {
   const terms = text.split(/でかつ、|かつ、|かつ/u);
   if (terms.length > 3) return null;
   const predicates = terms.map(term => {
+    const donCondition = fieldDonCondition(term);
+    if (donCondition) return donCondition;
     const match = /^(自分|相手)の(ライフ|手札)が(0|[1-9][0-9]?)枚(以下|以上)$/u.exec(term);
     return match && compare(`${player(match[1])}.${match[2] === "ライフ" ? "lifeCount" : "handCount"}`, op(match[4]), Number(match[3]));
   });
@@ -85,6 +101,14 @@ export function parseV3Structure(body, timing) {
     offset = marker + "の場合、".length;
     if (!conditions) return fail("resolution-condition-unconfirmed", 0, offset);
     clauses = body.slice(offset);
+  } else {
+    const conditional = body.indexOf("場合、");
+    const parsed = conditional >= 0 ? countConditions(body.slice(0, conditional)) : null;
+    if (parsed?.some(node => node.left.ref.endsWith(".don.fieldCount"))) {
+      conditions = parsed;
+      offset = conditional + "場合、".length;
+      clauses = body.slice(offset);
+    }
   }
   const drawDiscard = /^(カード(?:[1-9]|[1-4][0-9]|50)枚を引)き、(自分の手札[1-3]枚を捨てる。)$/u.exec(clauses);
   if (drawDiscard) {
@@ -149,6 +173,8 @@ export function emitV3Structure(structure, sourceSpan) {
 }
 
 export function structurePattern(structure, boundary) {
+  const donConditions = structure.conditions.filter(node => node.left.ref.endsWith(".don.fieldCount"));
+  if (donConditions.length) return donConditions.some(node => typeof node.right === "object") ? "pr27-field-don-relative" : "pr27-field-don-fixed";
   for (const { kind, target } of structure.operations) {
     if (target?.filters.some(filter => filter.left.ref.startsWith("CANDIDATE.base."))) return "pr25-base-stat-target";
     if (kind === "cost") return "pr25-turn-cost";

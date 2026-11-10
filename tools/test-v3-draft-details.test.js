@@ -5,6 +5,7 @@ import { dissectV3DraftSpan, diagnoseV3DraftSpan } from "./v3-draft-diagnostics.
 import { analyzeV3DraftDetails, renderV3TopGroups } from "./analyze-v3-draft-details.js";
 import { ledgerFromCsv } from "./build-v3-review-ledger.js";
 import { generateV3Drafts } from "./generate-v3-drafts.js";
+import { v3DraftRegistry } from "./analyze-v3-coverage.js";
 
 const { SOURCE_COLUMNS } = createRequire(import.meta.url)("../server/dist/test/effects/v3/cardData.js");
 const row = (id, text, fields = {}) => ({
@@ -14,12 +15,24 @@ const row = (id, text, fields = {}) => ({
 function fixture(...rows) {
   const bytes = Buffer.from([SOURCE_COLUMNS, ...rows.map(r => SOURCE_COLUMNS.map(field => r[field] ?? ""))]
     .map(values => values.map(v => `"${v.replaceAll('"', '""')}"`).join(",")).join("\n"));
-  const current = generateV3Drafts(ledgerFromCsv(bytes)).trace;
+  const current = { ...generateV3Drafts(ledgerFromCsv(bytes)).trace, version: "v3-draft-generator.6", registryHash: v3DraftRegistry("v3-draft-generator.6") };
   const previous = { ...structuredClone(current), version: "v3-draft-generator.5" };
   return { bytes, previous, current };
 }
 const diagnose = (raw, extra = {}) => diagnoseV3DraftSpan({ raw, field: "text", cardType: "character", structure: dissectV3DraftSpan(raw), ...extra });
 const ids = tokens => tokens.map(token => token.id);
+
+test("PR27 classifies the same held comparison as unconfirmed context, not a missing count primitive", () => {
+  const { bytes, previous, current } = fixture(row("SYN-DON", "【登場時】自分の場のドン‼が3枚以上ある場合、自分のデッキをシャッフルする。"));
+  const before = analyzeV3DraftDetails(bytes, previous, current);
+  const newer = generateV3Drafts(ledgerFromCsv(bytes)).trace;
+  const after = analyzeV3DraftDetails(bytes, current, newer);
+  assert.ok(before.spans[0].findings.some(f => f.category === "runtime" && f.feature === "field-don-comparison"));
+  assert.ok(after.spans[0].findings.some(f => f.category === "unknown" && f.feature === "field-don-context-unconfirmed"));
+  assert.ok(!after.spans[0].findings.some(f => f.feature === "field-don-comparison"));
+  assert.equal(after.summary.fieldDon.cards, 1);
+  assert.equal(after.fieldDonCohort[0].conditions[0].predicate.right, 3);
+});
 
 test("the structural trace separates all eight dimensions without interpreting quoted titles as rules", () => {
   const raw = "【登場時】/【アタック時】自分の手札1枚を捨てることができる：自分の場のドン‼が3枚以上ある場合、相手は「💡このターン中にKOする。」を選ぶ。その後、このターン中、パワー-2000。";

@@ -81,6 +81,7 @@ export const contracts = {
   "simple-multiple-timings": ["composition", ["timing:ON_PLAY", "timing:ON_ATTACK", "action:DRAW", "action:ADD_DON_UP_TO"], "Both timings are registered; unqualified timing tags can reuse the same simple action with no shared-use limit."],
   "multiple-timings": ["unknown", ["timing:ON_PLAY", "timing:ON_ATTACK"], "The timing nodes exist, but a shared limit, unparsed clauses or activation order must be checked before splitting the text."],
   "field-don-comparison": ["runtime", ["query:QUERY_CARDS", "predicate:COUNT", "action:ADD_DON_UP_TO", "timing:ON_EVENT"], "dsl.ts Value and QueryMap cannot read field DON totals. ADD_DON_UP_TO reads the DON deck only; DON_RETURNED is a separate event."],
+  "field-don-context-unconfirmed": ["unknown", ["predicate:compare"], "Subset.47 reads field DON totals. Review the full comparison, timing, other conditions and actions before treating this remaining span as representable."],
   "trigger-self-play-condition": ["runtime", ["timing:TRIGGER", "action:PLAY_TRIGGER_SOURCE"], "compiler.ts v3-trigger-play-must-be-unconditional excludes conditional self-play; the unqualified form is already implemented."],
   "trigger-self-play-payment": ["runtime", ["timing:TRIGGER", "action:PLAY_TRIGGER_SOURCE", "cost:DON_RETURN"], "compiler.ts v3-trigger-additional-activation-unresolved rejects TRIGGER activation costs; do not move the cost into the body."],
   "counter-hand-payment": ["runtime", ["timing:COUNTER", "cost:MOVE_AS_COST", "action:OFFER_PAYMENT"], "compiler.ts and counterEvents.ts allow additional activation DON_RETURN only; in-effect OFFER_PAYMENT has different timing."],
@@ -93,7 +94,7 @@ export const contracts = {
   "other-trigger-body": ["runtime", ["action:CALL_EFFECT_BODY", "timing:TRIGGER"], "compiler.ts restricts same-card life-trigger body calls to an event's MAIN; the printed ON_PLAY/ON_KO/COUNTER body is a different timing."]
 };
 
-export function diagnoseV3DraftSpan({ field, cardType, raw, structure, reason, inherited = [] }) {
+export function diagnoseV3DraftSpan({ field, cardType, raw, structure, reason, inherited = [], fieldDonSupported = false }) {
   const { head, body, signals, multipleTimings } = structure;
   const out = inherited.filter(row => row.category !== "unknown" || row.feature === "optional-add-don");
   const add = feature => {
@@ -102,7 +103,8 @@ export function diagnoseV3DraftSpan({ field, cardType, raw, structure, reason, i
   };
   const primary = signals.timing[0]?.id;
   const pay = signals.costs.length > 0;
-  if (signals.conditions.some(condition => condition.id === "field-don-comparison")) add("field-don-comparison");
+  if (signals.conditions.some(condition => condition.id === "field-don-comparison"))
+    add(fieldDonSupported ? "field-don-context-unconfirmed" : "field-don-comparison");
   if (field === "triggerText" && primary === "TRIGGER" && /(?:場合、|[:：])このカードを登場させる。$/u.test(body) &&
       (cardType === "character" || cardType === "stage")) {
     if (pay || /場合、/u.test(body)) {

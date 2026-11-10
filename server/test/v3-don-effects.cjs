@@ -6,16 +6,18 @@ const { V3SyntheticMatchCoordinator } = require('../dist/test/effects/v3/matchCo
 const { compileV3CardJson } = require('../dist/test/effects/v3/compiler.js');
 const { getCard } = require('../dist/test/movement/state.js');
 const { movementReadContext } = require('../dist/test/effects/v3/readContext.js');
+const { fixtureEnvironment } = require('../dist/test/effects/v3/fixtureEnvironment.js');
+const { pinMasterFacts } = require('../dist/test/effects/masterFacts.js');
 
 const add = (count = 1, state = 'ACTIVE') => ({ type: 'ADD_DON', player: 'SELF', count, state, onInsufficient: 'fail' });
 const addUpTo = (max, state = 'ACTIVE') => ({ type: 'ADD_DON_UP_TO', player: 'SELF', max, state });
 const set = (from = 'REST', to = 'ACTIVE') => ({ type: 'SET_DON_STATE', cards: { ref: 'bindings.don' }, from, to });
 const choose = (zone = 'restDon', min = 1, max = min) => ({ type: 'SELECT', bindAs: 'don',
   selector: { ...selector('SELF'), zone, min, max, cardTypes: ['don'], excludeSource: false } });
-function setup(actions, { actor = 0, costs = [], prepare = () => {}, effects = [], schema = '3.0.0-subset.28' } = {}) {
+function setup(actions, { actor = 0, costs = [], prepare = () => {}, effects = [], schema = '3.0.0-subset.28', activationConditions = always() } = {}) {
   const h = base({ actor, mutate: raw => {
     raw.schemaVersion = schema;
-    Object.assign(raw.effects[0], { actions, costs });
+    Object.assign(raw.effects[0], { actions, costs, activationConditions });
     raw.effects.push(...effects);
   } });
   prepare(h.options.movement, actor);
@@ -44,6 +46,57 @@ function run(h, count = 1) {
   activate(h); finish(h.c, h.actor);
   if (h.c.viewFor(h.actor).frame.choice) { accept(h, count); finish(h.c, h.actor); }
 }
+const fieldRef = side => ({ ref: `${side}.don.fieldCount` });
+const comparison = (left, op, right) => ({ type: 'compare', left, op, right });
+const fieldSchema = '3.0.0-subset.47';
+
+test('DON count reads distinguish seats, cost area, active, rested, given and the deck; invalid data is UNKNOWN', () => {
+  const h = setup([add()], { actor: 1, schema: fieldSchema });
+  const state = structuredClone(h.options.movement), actor = h.actor;
+  const identity = { matchId: state.matchId, resolutionId: 'don-count', effectId: 'watch-0', actor, source: h.source };
+  const env = fixtureEnvironment(() => state, identity, h.approved, pinMasterFacts(state, { master: null, numericPolicy: 'certifiedUnmodified' }), () => 1000);
+  const read = (side, scope, op, right) => env.evaluate(comparison({ ref: `${side}.don.${scope}` }, op, right), {});
+  rest(state, actor, 1); attach(state, actor);
+  const snapshot = structuredClone(state);
+  for (const [scope, value] of Object.entries({ fieldCount: 2, costAreaCount: 1, activeCount: 0, restCount: 1, attachedCount: 1 })) {
+    assert.equal(read('SELF', scope, 'eq', value), true);
+  }
+  assert.equal(read('OPPONENT', 'activeCount', 'eq', 2), true);
+  assert.equal(read('SELF', 'costAreaCount', 'lt', fieldRef('OPPONENT')), true);
+  assert.equal(read('SELF', 'fieldCount', 'gt', fieldRef('OPPONENT')), false);
+  assert.deepEqual(state, snapshot);
+  const zones = state.players[actor], given = state.cards[zones.attachedDon[0]];
+  given.attachedTo.generation++;
+  assert.equal(read('SELF', 'fieldCount', 'eq', 0), 'unknown');
+  given.attachedTo.generation--;
+  zones.restDon.push(zones.attachedDon[0]);
+  assert.equal(read('SELF', 'restCount', 'ne', 0), 'unknown');
+  zones.restDon.pop();
+  delete state.cards[zones.attachedDon[0]];
+  assert.equal(read('SELF', 'attachedCount', 'eq', 0), 'unknown');
+});
+
+test('a composed DON condition re-reads the board after work in the same resolution and checks 0 and 10', () => {
+  const h = setup([{
+    type: 'IF', condition: comparison(fieldRef('SELF'), 'eq', 0), then: [add(10, 'REST')], else: []
+  }, {
+    type: 'IF', condition: { type: 'all', conditions: [
+      comparison(fieldRef('SELF'), 'eq', 10),
+      comparison(fieldRef('SELF'), 'gt', fieldRef('OPPONENT')),
+      comparison({ ref: 'SELF.don.activeCount' }, 'eq', 0)
+    ] }, then: [{ type: 'DRAW', player: 'SELF', count: 1 }], else: []
+  }], { schema: fieldSchema, activationConditions: comparison(fieldRef('SELF'), 'eq', 0), prepare(state, actor) {
+    const p = state.players[actor];
+    for (const id of p.activeDon) state.cards[id].faceUp = false;
+    p.donDeck.push(...p.activeDon.splice(0));
+  } });
+  const hand = board(h).players[0].hand.length;
+  run(h);
+  assert.equal(h.c.viewFor(0).frame.status, 'completed');
+  assert.equal(board(h).players[0].restDon.length, 10);
+  assert.equal(board(h).players[0].hand.length, hand + 1);
+  assert.equal(events(h).length, 11);
+});
 for (const actor of [0, 1]) for (const state of ['ACTIVE', 'REST']) test(`ADD_DON moves existing deck objects only (${actor}/${state})`, () => {
   const h = setup([add(2, state)], { actor, prepare: attach }), before = board(h), ids = before.players[actor].donDeck.slice(0, 2);
   run(h);

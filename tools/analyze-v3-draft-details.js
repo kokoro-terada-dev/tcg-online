@@ -6,10 +6,10 @@ import { analyzeV3DraftBlockers } from "./analyze-v3-draft-blockers.js";
 import { normalizeV3Gap } from "./analyze-v3-draft-gaps.js";
 import { resolveReviewOutput } from "./review-v3-catalog.js";
 import { contracts, diagnoseV3DraftSpan, dissectV3DraftSpan } from "./v3-draft-diagnostics.js";
+import { fieldDonCondition } from "./v3-draft-structure.js";
 
 const require = createRequire(import.meta.url);
-const schemaVersion = "3.0.0-subset.46";
-const profile = require("../docs/card-effect-supported-operations.json").profiles[schemaVersion];
+const { profiles } = require("../docs/card-effect-supported-operations.json");
 const { supportsV3RuntimeProfile } = require("../server/dist/test/effects/v3/compiler.js");
 const categories = ["generator", "runtime", "composition", "interpretation", "data", "unknown"];
 const catalog = fileURLToPath(new URL("../server/data/effects-v3-reviewed", import.meta.url));
@@ -53,9 +53,11 @@ function reviewRows(input, trace, spans) {
 }
 
 export function analyzeV3DraftDetails(bytes, previous, current, reviews) {
-  assert(current.version === "v3-draft-generator.6" && current.registryHash === profile.registryHash &&
+  const fieldDonSupported = current.version === "v3-draft-generator.7";
+  const schemaVersion = fieldDonSupported ? "3.0.0-subset.47" : "3.0.0-subset.46", profile = profiles[schemaVersion];
+  assert((fieldDonSupported || current.version === "v3-draft-generator.6") && current.registryHash === profile.registryHash &&
     supportsV3RuntimeProfile({ definition: { schemaVersion }, compilerVersion: profile.compilerVersion, registryHash: profile.registryHash }),
-  "Detailed rules are audited for the PR25 trace and executable subset.46");
+  "Detailed rules require a pinned PR25 or PR27 trace and executable profile");
   const operations = new Set(Object.entries(profile.registries).flatMap(([category, entries]) => entries.map(entry => `${category}:${entry.split("@")[0]}`)));
   for (const [, required] of Object.values(contracts)) for (const operation of required)
     assert(operations.has(operation), `Diagnostic contract requires existing operation: ${operation}`);
@@ -72,9 +74,9 @@ export function analyzeV3DraftDetails(bytes, previous, current, reviews) {
     const row = { cardId: card.cardId, status: card.status, cardType: variant.cardType, variantSha256: variant.pairSha256, displayIds: variant.displayIds,
       field: span.field, start: span.start, end: span.end, raw: span.text };
     const structure = dissectV3DraftSpan(row.raw, row.start);
-    spans.push({ ...row, structure, findings: diagnoseV3DraftSpan({ ...row, structure, reason: span.reason, inherited: inherited.get(spanKey(row)) }) });
+    spans.push({ ...row, structure, findings: diagnoseV3DraftSpan({ ...row, structure, reason: span.reason, inherited: inherited.get(spanKey(row)), fieldDonSupported }) });
   }
-  assert(spans.length === baseline.spans, "Detailed span count must match the validated PR25 trace");
+  assert(spans.length === baseline.spans, "Detailed span count must match the validated trace");
   const human = reviewRows(reviews, current, spans);
   const rows = [...spans, ...cardRecords], grouped = buckets(rows, row => row.findings.map(f => f.category));
   const byFeature = buckets(rows, row => row.findings.map(f => f.feature));
@@ -91,7 +93,9 @@ export function analyzeV3DraftDetails(bytes, previous, current, reviews) {
     return counts ? { ...counts, next } : null;
   };
   const recommendations = [
-    recommend("field-don-comparison", ["field-don-comparison"], "Add public field DON count reads and compare them without exposing DON instances."),
+    fieldDonSupported
+      ? recommend("field-don-context-unconfirmed", ["field-don-context-unconfirmed"], "Review the remaining timing, compound conditions and action text; do not add a duplicate count primitive.")
+      : recommend("field-don-comparison", ["field-don-comparison"], "Add public field DON count reads and compare them without exposing DON instances."),
     recommend("trigger-self-play", ["trigger-self-play", "trigger-self-play-condition", "trigger-self-play-payment"], "First support an explicit condition without costs; review paid triggers separately."),
     recommend("multiple-timings", ["multiple-timings", "simple-multiple-timings"], "Start with proven independent timing tags and review shared use limits separately."),
     recommend("ownership-and-chooser", ["unscoped-owner-destination", "explicit-chooser-complex"], "Review the official owner, controller and chooser per pattern before changing target generation."),
@@ -121,7 +125,31 @@ export function analyzeV3DraftDetails(bytes, previous, current, reviews) {
       { id: "power-dash", spans: 0, cardRecords: powerDash.length, cards: powerDash.length }],
     humanReviews: human.length, humanReviewedCategories: buckets([...new Map(human.map(row => [spanKey(row) + row.category, row])).values()], row => [row.category]),
     groups: { structural: structural.length, wording: wording.length }, recommendations };
-  return { summary, spans, cardRecords, humanReviews: human, structural, wording };
+  const fieldDonCohort = fieldDonSupported ? compareFieldDonCohort(previous, current) : undefined;
+  if (fieldDonCohort) summary.fieldDon = {
+    cards: new Set(fieldDonCohort.map(row => row.cardId)).size, spans: fieldDonCohort.length,
+    byCondition: buckets(fieldDonCohort, row => row.conditions.map(condition => condition.kind)),
+    newlyRecognized: buckets(fieldDonCohort, row => row.pattern?.startsWith("pr27-field-don-") ? [row.pattern] : [])
+  };
+  return { summary, spans, cardRecords, humanReviews: human, structural, wording, ...(fieldDonCohort ? { fieldDonCohort } : {}) };
+}
+
+function compareFieldDonCohort(previous, current) {
+  const latest = new Map(current.cards.flatMap(card => card.variants.flatMap(variant => variant.spans.map(span => [
+    spanKey({ ...span, cardId: card.cardId, variantSha256: variant.pairSha256 }), { status: card.status, pattern: span.pattern }
+  ]))));
+  return previous.cards.flatMap(card => card.variants.flatMap(variant => variant.spans.flatMap(span => {
+    if (span.status === "recognized") return [];
+    const { signals } = dissectV3DraftSpan(span.text, span.start);
+    const conditions = signals.conditions.filter(condition => condition.id === "field-don-comparison").map(condition => {
+      const predicate = fieldDonCondition(condition.text.replace(/(?:の)?場合$/u, ""));
+      return { ...condition, kind: !predicate ? "compound-or-unconfirmed" : typeof predicate.right === "object" ? "relative" : "fixed", predicate };
+    });
+    if (!conditions.length) return [];
+    const row = { cardId: card.cardId, variantSha256: variant.pairSha256, displayIds: variant.displayIds,
+      field: span.field, start: span.start, end: span.end, raw: span.text, conditions };
+    return [{ ...row, ...latest.get(spanKey(row)) }];
+  })));
 }
 
 export function renderV3TopGroups({ structural, wording }) {
@@ -131,14 +159,14 @@ export function renderV3TopGroups({ structural, wording }) {
     return `| ${index + 1} | ${group.cards} | ${group.spans} | ${cell(group.id)} | ${e.cardId}: ${cell(e.raw)} | ${cell(evidence)} |`;
   }).join("\n");
   const header = "| 順位 | 影響番号 | 箇所 | グループ | 代表原文 | 代表例の自動分類・根拠 |\n| ---: | ---: | ---: | --- | --- | --- |";
-  return `# PR26 未解釈グループ上位30\n\n各行の分類は代表例の自動判定。グループ全体の意味一致や人手確認は保証しない。\n\n## 構造別\n\n${header}\n${render(structural)}\n\n## 正規化表現別\n\n${header}\n${render(wording)}\n`;
+  return `# 未解釈グループ上位30\n\n各行の分類は代表例の自動判定。グループ全体の意味一致や人手確認は保証しない。\n\n## 構造別\n\n${header}\n${render(structural)}\n\n## 正規化表現別\n\n${header}\n${render(wording)}\n`;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const [source, before, current, output, flag, review] = process.argv.slice(2);
     assert(process.argv.length === 6 || process.argv.length === 8 && flag === "--reviews",
-      "Usage: analyze-v3-draft-details.js <source.csv> <pr24-trace> <pr25-trace> <new-report-dir> [--reviews file.json]");
+      "Usage: analyze-v3-draft-details.js <source.csv> <previous-trace> <current-trace> <new-report-dir> [--reviews file.json]");
     const json = file => {
       assert(fs.statSync(file).size <= 64 * 1024 * 1024, "Analysis input exceeds 64 MiB");
       return JSON.parse(fs.readFileSync(file, "utf8"));
@@ -151,7 +179,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     write("summary.json", JSON.stringify(report.summary, null, 2) + "\n");
     write("details.json", JSON.stringify(report) + "\n");
     write("top-30.md", renderV3TopGroups(report));
-    const { categories, spans, cardRecords, focus, overlappingSpans, multiCauseSpans, overlappingCards, humanReviews, groups } = report.summary;
-    console.log(JSON.stringify({ categories, spans, cardRecords, focus, overlappingSpans, multiCauseSpans, overlappingCards, humanReviews, groups }));
+    const { categories, spans, cardRecords, focus, overlappingSpans, multiCauseSpans, overlappingCards, humanReviews, groups, fieldDon } = report.summary;
+    console.log(JSON.stringify({ categories, spans, cardRecords, focus, overlappingSpans, multiCauseSpans, overlappingCards, humanReviews, groups, fieldDon }));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
