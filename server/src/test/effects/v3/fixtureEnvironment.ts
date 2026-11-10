@@ -60,6 +60,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
   const read = (value: DeepReadonly<Value>, bindings: Readonly<Record<string, readonly Readonly<CardObjectRef>[]>>, candidate?: Readonly<CardObjectRef>): Scalar => {
     if (value === null || typeof value !== "object") return value;
     const state = board(), parts = value.ref.split(".");
+    if (value.ref === "BOTH.lifeCount") return state.players[0].life.length + state.players[1].life.length;
     if (parts[0] === "bindings") return bindings[parts[1]!]?.length ?? UNKNOWN;
     if (parts[0] === "SELF" || parts[0] === "OPPONENT") {
       if (parts[1] === "don" && parts.length === 3 && DON_COUNT_SCOPES.includes(parts[2] as DonCountScope))
@@ -230,7 +231,9 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     candidates: (selector, bindings) => {
       const state = board();
       const zones = typeof selector.zone === "string" ? [selector.zone] : selector.zone;
-      let ids: readonly (string | null)[] = zones.flatMap(zone => state.players[seat(selector.owner)][zone]);
+      const seats = selector.controller === "EITHER" ? [0, 1] as const :
+        [seat(selector.owner === "EITHER" ? selector.controller : selector.owner)];
+      let ids: readonly (string | null)[] = seats.flatMap(player => zones.flatMap(zone => state.players[player][zone]));
       if (selector.type === "BOUND_CARDS") {
         const cards = bindings[selector.cards.ref.slice("bindings.".length)], excluded = selector.excludeCards ? bindings[selector.excludeCards.ref.slice("bindings.".length)] : [];
         ensureMove(cards && excluded, "v3-missing-bound-candidates");
@@ -247,7 +250,9 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
         const viewers = ([0, 1] as const).filter(viewer => visibleTo(state, card, at, viewer));
         const visible = selector.type === "BOUND_CARDS" ? viewers.includes(identity.actor) : selector.visibility === "PUBLIC" ? card.faceUp && viewers.length === 2 :
           at.zone === "hand" && card.owner === identity.actor && card.controller === identity.actor && viewers.length === 1 && viewers[0] === identity.actor;
-        if (card.owner !== seat(selector.owner) || card.controller !== seat(selector.controller) || !visible || !selector.cardTypes.some(type => type === card.kind)) return [];
+        if (selector.owner !== "EITHER" && card.owner !== seat(selector.owner) ||
+          selector.controller !== "EITHER" && card.controller !== seat(selector.controller) ||
+          !visible || !selector.cardTypes.some(type => type === card.kind)) return [];
         let label: string | undefined;
         if (at.zone === "activeDon") label = "アクティブDON";
         if (at.zone === "restDon") label = "レストDON";

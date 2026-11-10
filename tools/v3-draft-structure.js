@@ -43,10 +43,10 @@ function countConditions(text) {
   return predicates;
 }
 
-function target(text) {
+function target(text, compound) {
   if (text === "自分のリーダー") return { owner: "SELF", chooser: "SELF", zones: ["leader"], min: 1, max: 1, filters: [] };
-  const leader = /^(自分|相手)のリーダー(かキャラ)?1枚まで$/u.exec(text);
-  if (leader) return { owner: player(leader[1]), chooser: "SELF", zones: leader[2] ? ["leader", "character"] : ["leader"], min: 0, max: 1, filters: [] };
+  const leader = (compound ? /^(自分|相手)のリーダー(かキャラ)?([1-5])枚まで$/u : /^(自分|相手)のリーダー(かキャラ)?(1)枚まで$/u).exec(text);
+  if (leader && (leader[2] || leader[3] === "1")) return { owner: player(leader[1]), chooser: "SELF", zones: leader[2] ? ["leader", "character"] : ["leader"], min: 0, max: Number(leader[3]), filters: [] };
   const match = /^(自分|相手)の(レストの|アクティブの)?(.*?)キャラ([1-5])枚まで$/u.exec(text);
   if (!match) return null;
   const [, side, state, bounds, amount] = match, filters = [];
@@ -55,27 +55,37 @@ function target(text) {
     if (!bounds.endsWith("の")) return null;
     const seen = new Set();
     for (const term of bounds.slice(0, -1).split(/でかつ、|かつ、|かつ/u)) {
-      const m = /^(元々の)?(コスト|パワー)(0|[1-9][0-9]{0,4})(以下|以上)$/u.exec(term);
+      const m = (compound ? /^(元々の)?(コスト|パワー)(0|[1-9][0-9]{0,4})(以下|以上)?$/u :
+        /^(元々の)?(コスト|パワー)(0|[1-9][0-9]{0,4})(以下|以上)$/u).exec(term);
       if (!m) return null;
       const ref = `CANDIDATE.${m[1] ? "base" : "current"}.${m[2] === "コスト" ? "cost" : "power"}`;
       if (seen.has(ref)) return null;
       seen.add(ref);
-      filters.push(compare(ref, op(m[4]), Number(m[3])));
+      filters.push(compare(ref, m[4] ? op(m[4]) : "eq", Number(m[3])));
     }
   }
   return { owner: player(side), chooser: "SELF", zones: ["character"], min: 0, max: Number(amount), filters };
 }
 
-function operation(sentence, timing) {
+function operation(sentence, timing, compound = false) {
   const don = optionalDon.exec(sentence);
   if (don) return { kind: "optional-don", max: Number(don[1]), state: don[2] === "アクティブ" ? "ACTIVE" : "REST" };
   const draw = /^カード([1-9]|[1-4][0-9]|50)枚を引く。$/u.exec(sentence);
   if (draw) return { kind: "draw", player: "SELF", count: Number(draw[1]) };
   const discard = /^自分の手札([1-3])枚を捨てる。$/u.exec(sentence);
   if (discard) return { kind: "discard", owner: "SELF", chooser: "SELF", count: Number(discard[1]), shortage: "all-available" };
+  if (compound) {
+    const move = /^(?:(自分|相手)は自身の|(自分|相手)の)?((?:アクティブの|レストの)?(?:コスト(?:0|[1-9][0-9]?)(?:以下|以上)の)?キャラ)([1-5])枚(まで)?を、?持ち主の(手札に戻す|デッキの下に置く)。$/u.exec(sentence);
+    if (move && (move[1] && !move[5] && move[4] === "1" || !move[1] && move[5]) && (move[6] === "手札に戻す" || move[4] === "1")) {
+      const parsed = target(`自分の${move[3]}${move[4]}枚まで`, true);
+      if (parsed) return { kind: "owner-move", to: move[6] === "手札に戻す" ? "hand" : "deck",
+        target: { ...parsed, owner: "EITHER", controller: move[1] || move[2] ? player(move[1] ?? move[2]) : "EITHER",
+          chooser: move[1] ? player(move[1]) : "SELF", min: move[1] ? 1 : 0 } };
+    }
+  }
   const clause = /^(.+)を、(.+)。$/u.exec(sentence);
   if (!clause) return null;
-  const selection = target(clause[1]);
+  const selection = target(clause[1], compound);
   if (!selection) return null;
   const power = /^(このターン中|このバトル中)、パワー([+-])([1-9][0-9]{0,4})$/u.exec(clause[2]);
   if (power) {
@@ -87,16 +97,26 @@ function operation(sentence, timing) {
   if (cost && selection.zones.length === 1 && selection.zones[0] === "character") {
     return { kind: "cost", target: selection, amount: Number(`${cost[1]}${cost[2]}`), duration: "turn" };
   }
+  if (compound && clause[2] === "レストにする") return { kind: "rest", target: selection };
   if (selection.zones.length !== 1 || selection.zones[0] !== "character" || selection.owner !== "OPPONENT") return null;
   const kind = new Map([["レストにする", "rest"], ["KOする", "ko"], ["持ち主の手札に戻す", "return"]]).get(clause[2]);
   return kind ? { kind, target: selection } : null;
 }
 
-export function parseV3Structure(body, timing) {
+export function parseV3Structure(body, timing, publicCondition) {
   if (/[:：]/u.test(body)) return fail("payment-or-unmodeled-declaration", 0, body.length);
   let clauses = body, offset = 0, conditions = [];
+  const prefix = publicCondition && /^([^。]+?)(?:の)?場合、/u.exec(body);
   const marker = body.indexOf("の場合、");
-  if (marker >= 0) {
+  if (publicCondition) {
+    if (prefix) {
+      const condition = publicCondition(prefix[1]);
+      if (!condition) return fail("resolution-condition-unconfirmed", 0, prefix[0].length);
+      conditions = [condition];
+      offset = prefix[0].length;
+      clauses = body.slice(offset);
+    }
+  } else if (marker >= 0) {
     conditions = countConditions(body.slice(0, marker));
     offset = marker + "の場合、".length;
     if (!conditions) return fail("resolution-condition-unconfirmed", 0, offset);
@@ -118,7 +138,7 @@ export function parseV3Structure(body, timing) {
   const combined = /^(.+?)(枚を引き|KOし|レストにし)、(.+)$/u.exec(clauses);
   if (combined && optionalDon.test(combined[3])) {
     const verb = { "枚を引き": "枚を引く。", "KOし": "KOする。", "レストにし": "レストにする。" }[combined[2]];
-    const first = operation(combined[1] + verb, timing);
+    const first = operation(combined[1] + verb, timing, !!publicCondition);
     if (first) return { structure: { conditions, sequence: "then", operations: [first, operation(combined[3], timing)] } };
   }
   const parts = clauses.split("。その後、");
@@ -126,9 +146,11 @@ export function parseV3Structure(body, timing) {
   const operations = [], issues = [];
   for (const [index, part] of parts.entries()) {
     const sentence = index < parts.length - 1 ? `${part}。` : part;
-    const node = operation(sentence, timing);
+    const branch = publicCondition && index > 0 && /^([^。]+?)(?:の)?場合、(.+)$/u.exec(sentence);
+    const guard = branch ? publicCondition(branch[1]) : null;
+    const node = branch ? guard && operation(branch[2], timing, true) : operation(sentence, timing, !!publicCondition);
     if (!node) issues.push(issue("target-or-operation-unconfirmed", offset, offset + sentence.length));
-    else operations.push(node);
+    else operations.push(guard ? { ...node, guard } : node);
     offset += part.length + "。その後、".length;
   }
   return issues.length ? { issues } : { structure: { conditions, sequence: parts.length > 1 ? "then" : "single", operations } };
@@ -143,14 +165,25 @@ function discardActions({ owner, chooser }, count, prefix, sourceSpan) {
     else: discardActions({ owner, chooser }, count - 1, prefix, sourceSpan) }];
 }
 
-function emitOperation(node, prefix, sourceSpan) {
+function emitOperation(node, prefix, sourceSpan, compound) {
+  if (node.guard) {
+    const { guard, ...child } = node;
+    return [{ type: "IF", condition: guard, then: emitOperation(child, prefix, sourceSpan, compound), else: [] }];
+  }
   if (node.kind === "optional-don") return [{ type: "ADD_DON_UP_TO", player: "SELF", max: node.max, state: node.state, sourceSpan }];
   if (node.kind === "draw") return [{ type: "DRAW", player: node.player, count: node.count, sourceSpan }];
   if (node.kind === "discard") return discardActions(node, node.count, prefix, sourceSpan);
   const { zones, owner, chooser, min, max, filters } = node.target;
   const forZone = zone => {
-    const bindAs = `${prefix}_${zone}`, cards = { ref: `bindings.${bindAs}` };
-    const select = draftSelect(bindAs, zone, owner, min, max, { type: "all", conditions: filters }, { chooser });
+    const bindAs = `${prefix}_${Array.isArray(zone) ? "field" : zone}`, cards = { ref: `bindings.${bindAs}` };
+    const select = draftSelect(bindAs, Array.isArray(zone) ? zone[0] : zone, owner, min, max, { type: "all", conditions: filters }, { chooser });
+    if (Array.isArray(zone)) Object.assign(select.selector, { zone, cardTypes: zone });
+    if (node.kind === "owner-move") {
+      select.selector.controller = node.target.controller;
+      if (min === 1) select.selector.onInsufficient = "skip";
+      return [select, { type: "MOVE_CARD", cards, destination: { owner: "CARD_OWNER", zone: node.to,
+        position: node.to === "deck" ? "bottom" : "append", faceUp: node.to === "hand" }, cause: "EFFECT", sourceSpan }];
+    }
     if (node.kind === "power" || node.kind === "cost") {
       const modify = duration => ({ type: "MODIFY_STAT", cards, stat: node.kind, amount: node.amount, duration, sourceSpan });
       const untilTurn = player => modify({ type: "TURN_END", player, occurrence: 1 });
@@ -162,13 +195,13 @@ function emitOperation(node, prefix, sourceSpan) {
       ? { type: "MOVE_CARD", cards, destination: { owner, zone: "hand", position: "append", faceUp: true }, cause: "EFFECT", sourceSpan }
       : { type: node.kind === "ko" ? "KO" : "REST", cards, sourceSpan }];
   };
-  return zones.length === 1 ? forZone(zones[0]) : [{ type: "CHOOSE_MODE", modes: zones.map(zone => ({
+  return zones.length === 1 ? forZone(zones[0]) : compound ? forZone(zones) : [{ type: "CHOOSE_MODE", modes: zones.map(zone => ({
     label: zone === "leader" ? "リーダー" : "キャラ", actions: forZone(zone)
   })) }];
 }
 
-export function emitV3Structure(structure, sourceSpan) {
-  const actions = structure.operations.flatMap((node, i) => emitOperation(node, `structure_${sourceSpan.start}_${i}`, sourceSpan));
+export function emitV3Structure(structure, sourceSpan, compound = false) {
+  const actions = structure.operations.flatMap((node, i) => emitOperation(node, `structure_${sourceSpan.start}_${i}`, sourceSpan, compound));
   return structure.conditions.length ? [{ type: "IF", condition: { type: "all", conditions: structure.conditions }, then: actions, else: [] }] : actions;
 }
 

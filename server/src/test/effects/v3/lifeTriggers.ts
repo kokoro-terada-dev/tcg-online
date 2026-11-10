@@ -7,10 +7,11 @@ import { acceptLifeDecision, type LifeDecision } from "./battle";
 
 export type LifeTriggerCause = Readonly<{ battleId: string; event: MovementEvent }>;
 export function prepareLifeTrigger(board: MovementState, progression: Progression, actor: 0 | 1, pending: LifeDecision, selectionId: string, token: string,
-  transactionId: string, now: number, cards: ReadonlyMap<string, ApprovedV3Card>) {
+  transactionId: string, now: number, cards: ReadonlyMap<string, ApprovedV3Card>, canPay?: (definition: ApprovedV3Card, effectId: string) => boolean) {
   const next = acceptLifeDecision(board, progression, actor, pending, selectionId, token, now), card = getCard(board, pending.card), definition = cards.get(card.cardId);
   const effect = definition?.definition.effects.find(effect => effect.timing.type === "TRIGGER");
   ensureMove(definition && effect && board.players.every(zones => zones.resolving.length === 0), "v3-life-trigger-unavailable");
+  ensureMove(!effect.costs.length || canPay?.(definition, effect.id) === true, "v3-life-trigger-unpayable");
   // resolving is an internal transport slot, not a gameplay area. V3 projections omit it.
   const moved = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
     actor, effectController: actor, source: pending.card, mode: "rule", resolutionId: pending.resolutionId, operations: [

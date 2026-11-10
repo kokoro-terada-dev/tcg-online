@@ -135,7 +135,7 @@ function tally(rows, key) {
 
 export function analyzeV3DraftBlockers(bytes, previous, current) {
   const ledger = ledgerFromCsv(bytes);
-  const prior = current.version === "v3-draft-generator.8" ? 7 : current.version === "v3-draft-generator.7" ? 6 : current.version === "v3-draft-generator.6" ? 5 : current.version === "v3-draft-generator.5" ? 4 : current.version === "v3-draft-generator.4" ? 3 : 2;
+  const prior = current.version === "v3-draft-generator.9" ? 8 : current.version === "v3-draft-generator.8" ? 7 : current.version === "v3-draft-generator.7" ? 6 : current.version === "v3-draft-generator.6" ? 5 : current.version === "v3-draft-generator.5" ? 4 : current.version === "v3-draft-generator.4" ? 3 : 2;
   const optionalDonSupported = prior >= 4;
   const before = indexTrace(previous, ledger, prior), after = indexTrace(current, ledger, prior + 1);
   const byCard = new Map();

@@ -35,13 +35,16 @@ function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean)
       case "CHOOSE_MODE": return action.modes.every(mode => mode.actions.every(supported));
       case "OFFER_PAYMENT": return action.costs.every(cost => cost.type !== "REST_SOURCE" && !(cost.type === "MOVE_AS_COST" && cost.selector === "SOURCE"));
       case "IF_PAYMENT_SUCCEEDED": return action.then.every(supported) && action.else.every(supported);
-      case "SELECT": return action.selector.type === "CARDS" && ["leader", "character", "stage", "hand"].includes(action.selector.zone as string) && !action.selector.cardTypes.includes("don");
+      case "SELECT": return action.selector.type === "CARDS" && !action.selector.cardTypes.includes("don") &&
+        (typeof action.selector.zone === "string" ? ["leader", "character", "stage", "hand"].includes(action.selector.zone) :
+          action.selector.zone.every(zone => ["leader", "character", "stage"].includes(zone)));
       case "DRAW": return action.player === "SELF";
       case "ADD_DON_UP_TO": return true;
       case "DISCARD_BY_OWNER": case "ORDER_THEN_MOVE": return true;
       case "KO": case "KO_STAGE": case "MOVE_LIFE": case "REST": case "SET_ACTIVE": case "REVEAL": return true;
       case "MODIFY_STAT": case "GRANT_KEYWORD": return action.duration.type === "TURN_END";
-      case "MOVE_CARD": return ["hand", "trash", "public"].includes(action.destination.zone) && action.destination.position === "append";
+      case "MOVE_CARD": return ["hand", "trash", "public"].includes(action.destination.zone) && action.destination.position === "append" ||
+        action.destination.owner === "CARD_OWNER" && action.destination.zone === "deck" && action.destination.position === "bottom";
       case "PLAY_BY_EFFECT": return true;
       default: return false;
     }

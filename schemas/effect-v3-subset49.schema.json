@@ -1,0 +1,5769 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tcg:effect-v3-subset:49",
+  "title": "V3 subset 49: compound effects",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "cardId",
+    "cardVersion",
+    "name",
+    "cardType",
+    "baseStats",
+    "colors",
+    "traits",
+    "attributes",
+    "keywords",
+    "reviewStatus",
+    "source",
+    "effects"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "3.0.0-subset.49"
+    },
+    "cardId": {
+      "$ref": "#/$defs/id"
+    },
+    "cardVersion": {
+      "$ref": "#/$defs/id"
+    },
+    "name": {
+      "$ref": "#/$defs/label"
+    },
+    "cardType": {
+      "enum": [
+        "leader",
+        "character",
+        "stage",
+        "event"
+      ]
+    },
+    "baseStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cost",
+        "power",
+        "counter",
+        "life"
+      ],
+      "properties": {
+        "cost": {
+          "$ref": "#/$defs/stat"
+        },
+        "power": {
+          "$ref": "#/$defs/stat"
+        },
+        "counter": {
+          "$ref": "#/$defs/stat"
+        },
+        "life": {
+          "$ref": "#/$defs/stat"
+        }
+      }
+    },
+    "colors": {
+      "$ref": "#/$defs/stringList"
+    },
+    "traits": {
+      "$ref": "#/$defs/stringList"
+    },
+    "attributes": {
+      "$ref": "#/$defs/stringList"
+    },
+    "keywords": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "$ref": "#/$defs/keyword"
+      }
+    },
+    "reviewStatus": {
+      "enum": [
+        "needs_review",
+        "unsupported",
+        "approved"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "triggerText",
+        "displayIds",
+        "datasetSha256"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 32768
+        },
+        "triggerText": {
+          "type": "string",
+          "maxLength": 32768
+        },
+        "displayIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "datasetSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "effects": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/effect"
+      }
+    },
+    "continuousEffects": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/continuousEffect"
+      }
+    },
+    "replacementEffects": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/replacementEffect"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "effects": {
+            "maxItems": 0
+          },
+          "keywords": {
+            "maxItems": 0
+          }
+        },
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "continuousEffects"
+              ]
+            },
+            {
+              "required": [
+                "replacementEffects"
+              ]
+            }
+          ]
+        }
+      },
+      "then": {
+        "properties": {
+          "source": {
+            "properties": {
+              "text": {
+                "pattern": "^\\s*$"
+              },
+              "triggerText": {
+                "pattern": "^\\s*$"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "source": {
+            "anyOf": [
+              {
+                "properties": {
+                  "text": {
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "triggerText": {
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cardType": {
+            "const": "leader"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "effects": {
+            "items": {
+              "properties": {
+                "sourceZones": {
+                  "items": {
+                    "const": "leader"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cardType": {
+            "const": "character"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "effects": {
+            "items": {
+              "properties": {
+                "sourceZones": {
+                  "items": {
+                    "enum": [
+                      "character",
+                      "life"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cardType": {
+            "const": "stage"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "effects": {
+            "items": {
+              "properties": {
+                "sourceZones": {
+                  "items": {
+                    "enum": [
+                      "stage",
+                      "life"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cardType": {
+            "const": "event"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "keywords": {
+            "maxItems": 0
+          },
+          "effects": {
+            "items": {
+              "properties": {
+                "sourceZones": {
+                  "items": {
+                    "enum": [
+                      "hand",
+                      "life"
+                    ]
+                  }
+                },
+                "timing": {
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "COUNTER",
+                        "TRIGGER",
+                        "MAIN"
+                      ]
+                    }
+                  }
+                },
+                "optional": {
+                  "const": false
+                },
+                "activationConditions": {
+                  "properties": {
+                    "type": {
+                      "const": "all"
+                    },
+                    "conditions": {
+                      "maxItems": 0
+                    }
+                  },
+                  "required": [
+                    "conditions"
+                  ]
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "timing": {
+                        "properties": {
+                          "type": {
+                            "const": "MAIN"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "sourceZones": {
+                        "const": [
+                          "hand"
+                        ]
+                      },
+                      "resolutionConditions": {
+                        "properties": {
+                          "type": {
+                            "const": "all"
+                          },
+                          "conditions": {
+                            "maxItems": 0
+                          }
+                        },
+                        "required": [
+                          "conditions"
+                        ]
+                      },
+                      "actions": {
+                        "$ref": "#/$defs/interactiveMainEventActions",
+                        "minItems": 1
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "timing": {
+                        "properties": {
+                          "type": {
+                            "const": "MAIN"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "usageLimit": {
+                        "properties": {
+                          "count": {
+                            "const": 1
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "usageLimit": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "timing": {
+                        "properties": {
+                          "type": {
+                            "const": "COUNTER"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "costs": {
+                        "maxItems": 1,
+                        "items": {
+                          "properties": {
+                            "type": {
+                              "const": "DON_RETURN"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "costs": {
+                        "maxItems": 0
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "effects": {
+            "items": {
+              "properties": {
+                "timing": {
+                  "properties": {
+                    "type": {
+                      "not": {
+                        "const": "COUNTER"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "continuousEffects"
+        ]
+      },
+      "then": {
+        "properties": {
+          "cardType": {
+            "enum": [
+              "leader",
+              "character",
+              "stage"
+            ]
+          },
+          "source": {
+            "properties": {
+              "text": {
+                "pattern": "\\S"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "replacementEffects"
+        ]
+      },
+      "then": {
+        "properties": {
+          "cardType": {
+            "enum": [
+              "leader",
+              "character",
+              "stage"
+            ]
+          },
+          "source": {
+            "properties": {
+              "text": {
+                "pattern": "\\S"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cardType": {
+            "enum": [
+              "leader",
+              "stage"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "replacementEffects": {
+            "items": {
+              "required": [
+                "target"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "effects": {
+            "contains": {
+              "properties": {
+                "actions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "$ref": "#/$defs/effectBodyCall"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cardType": {
+            "const": "event"
+          },
+          "effects": {
+            "contains": {
+              "properties": {
+                "timing": {
+                  "properties": {
+                    "type": {
+                      "const": "MAIN"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "effects": {
+            "contains": {
+              "properties": {
+                "actions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "$ref": "#/$defs/externalBodyCall"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cardType": {
+            "enum": [
+              "leader",
+              "character",
+              "stage"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cardType": {
+            "const": "stage"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "effects": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "actions": {
+                    "contains": {
+                      "$ref": "#/$defs/containsRetarget"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "not": {
+          "properties": {
+            "cardType": {
+              "const": "character"
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "effects": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "actions": {
+                    "contains": {
+                      "$ref": "#/$defs/containsExtraTurn"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "not": {
+          "properties": {
+            "cardType": {
+              "enum": [
+                "character",
+                "stage"
+              ]
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "effects": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "actions": {
+                    "contains": {
+                      "$ref": "#/$defs/containsTriggerPlay"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "maxLength": 100,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
+      "not": {
+        "enum": [
+          "constructor",
+          "prototype"
+        ]
+      }
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "\\S"
+    },
+    "stringList": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/label"
+      }
+    },
+    "stat": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+    },
+    "meta": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/id"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "sourceSpan": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "end"
+          ],
+          "properties": {
+            "start": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "end": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "value": {
+      "oneOf": [
+        {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        {
+          "type": "string",
+          "maxLength": 1000
+        },
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ref"
+          ],
+          "properties": {
+            "ref": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "SELF.lifeCount",
+                    "SELF.handCount",
+                    "OPPONENT.lifeCount",
+                    "OPPONENT.handCount"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(SOURCE|CANDIDATE)\\.(cost|power|cardType|rotated)$"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^bindings\\.[A-Za-z][A-Za-z0-9_]{0,63}\\.count$"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(SOURCE|CANDIDATE)\\.(printed|current)\\.(cost|power)$"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(SOURCE|CANDIDATE)\\.(base\\.(cost|power|counter)|(printed|current)\\.counter)$"
+                },
+                {
+                  "enum": [
+                    "SELF.don.fieldCount",
+                    "OPPONENT.don.fieldCount",
+                    "SELF.don.costAreaCount",
+                    "OPPONENT.don.costAreaCount",
+                    "SELF.don.activeCount",
+                    "OPPONENT.don.activeCount",
+                    "SELF.don.restCount",
+                    "OPPONENT.don.restCount",
+                    "SELF.don.attachedCount",
+                    "OPPONENT.don.attachedCount"
+                  ]
+                },
+                {
+                  "const": "BOTH.lifeCount"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "predicates": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/predicate"
+      }
+    },
+    "predicate": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "conditions"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "all",
+                "any"
+              ]
+            },
+            "conditions": {
+              "$ref": "#/$defs/predicates"
+            }
+          }
+        },
+        {
+          "required": [
+            "condition"
+          ],
+          "properties": {
+            "type": {
+              "const": "not"
+            },
+            "condition": {
+              "$ref": "#/$defs/predicate"
+            }
+          }
+        },
+        {
+          "required": [
+            "left",
+            "op",
+            "right"
+          ],
+          "properties": {
+            "type": {
+              "const": "compare"
+            },
+            "left": {
+              "$ref": "#/$defs/value"
+            },
+            "op": {
+              "enum": [
+                "eq",
+                "ne",
+                "lt",
+                "lte",
+                "gt",
+                "gte"
+              ]
+            },
+            "right": {
+              "$ref": "#/$defs/value"
+            }
+          }
+        },
+        {
+          "required": [
+            "subject",
+            "basis",
+            "op",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "const": "CARD_NAME"
+            },
+            "subject": {
+              "enum": [
+                "SOURCE",
+                "CANDIDATE"
+              ]
+            },
+            "basis": {
+              "enum": [
+                "PRINTED",
+                "CURRENT"
+              ]
+            },
+            "op": {
+              "enum": [
+                "eq",
+                "ne"
+              ]
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "\\S"
+            }
+          }
+        },
+        {
+          "required": [
+            "subject",
+            "basis",
+            "field",
+            "match",
+            "comparison",
+            "values"
+          ],
+          "properties": {
+            "type": {
+              "const": "CARD_METADATA"
+            },
+            "subject": {
+              "enum": [
+                "SOURCE",
+                "CANDIDATE"
+              ]
+            },
+            "basis": {
+              "enum": [
+                "PRINTED",
+                "CURRENT"
+              ]
+            },
+            "field": {
+              "enum": [
+                "traits",
+                "colors",
+                "attributes"
+              ]
+            },
+            "match": {
+              "enum": [
+                "ANY",
+                "ALL",
+                "NONE",
+                "EXACT"
+              ]
+            },
+            "comparison": {
+              "enum": [
+                "EXACT",
+                "CONTAINS"
+              ]
+            },
+            "values": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300,
+                "pattern": "\\S"
+              }
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "comparison": {
+                    "const": "CONTAINS"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "field": {
+                    "const": "traits"
+                  },
+                  "match": {
+                    "enum": [
+                      "ANY",
+                      "ALL",
+                      "NONE"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "required": [
+            "subject",
+            "basis",
+            "ability"
+          ],
+          "properties": {
+            "type": {
+              "const": "HAS_ABILITY"
+            },
+            "subject": {
+              "enum": [
+                "SOURCE",
+                "CANDIDATE"
+              ]
+            },
+            "basis": {
+              "enum": [
+                "PRINTED",
+                "GRANTED",
+                "CURRENT"
+              ]
+            },
+            "ability": {
+              "enum": [
+                "BLOCKER",
+                "RUSH",
+                "RUSH_CHARACTER",
+                "CANNOT_BE_BLOCKED",
+                "MAIN",
+                "ON_PLAY",
+                "ON_ATTACK",
+                "ON_OPPONENT_ATTACK",
+                "ON_KO",
+                "COUNTER",
+                "TRIGGER",
+                "BANISH",
+                "DOUBLE_ATTACK"
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "basis": {
+                    "const": "GRANTED"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "ability": {
+                    "enum": [
+                      "BLOCKER",
+                      "RUSH",
+                      "RUSH_CHARACTER",
+                      "CANNOT_BE_BLOCKED",
+                      "BANISH",
+                      "DOUBLE_ATTACK"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "required": [
+            "query"
+          ],
+          "properties": {
+            "type": {
+              "const": "EXISTS"
+            },
+            "query": {
+              "$ref": "#/$defs/query"
+            }
+          }
+        },
+        {
+          "required": [
+            "query",
+            "op",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "const": "COUNT"
+            },
+            "query": {
+              "$ref": "#/$defs/query"
+            },
+            "op": {
+              "enum": [
+                "eq",
+                "ne",
+                "lt",
+                "lte",
+                "gt",
+                "gte"
+              ]
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 256
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player"
+          ],
+          "properties": {
+            "type": {
+              "const": "TURN_IS"
+            },
+            "player": {
+              "enum": [
+                "SELF",
+                "OPPONENT"
+              ]
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "result",
+            "subject",
+            "basis",
+            "match"
+          ],
+          "properties": {
+            "type": {
+              "const": "MOVED_COLORS"
+            },
+            "result": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "not": {
+                "enum": [
+                  "constructor",
+                  "prototype"
+                ]
+              }
+            },
+            "subject": {
+              "enum": [
+                "SOURCE",
+                "CANDIDATE"
+              ]
+            },
+            "basis": {
+              "enum": [
+                "PRINTED",
+                "CURRENT"
+              ]
+            },
+            "match": {
+              "enum": [
+                "OVERLAP",
+                "DISJOINT"
+              ]
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "memory",
+            "subject",
+            "basis",
+            "match"
+          ],
+          "properties": {
+            "type": {
+              "const": "REMEMBERED_COLORS"
+            },
+            "memory": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "not": {
+                "enum": [
+                  "constructor",
+                  "prototype"
+                ]
+              }
+            },
+            "subject": {
+              "enum": [
+                "SOURCE",
+                "CANDIDATE"
+              ]
+            },
+            "basis": {
+              "enum": [
+                "PRINTED",
+                "CURRENT"
+              ]
+            },
+            "match": {
+              "enum": [
+                "OVERLAP",
+                "DISJOINT"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "actions": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/action"
+      }
+    },
+    "bindingName": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+      "not": {
+        "enum": [
+          "constructor",
+          "prototype"
+        ]
+      }
+    },
+    "cardSetRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^bindings\\.[A-Za-z][A-Za-z0-9_]{0,63}$"
+        }
+      }
+    },
+    "player": {
+      "enum": [
+        "SELF",
+        "OPPONENT"
+      ]
+    },
+    "donZones": {
+      "oneOf": [
+        {
+          "enum": [
+            "activeDon",
+            "restDon",
+            "attachedDon"
+          ]
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "activeDon",
+              "restDon",
+              "attachedDon"
+            ]
+          }
+        }
+      ]
+    },
+    "selector": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/areaSelector"
+        },
+        {
+          "$ref": "#/$defs/boundSelector"
+        }
+      ]
+    },
+    "boundSelector": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "cards",
+        "excludeCards",
+        "owner",
+        "controller",
+        "chooser",
+        "zone",
+        "visibility",
+        "faceUpOnly",
+        "cardTypes",
+        "filters",
+        "excludeSource",
+        "min",
+        "max",
+        "selectionMode",
+        "order",
+        "onInsufficient"
+      ],
+      "properties": {
+        "type": {
+          "const": "BOUND_CARDS"
+        },
+        "cards": {
+          "$ref": "#/$defs/cardSetRef"
+        },
+        "excludeCards": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/cardSetRef"
+            }
+          ]
+        },
+        "owner": {
+          "const": "SELF"
+        },
+        "controller": {
+          "const": "SELF"
+        },
+        "chooser": {
+          "const": "SELF"
+        },
+        "zone": {
+          "const": "deck"
+        },
+        "visibility": {
+          "const": "OWNER_ONLY"
+        },
+        "faceUpOnly": {
+          "const": false
+        },
+        "cardTypes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "character",
+              "event",
+              "stage"
+            ]
+          }
+        },
+        "filters": {
+          "$ref": "#/$defs/predicate"
+        },
+        "excludeSource": {
+          "type": "boolean"
+        },
+        "min": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "max": {
+          "$ref": "#/$defs/count"
+        },
+        "selectionMode": {
+          "const": "SELECT"
+        },
+        "order": {
+          "const": "UNORDERED"
+        },
+        "onInsufficient": {
+          "const": "fail"
+        }
+      }
+    },
+    "areaSelector": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "zone": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "leader",
+                        "character",
+                        "stage",
+                        "trash",
+                        "public"
+                      ]
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "enum": [
+                          "leader",
+                          "character",
+                          "stage"
+                        ]
+                      },
+                      "minItems": 1,
+                      "maxItems": 3,
+                      "uniqueItems": true
+                    }
+                  ]
+                },
+                "visibility": {
+                  "const": "PUBLIC"
+                },
+                "faceUpOnly": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "properties": {
+                "zone": {
+                  "$ref": "#/$defs/donZones"
+                },
+                "visibility": {
+                  "const": "PUBLIC"
+                },
+                "faceUpOnly": {
+                  "const": true
+                },
+                "owner": {
+                  "const": "SELF"
+                },
+                "controller": {
+                  "const": "SELF"
+                },
+                "chooser": {
+                  "const": "SELF"
+                },
+                "cardTypes": {
+                  "const": [
+                    "don"
+                  ]
+                }
+              }
+            },
+            {
+              "properties": {
+                "zone": {
+                  "const": "hand"
+                },
+                "visibility": {
+                  "const": "OWNER_ONLY"
+                },
+                "faceUpOnly": {
+                  "const": false
+                },
+                "owner": {
+                  "const": "SELF"
+                },
+                "controller": {
+                  "const": "SELF"
+                },
+                "chooser": {
+                  "const": "SELF"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "properties": {
+                  "zone": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "leader",
+                        "character",
+                        "stage"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "uniqueItems": true
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "owner": {
+                    "const": "EITHER"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "controller": {
+                    "const": "EITHER"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "onInsufficient": {
+                    "const": "skip"
+                  }
+                }
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "zone": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "leader",
+                      "character",
+                      "stage"
+                    ]
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "leader",
+                        "character",
+                        "stage"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "uniqueItems": true
+                  }
+                ]
+              },
+              "cardTypes": {
+                "items": {
+                  "enum": [
+                    "leader",
+                    "character",
+                    "stage"
+                  ]
+                }
+              },
+              "visibility": {
+                "const": "PUBLIC"
+              },
+              "faceUpOnly": {
+                "const": true
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "cardTypes": {
+                      "contains": {
+                        "const": "leader"
+                      }
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "zone": {
+                      "anyOf": [
+                        {
+                          "const": "leader"
+                        },
+                        {
+                          "type": "array",
+                          "contains": {
+                            "const": "leader"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "cardTypes": {
+                      "contains": {
+                        "const": "character"
+                      }
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "zone": {
+                      "anyOf": [
+                        {
+                          "const": "character"
+                        },
+                        {
+                          "type": "array",
+                          "contains": {
+                            "const": "character"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "cardTypes": {
+                      "contains": {
+                        "const": "stage"
+                      }
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "zone": {
+                      "anyOf": [
+                        {
+                          "const": "stage"
+                        },
+                        {
+                          "type": "array",
+                          "contains": {
+                            "const": "stage"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "onInsufficient": {
+                "const": "skip"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "min": {
+                "const": 1
+              },
+              "max": {
+                "const": 1
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "owner",
+        "controller",
+        "zone",
+        "cardTypes",
+        "filters",
+        "excludeSource",
+        "faceUpOnly",
+        "min",
+        "max",
+        "visibility",
+        "selectionMode",
+        "chooser",
+        "order",
+        "onInsufficient"
+      ],
+      "properties": {
+        "type": {
+          "const": "CARDS"
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/player"
+            },
+            {
+              "const": "EITHER"
+            }
+          ]
+        },
+        "controller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/player"
+            },
+            {
+              "const": "EITHER"
+            }
+          ]
+        },
+        "chooser": {
+          "$ref": "#/$defs/player"
+        },
+        "zone": {
+          "oneOf": [
+            {
+              "enum": [
+                "leader",
+                "character",
+                "stage",
+                "trash",
+                "public",
+                "hand"
+              ]
+            },
+            {
+              "$ref": "#/$defs/donZones"
+            },
+            {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "leader",
+                  "character",
+                  "stage"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 3,
+              "uniqueItems": true
+            }
+          ]
+        },
+        "cardTypes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "leader",
+              "character",
+              "event",
+              "stage",
+              "don"
+            ]
+          }
+        },
+        "filters": {
+          "$ref": "#/$defs/predicate"
+        },
+        "excludeSource": {
+          "type": "boolean"
+        },
+        "faceUpOnly": {
+          "type": "boolean"
+        },
+        "min": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50
+        },
+        "max": {
+          "$ref": "#/$defs/count"
+        },
+        "visibility": {
+          "enum": [
+            "PUBLIC",
+            "OWNER_ONLY"
+          ]
+        },
+        "selectionMode": {
+          "const": "SELECT"
+        },
+        "order": {
+          "const": "UNORDERED"
+        },
+        "onInsufficient": {
+          "enum": [
+            "fail",
+            "skip"
+          ]
+        }
+      }
+    },
+    "destination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "owner",
+        "zone",
+        "position",
+        "faceUp"
+      ],
+      "properties": {
+        "owner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/player"
+            },
+            {
+              "const": "CARD_OWNER"
+            }
+          ]
+        },
+        "zone": {
+          "enum": [
+            "hand",
+            "trash",
+            "deck",
+            "public"
+          ]
+        },
+        "position": {
+          "enum": [
+            "append",
+            "top",
+            "bottom"
+          ]
+        },
+        "faceUp": {
+          "type": "boolean"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "zone": {
+              "enum": [
+                "hand",
+                "trash",
+                "public"
+              ]
+            },
+            "position": {
+              "const": "append"
+            },
+            "faceUp": {
+              "const": true
+            }
+          }
+        },
+        {
+          "properties": {
+            "zone": {
+              "const": "deck"
+            },
+            "position": {
+              "enum": [
+                "top",
+                "bottom"
+              ]
+            },
+            "faceUp": {
+              "const": false
+            }
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "owner": {
+                "const": "CARD_OWNER"
+              }
+            }
+          },
+          "then": {
+            "anyOf": [
+              {
+                "properties": {
+                  "zone": {
+                    "const": "hand"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "owner": {
+                    "const": "CARD_OWNER"
+                  },
+                  "zone": {
+                    "const": "deck"
+                  },
+                  "position": {
+                    "const": "bottom"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "keyword": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "BLOCKER",
+            "RUSH",
+            "RUSH_CHARACTER",
+            "CANNOT_BE_BLOCKED",
+            "BANISH",
+            "DOUBLE_ATTACK"
+          ]
+        }
+      }
+    },
+    "duration": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "player",
+            "occurrence"
+          ],
+          "properties": {
+            "type": {
+              "const": "TURN_END"
+            },
+            "player": {
+              "$ref": "#/$defs/player"
+            },
+            "occurrence": {
+              "enum": [
+                1,
+                2
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "BATTLE_END"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player",
+            "boundary",
+            "occurrence",
+            "includeCurrent"
+          ],
+          "properties": {
+            "type": {
+              "const": "UNTIL_BOUNDARY"
+            },
+            "player": {
+              "enum": [
+                "SELF",
+                "OPPONENT"
+              ]
+            },
+            "boundary": {
+              "enum": [
+                "TURN_START",
+                "END_PHASE_END"
+              ]
+            },
+            "occurrence": {
+              "enum": [
+                1,
+                2
+              ]
+            },
+            "includeCurrent": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "action": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "player",
+            "count"
+          ],
+          "properties": {
+            "type": {
+              "const": "DRAW"
+            },
+            "player": {
+              "enum": [
+                "SELF",
+                "OPPONENT"
+              ]
+            },
+            "count": {
+              "$ref": "#/$defs/count"
+            }
+          }
+        },
+        {
+          "required": [
+            "bindAs"
+          ],
+          "properties": {
+            "type": {
+              "const": "BIND_SOURCE"
+            },
+            "bindAs": {
+              "$ref": "#/$defs/bindingName"
+            }
+          }
+        },
+        {
+          "required": [
+            "cards",
+            "keyword",
+            "duration"
+          ],
+          "properties": {
+            "type": {
+              "const": "GRANT_KEYWORD"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "keyword": {
+              "$ref": "#/$defs/keyword"
+            },
+            "duration": {
+              "$ref": "#/$defs/duration"
+            }
+          }
+        },
+        {
+          "required": [
+            "cards",
+            "stat",
+            "amount",
+            "duration"
+          ],
+          "properties": {
+            "type": {
+              "const": "MODIFY_STAT"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "stat": {
+              "enum": [
+                "power",
+                "cost"
+              ]
+            },
+            "amount": {
+              "type": "integer",
+              "minimum": -100000,
+              "maximum": 100000,
+              "not": {
+                "const": 0
+              }
+            },
+            "duration": {
+              "$ref": "#/$defs/duration"
+            }
+          }
+        },
+        {
+          "required": [
+            "player",
+            "count",
+            "bindAs",
+            "onInsufficient"
+          ],
+          "properties": {
+            "type": {
+              "const": "LOOK_TOP"
+            },
+            "player": {
+              "const": "SELF"
+            },
+            "count": {
+              "$ref": "#/$defs/count"
+            },
+            "bindAs": {
+              "$ref": "#/$defs/bindingName"
+            },
+            "onInsufficient": {
+              "enum": [
+                "fail",
+                "takeAvailable"
+              ]
+            }
+          }
+        },
+        {
+          "required": [
+            "cards",
+            "viewers"
+          ],
+          "properties": {
+            "type": {
+              "const": "REVEAL"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "viewers": {
+              "const": "BOTH"
+            }
+          }
+        },
+        {
+          "required": [
+            "cards",
+            "excludeCards",
+            "bindAs",
+            "chooser"
+          ],
+          "properties": {
+            "type": {
+              "const": "ORDER_CARDS"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "excludeCards": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/cardSetRef"
+                }
+              ]
+            },
+            "bindAs": {
+              "$ref": "#/$defs/bindingName"
+            },
+            "chooser": {
+              "const": "SELF"
+            }
+          }
+        },
+        {
+          "required": [
+            "cards",
+            "player",
+            "position"
+          ],
+          "properties": {
+            "type": {
+              "const": "RETURN_TO_DECK"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "player": {
+              "const": "SELF"
+            },
+            "position": {
+              "enum": [
+                "top",
+                "bottom"
+              ]
+            }
+          }
+        },
+        {
+          "required": [
+            "actions"
+          ],
+          "properties": {
+            "type": {
+              "const": "SEQUENCE"
+            },
+            "actions": {
+              "$ref": "#/$defs/actions"
+            }
+          }
+        },
+        {
+          "required": [
+            "condition",
+            "then",
+            "else"
+          ],
+          "properties": {
+            "type": {
+              "const": "IF"
+            },
+            "condition": {
+              "$ref": "#/$defs/predicate"
+            },
+            "then": {
+              "$ref": "#/$defs/actions"
+            },
+            "else": {
+              "$ref": "#/$defs/actions"
+            }
+          }
+        },
+        {
+          "required": [
+            "selector",
+            "bindAs"
+          ],
+          "properties": {
+            "type": {
+              "const": "SELECT"
+            },
+            "selector": {
+              "$ref": "#/$defs/selector"
+            },
+            "bindAs": {
+              "$ref": "#/$defs/bindingName"
+            }
+          }
+        },
+        {
+          "required": [
+            "cards",
+            "destination",
+            "cause"
+          ],
+          "properties": {
+            "type": {
+              "const": "MOVE_CARD"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "destination": {
+              "$ref": "#/$defs/destination"
+            },
+            "cause": {
+              "const": "EFFECT"
+            }
+          }
+        },
+        {
+          "required": [
+            "cards"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "KO",
+                "REST",
+                "SET_ACTIVE",
+                "RETARGET_BATTLE",
+                "KO_STAGE"
+              ]
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "bindAs"
+          ],
+          "properties": {
+            "type": {
+              "const": "MOVE_RESULT"
+            },
+            "bindAs": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "not": {
+                "enum": [
+                  "constructor",
+                  "prototype"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "result",
+            "cards",
+            "snapshot",
+            "basis",
+            "field",
+            "bindAs"
+          ],
+          "properties": {
+            "type": {
+              "const": "REMEMBER_FACTS"
+            },
+            "result": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "not": {
+                "enum": [
+                  "constructor",
+                  "prototype"
+                ]
+              }
+            },
+            "cards": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/cardSetRef"
+                }
+              ]
+            },
+            "snapshot": {
+              "enum": [
+                "BEFORE",
+                "AFTER"
+              ]
+            },
+            "basis": {
+              "enum": [
+                "PRINTED",
+                "CURRENT"
+              ]
+            },
+            "field": {
+              "const": "colors"
+            },
+            "bindAs": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "not": {
+                "enum": [
+                  "constructor",
+                  "prototype"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "cards",
+            "from",
+            "destination",
+            "enterState",
+            "provenance",
+            "condition"
+          ],
+          "properties": {
+            "type": {
+              "const": "PLAY_BY_EFFECT"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "from": {
+              "const": "hand"
+            },
+            "destination": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "owner",
+                "zone",
+                "slotPolicy"
+              ],
+              "properties": {
+                "owner": {
+                  "const": "SELF"
+                },
+                "zone": {
+                  "const": "character"
+                },
+                "slotPolicy": {
+                  "const": "FIRST_EMPTY"
+                }
+              }
+            },
+            "enterState": {
+              "enum": [
+                "ACTIVE",
+                "REST"
+              ]
+            },
+            "provenance": {
+              "const": "EFFECT"
+            },
+            "condition": {
+              "$ref": "#/$defs/predicate"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "cards",
+            "from",
+            "to"
+          ],
+          "properties": {
+            "type": {
+              "const": "SET_DON_STATE"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "from": {
+              "enum": [
+                "ACTIVE",
+                "REST"
+              ]
+            },
+            "to": {
+              "enum": [
+                "ACTIVE",
+                "REST"
+              ]
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "properties": {
+                  "from": {
+                    "const": "ACTIVE"
+                  },
+                  "to": {
+                    "const": "ACTIVE"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "from": {
+                    "const": "REST"
+                  },
+                  "to": {
+                    "const": "REST"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player",
+            "count",
+            "state",
+            "onInsufficient"
+          ],
+          "properties": {
+            "type": {
+              "const": "ADD_DON"
+            },
+            "player": {
+              "const": "SELF"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "state": {
+              "enum": [
+                "ACTIVE",
+                "REST"
+              ]
+            },
+            "onInsufficient": {
+              "const": "fail"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "from",
+            "assignments"
+          ],
+          "properties": {
+            "type": {
+              "const": "ATTACH_DON"
+            },
+            "from": {
+              "enum": [
+                "ACTIVE",
+                "REST"
+              ]
+            },
+            "assignments": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 10,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "cards",
+                  "target"
+                ],
+                "properties": {
+                  "cards": {
+                    "$ref": "#/$defs/cardSetRef"
+                  },
+                  "target": {
+                    "$ref": "#/$defs/cardSetRef"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "cards",
+            "from"
+          ],
+          "properties": {
+            "type": {
+              "const": "RETURN_DON_BY_EFFECT"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "from": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 3,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "activeDon",
+                  "restDon",
+                  "attachedDon"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "modes"
+          ],
+          "properties": {
+            "type": {
+              "const": "CHOOSE_MODE"
+            },
+            "modes": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 8,
+              "items": {
+                "$ref": "#/$defs/effectMode"
+              }
+            }
+          },
+          "$comment": "Mode labels, scoped payment names and cost combinations are also validated by the Compiler."
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "costs",
+            "bindAs"
+          ],
+          "properties": {
+            "type": {
+              "const": "OFFER_PAYMENT"
+            },
+            "costs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 128,
+              "items": {
+                "$ref": "#/$defs/cost"
+              }
+            },
+            "bindAs": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
+              "maxLength": 64,
+              "not": {
+                "enum": [
+                  "constructor",
+                  "prototype"
+                ]
+              }
+            }
+          },
+          "$comment": "Mode labels, scoped payment names and cost combinations are also validated by the Compiler."
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "payment",
+            "then",
+            "else"
+          ],
+          "properties": {
+            "type": {
+              "const": "IF_PAYMENT_SUCCEEDED"
+            },
+            "payment": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
+              "maxLength": 64,
+              "not": {
+                "enum": [
+                  "constructor",
+                  "prototype"
+                ]
+              }
+            },
+            "then": {
+              "type": "array",
+              "maxItems": 128,
+              "items": {
+                "$ref": "#/$defs/action"
+              }
+            },
+            "else": {
+              "type": "array",
+              "maxItems": 128,
+              "items": {
+                "$ref": "#/$defs/action"
+              }
+            }
+          },
+          "$comment": "Mode labels, scoped payment names and cost combinations are also validated by the Compiler."
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player",
+            "chooser",
+            "count"
+          ],
+          "properties": {
+            "type": {
+              "const": "DISCARD_BY_OWNER"
+            },
+            "player": {
+              "const": "OPPONENT"
+            },
+            "chooser": {
+              "const": "OPPONENT"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player",
+            "chooser",
+            "count",
+            "destination"
+          ],
+          "properties": {
+            "type": {
+              "const": "ORDER_THEN_MOVE"
+            },
+            "player": {
+              "const": "OPPONENT"
+            },
+            "chooser": {
+              "const": "OPPONENT"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "destination": {
+              "const": "deckBottom"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player",
+            "from",
+            "to",
+            "faceUp"
+          ],
+          "properties": {
+            "type": {
+              "const": "MOVE_LIFE"
+            },
+            "player": {
+              "enum": [
+                "SELF",
+                "OPPONENT"
+              ]
+            },
+            "from": {
+              "const": "DECK_TOP"
+            },
+            "to": {
+              "enum": [
+                "LIFE_TOP",
+                "LIFE_BOTTOM"
+              ]
+            },
+            "faceUp": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player",
+            "from",
+            "to",
+            "faceUp",
+            "cards"
+          ],
+          "properties": {
+            "type": {
+              "const": "MOVE_LIFE"
+            },
+            "player": {
+              "enum": [
+                "SELF",
+                "OPPONENT"
+              ]
+            },
+            "from": {
+              "const": "BOUND"
+            },
+            "to": {
+              "enum": [
+                "LIFE_TOP",
+                "LIFE_BOTTOM"
+              ]
+            },
+            "faceUp": {
+              "type": "boolean"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player",
+            "from",
+            "to"
+          ],
+          "properties": {
+            "type": {
+              "const": "MOVE_LIFE"
+            },
+            "player": {
+              "enum": [
+                "SELF",
+                "OPPONENT"
+              ]
+            },
+            "from": {
+              "const": "LIFE_TOP"
+            },
+            "to": {
+              "enum": [
+                "HAND",
+                "TRASH",
+                "DECK_BOTTOM"
+              ]
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player",
+            "from",
+            "to"
+          ],
+          "properties": {
+            "type": {
+              "const": "MOVE_LIFE"
+            },
+            "player": {
+              "enum": [
+                "SELF",
+                "OPPONENT"
+              ]
+            },
+            "from": {
+              "const": "LIFE_BOTTOM"
+            },
+            "to": {
+              "enum": [
+                "HAND",
+                "TRASH",
+                "DECK_BOTTOM"
+              ]
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "properties": {
+            "type": {
+              "const": "EXTRA_TURN"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "properties": {
+            "type": {
+              "const": "PLAY_TRIGGER_SOURCE"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player",
+            "max",
+            "state"
+          ],
+          "properties": {
+            "type": {
+              "const": "ADD_DON_UP_TO"
+            },
+            "player": {
+              "const": "SELF"
+            },
+            "max": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "state": {
+              "enum": [
+                "ACTIVE",
+                "REST"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "cost": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "count"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "REST_DON",
+                "DISCARD_HAND"
+              ]
+            },
+            "count": {
+              "$ref": "#/$defs/count"
+            }
+          }
+        },
+        {
+          "required": [
+            "count",
+            "from"
+          ],
+          "properties": {
+            "type": {
+              "const": "DON_RETURN"
+            },
+            "count": {
+              "$ref": "#/$defs/count"
+            },
+            "from": {
+              "$ref": "#/$defs/donZones"
+            }
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "REST_SOURCE"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "selector"
+          ],
+          "properties": {
+            "type": {
+              "const": "REVEAL_CARDS"
+            },
+            "selector": {
+              "$ref": "#/$defs/activationHandCostSelector"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "selector",
+            "destination"
+          ],
+          "properties": {
+            "type": {
+              "const": "MOVE_AS_COST"
+            },
+            "selector": {
+              "oneOf": [
+                {
+                  "const": "SOURCE"
+                },
+                {
+                  "$ref": "#/$defs/activationHandCostSelector"
+                }
+              ]
+            },
+            "destination": {
+              "const": "trash"
+            }
+          }
+        }
+      ]
+    },
+    "timing": {
+      "oneOf": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "MAIN",
+                "COUNTER",
+                "TRIGGER",
+                "ON_PLAY",
+                "ON_ATTACK",
+                "ON_OPPONENT_ATTACK",
+                "ON_KO"
+              ]
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "event",
+            "snapshot",
+            "relation",
+            "owner",
+            "controller",
+            "fromZones",
+            "toZones",
+            "cardTypes",
+            "filters"
+          ],
+          "properties": {
+            "type": {
+              "const": "ON_EVENT"
+            },
+            "event": {
+              "enum": [
+                "CARD_ENTERED",
+                "CARD_KO",
+                "CARD_MOVED"
+              ]
+            },
+            "snapshot": {
+              "enum": [
+                "TRANSACTION_BEFORE",
+                "TRANSACTION_AFTER"
+              ]
+            },
+            "relation": {
+              "enum": [
+                "SELF",
+                "OTHER",
+                "ANY"
+              ]
+            },
+            "owner": {
+              "enum": [
+                "SELF",
+                "OPPONENT",
+                "ANY"
+              ]
+            },
+            "controller": {
+              "enum": [
+                "SELF",
+                "OPPONENT",
+                "ANY"
+              ]
+            },
+            "fromZones": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 7,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "hand",
+                  "deck",
+                  "life",
+                  "trash",
+                  "public",
+                  "character",
+                  "stage"
+                ]
+              }
+            },
+            "toZones": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 7,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "hand",
+                  "deck",
+                  "life",
+                  "trash",
+                  "public",
+                  "character",
+                  "stage"
+                ]
+              }
+            },
+            "cardTypes": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 3,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "character",
+                  "stage",
+                  "event"
+                ]
+              }
+            },
+            "filters": {
+              "$ref": "#/$defs/predicate"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "properties": {
+            "type": {
+              "const": "ON_BLOCK"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player"
+          ],
+          "properties": {
+            "type": {
+              "const": "MAIN_START"
+            },
+            "player": {
+              "enum": [
+                "SELF",
+                "OPPONENT"
+              ]
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player"
+          ],
+          "properties": {
+            "type": {
+              "const": "TURN_END"
+            },
+            "player": {
+              "enum": [
+                "SELF",
+                "OPPONENT"
+              ]
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "event",
+            "owner",
+            "cause",
+            "min"
+          ],
+          "properties": {
+            "type": {
+              "const": "ON_EVENT"
+            },
+            "event": {
+              "const": "DON_RETURNED"
+            },
+            "owner": {
+              "enum": [
+                "SELF",
+                "OPPONENT"
+              ]
+            },
+            "cause": {
+              "enum": [
+                "EFFECT_MOVE",
+                "COST_PAYMENT",
+                "ANY"
+              ]
+            },
+            "min": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          }
+        }
+      ]
+    },
+    "effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "timing",
+        "sourceZones",
+        "optional",
+        "usageLimit",
+        "activationConditions",
+        "resolutionConditions",
+        "costs",
+        "actions"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "activated",
+            "triggered"
+          ]
+        },
+        "timing": {
+          "$ref": "#/$defs/timing"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "sourceZones": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "enum": [
+              "leader",
+              "character",
+              "stage",
+              "hand",
+              "life"
+            ]
+          }
+        },
+        "usageLimit": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "scope",
+                "count"
+              ],
+              "properties": {
+                "type": {
+                  "const": "PER_TURN"
+                },
+                "scope": {
+                  "const": "SOURCE_OBJECT"
+                },
+                "count": {
+                  "$ref": "#/$defs/count"
+                }
+              }
+            }
+          ]
+        },
+        "activationConditions": {
+          "$ref": "#/$defs/predicate"
+        },
+        "resolutionConditions": {
+          "$ref": "#/$defs/predicate"
+        },
+        "costs": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/cost"
+          }
+        },
+        "actions": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/actions"
+                }
+              ],
+              "minItems": 1
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "$ref": "#/$defs/effectBodyCall"
+              }
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "$ref": "#/$defs/externalBodyCall"
+              }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "triggered"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "timing": {
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "TRIGGER",
+                      "ON_PLAY",
+                      "ON_ATTACK",
+                      "ON_OPPONENT_ATTACK",
+                      "ON_KO",
+                      "ON_EVENT",
+                      "ON_BLOCK",
+                      "MAIN_START",
+                      "TURN_END"
+                    ]
+                  }
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "timing": {
+                      "properties": {
+                        "type": {
+                          "not": {
+                            "enum": [
+                              "ON_EVENT",
+                              "ON_BLOCK",
+                              "MAIN_START",
+                              "TURN_END"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "activationConditions": {
+                      "properties": {
+                        "type": {
+                          "const": "all"
+                        },
+                        "conditions": {
+                          "maxItems": 0
+                        }
+                      },
+                      "required": [
+                        "conditions"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "else": {
+            "properties": {
+              "timing": {
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "MAIN",
+                      "COUNTER"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "timing": {
+                "properties": {
+                  "type": {
+                    "const": "TRIGGER"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "sourceZones": {
+                "const": [
+                  "life"
+                ]
+              },
+              "optional": {
+                "const": false
+              },
+              "usageLimit": {
+                "type": "null"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "actions": {
+                      "minItems": 1,
+                      "maxItems": 1,
+                      "items": {
+                        "properties": {
+                          "type": {
+                            "const": "PLAY_TRIGGER_SOURCE"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "costs": {
+                      "maxItems": 1,
+                      "items": {
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "type": {
+                                "const": "DISCARD_HAND"
+                              },
+                              "count": {
+                                "maximum": 3
+                              }
+                            }
+                          },
+                          {
+                            "properties": {
+                              "type": {
+                                "const": "DON_RETURN"
+                              },
+                              "count": {
+                                "maximum": 10
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "costs": {
+                      "maxItems": 0
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "else": {
+            "properties": {
+              "sourceZones": {
+                "items": {
+                  "not": {
+                    "const": "life"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "timing": {
+                "properties": {
+                  "type": {
+                    "const": "ON_PLAY"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "sourceZones": {
+                "items": {
+                  "enum": [
+                    "character",
+                    "stage"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "timing": {
+                "properties": {
+                  "type": {
+                    "const": "ON_ATTACK"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "sourceZones": {
+                "items": {
+                  "enum": [
+                    "leader",
+                    "character"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "timing": {
+                "properties": {
+                  "type": {
+                    "const": "ON_KO"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "sourceZones": {
+                "items": {
+                  "const": "character"
+                }
+              },
+              "costs": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "timing": {
+                "properties": {
+                  "type": {
+                    "const": "ON_BLOCK"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "sourceZones": {
+                "const": [
+                  "character"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "actions": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "$ref": "#/$defs/effectBodyCall"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "timing": {
+                "properties": {
+                  "type": {
+                    "const": "TRIGGER"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "actions": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "$ref": "#/$defs/externalBodyCall"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "timing": {
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "MAIN",
+                      "ON_PLAY",
+                      "ON_EVENT"
+                    ]
+                  }
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "timing": {
+                      "properties": {
+                        "type": {
+                          "const": "ON_EVENT"
+                        }
+                      }
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "timing": {
+                      "properties": {
+                        "event": {
+                          "const": "CARD_ENTERED"
+                        },
+                        "relation": {
+                          "const": "SELF"
+                        },
+                        "snapshot": {
+                          "const": "TRANSACTION_AFTER"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "actions": {
+                "contains": {
+                  "$ref": "#/$defs/containsRetarget"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "timing": {
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "COUNTER",
+                      "ON_OPPONENT_ATTACK"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "actions": {
+                "contains": {
+                  "$ref": "#/$defs/containsExtraTurn"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "timing": {
+                "properties": {
+                  "type": {
+                    "const": "ON_PLAY"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "actions": {
+                "contains": {
+                  "$ref": "#/$defs/containsTriggerPlay"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "triggered"
+              },
+              "timing": {
+                "properties": {
+                  "type": {
+                    "const": "TRIGGER"
+                  }
+                }
+              },
+              "sourceZones": {
+                "const": [
+                  "life"
+                ]
+              },
+              "optional": {
+                "const": false
+              },
+              "usageLimit": {
+                "type": "null"
+              },
+              "activationConditions": {
+                "properties": {
+                  "type": {
+                    "const": "all"
+                  },
+                  "conditions": {
+                    "maxItems": 0
+                  }
+                }
+              },
+              "resolutionConditions": {
+                "$ref": "#/$defs/triggerPlayCondition"
+              },
+              "actions": {
+                "anyOf": [
+                  {
+                    "minItems": 1,
+                    "maxItems": 1,
+                    "items": {
+                      "properties": {
+                        "type": {
+                          "const": "PLAY_TRIGGER_SOURCE"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "prefixItems": [
+                      {
+                        "properties": {
+                          "type": {
+                            "const": "DRAW"
+                          },
+                          "player": {
+                            "const": "SELF"
+                          }
+                        }
+                      },
+                      {
+                        "properties": {
+                          "type": {
+                            "const": "IF"
+                          },
+                          "condition": {
+                            "$ref": "#/$defs/triggerPlayCondition"
+                          },
+                          "then": {
+                            "minItems": 1,
+                            "maxItems": 1,
+                            "items": {
+                              "properties": {
+                                "type": {
+                                  "const": "PLAY_TRIGGER_SOURCE"
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "maxItems": 0
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "query": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "zone": {
+                  "enum": [
+                    "leader",
+                    "character",
+                    "stage",
+                    "trash",
+                    "public"
+                  ]
+                },
+                "visibility": {
+                  "const": "PUBLIC"
+                },
+                "faceUpOnly": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "properties": {
+                "zone": {
+                  "const": "hand"
+                },
+                "visibility": {
+                  "const": "OWNER_ONLY"
+                },
+                "faceUpOnly": {
+                  "const": false
+                },
+                "owner": {
+                  "const": "SELF"
+                },
+                "controller": {
+                  "const": "SELF"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "owner",
+        "controller",
+        "zone",
+        "cardTypes",
+        "filters",
+        "excludeSource",
+        "faceUpOnly",
+        "visibility"
+      ],
+      "properties": {
+        "type": {
+          "const": "QUERY_CARDS"
+        },
+        "owner": {
+          "$ref": "#/$defs/player"
+        },
+        "controller": {
+          "$ref": "#/$defs/player"
+        },
+        "zone": {
+          "enum": [
+            "leader",
+            "character",
+            "stage",
+            "trash",
+            "public",
+            "hand"
+          ]
+        },
+        "cardTypes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "leader",
+              "character",
+              "event",
+              "stage"
+            ]
+          }
+        },
+        "filters": {
+          "$ref": "#/$defs/predicate"
+        },
+        "excludeSource": {
+          "type": "boolean"
+        },
+        "faceUpOnly": {
+          "type": "boolean"
+        },
+        "visibility": {
+          "enum": [
+            "PUBLIC",
+            "OWNER_ONLY"
+          ]
+        }
+      }
+    },
+    "simpleMainEventAction": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "player",
+            "count"
+          ],
+          "properties": {
+            "type": {
+              "const": "DRAW"
+            },
+            "player": {
+              "const": "SELF"
+            },
+            "count": {
+              "$ref": "#/$defs/count"
+            }
+          }
+        },
+        {
+          "required": [
+            "actions"
+          ],
+          "properties": {
+            "type": {
+              "const": "SEQUENCE"
+            },
+            "actions": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 128,
+              "items": {
+                "$ref": "#/$defs/simpleMainEventAction"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "interactiveMainEventAction": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "player",
+            "count"
+          ],
+          "properties": {
+            "type": {
+              "const": "DRAW"
+            },
+            "player": {
+              "const": "SELF"
+            },
+            "count": {
+              "$ref": "#/$defs/count"
+            }
+          }
+        },
+        {
+          "required": [
+            "cards",
+            "keyword",
+            "duration"
+          ],
+          "properties": {
+            "type": {
+              "const": "GRANT_KEYWORD"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "keyword": {
+              "$ref": "#/$defs/keyword"
+            },
+            "duration": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/duration"
+                }
+              ],
+              "properties": {
+                "type": {
+                  "const": "TURN_END"
+                }
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "cards",
+            "stat",
+            "amount",
+            "duration"
+          ],
+          "properties": {
+            "type": {
+              "const": "MODIFY_STAT"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "stat": {
+              "enum": [
+                "power",
+                "cost"
+              ]
+            },
+            "amount": {
+              "type": "integer",
+              "minimum": -100000,
+              "maximum": 100000,
+              "not": {
+                "const": 0
+              }
+            },
+            "duration": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/duration"
+                }
+              ],
+              "properties": {
+                "type": {
+                  "const": "TURN_END"
+                }
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "cards",
+            "viewers"
+          ],
+          "properties": {
+            "type": {
+              "const": "REVEAL"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "viewers": {
+              "const": "BOTH"
+            }
+          }
+        },
+        {
+          "required": [
+            "actions"
+          ],
+          "properties": {
+            "type": {
+              "const": "SEQUENCE"
+            },
+            "actions": {
+              "$ref": "#/$defs/interactiveMainEventActions",
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": [
+            "condition",
+            "then",
+            "else"
+          ],
+          "properties": {
+            "type": {
+              "const": "IF"
+            },
+            "condition": {
+              "$ref": "#/$defs/predicate"
+            },
+            "then": {
+              "$ref": "#/$defs/interactiveMainEventActions"
+            },
+            "else": {
+              "$ref": "#/$defs/interactiveMainEventActions"
+            }
+          }
+        },
+        {
+          "required": [
+            "selector",
+            "bindAs"
+          ],
+          "properties": {
+            "type": {
+              "const": "SELECT"
+            },
+            "selector": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/areaSelector"
+                }
+              ],
+              "properties": {
+                "zone": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "leader",
+                        "character",
+                        "stage",
+                        "hand"
+                      ]
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "enum": [
+                          "leader",
+                          "character",
+                          "stage"
+                        ]
+                      },
+                      "minItems": 1,
+                      "maxItems": 3,
+                      "uniqueItems": true
+                    }
+                  ]
+                },
+                "cardTypes": {
+                  "items": {
+                    "enum": [
+                      "leader",
+                      "character",
+                      "stage",
+                      "event"
+                    ]
+                  }
+                }
+              }
+            },
+            "bindAs": {
+              "$ref": "#/$defs/bindingName"
+            }
+          }
+        },
+        {
+          "required": [
+            "cards",
+            "destination",
+            "cause"
+          ],
+          "properties": {
+            "type": {
+              "const": "MOVE_CARD"
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            },
+            "destination": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/destination"
+                }
+              ],
+              "anyOf": [
+                {
+                  "properties": {
+                    "zone": {
+                      "enum": [
+                        "hand",
+                        "trash",
+                        "public"
+                      ]
+                    },
+                    "position": {
+                      "const": "append"
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "owner": {
+                      "const": "CARD_OWNER"
+                    },
+                    "zone": {
+                      "const": "deck"
+                    },
+                    "position": {
+                      "const": "bottom"
+                    }
+                  }
+                }
+              ]
+            },
+            "cause": {
+              "const": "EFFECT"
+            }
+          }
+        },
+        {
+          "required": [
+            "cards"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "KO",
+                "REST",
+                "SET_ACTIVE"
+              ]
+            },
+            "cards": {
+              "$ref": "#/$defs/cardSetRef"
+            }
+          }
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/meta"
+            }
+          ],
+          "unevaluatedProperties": false,
+          "required": [
+            "player",
+            "max",
+            "state"
+          ],
+          "properties": {
+            "type": {
+              "const": "ADD_DON_UP_TO"
+            },
+            "player": {
+              "const": "SELF"
+            },
+            "max": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "state": {
+              "enum": [
+                "ACTIVE",
+                "REST"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "interactiveMainEventActions": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/interactiveMainEventAction"
+      }
+    },
+    "activationHandCostSelector": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/selector"
+        }
+      ],
+      "properties": {
+        "type": {
+          "const": "CARDS"
+        },
+        "zone": {
+          "const": "hand"
+        },
+        "visibility": {
+          "const": "OWNER_ONLY"
+        },
+        "owner": {
+          "const": "SELF"
+        },
+        "controller": {
+          "const": "SELF"
+        },
+        "chooser": {
+          "const": "SELF"
+        },
+        "faceUpOnly": {
+          "const": false
+        },
+        "min": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cardTypes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "character",
+              "stage",
+              "event"
+            ]
+          }
+        }
+      },
+      "$comment": "The Compiler requires min === max and validates compound-cost combinations."
+    },
+    "effectMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "actions"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?!\\s)(?!.*[\\x00-\\x1f\\x7f]).*\\S$"
+        },
+        "actions": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/action"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "continuousEffect": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "type": {
+                        "const": "GRANT_COUNTER"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "stat"
+                    ],
+                    "properties": {
+                      "type": {
+                        "const": "ADD_STAT"
+                      },
+                      "stat": {
+                        "const": "counter"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "affectedQuery": {
+                "properties": {
+                  "zone": {
+                    "enum": [
+                      "character",
+                      "hand"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "affectedQuery": {
+                "properties": {
+                  "zone": {
+                    "enum": [
+                      "character",
+                      "leader",
+                      "stage"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "properties": {
+                  "type": {
+                    "const": "RESTRICT"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "affectedQuery": {
+                "properties": {
+                  "owner": {
+                    "const": "SELF"
+                  },
+                  "controller": {
+                    "const": "SELF"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "required": [
+                  "policy"
+                ],
+                "properties": {
+                  "policy": {
+                    "const": "CANNOT_KO"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "affectedQuery": {
+                "properties": {
+                  "zone": {
+                    "const": "character"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "condition",
+        "affectedQuery",
+        "operation"
+      ],
+      "properties": {
+        "type": {
+          "const": "CONTINUOUS_EFFECT"
+        },
+        "condition": {
+          "$ref": "#/$defs/predicate"
+        },
+        "affectedQuery": {
+          "oneOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/query"
+                }
+              ],
+              "properties": {
+                "zone": {
+                  "enum": [
+                    "leader",
+                    "character",
+                    "stage"
+                  ]
+                },
+                "visibility": {
+                  "const": "PUBLIC"
+                },
+                "faceUpOnly": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/query"
+                }
+              ],
+              "properties": {
+                "zone": {
+                  "const": "hand"
+                },
+                "owner": {
+                  "const": "SELF"
+                },
+                "controller": {
+                  "const": "SELF"
+                },
+                "visibility": {
+                  "const": "OWNER_ONLY"
+                },
+                "faceUpOnly": {
+                  "const": false
+                },
+                "cardTypes": {
+                  "type": "array",
+                  "items": {
+                    "const": "character"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "operation": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "stat",
+                "amount"
+              ],
+              "properties": {
+                "type": {
+                  "const": "ADD_STAT"
+                },
+                "stat": {
+                  "enum": [
+                    "cost",
+                    "power",
+                    "counter"
+                  ]
+                },
+                "amount": {
+                  "type": "integer",
+                  "minimum": -100000,
+                  "maximum": 100000,
+                  "not": {
+                    "const": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "keyword"
+              ],
+              "properties": {
+                "type": {
+                  "const": "GRANT_KEYWORD"
+                },
+                "keyword": {
+                  "$ref": "#/$defs/keyword"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "stat",
+                "value"
+              ],
+              "properties": {
+                "type": {
+                  "const": "SET_BASE_STAT"
+                },
+                "stat": {
+                  "enum": [
+                    "power",
+                    "cost"
+                  ]
+                },
+                "value": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "value"
+              ],
+              "properties": {
+                "type": {
+                  "const": "GRANT_COUNTER"
+                },
+                "value": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100000
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "policy",
+                "by"
+              ],
+              "properties": {
+                "type": {
+                  "const": "RESTRICT"
+                },
+                "policy": {
+                  "enum": [
+                    "CANNOT_TARGET",
+                    "PREVENT_MOVE"
+                  ]
+                },
+                "by": {
+                  "enum": [
+                    "SELF",
+                    "OPPONENT",
+                    "ANY"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "policy",
+                "by"
+              ],
+              "properties": {
+                "type": {
+                  "const": "RESTRICT"
+                },
+                "policy": {
+                  "const": "UNAFFECTED_BY"
+                },
+                "by": {
+                  "const": "OPPONENT"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "policy",
+                "by",
+                "cause"
+              ],
+              "properties": {
+                "type": {
+                  "const": "RESTRICT"
+                },
+                "policy": {
+                  "const": "CANNOT_KO"
+                },
+                "by": {
+                  "enum": [
+                    "SELF",
+                    "OPPONENT",
+                    "ANY"
+                  ]
+                },
+                "cause": {
+                  "const": "EFFECT"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "policy",
+                "by",
+                "cause"
+              ],
+              "properties": {
+                "type": {
+                  "const": "RESTRICT"
+                },
+                "policy": {
+                  "const": "CANNOT_KO"
+                },
+                "by": {
+                  "enum": [
+                    "SELF",
+                    "OPPONENT",
+                    "ANY"
+                  ]
+                },
+                "cause": {
+                  "const": "BATTLE"
+                },
+                "sourceAttribute": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80,
+                  "pattern": "^\\S(?:.*\\S)?$"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "$comment": "The Compiler also checks predicate dependencies, field/card kind and operation compatibility."
+    },
+    "replacementEffect": {
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": [
+        "id",
+        "match",
+        "condition",
+        "substitute"
+      ],
+      "properties": {
+        "type": {
+          "const": "REPLACE_EVENT"
+        },
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cause",
+            "by",
+            "from",
+            "to"
+          ],
+          "properties": {
+            "cause": {
+              "enum": [
+                "EFFECT_KO",
+                "EFFECT_MOVE"
+              ]
+            },
+            "by": {
+              "enum": [
+                "SELF",
+                "OPPONENT",
+                "ANY"
+              ]
+            },
+            "from": {
+              "const": "character"
+            },
+            "to": {
+              "enum": [
+                "trash",
+                "hand",
+                "deck",
+                "public"
+              ]
+            }
+          }
+        },
+        "condition": {
+          "$ref": "#/$defs/predicate"
+        },
+        "substitute": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "to"
+              ],
+              "properties": {
+                "to": {
+                  "enum": [
+                    "hand",
+                    "trash"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "const": "PREVENT"
+                }
+              }
+            }
+          ]
+        },
+        "optionalPayment": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/replacementHandPayment"
+            },
+            {
+              "$ref": "#/$defs/replacementDonPayment"
+            }
+          ]
+        },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "minPrintedCost"
+          ],
+          "properties": {
+            "type": {
+              "const": "OWN_CHARACTER"
+            },
+            "minPrintedCost": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99
+            }
+          }
+        },
+        "usageLimit": {
+          "const": "ONCE_PER_TURN"
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        },
+        {
+          "if": {
+            "properties": {
+              "match": {
+                "properties": {
+                  "cause": {
+                    "const": "EFFECT_KO"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "match": {
+                "properties": {
+                  "to": {
+                    "const": "trash"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "match": {
+                "properties": {
+                  "cause": {
+                    "const": "EFFECT_MOVE"
+                  },
+                  "to": {
+                    "const": "hand"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "substitute": {
+                "properties": {
+                  "to": {
+                    "not": {
+                      "const": "hand"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "match": {
+                "properties": {
+                  "cause": {
+                    "const": "EFFECT_MOVE"
+                  },
+                  "to": {
+                    "const": "trash"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "substitute": {
+                "properties": {
+                  "to": {
+                    "not": {
+                      "const": "trash"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "optionalPayment"
+            ]
+          },
+          "then": {
+            "properties": {
+              "substitute": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "PREVENT"
+                  }
+                }
+              },
+              "match": {
+                "properties": {
+                  "cause": {
+                    "const": "EFFECT_KO"
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "substitute": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "to"
+                ],
+                "properties": {
+                  "to": {
+                    "enum": [
+                      "hand",
+                      "trash"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "target"
+            ]
+          },
+          "then": {
+            "required": [
+              "optionalPayment"
+            ],
+            "properties": {
+              "optionalPayment": {
+                "$ref": "#/$defs/replacementHandPayment"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "replacementHandPayment": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "selector",
+        "destination"
+      ],
+      "properties": {
+        "type": {
+          "const": "MOVE_AS_COST"
+        },
+        "destination": {
+          "const": "trash"
+        },
+        "selector": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/activationHandCostSelector"
+            }
+          ],
+          "properties": {
+            "min": {
+              "const": 1
+            },
+            "max": {
+              "const": 1
+            },
+            "cardTypes": {
+              "items": {
+                "enum": [
+                  "event",
+                  "stage",
+                  "character"
+                ]
+              }
+            },
+            "filters": {
+              "properties": {
+                "type": {
+                  "const": "all"
+                },
+                "conditions": {
+                  "maxItems": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "replacementDonPayment": {
+      "required": [
+        "count",
+        "from"
+      ],
+      "properties": {
+        "type": {
+          "const": "DON_RETURN"
+        },
+        "count": {
+          "const": 1
+        },
+        "from": {
+          "$ref": "#/$defs/donZones"
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "effectBodyCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "effectId"
+      ],
+      "properties": {
+        "type": {
+          "const": "CALL_EFFECT_BODY"
+        },
+        "effectId": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "externalBodyCall": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/meta"
+        }
+      ],
+      "unevaluatedProperties": false,
+      "required": [
+        "from",
+        "maxPrintedCost"
+      ],
+      "properties": {
+        "type": {
+          "const": "CALL_EFFECT_BODY"
+        },
+        "from": {
+          "const": "OWN_TRASH"
+        },
+        "maxPrintedCost": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 99
+        }
+      }
+    },
+    "containsRetarget": {
+      "anyOf": [
+        {
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "RETARGET_BATTLE"
+            }
+          }
+        },
+        {
+          "required": [
+            "actions"
+          ],
+          "properties": {
+            "actions": {
+              "contains": {
+                "$ref": "#/$defs/containsRetarget"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "then"
+          ],
+          "properties": {
+            "then": {
+              "contains": {
+                "$ref": "#/$defs/containsRetarget"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "else"
+          ],
+          "properties": {
+            "else": {
+              "contains": {
+                "$ref": "#/$defs/containsRetarget"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "modes"
+          ],
+          "properties": {
+            "modes": {
+              "contains": {
+                "required": [
+                  "actions"
+                ],
+                "properties": {
+                  "actions": {
+                    "contains": {
+                      "$ref": "#/$defs/containsRetarget"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "containsExtraTurn": {
+      "anyOf": [
+        {
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "EXTRA_TURN"
+            }
+          }
+        },
+        {
+          "required": [
+            "actions"
+          ],
+          "properties": {
+            "actions": {
+              "contains": {
+                "$ref": "#/$defs/containsExtraTurn"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "then"
+          ],
+          "properties": {
+            "then": {
+              "contains": {
+                "$ref": "#/$defs/containsExtraTurn"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "else"
+          ],
+          "properties": {
+            "else": {
+              "contains": {
+                "$ref": "#/$defs/containsExtraTurn"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "modes"
+          ],
+          "properties": {
+            "modes": {
+              "contains": {
+                "required": [
+                  "actions"
+                ],
+                "properties": {
+                  "actions": {
+                    "contains": {
+                      "$ref": "#/$defs/containsExtraTurn"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "containsTriggerPlay": {
+      "anyOf": [
+        {
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "PLAY_TRIGGER_SOURCE"
+            }
+          }
+        },
+        {
+          "required": [
+            "actions"
+          ],
+          "properties": {
+            "actions": {
+              "contains": {
+                "$ref": "#/$defs/containsTriggerPlay"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "then"
+          ],
+          "properties": {
+            "then": {
+              "contains": {
+                "$ref": "#/$defs/containsTriggerPlay"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "else"
+          ],
+          "properties": {
+            "else": {
+              "contains": {
+                "$ref": "#/$defs/containsTriggerPlay"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "modes"
+          ],
+          "properties": {
+            "modes": {
+              "contains": {
+                "required": [
+                  "actions"
+                ],
+                "properties": {
+                  "actions": {
+                    "contains": {
+                      "$ref": "#/$defs/containsTriggerPlay"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "triggerPlayCondition": {
+      "anyOf": [
+        {
+          "required": [
+            "type",
+            "left",
+            "right"
+          ],
+          "properties": {
+            "type": {
+              "const": "compare"
+            },
+            "left": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "ref"
+                  ],
+                  "properties": {
+                    "ref": {
+                      "enum": [
+                        "SELF.lifeCount",
+                        "SELF.handCount",
+                        "SELF.don.fieldCount",
+                        "SELF.don.costAreaCount",
+                        "SELF.don.activeCount",
+                        "SELF.don.restCount",
+                        "SELF.don.attachedCount",
+                        "OPPONENT.lifeCount",
+                        "OPPONENT.handCount",
+                        "OPPONENT.don.fieldCount",
+                        "OPPONENT.don.costAreaCount",
+                        "OPPONENT.don.activeCount",
+                        "OPPONENT.don.restCount",
+                        "OPPONENT.don.attachedCount",
+                        "BOTH.lifeCount"
+                      ]
+                    }
+                  }
+                }
+              ]
+            },
+            "right": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "ref"
+                  ],
+                  "properties": {
+                    "ref": {
+                      "enum": [
+                        "SELF.lifeCount",
+                        "SELF.handCount",
+                        "SELF.don.fieldCount",
+                        "SELF.don.costAreaCount",
+                        "SELF.don.activeCount",
+                        "SELF.don.restCount",
+                        "SELF.don.attachedCount",
+                        "OPPONENT.lifeCount",
+                        "OPPONENT.handCount",
+                        "OPPONENT.don.fieldCount",
+                        "OPPONENT.don.costAreaCount",
+                        "OPPONENT.don.activeCount",
+                        "OPPONENT.don.restCount",
+                        "OPPONENT.don.attachedCount",
+                        "BOTH.lifeCount"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "TURN_IS"
+            }
+          }
+        },
+        {
+          "required": [
+            "type",
+            "conditions"
+          ],
+          "properties": {
+            "type": {
+              "const": "all"
+            },
+            "conditions": {
+              "items": {
+                "$ref": "#/$defs/triggerPlayCondition"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "type",
+            "conditions"
+          ],
+          "properties": {
+            "type": {
+              "const": "any"
+            },
+            "conditions": {
+              "items": {
+                "$ref": "#/$defs/triggerPlayCondition"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "type",
+            "condition"
+          ],
+          "properties": {
+            "type": {
+              "const": "not"
+            },
+            "condition": {
+              "$ref": "#/$defs/triggerPlayCondition"
+            }
+          }
+        },
+        {
+          "required": [
+            "type",
+            "query"
+          ],
+          "properties": {
+            "type": {
+              "const": "EXISTS"
+            },
+            "query": {
+              "properties": {
+                "zone": {
+                  "const": "leader"
+                },
+                "visibility": {
+                  "const": "PUBLIC"
+                },
+                "faceUpOnly": {
+                  "const": true
+                },
+                "cardTypes": {
+                  "const": [
+                    "leader"
+                  ]
+                },
+                "excludeSource": {
+                  "const": false
+                },
+                "filters": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "type",
+                        "subject"
+                      ],
+                      "properties": {
+                        "type": {
+                          "const": "CARD_NAME"
+                        },
+                        "subject": {
+                          "const": "CANDIDATE"
+                        }
+                      }
+                    },
+                    {
+                      "required": [
+                        "type",
+                        "subject",
+                        "field",
+                        "comparison"
+                      ],
+                      "properties": {
+                        "type": {
+                          "const": "CARD_METADATA"
+                        },
+                        "subject": {
+                          "const": "CANDIDATE"
+                        },
+                        "field": {
+                          "const": "traits"
+                        },
+                        "comparison": {
+                          "const": "EXACT"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "anyOf": [
+                {
+                  "properties": {
+                    "owner": {
+                      "const": "SELF"
+                    },
+                    "controller": {
+                      "const": "SELF"
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "owner": {
+                      "const": "OPPONENT"
+                    },
+                    "controller": {
+                      "const": "OPPONENT"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$comment": "Compiler additionally checks subject scope, timing, bindings and approval. Raw literal comparison only; no Unicode normalization, aliases or official name equivalence inference."
+}

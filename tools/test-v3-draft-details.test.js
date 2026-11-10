@@ -15,7 +15,7 @@ const row = (id, text, fields = {}) => ({
 function fixture(...rows) {
   const bytes = Buffer.from([SOURCE_COLUMNS, ...rows.map(r => SOURCE_COLUMNS.map(field => r[field] ?? ""))]
     .map(values => values.map(v => `"${v.replaceAll('"', '""')}"`).join(",")).join("\n"));
-  const current = { ...generateV3Drafts(ledgerFromCsv(bytes)).trace, version: "v3-draft-generator.6", registryHash: v3DraftRegistry("v3-draft-generator.6") };
+  const current = { ...generateV3Drafts(ledgerFromCsv(bytes), [], "v3-draft-generator.8").trace, version: "v3-draft-generator.6", registryHash: v3DraftRegistry("v3-draft-generator.6") };
   const previous = { ...structuredClone(current), version: "v3-draft-generator.5" };
   return { bytes, previous, current };
 }

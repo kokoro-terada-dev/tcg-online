@@ -38,12 +38,14 @@ const file = "docs/card-effect-supported-operations.json", inventory = read(file
 const profile = { compilerVersion: compilerVersionForSchema(schema), registryHash: v3RegistryHash(registries),
   registries: Object.fromEntries(Object.entries(registries).map(([key, registry]) => [key, registry.manifest()])) };
 inventory.profiles[schema] = profile;
-Object.assign(inventory, { basedOnCommit: "480c9a2", ...profile });
+if (!Object.keys(inventory.profiles).some(version => Number(version.split(".").at(-1)) > 48))
+  Object.assign(inventory, { basedOnCommit: "480c9a2", ...profile });
 const isSelfPlay = op => op.category === "action" && op.name === "PLAY_TRIGGER_SOURCE";
 const previousEntry = inventory.operations.find(op => isSelfPlay(op) && op.availableIn.includes(previous));
 for (const op of inventory.operations) if (op !== previousEntry && op.availableIn.includes(previous) && !op.availableIn.includes(schema)) op.availableIn.push(schema);
-inventory.operations = inventory.operations.filter(op => !(isSelfPlay(op) && op.availableIn.includes(schema)));
-inventory.operations.push({ ...previousEntry, handlerVersion: "2", availableIn: [schema],
+const index = inventory.operations.findIndex(op => isSelfPlay(op) && op.availableIn.includes(schema));
+const entry = { ...previousEntry, handlerVersion: "2", availableIn: inventory.operations[index]?.availableIn ?? [schema],
   schemaRef: "../schemas/effect-v3-subset48.schema.json#/$defs/effect",
-  runtimeConstraints: "Only as the entire Character/Stage life TRIGGER program, without activation costs or conditions. Optional public resolutionConditions are checked after Life removal; false uses normal trigger cleanup. Does not pay printed DON." });
+  runtimeConstraints: "Only as the entire Character/Stage life TRIGGER program, without activation costs or conditions. Optional public resolutionConditions are checked after Life removal; false uses normal trigger cleanup. Does not pay printed DON." };
+if (index < 0) inventory.operations.push(entry); else inventory.operations[index] = entry;
 emit(file, inventory);

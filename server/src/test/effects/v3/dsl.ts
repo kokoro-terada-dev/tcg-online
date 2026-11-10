@@ -1,5 +1,8 @@
 import type { DeepReadonly } from "../types";
 export type Player = "SELF" | "OPPONENT";
+export type PlayerScope = Player | "EITHER";
+export const PUBLIC_FIELD_ZONES = ["leader", "character", "stage"] as const;
+export type PublicFieldZone = typeof PUBLIC_FIELD_ZONES[number];
 export type DonZone = "activeDon" | "restDon" | "attachedDon";
 export type SourceSpan = { start: number; end: number };
 export type NodeMeta = { id?: string; sourceSpan?: SourceSpan };
@@ -17,9 +20,9 @@ export type DonCountScope = typeof DON_COUNT_SCOPES[number];
 export type DonCountRef = `${"SELF" | "OPPONENT"}.don.${DonCountScope}`;
 export const PUBLIC_TRIGGER_COUNT_REFS = (["SELF", "OPPONENT"] as const).flatMap(side =>
   [`${side}.lifeCount`, `${side}.handCount`, ...DON_COUNT_SCOPES.map(scope => `${side}.don.${scope}`)]);
-export type Value = number | string | boolean | null | { ref: DonCountRef | "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "base" | "current"}.${MutableStat}` | `bindings.${string}.count` };
+export type Value = number | string | boolean | null | { ref: "BOTH.lifeCount" | DonCountRef | "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "base" | "current"}.${MutableStat}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42" | "3.0.0-subset.43" | "3.0.0-subset.44" | "3.0.0-subset.45" | "3.0.0-subset.46" | "3.0.0-subset.47" | "3.0.0-subset.48";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42" | "3.0.0-subset.43" | "3.0.0-subset.44" | "3.0.0-subset.45" | "3.0.0-subset.46" | "3.0.0-subset.47" | "3.0.0-subset.48" | "3.0.0-subset.49";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
 export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "BANISH" | "DOUBLE_ATTACK" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
@@ -76,7 +79,7 @@ export interface ActionMap {
   SEQUENCE: NodeMeta & { type: "SEQUENCE"; actions: Action[] };
   IF: NodeMeta & { type: "IF"; condition: Predicate; then: Action[]; else: Action[] };
   SELECT: NodeMeta & { type: "SELECT"; selector: Node<"selector">; bindAs: string };
-  MOVE_CARD: NodeMeta & { type: "MOVE_CARD"; cards: CardSetRef; destination: { owner: Player; zone: "hand" | "trash" | "deck" | "public"; position: "append" | "top" | "bottom"; faceUp: boolean }; cause: "EFFECT" };
+  MOVE_CARD: NodeMeta & { type: "MOVE_CARD"; cards: CardSetRef; destination: { owner: Player | "CARD_OWNER"; zone: "hand" | "trash" | "deck" | "public"; position: "append" | "top" | "bottom"; faceUp: boolean }; cause: "EFFECT" };
   KO: NodeMeta & { type: "KO"; cards: CardSetRef };
   REST: NodeMeta & { type: "REST"; cards: CardSetRef };
   SET_ACTIVE: NodeMeta & { type: "SET_ACTIVE"; cards: CardSetRef };
@@ -112,12 +115,12 @@ export interface SelectorMap {
     cardTypes: ("character" | "event" | "stage")[]; filters: Predicate; excludeSource: boolean; min: number; max: number;
     selectionMode: "SELECT"; order: "UNORDERED"; onInsufficient: "fail" };
   CARDS: NodeMeta & {
-    type: "CARDS"; owner: Player; controller: Player;
+    type: "CARDS"; owner: PlayerScope; controller: PlayerScope;
     cardTypes: ("leader" | "character" | "event" | "stage" | "don")[];
     filters: Predicate; excludeSource: boolean;
     min: number; max: number; selectionMode: "SELECT";
-    chooser: Player; order: "UNORDERED"; onInsufficient: "fail";
-  } & ({ zone: "leader" | "character" | "stage" | "trash" | "public"; visibility: "PUBLIC"; faceUpOnly: true } |
+    chooser: Player; order: "UNORDERED"; onInsufficient: "fail" | "skip";
+  } & ({ zone: PublicFieldZone | PublicFieldZone[] | "trash" | "public"; visibility: "PUBLIC"; faceUpOnly: true } |
     { zone: DonZone | DonZone[]; visibility: "PUBLIC"; faceUpOnly: true; owner: "SELF"; controller: "SELF"; chooser: "SELF" } |
     { zone: "hand"; visibility: "OWNER_ONLY"; faceUpOnly: false; owner: "SELF"; controller: "SELF"; chooser: "SELF" });
 }

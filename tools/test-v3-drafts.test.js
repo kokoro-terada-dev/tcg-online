@@ -60,10 +60,10 @@ test("optional leader selection retains zero, and a leader or character shares o
   assert.deepEqual(mode.modes.map(({ actions: [pick] }) =>
     [pick.selector.zone, pick.selector.owner, pick.selector.chooser, pick.selector.min, pick.selector.max]),
   [["leader", "OPPONENT", "SELF", 0, 1], ["character", "OPPONENT", "SELF", 0, 1]]);
-  for (const id of ["OPPONENT-TWO", "UNSCOPED-BASE"]) {
-    assert.equal(entry(g, id).definition, undefined);
-    assert.equal(trace(g, id).noEffect, false);
-  }
+  const [two] = entry(g, "OPPONENT-TWO").definition.effects[0].actions;
+  assert.deepEqual([two.selector.zone, two.selector.owner, two.selector.max], [["leader", "character"], "OPPONENT", 2]);
+  assert.equal(entry(g, "UNSCOPED-BASE").definition, undefined);
+  assert.equal(trace(g, "UNSCOPED-BASE").noEffect, false);
   assert.equal(g.trace.totals.noEffect, 1);
 });
 
@@ -108,7 +108,11 @@ test("optional DON preserves the count, state and order without dropping a cost 
     type: "compare", left: { ref: "SELF.don.fieldCount" }, op: "lte", right: { ref: "OPPONENT.don.fieldCount" }
   });
   assert.deepEqual(details(actions("DON-RELATIVE")[0].then[0]), ["ADD_DON_UP_TO", "SELF", 1, "REST"]);
-  for (const id of ["DON-PAID", "DON-UNKNOWN", "DON-EXACT"]) assert.equal(entry(g, id).definition, undefined);
+  const paid = entry(g, "DON-PAID").definition.effects[0];
+  assert.equal(paid.optional, true);
+  assert.deepEqual(paid.costs, [{ type: "DISCARD_HAND", count: 1 }]);
+  assert.equal(paid.actions[0].type, "ADD_DON_UP_TO");
+  for (const id of ["DON-UNKNOWN", "DON-EXACT"]) assert.equal(entry(g, id).definition, undefined);
 });
 
 test("field DON generation keeps subject, exact boundaries, conjunctions and unresolved original text", () => {
@@ -161,10 +165,15 @@ test("unconditional self-play retains its old profile; only exact safe condition
   assert.deepEqual(entry(generated, "SELF-DON").definition.effects[0].resolutionConditions, {
     type: "compare", left: { ref: "SELF.don.fieldCount" }, op: "lte", right: { ref: "OPPONENT.don.fieldCount" }
   });
-  for (const id of ["SELF-PAID", "SELF-UNCONFIRMED", "SELF-DRAW-FIRST", "SELF-MULTILINE"]) assert.equal(entry(generated, id).definition, undefined);
+  const old = generateV3Drafts(ledgerFromCsv(bytes), [], "v3-draft-generator.8");
+  for (const id of ["SELF-PAID", "SELF-UNCONFIRMED", "SELF-DRAW-FIRST", "SELF-MULTILINE"]) assert.equal(entry(old, id).definition, undefined);
+  assert.deepEqual(entry(generated, "SELF-PAID").definition.effects[0].costs, [{ type: "DON_RETURN", count: 1, from: ["activeDon", "restDon", "attachedDon"] }]);
+  assert.equal(entry(generated, "SELF-UNCONFIRMED").definition.effects[0].resolutionConditions.left.ref, "BOTH.lifeCount");
+  assert.deepEqual(entry(generated, "SELF-DRAW-FIRST").definition.effects[0].actions.map(x => x.type), ["DRAW", "IF"]);
+  assert.equal(entry(generated, "SELF-MULTILINE").definition, undefined);
   assert.equal(entry(generated, "UNCHANGED").definition.schemaVersion, "3.0.0-subset.44");
   const coverage = analyzeV3Coverage(loadReviewedV3Catalog(), bytes, { candidates: generated.candidates });
-  assert.equal(coverage.counts.candidate, 6);
+  assert.equal(coverage.counts.candidate, 9);
   assert.equal(coverage.counts.approved, 0);
 });
 
@@ -198,7 +207,7 @@ test("exact keywords and independent draws preserve every body and trigger span 
 test("ambiguous suffixes, unknown payments and known gaps cannot leak an incomplete definition", () => {
   const bytes = csv([
     card("SYN-PARTIAL", "【速攻】\n【登場時】自分のデッキをシャッフルする。"),
-    card("SYN-COST", "【登場時】ドン!!-1：カード1枚を引く。"),
+    card("SYN-COST", "【登場時】ドン!!-1と自分の手札1枚を捨てることができる：カード1枚を引く。"),
     card("SYN-SUFFIX", "【登場時】カード1枚を引く。その後、カードを選ぶ。"),
     card("SYN-TRIGGER", "【登場時】カード1枚を引く。", { "トリガー": "【トリガー】カード1枚を引いてもよい。" }),
     card("SYN-HEADER", "【登場時】\r\nカード1枚を引く。")
@@ -269,7 +278,8 @@ test("threshold effects retain current value, rest condition, chooser and maximu
     }),
     card("TARGET-RETURN", "【登場時】相手のコスト3以下のキャラ1枚までを、持ち主の手札に戻す。"),
     card("TARGET-REQUIRED", "【登場時】相手のコスト4以下のキャラ1枚を、KOする。"),
-    card("TARGET-UNSCOPED", "【登場時】コスト4以下のキャラ1枚までを、KOする。")
+    card("TARGET-UNSCOPED", "【登場時】コスト4以下のキャラ1枚までを、KOする。"),
+    card("TARGET-OWNER", "【登場時】コスト4以下のキャラ1枚までを、持ち主の手札に戻す。")
   ];
   const g = generateV3Drafts(ledgerFromCsv(csv(rows)));
   const [entryEffect, trigger] = entry(g, "TARGET-KO").definition.effects;
@@ -285,6 +295,9 @@ test("threshold effects retain current value, rest condition, chooser and maximu
   assert.equal(entry(g, "TARGET-RETURN").definition.effects[0].actions[1].destination.owner, "OPPONENT");
   assert.equal(entry(g, "TARGET-REQUIRED").definition, undefined);
   assert.equal(entry(g, "TARGET-UNSCOPED").definition, undefined);
+  const [crossSide, ownerReturn] = entry(g, "TARGET-OWNER").definition.effects[0].actions;
+  assert.equal(crossSide.selector.controller, "EITHER");
+  assert.equal(ownerReturn.destination.owner, "CARD_OWNER");
 });
 
 test("counter distinguishes fixed leader, a single optional target across zones, and unsupported payments or totals", () => {
@@ -305,7 +318,8 @@ test("counter distinguishes fixed leader, a single optional target across zones,
     [pick.selector.zone, pick.selector.owner, pick.selector.chooser, pick.selector.min, pick.selector.max, modify.duration.type]), [
     ["leader", "SELF", "SELF", 0, 1, "BATTLE_END"], ["character", "SELF", "SELF", 0, 1, "BATTLE_END"]
   ]);
-  assert.equal(entry(g, "COUNT-TOTAL").definition, undefined);
+  const [total] = entry(g, "COUNT-TOTAL").definition.effects[0].actions;
+  assert.deepEqual([total.selector.zone, total.selector.min, total.selector.max], [["leader", "character"], 0, 2]);
 });
 
 test("structured clauses retain conjunctive conditions, current target bounds, quantities and independent sequential bindings", () => {
@@ -382,7 +396,7 @@ test("uncertain selectors, scope and payment retain precise raw offsets without 
     ["【登場時】ドン!!−1：カード1枚を引く。", "ドン!!−1：カード1枚を引く。", "payment-or-unmodeled-declaration"],
     ["【登場時】自分のリーダーを、このバトル中、パワー+1000。", "自分のリーダーを、このバトル中、パワー+1000。", "target-or-operation-unconfirmed"]
   ];
-  const g = generateV3Drafts(ledgerFromCsv(csv(bodies.map(([body], i) => card(`HELD-${i}`, body)))));
+  const g = generateV3Drafts(ledgerFromCsv(csv(bodies.map(([body], i) => card(`HELD-${i}`, body)))), [], "v3-draft-generator.8");
   for (const [i, [body, unresolved, reason]] of bodies.entries()) {
     assert.equal(entry(g, `HELD-${i}`).definition, undefined);
     const [span] = trace(g, `HELD-${i}`).variants[0].spans;
@@ -394,6 +408,28 @@ test("uncertain selectors, scope and payment retain precise raw offsets without 
   const [span] = trace(second, "HELD-SEQUENCE").variants[0].spans;
   assert.deepEqual(span.unparsed.map(({ start, end }) => multi.slice(start, end)), ["カードを選ぶ。", "ドン!!を追加する。"]);
   assert.equal(entry(second, "HELD-SEQUENCE").definition, undefined);
+});
+
+test("distinct timings retain the same ordered body, and shared turn limits remain unresolved", () => {
+  const dual = "【登場時】/【アタック時】カード1枚を引く。その後、自分のライフが2枚以下または相手の手札が3枚以上の場合、カード2枚を引く。";
+  const limited = "【登場時】/【アタック時】【ターン1回】カード1枚を引く。";
+  const pay = "【登場時】自分の手札1枚を捨ててもよい。そうした場合、カード1枚を引く。";
+  const g = generateV3Drafts(ledgerFromCsv(csv([card("PR29-MULTI", dual), card("PR29-LIMIT", limited), card("PR29-OFFER", pay)])));
+  const { effects } = entry(g, "PR29-MULTI").definition;
+  assert.deepEqual(effects.map(x => x.timing.type), ["ON_PLAY", "ON_ATTACK"]);
+  assert.notEqual(effects[0].id, effects[1].id);
+  for (const { actions } of effects) {
+    assert.equal(actions[0].count, 1);
+    assert.equal(actions[1].type, "IF");
+    assert.deepEqual(actions[1].condition.conditions.map(p => p.left.ref), ["SELF.lifeCount", "OPPONENT.handCount"]);
+    assert.equal(actions[1].condition.type, "any");
+    assert.equal(actions[1].then[0].count, 2);
+  }
+  assert.equal(entry(g, "PR29-LIMIT").definition, undefined);
+  const [offer, success] = entry(g, "PR29-OFFER").definition.effects[0].actions;
+  assert.equal(offer.type, "OFFER_PAYMENT");
+  assert.equal(success.type, "IF_PAYMENT_SUCCEEDED");
+  assert.equal(success.payment, offer.bindAs);
 });
 
 test("a life trigger calls the fully interpreted unique MAIN on the same card or remains unresolved", () => {

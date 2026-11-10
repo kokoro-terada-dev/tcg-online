@@ -12,7 +12,8 @@ const { applyPlayerIntent, applySystemEvent } = require('../dist/test/progressio
 
 const ref = ({ instanceId, generation }) => ({ instanceId, generation });
 const snap = c => c.snapshotForCoordinator();
-function setup({ full = false, zone = 'character', double = false, generationLimit = false, condition = null, don = 0 } = {}) {
+function setup({ full = false, zone = 'character', double = false, generationLimit = false, condition = null, don = 0,
+  cost = null, drawFirst = false, emptyHand = false, canTrigger = true } = {}) {
   const { options, approval } = base({ don, field: full && zone === 'character' ? 5 : 0 });
   const compile = raw => compileV3CardJson(JSON.stringify(raw));
   const plans = options.cards.map(card => {
@@ -23,7 +24,7 @@ function setup({ full = false, zone = 'character', double = false, generationLim
       raw.keywords = [{ type: 'DOUBLE_ATTACK' }];
     }
     if (raw.cardId === 'TARGET') {
-      raw.schemaVersion = condition ? '3.0.0-subset.48' : '3.0.0-subset.45';
+      raw.schemaVersion = cost || drawFirst ? '3.0.0-subset.49' : condition ? '3.0.0-subset.48' : '3.0.0-subset.45';
       raw.cardType = zone; raw.baseStats.cost = 9; raw.baseStats.counter = null;
       if (zone === 'stage') raw.baseStats.power = null;
       raw.source.text = 'Synthetic ON_PLAY and optional ON_KO test fixture.';
@@ -31,7 +32,8 @@ function setup({ full = false, zone = 'character', double = false, generationLim
       const effect = { kind: 'triggered', optional: false, usageLimit: null, activationConditions: always(), resolutionConditions: always(), costs: [] };
       const draw = [{ type: 'DRAW', player: 'SELF', count: 1 }];
       raw.effects = [
-        { ...effect, id: 'life', timing: { type: 'TRIGGER' }, sourceZones: ['life'], resolutionConditions: condition ?? always(), actions: [{ type: 'PLAY_TRIGGER_SOURCE' }] },
+        { ...effect, id: 'life', timing: { type: 'TRIGGER' }, sourceZones: ['life'], resolutionConditions: drawFirst ? always() : condition ?? always(), costs: cost ? [cost] : [],
+          actions: drawFirst ? [...draw, { type: 'IF', condition, then: [{ type: 'PLAY_TRIGGER_SOURCE' }], else: [] }] : [{ type: 'PLAY_TRIGGER_SOURCE' }] },
         { ...effect, id: 'enter', timing: { type: 'ON_PLAY' }, sourceZones: [zone], actions: draw },
         ...(zone === 'character' ? [{ ...effect, id: 'ko', timing: { type: 'ON_KO' }, sourceZones: [zone], actions: draw }] : [])
       ];
@@ -43,6 +45,7 @@ function setup({ full = false, zone = 'character', double = false, generationLim
     compilerVersion: plan.compilerVersion, registryHash: plan.registryHash })), approval.rulesetVersion);
   const cards = new Map(plans.map(plan => [plan.definition.cardId, catalog.get(plan.definition.cardId)]));
   const movement = structuredClone(options.movement), defender = movement.players[1];
+  if (emptyHand) defender.deck.push(...defender.hand.splice(0));
   Object.assign(movement.cards[defender.life[0]], { cardId: 'TARGET', kind: zone });
   if (generationLimit) movement.cards[defender.life[0]].generation = Number.MAX_SAFE_INTEGER - 1;
   if (full && zone === 'stage') {
@@ -65,7 +68,7 @@ function setup({ full = false, zone = 'character', double = false, generationLim
   c.battleDecision(1, id(), c.context(), 'endCounter');
   c.resolveDamage(1, id(), c.context());
   const life = c.viewFor(1).lifeChoice;
-  assert.ok(life?.canTrigger);
+  assert.equal(life?.canTrigger, canTrigger);
   return { c, life, movement, cards };
 }
 
@@ -215,4 +218,50 @@ test('changed world revision after the condition check cannot answer the reserve
   revision++;
   assert.throws(() => machine.answer(1, id(), view.revision, view.choice.selectionId, [view.choice.options[0].token]), /not-current-chooser/);
   assert.deepEqual(machine.viewFor(1), view);
+});
+
+test('paid self-play checks resources before reveal, and privately selects and commits costs before the condition', () => {
+  const cases = [
+    [{ type: 'DISCARD_HAND', count: 1 }, 'hand', compare('SELF.handCount', 'eq', 4), 0],
+    [{ type: 'DON_RETURN', count: 1, from: ['activeDon', 'restDon', 'attachedDon'] }, 'activeDon', compare('SELF.don.fieldCount', 'eq', 1), 2]
+  ];
+  for (const [cost, zone, condition, don] of cases) {
+    const { c, life, movement } = setup({ cost, condition, don });
+    const card = movement.players[1].life[0], original = [...movement.players[1][zone]];
+    c.useLifeTrigger(1, id(), c.context(), life.selectionId, life.token);
+    const choice = finish(c, 1).choice, waiting = snap(c).movement;
+    assert.equal(c.viewFor(0).frame.choice.options.length, 0);
+    assert.deepEqual(waiting.players[1][zone], original);
+    assert.deepEqual(waiting.players[1].character, movement.players[1].character);
+    assert.throws(() => c.answer(0, id(), c.context(), choice.selectionId, [choice.options[0].token]));
+    const request = id(), at = c.context(), tokens = [choice.options[0].token];
+    c.answer(1, request, at, choice.selectionId, tokens);
+    assert.equal(c.answer(1, request, at, choice.selectionId, tokens).replayed, true);
+    assert.deepEqual(snap(c).movement, waiting);
+    finish(c, 1);
+    const after = snap(c).movement.players[1];
+    assert.equal(after[zone].length, original.length - 1);
+    assert.equal(after.character[0], card);
+    assert.equal(c.viewFor(1).triggerChoices[0].effectId, 'enter');
+  }
+  const { c, life, movement } = setup({ cost: cases[0][0], emptyHand: true, canTrigger: false });
+  const before = snap(c).movement;
+  assert.throws(() => c.useLifeTrigger(1, id(), c.context(), life.selectionId, life.token), /unpayable/);
+  assert.deepEqual(snap(c).movement, before);
+  assert.equal(c.viewFor(0).lifeTrigger, null);
+  c.takeDamageLife(1, id(), c.context(), life.selectionId, life.token);
+  assert.equal(snap(c).movement.players[1].hand[0], movement.players[1].life[0]);
+});
+
+test('draw before conditional life self-play is retained even when the play condition fails', () => {
+  for (const max of [8, 9]) {
+    const { c, life, movement } = setup({ drawFirst: true, condition: compare('BOTH.lifeCount', 'lte', max) });
+    const card = movement.players[1].life[0];
+    c.useLifeTrigger(1, id(), c.context(), life.selectionId, life.token);
+    finish(c, 1);
+    const after = snap(c).movement.players[1];
+    assert.equal(after.hand.length, movement.players[1].hand.length + 1);
+    assert.equal(after.character.includes(card), max === 9);
+    assert.equal(after.trash.includes(card), max === 8);
+  }
 });

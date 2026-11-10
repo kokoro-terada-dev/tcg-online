@@ -8,13 +8,13 @@ import { reviewedPrintedDifferences } from "./review-v3-catalog.js";
 import { csv } from "./audit-effect-cards.js";
 import { draftSelect as select, emitV3Structure, parseV3Structure, structurePattern } from "./v3-draft-structure.js";
 import { classifyTriggerSelfPlay } from "./v3-trigger-self-play.js";
+import { parseCompoundEffect } from "./v3-draft-compound.js";
 
 const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
 const { compileV3CardJson, supportsV3RuntimeProfile } = require("../server/dist/test/effects/v3/compiler.js");
 const { isInteractiveMainEvent } = require("../server/dist/test/effects/v3/simpleMainEvent.js");
-const version = "v3-draft-generator.8";
-const registryHash = v3DraftRegistry(version);
+const latest = "v3-draft-generator.9";
 const keywords = new Map([
   ["ブロッカー", ["BLOCKER", "(相手のアタックの後、このカードをレストにし、アタックの対象をこのカードにできる)"]],
   ["速攻", ["RUSH", "(このカードは登場したターンにアタックできる)"]],
@@ -46,6 +46,11 @@ const header = text => /^(?:【([^】]+)】|〖([^〗]+)〗)(.*)$/u.exec(text.tr
 const reminder = (body, keyword) => keyword.length > 1 && /^[（(].+[）)]$/u.test(body) &&
   keyword.slice(1).some(value => value.slice(1, -1) === body.slice(1, -1));
 const compare = (ref, op, right) => ({ type: "compare", left: { ref }, op, right });
+const effectFor = (field, start, cardType, [type, kind, , player], suffix = "") => ({
+  id: `${field === "text" ? "body" : "trigger"}-${start}${suffix}`, kind, timing: { type, ...(player ? { player } : {}) },
+  sourceZones: [type === "TRIGGER" ? "life" : cardType === "event" ? "hand" : cardType],
+  optional: false, usageLimit: null, activationConditions: always(), resolutionConditions: always(), costs: []
+});
 
 function targetedActions(body, type, start, sourceSpan) {
   const binding = `target_${start}`, cards = { ref: `bindings.${binding}` };
@@ -66,7 +71,7 @@ function targetedActions(body, type, start, sourceSpan) {
     actions: [select(binding, "character", "OPPONENT", 0, Number(max), filter), action] };
 }
 
-function parseSpan(span, cardType, gaps, previous, raw) {
+function parseSpan(span, cardType, gaps, previous, raw, extended) {
   const { field, start, end, text } = span;
   const tag = header(text);
   const keyword = keywords.get(tag?.[1] ?? tag?.[2]);
@@ -86,14 +91,28 @@ function parseSpan(span, cardType, gaps, previous, raw) {
   const label = tag?.[1] ?? tag?.[2];
   const regular = timings.get(label), timing = regular ?? boundaryTimings.get(label);
   let reason = "timing-or-keyword-unconfirmed", unparsed = [{ ...sourceSpan, reason }];
+  const secondTag = field === "text" && body?.startsWith("/") ? header(body.slice(1)) : null;
+  if (extended && timing && secondTag) {
+    const second = timings.get(secondTag[1] ?? secondTag[2]) ?? boundaryTimings.get(secondTag[1] ?? secondTag[2]);
+    const pair = second && [timing[0], second[0]].join("/");
+    const shared = secondTag[3].trim();
+    if (["ON_PLAY/ON_ATTACK", "ON_PLAY/ON_KO", "MAIN/COUNTER"].includes(pair) &&
+        timing[2].includes(cardType) && second[2].includes(cardType) && !/^[【〖]/u.test(shared)) {
+      const parsed = [timing, second].map(t => parseCompoundEffect(shared, t[0], cardType, sourceSpan, false));
+      if (parsed.every(Boolean)) {
+        const effects = [timing, second].map((t, index) => {
+          const { pattern, structure, ...program } = parsed[index];
+          return { ...effectFor(field, start, cardType, t, `-${index + 1}`), ...program };
+        });
+        return { ...span, status: "recognized", pattern: "pr29-multiple-timings", effects };
+      }
+    }
+  }
   if (timing && (field === "triggerText") === (timing[0] === "TRIGGER") && timing[2].includes(cardType)) {
-    const [type, kind, , player] = timing;
+    const [type] = timing;
     const draw = /^カード([1-9]|[1-4][0-9]|50)枚を引く。$/u.exec(body);
     const parsed = regular && (draw ? { actions: [{ type: "DRAW", player: "SELF", count: Number(draw[1]), sourceSpan }] } : targetedActions(body, type, start, sourceSpan));
-    const effect = {
-      id: `${field === "text" ? "body" : "trigger"}-${start}`, kind, timing: { type, ...(player ? { player } : {}) }, sourceZones: [type === "TRIGGER" ? "life" : cardType === "event" ? "hand" : cardType],
-      optional: false, usageLimit: null, activationConditions: always(), resolutionConditions: always(), costs: []
-    };
+    const effect = effectFor(field, start, cardType, timing);
     if (type === "TRIGGER" && (cardType === "character" || cardType === "stage") && isBareTriggerSelfPlay(raw)) {
       return { ...span, status: "recognized", pattern: "trigger-self-play", effect: { ...effect, actions: [{ type: "PLAY_TRIGGER_SOURCE", sourceSpan }] } };
     }
@@ -110,6 +129,11 @@ function parseSpan(span, cardType, gaps, previous, raw) {
     const { structure, issues } = parseV3Structure(body, type);
     if (structure) return { ...span, status: "recognized", pattern: structurePattern(structure, !regular), structure,
       effect: { ...effect, actions: emitV3Structure(structure, sourceSpan) } };
+    const compound = extended && parseCompoundEffect(body, type, cardType, sourceSpan, raw.trim() === text.trim());
+    if (compound) {
+      const { pattern, structure, ...program } = compound;
+      return { ...span, status: "recognized", pattern, ...(structure ? { structure } : {}), effect: { ...effect, ...program } };
+    }
     reason = issues[0].reason;
     const bodyStart = start + text.trimEnd().length - body.length;
     unparsed = issues.map(({ reason, start, end }) => ({
@@ -120,7 +144,7 @@ function parseSpan(span, cardType, gaps, previous, raw) {
   return { ...span, status: features.length ? "unsupported" : "unknown", features, reason, unparsed };
 }
 
-function analyzeVariant(variant, rows) {
+function analyzeVariant(variant, rows, extended) {
   const selected = rows.filter(row => variant.recordNumbers.includes(row.recordNumber));
   const types = sorted(selected.map(row => row.raw["種類"]));
   const cardType = types.length === 1 ? types[0].toLowerCase() : null;
@@ -129,7 +153,7 @@ function analyzeVariant(variant, rows) {
   for (const field of ["text", "triggerText"]) {
     if (absent(variant[field])) continue;
     for (const match of variant[field].matchAll(/[^\r\n]+/g)) {
-      if (match[0].trim()) spans.push(parseSpan({ field, start: match.index, end: match.index + match[0].length, text: match[0] }, cardType, gaps, spans.at(-1), variant[field]));
+      if (match[0].trim()) spans.push(parseSpan({ field, start: match.index, end: match.index + match[0].length, text: match[0] }, cardType, gaps, spans.at(-1), variant[field], extended));
     }
   }
   const body = spans.filter(span => span.field === "text");
@@ -166,21 +190,22 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const optionalDon = variant.spans.some(span => span.structure?.operations.some(node => node.kind === "optional-don"));
   const fieldDon = variant.spans.some(span => span.pattern?.startsWith("pr27-field-don-"));
   const conditionalTriggerPlay = variant.spans.some(span => span.pattern?.startsWith("pr28-trigger-self-play-"));
+  const compound = variant.spans.some(span => span.pattern?.startsWith("pr29-"));
   const newTargets = variant.spans.some(span => span.pattern?.startsWith("pr25-"));
   return {
-    schemaVersion: conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
-    cardVersion: conditionalTriggerPlay ? "draft.pr28.1" : fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
+    schemaVersion: compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
+    cardVersion: compound ? "draft.pr29.1" : conditionalTriggerPlay ? "draft.pr28.1" : fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
       variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",
     keywords: variant.spans.flatMap(span => span.keyword ? [span.keyword] : []),
-    effects: variant.spans.flatMap(span => span.effect ? [span.effect] : []),
+    effects: variant.spans.flatMap(span => span.effects ?? (span.effect ? [span.effect] : [])),
     source: { text: absent(variant.text) ? "" : variant.text, triggerText: absent(variant.triggerText) ? "" : variant.triggerText,
       displayIds: sorted(variant.displayIds), datasetSha256: sourceCsvSha256 }
   };
 }
 
-function generateCard(card, rows, sourceCsvSha256) {
-  const variants = card.variants.map(variant => analyzeVariant(variant, rows));
+function generateCard(card, rows, sourceCsvSha256, extended) {
+  const variants = card.variants.map(variant => analyzeVariant(variant, rows, extended));
   const spans = variants.flatMap(variant => variant.spans);
   const recognized = spans.filter(span => span.status === "recognized").length;
   const unresolved = spans.length - recognized;
@@ -205,7 +230,9 @@ function generateCard(card, rows, sourceCsvSha256) {
   }
 }
 
-export function generateV3Drafts(ledger, cardIds = []) {
+export function generateV3Drafts(ledger, cardIds = [], version = latest) {
+  if (version !== latest && version !== "v3-draft-generator.8") throw Error("Unsupported draft generation baseline");
+  const registryHash = v3DraftRegistry(version);
   const selected = new Set(cardIds), rows = new Map();
   for (const row of ledger.rows) {
     if (selected.size && !selected.has(row.cardId)) continue;
@@ -214,7 +241,7 @@ export function generateV3Drafts(ledger, cardIds = []) {
   }
   if ([...selected].some(id => !rows.has(id))) throw Error("Requested card ID does not exist in this CSV");
   const counts = { complete: 0, partial: 0, unconvertible: 0, unassessed: 0 };
-  const cards = ledger.cards.filter(card => rows.has(card.cardId)).map(card => generateCard(card, rows.get(card.cardId), ledger.sourceSha256))
+  const cards = ledger.cards.filter(card => rows.has(card.cardId)).map(card => generateCard(card, rows.get(card.cardId), ledger.sourceSha256, version === latest))
     .sort((a, b) => lexical(a.cardId, b.cardId));
   const totals = { sourceCards: ledger.cards.length, selectedCards: cards.length, counts, noEffect: 0, compilerPassed: 0, compilerFailed: 0, unresolvedSpans: 0 };
   for (const card of cards) {

@@ -53,12 +53,13 @@ function reviewRows(input, trace, spans) {
 }
 
 export function analyzeV3DraftDetails(bytes, previous, current, reviews) {
-  const conditionalTriggerPlay = current.version === "v3-draft-generator.8";
+  const compound = current.version === "v3-draft-generator.9";
+  const conditionalTriggerPlay = compound || current.version === "v3-draft-generator.8";
   const fieldDonSupported = conditionalTriggerPlay || current.version === "v3-draft-generator.7";
-  const schemaVersion = conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDonSupported ? "3.0.0-subset.47" : "3.0.0-subset.46", profile = profiles[schemaVersion];
+  const schemaVersion = compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDonSupported ? "3.0.0-subset.47" : "3.0.0-subset.46", profile = profiles[schemaVersion];
   assert((fieldDonSupported || current.version === "v3-draft-generator.6") && current.registryHash === profile.registryHash &&
     supportsV3RuntimeProfile({ definition: { schemaVersion }, compilerVersion: profile.compilerVersion, registryHash: profile.registryHash }),
-  "Detailed rules require a pinned PR25, PR27, or PR28 trace and executable profile");
+  "Detailed rules require a pinned PR25, PR27, PR28, or PR29 trace and executable profile");
   const operations = new Set(Object.entries(profile.registries).flatMap(([category, entries]) => entries.map(entry => `${category}:${entry.split("@")[0]}`)));
   for (const [, required] of Object.values(contracts)) for (const operation of required)
     assert(operations.has(operation), `Diagnostic contract requires existing operation: ${operation}`);
@@ -75,7 +76,7 @@ export function analyzeV3DraftDetails(bytes, previous, current, reviews) {
     const row = { cardId: card.cardId, status: card.status, cardType: variant.cardType, variantSha256: variant.pairSha256, displayIds: variant.displayIds,
       field: span.field, start: span.start, end: span.end, raw: span.text };
     const structure = dissectV3DraftSpan(row.raw, row.start);
-    spans.push({ ...row, structure, findings: diagnoseV3DraftSpan({ ...row, structure, reason: span.reason, inherited: inherited.get(spanKey(row)), fieldDonSupported, conditionalTriggerPlay }) });
+    spans.push({ ...row, structure, findings: diagnoseV3DraftSpan({ ...row, structure, reason: span.reason, inherited: inherited.get(spanKey(row)), fieldDonSupported, conditionalTriggerPlay, compound }) });
   }
   assert(spans.length === baseline.spans, "Detailed span count must match the validated trace");
   const human = reviewRows(reviews, current, spans);
@@ -98,7 +99,7 @@ export function analyzeV3DraftDetails(bytes, previous, current, reviews) {
       ? recommend("field-don-context-unconfirmed", ["field-don-context-unconfirmed"], "Review the remaining timing, compound conditions and action text; do not add a duplicate count primitive.")
       : recommend("field-don-comparison", ["field-don-comparison"], "Add public field DON count reads and compare them without exposing DON instances."),
     conditionalTriggerPlay
-      ? recommend("trigger-self-play", ["trigger-self-play", "trigger-self-play-condition-unconfirmed", "trigger-self-play-payment"], "Review remaining condition shapes, sequences, and paid triggers separately.")
+      ? recommend("trigger-self-play", ["trigger-self-play", "trigger-self-play-condition-unconfirmed", "trigger-self-play-payment", "trigger-self-play-payment-unconfirmed"], "Review remaining condition shapes, sequences, and paid triggers separately.")
       : recommend("trigger-self-play", ["trigger-self-play", "trigger-self-play-condition", "trigger-self-play-payment"], "First support an explicit condition without costs; review paid triggers separately."),
     recommend("multiple-timings", ["multiple-timings", "simple-multiple-timings"], "Start with proven independent timing tags and review shared use limits separately."),
     recommend("ownership-and-chooser", ["unscoped-owner-destination", "explicit-chooser-complex"], "Review the official owner, controller and chooser per pattern before changing target generation."),
