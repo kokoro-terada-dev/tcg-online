@@ -11,6 +11,7 @@ export function requireId(value: unknown): asserts value is string {
 }
 export function phaseToken(turn: number, phase: Phase): string { return `turn:${turn}:${phase}`; }
 export function freezeState(value: Progression): Progression {
+  if (value.playerTurns) Object.freeze(value.playerTurns);
   if (value.battle) {
     Object.freeze(value.battle.source); Object.freeze(value.battle.target);
     if (value.battle.blocker) Object.freeze(value.battle.blocker);
@@ -32,7 +33,11 @@ export function createProgression(firstPlayer: Player): Progression {
 }
 export function playerTurnNumber(state: Progression, player: Player): number {
   requirePlayer(player);
-  return Math.floor((state.turnNumber + (player === state.firstPlayer ? 1 : 0)) / 2);
+  return state.playerTurns?.[player] ?? Math.floor((state.turnNumber + (player === state.firstPlayer ? 1 : 0)) / 2);
+}
+export function validPlayerTurns(counts: readonly number[] | undefined, turn: number, active: Player): counts is readonly [number, number] {
+  return Array.isArray(counts) && counts.length === 2 && [counts[0], counts[1]].every(n => Number.isSafeInteger(n) && n >= 0) &&
+    counts[0] + counts[1] === turn && counts[active] > 0;
 }
 export function checkTiming(state: Progression, actor: Player, intent: TimingIntent): Permission {
   requirePlayer(actor);

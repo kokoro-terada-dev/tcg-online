@@ -16,6 +16,7 @@ export type Battle = Readonly<{
 }>;
 export type Progression = Readonly<{
   version: 1; revision: number; firstPlayer: Player; activePlayer: Player; turnNumber: number;
+  playerTurns?: readonly [number, number]; extraTurnFor?: Player; isExtraTurn?: true;
   phase: Phase; phaseToken: string; phaseSettled: boolean;
   battle: Battle | null; gate: Gate;
   outcome: Readonly<{ winner: Player | null; reason: string }> | null;
@@ -27,6 +28,7 @@ export type Permission = Readonly<{ allowed: true; scope: "timingOnly" }> | Read
 export type SystemEvent =
   | { kind: "settlePhase"; phaseToken: string }
   | { kind: "advancePhase"; phaseToken: string }
+  | { kind: "reserveExtraTurn"; actor: Player; turnNumber: number; resolutionId: string }
   | { kind: "startBattle"; battleId: string; source: CardObjectRef; target: CardObjectRef }
   | { kind: "redirectBattle"; battleId: string; target: CardObjectRef; recordBlocker?: true }
   | { kind: "retargetBattleByEffect"; battleId: string; step: "attack" | "counter"; resolutionId: string; actor: Player; source: CardObjectRef; effectId: string; target: CardObjectRef }

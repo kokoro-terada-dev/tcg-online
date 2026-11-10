@@ -8,7 +8,7 @@ import V3MainEffectDialog from "./V3MainEffectDialog";
 import { getLocalCardImage } from "../utils/localCardImages";
 const hasStatSummary = (card: V3SessionView["publicStats"][number]) => card.powerDelta !== 0 || card.costDelta !== 0 ||
   card.basePower !== undefined || card.baseCost !== undefined || card.counter !== undefined || card.keywords.length > 0 || card.keywordsUnknown === true;
-const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", ATTACH_DON: "DON!!を付与", RETURN_DON_BY_EFFECT: "DON!!を戻す", SET_DON_STATE: "DON!!の状態変更", ADD_DON: "DON!!を追加", PLAY_BY_EFFECT: "効果で登場", MOVE_CARD: "カードを移動", DISCARD_BY_OWNER: "手札の破棄を実行", ORDER_THEN_MOVE: "手札をデッキ下へ戻す", KO: "KOを実行", KO_STAGE: "ステージをKO", MOVE_LIFE: "ライフを移動", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", RETARGET_BATTLE: "攻撃先を変更", GRANT_KEYWORD: "能力を付与", FINISH_LIFE_TRIGGER: "トリガー処理を終了" };
+const workLabels = { PAY_COSTS: "支払いを確定", DRAW: "ドローを実行", ATTACH_DON: "DON!!を付与", RETURN_DON_BY_EFFECT: "DON!!を戻す", SET_DON_STATE: "DON!!の状態変更", ADD_DON: "DON!!を追加", PLAY_BY_EFFECT: "効果で登場", MOVE_CARD: "カードを移動", DISCARD_BY_OWNER: "手札の破棄を実行", ORDER_THEN_MOVE: "手札をデッキ下へ戻す", KO: "KOを実行", KO_STAGE: "ステージをKO", MOVE_LIFE: "ライフを移動", REST: "レストにする", SET_ACTIVE: "アクティブにする", LOOK_TOP: "山札を見る", REVEAL: "カードを公開", RETURN_TO_DECK: "山札へ戻す", CLOSE_REVEALS: "確認を終了", MODIFY_STAT: "修正を適用", RETARGET_BATTLE: "攻撃先を変更", EXTRA_TURN: "追加ターンを予約", GRANT_KEYWORD: "能力を付与", FINISH_LIFE_TRIGGER: "トリガー処理を終了" };
 export default function V3SessionPanel({ view, busy, needsSync, error, isHost, onAction, onSync, onEnd }: {
   view: V3SessionView; busy: boolean; needsSync: boolean; error: string; isHost: boolean;
   onAction: (kind: V3SessionCommand["kind"], details?: SessionDetails) => void; onSync: () => void; onEnd: () => void;
@@ -43,7 +43,7 @@ export default function V3SessionPanel({ view, busy, needsSync, error, isHost, o
       onTestPlay={card => { const play = playable(card.id); if (play?.enabled) onAction("play", { card: play.card }); }} />
     <section className={`test-effect-panel${collapsed ? " test-effect-panel-minimized" : ""}`} aria-label="v3連続操作検証">
       <button hidden={!collapsed} onClick={() => setCollapsed(false)}>効果処理に戻る</button>
-      <div hidden={collapsed}><strong>{view.mode === "v3-reviewed-session" ? "v3検証・限定実カード" : "v3検証・連続操作"}</strong><p>{view.turnNumber}ターン目・{ownTurn ? "自分" : "相手"}のターン</p>
+      <div hidden={collapsed}><strong>{view.mode === "v3-reviewed-session" ? "v3検証・限定実カード" : "v3検証・連続操作"}</strong><p>{view.turnNumber}ターン目・{ownTurn ? "自分" : "相手"}のターン{view.isExtraTurn ? "（追加）" : view.extraTurnFor !== undefined ? "・追加ターン予約済み" : ""}</p>
         {view.conditionalTriggerHold && <p role="status">条件付き誘発を保留しています。現在の効果処理完了後、安全停止します。</p>}
         {view.phaseContinuation && <button disabled={disabled || !ownTurn} onClick={() => onAction("advance")}>フェイズを進める</button>}
         {view.mainEvent && <div className="v3-public-reveals"><button onClick={() => setRevealPreview(view.imageAliases[view.mainEvent!.cardId] ?? view.mainEvent!.cardId)}>イベント詳細</button><p role="status">{view.mainEvent.actor === view.localPlayerIndex ? "自分" : "相手"}のイベント処理中・DON{view.mainEvent.paidCost}支払済み<br />{view.mainEvent.effectId}</p></div>}

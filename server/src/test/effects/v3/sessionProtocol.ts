@@ -7,6 +7,7 @@ export type V3SessionView = Readonly<{
   triggerPolicy: string; pendingTriggerCount: number; triggerChooser: 0 | 1 | null;
   conditionalTriggerHold?: boolean;
   phaseContinuation?: boolean;
+  isExtraTurn?: boolean; extraTurnFor?: 0 | 1;
   triggerChoices: readonly Readonly<{ token: string; cardId: string; effectId: string; timing: "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "ON_EVENT"; sourceLabel?: string }>[];
   damageEffectsPending: boolean;
   battle: (NonNullable<import("../../progression/types").Progression["battle"]> & { powers: Readonly<{ attack: number; defense: number }> | null }) | null;

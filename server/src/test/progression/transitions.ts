@@ -1,5 +1,5 @@
 import type { Battle, BattleStep, Phase, Player, PlayerIntent, Progression, SystemEvent } from "./types";
-import { checkTiming, freezeState, phaseToken, ProgressionError, requireId, requirePlayer } from "./state";
+import { checkTiming, freezeState, phaseToken, playerTurnNumber, ProgressionError, requireId, requirePlayer } from "./state";
 import type { CardObjectRef } from "../effects/types";
 
 function ensure(condition: unknown, message: string): asserts condition { if (!condition) throw new ProgressionError(message); }
@@ -10,8 +10,8 @@ function checkRevision(state: Progression, expected: number): void {
 }
 function commit(state: Progression, patch: Partial<Progression>): Progression { return freezeState({ ...state, ...patch, revision: state.revision + 1 }); }
 function idle(state: Progression): void { ensure(state.gate.kind === "idle", "Resolution or choice is pending"); }
-function enterPhase(state: Progression, phase: Phase, turn = state.turnNumber, active = state.activePlayer): Progression {
-  return commit(state, { phase, turnNumber: turn, activePlayer: active, phaseToken: phaseToken(turn, phase), phaseSettled: false });
+function enterPhase(state: Progression, phase: Phase, turn = state.turnNumber, active = state.activePlayer, turnChange?: Partial<Progression>): Progression {
+  return commit(state, { ...turnChange, phase, turnNumber: turn, activePlayer: active, phaseToken: phaseToken(turn, phase), phaseSettled: false });
 }
 function cardRef(value: CardObjectRef): Readonly<CardObjectRef> {
   ensure(value && typeof value === "object", "Invalid card reference"); requireId(value.instanceId);
@@ -40,7 +40,8 @@ export function applySystemEvent(state: Progression, expectedRevision: number, e
   if (event.kind === "finishGame") {
     if (event.winner !== null) requirePlayer(event.winner);
     requireId(event.reason);
-    return commit(state, { outcome: { winner: event.winner, reason: event.reason }, gate: { kind: "idle" }, battle: null });
+    const { extraTurnFor: _cancelled, ...finished } = state;
+    return commit(finished, { outcome: { winner: event.winner, reason: event.reason }, gate: { kind: "idle" }, battle: null });
   }
   if (event.kind === "beginResolution") {
     idle(state); requireId(event.resolutionId); requirePlayer(event.controller);
@@ -71,6 +72,13 @@ export function applySystemEvent(state: Progression, expectedRevision: number, e
     ensure(target.instanceId !== battle.source.instanceId, "Source and target must differ");
     return commit(state, { battle: { ...battle, target, lastRetarget: { previousTarget: battle.target, source, effectId: event.effectId, actor: event.actor } } });
   }
+  if (event.kind === "reserveExtraTurn") {
+    ensure(state.phase === "main" && state.phaseSettled && !state.battle && event.actor === state.activePlayer &&
+      event.turnNumber === state.turnNumber && state.gate.kind === "resolving" && state.gate.controller === event.actor &&
+      state.gate.resolutionId === event.resolutionId, "Extra turn is unavailable in this resolution");
+    ensure(state.extraTurnFor === undefined && !state.isExtraTurn, "Extra turn stacking or chaining is not supported");
+    return commit(state, { extraTurnFor: event.actor, playerTurns: state.playerTurns ?? [playerTurnNumber(state, 0), playerTurnNumber(state, 1)] });
+  }
   idle(state);
   if (event.kind === "settlePhase" || event.kind === "advancePhase") {
     ensure(!state.battle && event.phaseToken === state.phaseToken, "Wrong phase checkpoint");
@@ -82,7 +90,13 @@ export function applySystemEvent(state: Progression, expectedRevision: number, e
     const next = { refresh: "draw", draw: "don", don: "main" } as const;
     if (state.phase !== "end") return enterPhase(state, next[state.phase]);
     ensure(state.turnNumber < Number.MAX_SAFE_INTEGER, "Turn limit reached");
-    return enterPhase(state, "refresh", state.turnNumber + 1, (1 - state.activePlayer) as Player);
+    const active = state.extraTurnFor ?? (1 - state.activePlayer) as Player;
+    if (!state.playerTurns) return enterPhase(state, "refresh", state.turnNumber + 1, active);
+    const turns: [number, number] = [...state.playerTurns];
+    turns[active]++;
+    const { extraTurnFor, isExtraTurn: _previousExtra, ...current } = state;
+    return enterPhase(current, "refresh", state.turnNumber + 1, active,
+      { playerTurns: turns, ...(extraTurnFor !== undefined ? { isExtraTurn: true as const } : {}) });
   }
   if (event.kind === "startBattle") {
     const permission = checkTiming(state, state.activePlayer, "attack");

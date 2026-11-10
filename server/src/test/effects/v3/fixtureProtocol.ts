@@ -13,7 +13,7 @@ export type V3FixtureView = Readonly<{
   outcome: Readonly<{ winner: 0 | 1 | null; reason: string }> | null;
   movement: MovementView; progression: Readonly<{ revision: number; gate: "idle" | "resolving" | "choice"; chooser: 0 | 1 | null }>;
   matchId: string; roomId: string; localPlayerIndex: 0 | 1; actor: 0 | 1; scenario: V3Scenario;
-  imageAliases: Readonly<Record<string, string>>; workType: "PAY_COSTS" | "DRAW" | "ATTACH_DON" | "RETURN_DON_BY_EFFECT" | "SET_DON_STATE" | "ADD_DON" | "PLAY_BY_EFFECT" | "MOVE_CARD" | "DISCARD_BY_OWNER" | "ORDER_THEN_MOVE" | "KO" | "KO_STAGE" | "MOVE_LIFE" | "RETARGET_BATTLE" | "REST" | "SET_ACTIVE" | "LOOK_TOP" | "REVEAL" | "RETURN_TO_DECK" | "CLOSE_REVEALS" | "MODIFY_STAT" | "GRANT_KEYWORD" | "FINISH_LIFE_TRIGGER" | null;
+  imageAliases: Readonly<Record<string, string>>; workType: "PAY_COSTS" | "DRAW" | "ATTACH_DON" | "RETURN_DON_BY_EFFECT" | "SET_DON_STATE" | "ADD_DON" | "PLAY_BY_EFFECT" | "MOVE_CARD" | "DISCARD_BY_OWNER" | "ORDER_THEN_MOVE" | "KO" | "KO_STAGE" | "MOVE_LIFE" | "RETARGET_BATTLE" | "EXTRA_TURN" | "REST" | "SET_ACTIVE" | "LOOK_TOP" | "REVEAL" | "RETURN_TO_DECK" | "CLOSE_REVEALS" | "MODIFY_STAT" | "GRANT_KEYWORD" | "FINISH_LIFE_TRIGGER" | null;
 }>;
 export type V3FixtureCommand = Readonly<{ frameRevision: number; movementRevision: number; progressionRevision: number; requestId: string; matchId: string; resolutionId: string }> & (
   { kind: "advance" | "work" } | { kind: "answer"; selectionId: string; tokens: readonly string[] });

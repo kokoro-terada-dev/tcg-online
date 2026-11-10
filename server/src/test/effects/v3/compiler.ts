@@ -18,6 +18,7 @@ export function compilerVersionForSchema(schema: SchemaVersion): string {
   if (schema === "3.0.0-subset.39") return "v3-subset-compiler.39.1";
   if (schema === "3.0.0-subset.40") return "v3-subset-compiler.40.1";
   if (schema === "3.0.0-subset.41") return "v3-subset-compiler.41.1";
+  if (schema === "3.0.0-subset.44") return "v3-subset-compiler.44.1";
   if (schema === "3.0.0-subset.43") return "v3-subset-compiler.43.1";
   if (schema === "3.0.0-subset.42") return "v3-subset-compiler.42.1";
   if (schema === "3.0.0-subset.35") return "v3-subset-compiler.35.1";
@@ -161,7 +162,8 @@ function valueType(value: Value): string {
 }
 export function builtinV3Registries(profile: SchemaVersion = "3.0.0-subset.16"): V3Registries {
   compilerVersionForSchema(profile);
-  const damageEffects = profile === "3.0.0-subset.43";
+  const extraTurn = profile === "3.0.0-subset.44";
+  const damageEffects = profile === "3.0.0-subset.43" || extraTurn;
   const battleEffects = profile === "3.0.0-subset.42" || damageEffects;
   const externalBody = profile === "3.0.0-subset.41" || battleEffects;
   const effectBody = profile === "3.0.0-subset.40" || externalBody;
@@ -170,6 +172,7 @@ export function builtinV3Registries(profile: SchemaVersion = "3.0.0-subset.16"):
   const schema = paidReplacement ? "3.0.0-subset.37" : profile;
   const r: V3Registries = { predicate: new V3Registry(), action: new V3Registry(), cost: new V3Registry(), replacement: new V3Registry(), selector: new V3Registry(), duration: new V3Registry(), timing: new V3Registry(), keyword: new V3Registry() };
   const protectionProfile = (schema === "3.0.0-subset.36" || schema === "3.0.0-subset.37");
+  if (extraTurn) r.action.register("EXTRA_TURN", "1", (n, c) => ({ type: "EXTRA_TURN", ...c.fields(n, []) }));
   if (damageEffects) {
     r.keyword.register("DOUBLE_ATTACK", "1", (n, c) => ({ type: "DOUBLE_ATTACK", ...c.fields(n, []) }));
     r.action.register("KO_STAGE", "1", (n, c) => ({ type: "KO_STAGE", ...c.fields(n, ["cards"]), cards: c.cards(n.cards) }));
@@ -614,9 +617,9 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"], ["continuousEffects", "replacementEffects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.43" || input.schemaVersion === "3.0.0-subset.42" || input.schemaVersion === "3.0.0-subset.41" || input.schemaVersion === "3.0.0-subset.40" || input.schemaVersion === "3.0.0-subset.39" || input.schemaVersion === "3.0.0-subset.38" || input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19" || input.schemaVersion === "3.0.0-subset.20" || input.schemaVersion === "3.0.0-subset.21" || input.schemaVersion === "3.0.0-subset.22" || (input.schemaVersion === "3.0.0-subset.23" || input.schemaVersion === "3.0.0-subset.24" || input.schemaVersion === "3.0.0-subset.25" || input.schemaVersion === "3.0.0-subset.26" || input.schemaVersion === "3.0.0-subset.27" || input.schemaVersion === "3.0.0-subset.28" || (input.schemaVersion === "3.0.0-subset.29" || (input.schemaVersion === "3.0.0-subset.30" || (input.schemaVersion === "3.0.0-subset.31" || (input.schemaVersion === "3.0.0-subset.32" || (input.schemaVersion === "3.0.0-subset.33" || (input.schemaVersion === "3.0.0-subset.34" || (input.schemaVersion === "3.0.0-subset.35" || (input.schemaVersion === "3.0.0-subset.36" || input.schemaVersion === "3.0.0-subset.37"))))))))), "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.44" || input.schemaVersion === "3.0.0-subset.43" || input.schemaVersion === "3.0.0-subset.42" || input.schemaVersion === "3.0.0-subset.41" || input.schemaVersion === "3.0.0-subset.40" || input.schemaVersion === "3.0.0-subset.39" || input.schemaVersion === "3.0.0-subset.38" || input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19" || input.schemaVersion === "3.0.0-subset.20" || input.schemaVersion === "3.0.0-subset.21" || input.schemaVersion === "3.0.0-subset.22" || (input.schemaVersion === "3.0.0-subset.23" || input.schemaVersion === "3.0.0-subset.24" || input.schemaVersion === "3.0.0-subset.25" || input.schemaVersion === "3.0.0-subset.26" || input.schemaVersion === "3.0.0-subset.27" || input.schemaVersion === "3.0.0-subset.28" || (input.schemaVersion === "3.0.0-subset.29" || (input.schemaVersion === "3.0.0-subset.30" || (input.schemaVersion === "3.0.0-subset.31" || (input.schemaVersion === "3.0.0-subset.32" || (input.schemaVersion === "3.0.0-subset.33" || (input.schemaVersion === "3.0.0-subset.34" || (input.schemaVersion === "3.0.0-subset.35" || (input.schemaVersion === "3.0.0-subset.36" || input.schemaVersion === "3.0.0-subset.37"))))))))), "unsupported-v3-schema-version");
   const profile = input.schemaVersion, compilerVersion = compilerVersionForSchema(profile);
-  const battleEffects = profile === "3.0.0-subset.42" || profile === "3.0.0-subset.43";
+  const battleEffects = profile === "3.0.0-subset.42" || profile === "3.0.0-subset.43" || profile === "3.0.0-subset.44";
   const externalBody = profile === "3.0.0-subset.41" || battleEffects;
   const schemaVersion = profile === "3.0.0-subset.38" || profile === "3.0.0-subset.39" || profile === "3.0.0-subset.40" || externalBody ? "3.0.0-subset.37" : profile;
   ensureMove(!Object.hasOwn(input, "continuousEffects") || (schemaVersion === "3.0.0-subset.34" || (schemaVersion === "3.0.0-subset.35" || (schemaVersion === "3.0.0-subset.36" || schemaVersion === "3.0.0-subset.37"))), "v3-continuous-profile-required");
@@ -650,6 +653,7 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
       const input = node as Record<string, unknown>; const type = label(input.type);
       const registry = registries[category]; ensureMove(registry, `unsupported-v3-category:${category}`);
       if (category === "action") ensureMove((type === "CONTINUOUS_EFFECT") === parsingContinuous, "v3-continuous-action-scope");
+      if (category === "action" && type === "EXTRA_TURN") ensureMove(currentTiming === "ON_PLAY" && inputCardType === "character", "v3-extra-turn-on-play-only");
       if (category === "action" && type === "RETARGET_BATTLE")
         ensureMove(currentTiming === "ON_OPPONENT_ATTACK" && (inputCardType === "leader" || inputCardType === "character") ||
           currentTiming === "COUNTER" && inputCardType === "event", "v3-battle-retarget-timing");
@@ -670,7 +674,7 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
       dataArray(nodes, 128);
       return nodes.map((node, index) => {
         const parsed = context.read(category, node);
-        if (category === "action" && (parsed as Node<"action">).type === "MOVE_RESULT") ensureMove(index > 0 && ["MOVE_CARD", ...(profile === "3.0.0-subset.43" ? ["MOVE_LIFE"] : []), ...((schemaVersion === "3.0.0-subset.27" || (schemaVersion === "3.0.0-subset.28" || (schemaVersion === "3.0.0-subset.29" || (schemaVersion === "3.0.0-subset.30" || (schemaVersion === "3.0.0-subset.31" || (schemaVersion === "3.0.0-subset.32" || (schemaVersion === "3.0.0-subset.33" || (schemaVersion === "3.0.0-subset.34" || (schemaVersion === "3.0.0-subset.35" || (schemaVersion === "3.0.0-subset.36" || schemaVersion === "3.0.0-subset.37")))))))))) ? ["PLAY_BY_EFFECT"] : [])].includes((nodes[index - 1] as { type: string }).type), "v3-result-must-follow-move");
+        if (category === "action" && (parsed as Node<"action">).type === "MOVE_RESULT") ensureMove(index > 0 && ["MOVE_CARD", ...((profile === "3.0.0-subset.43" || profile === "3.0.0-subset.44") ? ["MOVE_LIFE"] : []), ...((schemaVersion === "3.0.0-subset.27" || (schemaVersion === "3.0.0-subset.28" || (schemaVersion === "3.0.0-subset.29" || (schemaVersion === "3.0.0-subset.30" || (schemaVersion === "3.0.0-subset.31" || (schemaVersion === "3.0.0-subset.32" || (schemaVersion === "3.0.0-subset.33" || (schemaVersion === "3.0.0-subset.34" || (schemaVersion === "3.0.0-subset.35" || (schemaVersion === "3.0.0-subset.36" || schemaVersion === "3.0.0-subset.37")))))))))) ? ["PLAY_BY_EFFECT"] : [])].includes((nodes[index - 1] as { type: string }).type), "v3-result-must-follow-move");
         return parsed;
       });
     },
