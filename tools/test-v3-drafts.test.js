@@ -22,6 +22,68 @@ const csv = rows => Buffer.from([SOURCE_COLUMNS, ...rows.map(row => SOURCE_COLUM
 const entry = (generated, id) => generated.candidates.cards.find(card => card.cardId === id);
 const trace = (generated, id) => generated.trace.cards.find(card => card.cardId === id);
 
+test("base-value filters, current-value filters, and turn cost modifiers preserve the condition and operation order", () => {
+  const text = "【登場時】自分のライフが2枚以下の場合、相手のレストの元々のコスト4以下かつパワー3000以上のキャラ2枚までを、KOする。その後、相手のキャラ1枚までを、このターン中、コスト-2。";
+  const g = generateV3Drafts(ledgerFromCsv(csv([card("BASE-THEN-COST", text)])));
+  const d = entry(g, "BASE-THEN-COST").definition;
+  assert.equal(d.schemaVersion, "3.0.0-subset.44");
+  const [step] = d.effects[0].actions;
+  assert.deepEqual(step.condition.conditions[0], { type: "compare", left: { ref: "SELF.lifeCount" }, op: "lte", right: 2 });
+  const [first, ko, second, cost] = step.then;
+  assert.deepEqual([first.selector.owner, first.selector.controller, first.selector.chooser, first.selector.min, first.selector.max],
+    ["OPPONENT", "OPPONENT", "SELF", 0, 2]);
+  assert.deepEqual(first.selector.filters.conditions.map(c => [c.left.ref, c.op, c.right]),
+    [["CANDIDATE.rotated", "eq", true], ["CANDIDATE.base.cost", "lte", 4], ["CANDIDATE.current.power", "gte", 3000]]);
+  assert.equal(ko.type, "KO");
+  assert.deepEqual([second.selector.min, second.selector.max], [0, 1]);
+  assert.deepEqual(cost.condition, { type: "TURN_IS", player: "SELF" });
+  assert.deepEqual([cost.then[0].stat, cost.then[0].amount, cost.then[0].cards.ref], ["cost", -2, `bindings.${second.bindAs}`]);
+  assert.deepEqual([cost.then[0].duration.player, cost.else[0].duration.player], ["SELF", "OPPONENT"]);
+  assert.notEqual(first.bindAs, second.bindAs);
+  assert.deepEqual(step.else, []);
+});
+
+test("optional leader selection retains zero, and a leader or character shares one limit", () => {
+  const event = { "種類": "EVENT", "パワー": "-", "属性": "-" };
+  const g = generateV3Drafts(ledgerFromCsv(csv([
+    card("LEADER-OPTIONAL", "【カウンター】自分のリーダー1枚までを、このバトル中、パワー+3000。", event),
+    card("OPPONENT-ONE", "-", { "トリガー": "【トリガー】相手のリーダーかキャラ1枚までを、このターン中、パワー-2000。" }),
+    card("OPPONENT-TWO", "【登場時】相手のリーダーかキャラ2枚までを、このターン中、パワー-2000。"),
+    card("UNSCOPED-BASE", "【登場時】元々のパワー3000以下のキャラ1枚までを、KOする。"),
+    card("VANILLA-ONLY", "-")
+  ])));
+  const [leader, modifier] = entry(g, "LEADER-OPTIONAL").definition.effects[0].actions;
+  assert.deepEqual([leader.selector.zone, leader.selector.owner, leader.selector.min, leader.selector.max, modifier.duration.type],
+    ["leader", "SELF", 0, 1, "BATTLE_END"]);
+  const [mode] = entry(g, "OPPONENT-ONE").definition.effects[0].actions;
+  assert.equal(mode.type, "CHOOSE_MODE");
+  assert.deepEqual(mode.modes.map(({ actions: [pick] }) =>
+    [pick.selector.zone, pick.selector.owner, pick.selector.chooser, pick.selector.min, pick.selector.max]),
+  [["leader", "OPPONENT", "SELF", 0, 1], ["character", "OPPONENT", "SELF", 0, 1]]);
+  for (const id of ["OPPONENT-TWO", "UNSCOPED-BASE"]) {
+    assert.equal(entry(g, id).definition, undefined);
+    assert.equal(trace(g, id).noEffect, false);
+  }
+  assert.equal(g.trace.totals.noEffect, 1);
+});
+
+test("a generated base-power selector resolves in the existing event MAIN runtime", () => {
+  const body = "【メイン】相手の元々のパワー2000以下のキャラ1枚までを、KOする。";
+  const g = generateV3Drafts(ledgerFromCsv(csv([card("BASE-POWER", body, { "種類": "EVENT", "パワー": "-", "属性": "-" })])));
+  const { schemaVersion, effects } = entry(g, "BASE-POWER").definition;
+  assert.equal(effects[0].actions[0].selector.filters.conditions[0].left.ref, "CANDIDATE.base.power");
+  const { c } = eventFixture({ field: 1, mutate(d) { d.schemaVersion = schemaVersion; d.effects = effects; } });
+  const use = c.mainEventChoicesFor(0)[0];
+  c.useMainEvent(0, id(), c.context(), use.sourceToken, use.effectId);
+  const { choice } = finish(c, 0), before = c.snapshotForCoordinator().movement;
+  assert.equal(choice.options.length, 1);
+  c.answer(0, id(), c.context(), choice.selectionId, [choice.options[0].token]);
+  finish(c, 0);
+  const after = c.snapshotForCoordinator().movement;
+  assert.equal(after.players[1].trash.at(-1), before.players[1].character[0]);
+  assert.deepEqual(after.players[0].character, before.players[0].character);
+});
+
 test("optional DON preserves the count, state and order without dropping a cost or condition", () => {
   const rows = [
     card("DON-ONLY", "【登場時】ドン‼デッキからドン‼4枚までを、レストで追加する。"),

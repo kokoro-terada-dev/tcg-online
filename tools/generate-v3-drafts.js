@@ -13,7 +13,7 @@ const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/review
 const { compileV3CardJson, supportsV3RuntimeProfile } = require("../server/dist/test/effects/v3/compiler.js");
 const { isInteractiveMainEvent } = require("../server/dist/test/effects/v3/simpleMainEvent.js");
 const { registryHash } = require("../docs/card-effect-supported-operations.json");
-const version = "v3-draft-generator.5";
+const version = "v3-draft-generator.6";
 const keywords = new Map([
   ["ブロッカー", ["BLOCKER", "(相手のアタックの後、このカードをレストにし、アタックの対象をこのカードにできる)"]],
   ["速攻", ["RUSH", "(このカードは登場したターンにアタックできる)"]],
@@ -156,10 +156,11 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
     required.some(key => baseStats[key] === null) ||
     Object.entries(baseStats).some(([key, value]) => value === undefined || value !== null && !possible.includes(key))) return null;
   const triggerPlay = variant.spans.some(span => span.pattern === "trigger-self-play");
-  const optionalDon = variant.spans.some(span => span.pattern === "optional-add-don");
+  const optionalDon = variant.spans.some(span => span.structure?.operations.some(node => node.kind === "optional-don"));
+  const newTargets = variant.spans.some(span => span.pattern?.startsWith("pr25-"));
   return {
     schemaVersion: optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
-    cardVersion: optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
+    cardVersion: newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
       variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",
     keywords: variant.spans.flatMap(span => span.keyword ? [span.keyword] : []),

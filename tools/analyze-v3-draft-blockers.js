@@ -84,7 +84,7 @@ function spanFindings(variant, span, probes, optionalDonSupported) {
       /^自分のリーダー1枚までを、このバトル中、パワー\+[1-9][0-9]{0,4}。$/u.test(body)) ||
     /^(?:相手の元々のパワー(?:0|[1-9][0-9]{0,4})以下のキャラ[1-5]枚までを、KOする|相手のキャラ[1-5]枚までを、このターン中、コスト[+-][1-9][0-9]{0,4})。$/u.test(body)
   )) {
-    add("generator", "explicit-target-or-stat", "Existing public SELECT, printed.power, KO and MODIFY_STAT with TURN_END/BATTLE_END");
+    add("generator", "explicit-target-or-stat", "Existing public SELECT, base.power, KO and MODIFY_STAT with TURN_END/BATTLE_END");
   }
   if (!out.length) {
     const composition = /かつ|その後、|^[・]|以下から.+選ぶ|リーダー(?:か|と)キャラ/u.test(raw);
@@ -132,8 +132,8 @@ function tally(rows, key) {
 
 export function analyzeV3DraftBlockers(bytes, previous, current) {
   const ledger = ledgerFromCsv(bytes);
-  const optionalDonSupported = current.version === "v3-draft-generator.5";
-  const prior = optionalDonSupported ? 4 : current.version === "v3-draft-generator.4" ? 3 : 2;
+  const prior = current.version === "v3-draft-generator.6" ? 5 : current.version === "v3-draft-generator.5" ? 4 : current.version === "v3-draft-generator.4" ? 3 : 2;
+  const optionalDonSupported = prior >= 4;
   const before = indexTrace(previous, ledger, prior), after = indexTrace(current, ledger, prior + 1);
   const byCard = new Map();
   for (const row of ledger.rows) {

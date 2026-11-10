@@ -16,7 +16,7 @@ const probeRegistry = "731fa079caef72803c33c5221aa0d423c61196b3752102408985cd6c2
 const probesEnabled = inventory.profiles["3.0.0-subset.44"]?.registryHash === probeRegistry && supportsV3RuntimeProfile({
   definition: { schemaVersion: "3.0.0-subset.44" }, compilerVersion: inventory.profiles["3.0.0-subset.44"]?.compilerVersion, registryHash: probeRegistry
 });
-export const v3DraftRegistry = version => version === "v3-draft-generator.5" ? inventory.profiles["3.0.0-subset.46"].registryHash :
+export const v3DraftRegistry = version => ["v3-draft-generator.5", "v3-draft-generator.6"].includes(version) ? inventory.profiles["3.0.0-subset.46"].registryHash :
   version === "v3-draft-generator.4" ? inventory.profiles["3.0.0-subset.45"].registryHash : probeRegistry;
 const bareTriggerSelfPlay = ["【トリガー】このカードを登場させる。", "〖トリガー〗このカードを登場させる。"];
 export const isBareTriggerSelfPlay = raw => bareTriggerSelfPlay.includes(raw.trim());
@@ -59,7 +59,7 @@ function candidatesFor(input, ledger) {
     if (Object.hasOwn(entry, "generation")) {
       const info = entry.generation;
       dataObject(info, ["version", "status", "noEffect", "recognized", "unresolved"]);
-      assert(["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3", "v3-draft-generator.4", "v3-draft-generator.5"].includes(info.version) && ["complete", "partial", "unconvertible", "unassessed"].includes(info.status) &&
+      assert(["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3", "v3-draft-generator.4", "v3-draft-generator.5", "v3-draft-generator.6"].includes(info.version) && ["complete", "partial", "unconvertible", "unassessed"].includes(info.status) &&
         typeof info.noEffect === "boolean" && [info.recognized, info.unresolved].every(n => Number.isSafeInteger(n) && n >= 0) &&
         (info.status === "complete") === Object.hasOwn(entry, "definition") &&
         (info.status !== "complete" || info.unresolved === 0) &&

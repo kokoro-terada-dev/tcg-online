@@ -29,7 +29,8 @@ function countConditions(text) {
 
 function target(text) {
   if (text === "自分のリーダー") return { owner: "SELF", chooser: "SELF", zones: ["leader"], min: 1, max: 1, filters: [] };
-  if (text === "自分のリーダーかキャラ1枚まで") return { owner: "SELF", chooser: "SELF", zones: ["leader", "character"], min: 0, max: 1, filters: [] };
+  const leader = /^(自分|相手)のリーダー(かキャラ)?1枚まで$/u.exec(text);
+  if (leader) return { owner: player(leader[1]), chooser: "SELF", zones: leader[2] ? ["leader", "character"] : ["leader"], min: 0, max: 1, filters: [] };
   const match = /^(自分|相手)の(レストの|アクティブの)?(.*?)キャラ([1-5])枚まで$/u.exec(text);
   if (!match) return null;
   const [, side, state, bounds, amount] = match, filters = [];
@@ -38,10 +39,12 @@ function target(text) {
     if (!bounds.endsWith("の")) return null;
     const seen = new Set();
     for (const term of bounds.slice(0, -1).split(/でかつ、|かつ、|かつ/u)) {
-      const m = /^(コスト|パワー)(0|[1-9][0-9]{0,4})(以下|以上)$/u.exec(term);
-      if (!m || seen.has(m[1])) return null;
-      seen.add(m[1]);
-      filters.push(compare(`CANDIDATE.current.${m[1] === "コスト" ? "cost" : "power"}`, op(m[3]), Number(m[2])));
+      const m = /^(元々の)?(コスト|パワー)(0|[1-9][0-9]{0,4})(以下|以上)$/u.exec(term);
+      if (!m) return null;
+      const ref = `CANDIDATE.${m[1] ? "base" : "current"}.${m[2] === "コスト" ? "cost" : "power"}`;
+      if (seen.has(ref)) return null;
+      seen.add(ref);
+      filters.push(compare(ref, op(m[4]), Number(m[3])));
     }
   }
   return { owner: player(side), chooser: "SELF", zones: ["character"], min: 0, max: Number(amount), filters };
@@ -63,6 +66,10 @@ function operation(sentence, timing) {
     const duration = power[1] === "このバトル中" ? "battle" : "turn";
     if (duration === "battle" && !battleTimings.has(timing)) return null;
     return { kind: "power", target: selection, amount: Number(`${power[2]}${power[3]}`), duration };
+  }
+  const cost = /^このターン中、コスト([+-])([1-9][0-9]{0,4})$/u.exec(clause[2]);
+  if (cost && selection.zones.length === 1 && selection.zones[0] === "character") {
+    return { kind: "cost", target: selection, amount: Number(`${cost[1]}${cost[2]}`), duration: "turn" };
   }
   if (selection.zones.length !== 1 || selection.zones[0] !== "character" || selection.owner !== "OPPONENT") return null;
   const kind = new Map([["レストにする", "rest"], ["KOする", "ko"], ["持ち主の手札に戻す", "return"]]).get(clause[2]);
@@ -120,8 +127,8 @@ function emitOperation(node, prefix, sourceSpan) {
   const forZone = zone => {
     const bindAs = `${prefix}_${zone}`, cards = { ref: `bindings.${bindAs}` };
     const select = draftSelect(bindAs, zone, owner, min, max, { type: "all", conditions: filters }, { chooser });
-    if (node.kind === "power") {
-      const modify = duration => ({ type: "MODIFY_STAT", cards, stat: "power", amount: node.amount, duration, sourceSpan });
+    if (node.kind === "power" || node.kind === "cost") {
+      const modify = duration => ({ type: "MODIFY_STAT", cards, stat: node.kind, amount: node.amount, duration, sourceSpan });
       const untilTurn = player => modify({ type: "TURN_END", player, occurrence: 1 });
       return [select, node.duration === "battle" ? modify({ type: "BATTLE_END" }) : {
         type: "IF", condition: { type: "TURN_IS", player: "SELF" }, then: [untilTurn("SELF")], else: [untilTurn("OPPONENT")]
@@ -142,6 +149,14 @@ export function emitV3Structure(structure, sourceSpan) {
 }
 
 export function structurePattern(structure, boundary) {
+  for (const { kind, target } of structure.operations) {
+    if (target?.filters.some(filter => filter.left.ref.startsWith("CANDIDATE.base."))) return "pr25-base-stat-target";
+    if (kind === "cost") return "pr25-turn-cost";
+    if (target?.min === 0 && target.zones[0] === "leader") {
+      if (target.zones.length === 1) return "pr25-optional-leader";
+      if (target.owner === "OPPONENT") return "pr25-opponent-leader-or-character";
+    }
+  }
   if (structure.operations.some(node => node.kind === "optional-don")) return "optional-add-don";
   if (structure.conditions.length) return "structure-count-conditions";
   if (structure.sequence === "draw-discard") return "structure-draw-discard";

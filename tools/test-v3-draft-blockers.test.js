@@ -25,7 +25,13 @@ test("counts only audited mechanics, keeps unknown compounds and distinguishes c
   const a = row("SYN-A", "【登場時】自分の手札1枚を捨てることができる：ドン!!デッキからドン!!2枚までを、アクティブで追加する。\n【アタック時】相手のキャラ1枚までを、このターン中、コスト-2。",
     { "トリガー": "【トリガー】自分のライフが2枚以下の場合、このカードを登場させる。" });
   const b = row("SYN-B", "【登場時】コスト4以下のキャラ1枚までを、持ち主の手札に戻す。\n【登場時】カード1枚を引く。その後、未解釈処理。");
-  const { bytes, previous, current, generated } = fixture(a, { ...a, "表示ID": "SYN-A_p1" }, b);
+  const { bytes, current: trace, generated } = fixture(a, { ...a, "表示ID": "SYN-A_p1" }, b);
+  const current = structuredClone(trace), draft = current.cards.find(card => card.cardId === "SYN-A");
+  const span = draft.variants[0].spans[1];
+  // PR23 and PR24 did not recognize the cost modifier; keep that baseline explicit.
+  draft.variants[0].spans[1] = { field: span.field, start: span.start, end: span.end, text: span.text, status: "unknown" };
+  draft.recognized--; draft.unresolved++; current.totals.unresolvedSpans++;
+  const previous = { ...current, version: "v3-draft-generator.3", registryHash: v3DraftRegistry("v3-draft-generator.3") };
   const { summary, findings } = analyzeV3DraftBlockers(bytes, previous, current);
   assert.equal(summary.executable, false);
   assert.equal(summary.spans, 5);
@@ -37,8 +43,11 @@ test("counts only audited mechanics, keeps unknown compounds and distinguishes c
   assert.deepEqual(findings.map(r => r.feature).sort(), [
     "compound-unreviewed", "explicit-target-or-stat", "optional-add-don", "trigger-self-play", "unscoped-owner-destination"
   ]);
-  const recent = analyzeV3DraftBlockers(bytes, current, generated);
-  assert.equal(recent.findings.find(r => r.feature === "optional-add-don").category, "unknown");
+  const pr24 = { ...current, version: "v3-draft-generator.5", registryHash: v3DraftRegistry("v3-draft-generator.5") };
+  for (const recent of [analyzeV3DraftBlockers(bytes, current, pr24), analyzeV3DraftBlockers(bytes, pr24, generated)]) {
+    assert.equal(recent.findings.find(r => r.feature === "optional-add-don").category, "unknown");
+  }
+  assert.equal(analyzeV3DraftBlockers(bytes, pr24, generated).findings.some(r => r.feature === "explicit-target-or-stat"), false);
 });
 
 test("records printed dash by display ID and separates record blockers from raw occurrences", () => {
