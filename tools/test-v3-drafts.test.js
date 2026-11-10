@@ -22,6 +22,27 @@ const csv = rows => Buffer.from([SOURCE_COLUMNS, ...rows.map(row => SOURCE_COLUM
 const entry = (generated, id) => generated.candidates.cards.find(card => card.cardId === id);
 const trace = (generated, id) => generated.trace.cards.find(card => card.cardId === id);
 
+test("optional DON preserves the count, state and order without dropping a cost or condition", () => {
+  const rows = [
+    card("DON-ONLY", "【登場時】ドン‼デッキからドン‼4枚までを、レストで追加する。"),
+    card("DON-DRAW", "【メイン】カード1枚を引き、ドン!!デッキからドン!!1枚までをアクティブで追加する。", { "種類": "EVENT", "パワー": "-", "属性": "-" }),
+    card("DON-LIFE", "【アタック時】自分のライフが2枚以下の場合、ドン!!デッキからドン!!2枚までを、レストで追加する。"),
+    card("DON-PAID", "【登場時】自分の手札1枚を捨てることができる：ドン!!デッキからドン!!2枚までを、レストで追加する。"),
+    card("DON-UNKNOWN", "【登場時】自分の場のドン!!が相手の場のドン!!の枚数以下の場合、ドン!!デッキからドン!!1枚までを、レストで追加する。"),
+    card("DON-EXACT", "【登場時】ドン!!デッキからドン!!2枚を、レストで追加する。")
+  ];
+  const g = generateV3Drafts(ledgerFromCsv(csv(rows)));
+  const actions = id => entry(g, id).definition.effects[0].actions;
+  const details = ({ type, player, max, state }) => [type, player, max, state];
+  assert.equal(entry(g, "DON-ONLY").definition.schemaVersion, "3.0.0-subset.46");
+  assert.deepEqual(details(actions("DON-ONLY")[0]), ["ADD_DON_UP_TO", "SELF", 4, "REST"]);
+  assert.deepEqual(actions("DON-DRAW").map(a => a.type), ["DRAW", "ADD_DON_UP_TO"]);
+  assert.deepEqual(details(actions("DON-DRAW")[1]), ["ADD_DON_UP_TO", "SELF", 1, "ACTIVE"]);
+  assert.equal(actions("DON-LIFE")[0].condition.conditions[0].left.ref, "SELF.lifeCount");
+  assert.deepEqual(details(actions("DON-LIFE")[0].then[0]), ["ADD_DON_UP_TO", "SELF", 2, "REST"]);
+  for (const id of ["DON-PAID", "DON-UNKNOWN", "DON-EXACT"]) assert.equal(entry(g, id).definition, undefined);
+});
+
 test("only exact unconditional character or stage self-play receives the new profile", () => {
   const rows = [
     card("SELF-PLAY", "【登場時】カード1枚を引く。", { "トリガー": "【トリガー】このカードを登場させる。" }),

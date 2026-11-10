@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { ledgerFromCsv } from "./build-v3-review-ledger.js";
 import { generateV3Drafts } from "./generate-v3-drafts.js";
 import { analyzeV3DraftBlockers } from "./analyze-v3-draft-blockers.js";
+import { v3DraftRegistry } from "./analyze-v3-coverage.js";
 
 const { SOURCE_COLUMNS } = createRequire(import.meta.url)("../server/dist/test/effects/v3/cardData.js");
 const row = (id, text, fields = {}) => ({
@@ -13,17 +14,18 @@ const row = (id, text, fields = {}) => ({
 function fixture(...rows) {
   const bytes = Buffer.from([SOURCE_COLUMNS, ...rows.map(r => SOURCE_COLUMNS.map(field => r[field] ?? ""))]
     .map(values => values.map(v => `"${v.replaceAll('"', '""')}"`).join(",")).join("\n"));
-  const current = generateV3Drafts(ledgerFromCsv(bytes)).trace;
+  const generated = generateV3Drafts(ledgerFromCsv(bytes)).trace;
+  const current = { ...generated, version: "v3-draft-generator.4", registryHash: v3DraftRegistry("v3-draft-generator.4") };
   const previous = { ...structuredClone(current), version: "v3-draft-generator.3",
     registryHash: "731fa079caef72803c33c5221aa0d423c61196b3752102408985cd6c2510e852" };
-  return { bytes, previous, current };
+  return { bytes, previous, current, generated };
 }
 
 test("counts only audited mechanics, keeps unknown compounds and distinguishes cards from spans and prints", () => {
-  const a = row("SYN-A", "【登場時】ドン!!デッキからドン!!2枚までを、アクティブで追加する。\n【アタック時】相手のキャラ1枚までを、このターン中、コスト-2。",
+  const a = row("SYN-A", "【登場時】自分の手札1枚を捨てることができる：ドン!!デッキからドン!!2枚までを、アクティブで追加する。\n【アタック時】相手のキャラ1枚までを、このターン中、コスト-2。",
     { "トリガー": "【トリガー】自分のライフが2枚以下の場合、このカードを登場させる。" });
   const b = row("SYN-B", "【登場時】コスト4以下のキャラ1枚までを、持ち主の手札に戻す。\n【登場時】カード1枚を引く。その後、未解釈処理。");
-  const { bytes, previous, current } = fixture(a, { ...a, "表示ID": "SYN-A_p1" }, b);
+  const { bytes, previous, current, generated } = fixture(a, { ...a, "表示ID": "SYN-A_p1" }, b);
   const { summary, findings } = analyzeV3DraftBlockers(bytes, previous, current);
   assert.equal(summary.executable, false);
   assert.equal(summary.spans, 5);
@@ -35,6 +37,8 @@ test("counts only audited mechanics, keeps unknown compounds and distinguishes c
   assert.deepEqual(findings.map(r => r.feature).sort(), [
     "compound-unreviewed", "explicit-target-or-stat", "optional-add-don", "trigger-self-play", "unscoped-owner-destination"
   ]);
+  const recent = analyzeV3DraftBlockers(bytes, current, generated);
+  assert.equal(recent.findings.find(r => r.feature === "optional-add-don").category, "unknown");
 });
 
 test("records printed dash by display ID and separates record blockers from raw occurrences", () => {

@@ -14,7 +14,7 @@ export type ContinuousOperation = { type: "ADD_STAT"; stat: MutableStat; amount:
   { type: "GRANT_KEYWORD"; keyword: Node<"keyword"> } | ProtectionRule;
 export type Value = number | string | boolean | null | { ref: "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "base" | "current"}.${MutableStat}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42" | "3.0.0-subset.43" | "3.0.0-subset.44" | "3.0.0-subset.45";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42" | "3.0.0-subset.43" | "3.0.0-subset.44" | "3.0.0-subset.45" | "3.0.0-subset.46";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
 export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "BANISH" | "DOUBLE_ATTACK" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
@@ -55,6 +55,7 @@ export interface ActionMap {
   RETURN_DON_BY_EFFECT: NodeMeta & { type: "RETURN_DON_BY_EFFECT"; cards: CardSetRef; from: DonZone[] };
   SET_DON_STATE: NodeMeta & { type: "SET_DON_STATE"; cards: CardSetRef; from: "ACTIVE" | "REST"; to: "ACTIVE" | "REST" };
   ADD_DON: NodeMeta & { type: "ADD_DON"; player: "SELF"; count: number; state: "ACTIVE" | "REST"; onInsufficient: "fail" };
+  ADD_DON_UP_TO: NodeMeta & { type: "ADD_DON_UP_TO"; player: "SELF"; max: number; state: "ACTIVE" | "REST" };
   PLAY_BY_EFFECT: NodeMeta & { type: "PLAY_BY_EFFECT"; cards: CardSetRef; from: "hand";
     destination: { owner: "SELF"; zone: "character"; slotPolicy: "FIRST_EMPTY" }; enterState: "ACTIVE" | "REST"; provenance: "EFFECT"; condition: Predicate };
   REMEMBER_FACTS: NodeMeta & { type: "REMEMBER_FACTS"; result: string; cards: CardSetRef | null; snapshot: "BEFORE" | "AFTER"; basis: MetadataBasis; field: "colors"; bindAs: string };

@@ -18,6 +18,7 @@ export function compilerVersionForSchema(schema: SchemaVersion): string {
   if (schema === "3.0.0-subset.39") return "v3-subset-compiler.39.1";
   if (schema === "3.0.0-subset.40") return "v3-subset-compiler.40.1";
   if (schema === "3.0.0-subset.41") return "v3-subset-compiler.41.1";
+  if (schema === "3.0.0-subset.46") return "v3-subset-compiler.46.1";
   if (schema === "3.0.0-subset.45") return "v3-subset-compiler.45.1";
   if (schema === "3.0.0-subset.44") return "v3-subset-compiler.44.1";
   if (schema === "3.0.0-subset.43") return "v3-subset-compiler.43.1";
@@ -163,7 +164,8 @@ function valueType(value: Value): string {
 }
 export function builtinV3Registries(profile: SchemaVersion = "3.0.0-subset.16"): V3Registries {
   compilerVersionForSchema(profile);
-  const triggerPlay = profile === "3.0.0-subset.45", extraTurn = profile === "3.0.0-subset.44" || triggerPlay;
+  const optionalDon = profile === "3.0.0-subset.46";
+  const triggerPlay = profile === "3.0.0-subset.45" || optionalDon, extraTurn = profile === "3.0.0-subset.44" || triggerPlay;
   const damageEffects = profile === "3.0.0-subset.43" || extraTurn;
   const battleEffects = profile === "3.0.0-subset.42" || damageEffects;
   const externalBody = profile === "3.0.0-subset.41" || battleEffects;
@@ -174,6 +176,11 @@ export function builtinV3Registries(profile: SchemaVersion = "3.0.0-subset.16"):
   const r: V3Registries = { predicate: new V3Registry(), action: new V3Registry(), cost: new V3Registry(), replacement: new V3Registry(), selector: new V3Registry(), duration: new V3Registry(), timing: new V3Registry(), keyword: new V3Registry() };
   const protectionProfile = (schema === "3.0.0-subset.36" || schema === "3.0.0-subset.37");
   if (triggerPlay) r.action.register("PLAY_TRIGGER_SOURCE", "1", (n, c) => ({ type: "PLAY_TRIGGER_SOURCE", ...c.fields(n, []) }));
+  if (optionalDon) r.action.register("ADD_DON_UP_TO", "1", (n, c) => {
+    const meta = c.fields(n, ["player", "max", "state"]), max = count(n.max);
+    ensureMove(n.player === "SELF" && max <= 10 && (n.state === "ACTIVE" || n.state === "REST"), "v3-optional-don-policy");
+    return { type: "ADD_DON_UP_TO", ...meta, player: "SELF", max, state: n.state };
+  });
   if (extraTurn) r.action.register("EXTRA_TURN", "1", (n, c) => ({ type: "EXTRA_TURN", ...c.fields(n, []) }));
   if (damageEffects) {
     r.keyword.register("DOUBLE_ATTACK", "1", (n, c) => ({ type: "DOUBLE_ATTACK", ...c.fields(n, []) }));
@@ -619,9 +626,10 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"], ["continuousEffects", "replacementEffects"]);
-  ensureMove(input.schemaVersion === "3.0.0-subset.45" || input.schemaVersion === "3.0.0-subset.44" || input.schemaVersion === "3.0.0-subset.43" || input.schemaVersion === "3.0.0-subset.42" || input.schemaVersion === "3.0.0-subset.41" || input.schemaVersion === "3.0.0-subset.40" || input.schemaVersion === "3.0.0-subset.39" || input.schemaVersion === "3.0.0-subset.38" || input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19" || input.schemaVersion === "3.0.0-subset.20" || input.schemaVersion === "3.0.0-subset.21" || input.schemaVersion === "3.0.0-subset.22" || (input.schemaVersion === "3.0.0-subset.23" || input.schemaVersion === "3.0.0-subset.24" || input.schemaVersion === "3.0.0-subset.25" || input.schemaVersion === "3.0.0-subset.26" || input.schemaVersion === "3.0.0-subset.27" || input.schemaVersion === "3.0.0-subset.28" || (input.schemaVersion === "3.0.0-subset.29" || (input.schemaVersion === "3.0.0-subset.30" || (input.schemaVersion === "3.0.0-subset.31" || (input.schemaVersion === "3.0.0-subset.32" || (input.schemaVersion === "3.0.0-subset.33" || (input.schemaVersion === "3.0.0-subset.34" || (input.schemaVersion === "3.0.0-subset.35" || (input.schemaVersion === "3.0.0-subset.36" || input.schemaVersion === "3.0.0-subset.37"))))))))), "unsupported-v3-schema-version");
+  ensureMove(input.schemaVersion === "3.0.0-subset.46" || input.schemaVersion === "3.0.0-subset.45" || input.schemaVersion === "3.0.0-subset.44" || input.schemaVersion === "3.0.0-subset.43" || input.schemaVersion === "3.0.0-subset.42" || input.schemaVersion === "3.0.0-subset.41" || input.schemaVersion === "3.0.0-subset.40" || input.schemaVersion === "3.0.0-subset.39" || input.schemaVersion === "3.0.0-subset.38" || input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19" || input.schemaVersion === "3.0.0-subset.20" || input.schemaVersion === "3.0.0-subset.21" || input.schemaVersion === "3.0.0-subset.22" || (input.schemaVersion === "3.0.0-subset.23" || input.schemaVersion === "3.0.0-subset.24" || input.schemaVersion === "3.0.0-subset.25" || input.schemaVersion === "3.0.0-subset.26" || input.schemaVersion === "3.0.0-subset.27" || input.schemaVersion === "3.0.0-subset.28" || (input.schemaVersion === "3.0.0-subset.29" || (input.schemaVersion === "3.0.0-subset.30" || (input.schemaVersion === "3.0.0-subset.31" || (input.schemaVersion === "3.0.0-subset.32" || (input.schemaVersion === "3.0.0-subset.33" || (input.schemaVersion === "3.0.0-subset.34" || (input.schemaVersion === "3.0.0-subset.35" || (input.schemaVersion === "3.0.0-subset.36" || input.schemaVersion === "3.0.0-subset.37"))))))))), "unsupported-v3-schema-version");
   const profile = input.schemaVersion, compilerVersion = compilerVersionForSchema(profile);
-  const damageEffects = profile === "3.0.0-subset.43" || profile === "3.0.0-subset.44" || profile === "3.0.0-subset.45";
+  const triggerPlay = profile === "3.0.0-subset.45" || profile === "3.0.0-subset.46";
+  const damageEffects = profile === "3.0.0-subset.43" || profile === "3.0.0-subset.44" || triggerPlay;
   const battleEffects = profile === "3.0.0-subset.42" || damageEffects;
   const externalBody = profile === "3.0.0-subset.41" || battleEffects;
   const schemaVersion = profile === "3.0.0-subset.38" || profile === "3.0.0-subset.39" || profile === "3.0.0-subset.40" || externalBody ? "3.0.0-subset.37" : profile;
@@ -658,7 +666,7 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
       if (category === "action") ensureMove((type === "CONTINUOUS_EFFECT") === parsingContinuous, "v3-continuous-action-scope");
       if (category === "action" && type === "EXTRA_TURN") ensureMove(currentTiming === "ON_PLAY" && inputCardType === "character", "v3-extra-turn-on-play-only");
       if (category === "action" && type === "PLAY_TRIGGER_SOURCE") {
-        ensureMove(profile === "3.0.0-subset.45" && currentTiming === "TRIGGER" &&
+        ensureMove(triggerPlay && currentTiming === "TRIGGER" &&
           (inputCardType === "character" || inputCardType === "stage"), "v3-trigger-play-field-card-trigger-only");
         triggerPlays++;
       }

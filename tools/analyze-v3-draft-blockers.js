@@ -7,6 +7,7 @@ import { normalizeV3Gap } from "./analyze-v3-draft-gaps.js";
 import { collectProbes, v3DraftRegistry } from "./analyze-v3-coverage.js";
 import { csv } from "./audit-effect-cards.js";
 import { resolveReviewOutput } from "./review-v3-catalog.js";
+import { optionalDonBody } from "./v3-draft-structure.js";
 
 const categories = ["generator", "runtime", "interpretation", "data", "unknown"];
 const statuses = ["complete", "partial", "unconvertible", "unassessed"];
@@ -56,7 +57,8 @@ function indexTrace(trace, ledger, version) {
 
 const timings = "(?:登場時|アタック時|相手のアタック時|KO時|起動メイン|メイン|カウンター|トリガー)";
 const parseTiming = new RegExp(`^(?:【(${timings})】|〖(${timings})〗)(.*)$`, "u");
-function spanFindings(variant, span, probes) {
+const optionalDon = new RegExp(`(?:^|[、：:。】〗])${optionalDonBody}`, "u");
+function spanFindings(variant, span, probes, optionalDonSupported) {
   const raw = span.text.trim(), timing = parseTiming.exec(raw), body = timing?.[3];
   const label = timing?.[1] ?? timing?.[2];
   const out = [];
@@ -68,8 +70,11 @@ function spanFindings(variant, span, probes) {
     /(?:の場合、|[：:])このカードを登場させる。$/u.test(body)) {
     add("runtime", "trigger-self-play", "Conditional or paid self-play is not admitted by PLAY_TRIGGER_SOURCE; prefix not classified");
   }
-  if (/(?:^|[、：:。】〗])ドン[!！]{2}デッキからドン[!！]{2}(?:[1-9]|10)枚までを、?(?:アクティブ|レスト)で追加する。/u.test(raw)) {
-    add("runtime", "optional-add-don", "ADD_DON is fixed-count and fails on shortage; no DON-deck count ref or selectable DON-deck source");
+  if (optionalDonSupported ? optionalDon.test(raw) :
+    /(?:^|[、：:。】〗])ドン[!！]{2}デッキからドン[!！]{2}(?:[1-9]|10)枚までを、?(?:アクティブ|レスト)で追加する。/u.test(raw)) {
+    add(optionalDonSupported ? "unknown" : "runtime", "optional-add-don", optionalDonSupported
+      ? "ADD_DON_UP_TO is supported; the full printed span is still unresolved"
+      : "ADD_DON is fixed-count and fails on shortage; no DON-deck count ref or selectable DON-deck source");
   }
   if (/^(?:コスト|パワー)(?:0|[1-9][0-9]*)(?:以下|以上)のキャラ[1-5]枚までを、持ち主の(?:手札に戻す|デッキの下に置く)。$/u.test(body)) {
     add("interpretation", "unscoped-owner-destination", "Destination owner is explicit; source side and chooser must be verified independently");
@@ -127,7 +132,8 @@ function tally(rows, key) {
 
 export function analyzeV3DraftBlockers(bytes, previous, current) {
   const ledger = ledgerFromCsv(bytes);
-  const prior = current.version === "v3-draft-generator.4" ? 3 : 2;
+  const optionalDonSupported = current.version === "v3-draft-generator.5";
+  const prior = optionalDonSupported ? 4 : current.version === "v3-draft-generator.4" ? 3 : 2;
   const before = indexTrace(previous, ledger, prior), after = indexTrace(current, ledger, prior + 1);
   const byCard = new Map();
   for (const row of ledger.rows) {
@@ -153,7 +159,7 @@ export function analyzeV3DraftBlockers(bytes, previous, current) {
         spans++;
         const { field, start, end, text: raw } = span, variantSha256 = variant.pairSha256;
         const at = { cardId, status: draft.status, variantSha256, field, start, end, raw, location: `${cardId}:${variantSha256}:${field}:${start}:${end}` };
-        for (const finding of spanFindings(variant, span, probes)) findings.push({ ...at, ...finding });
+        for (const finding of spanFindings(variant, span, probes, optionalDonSupported)) findings.push({ ...at, ...finding });
       }
     }
   }

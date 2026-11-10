@@ -138,6 +138,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     },
     opponentHand: owner => ownerHandCandidates(board(), identity.actor, owner),
     revision: () => board().revision, now, evaluate,
+    donDeckCount: () => board().players[identity.actor].donDeck.length,
     peekTop: amount => board().players[identity.actor].deck.slice(0, amount).map(id => ({ instanceId: id!, generation: board().cards[id!]!.generation })),
     lifeMoveCard: (player, from) => {
       const state = board(), zones = state.players[player];

@@ -5,6 +5,8 @@ const op = bound => bound === "以下" ? "lte" : "gte";
 const battleTimings = new Set(["COUNTER", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_BLOCK"]);
 const issue = (reason, start, end) => ({ reason, start, end });
 const fail = (...args) => ({ issues: [issue(...args)] });
+export const optionalDonBody = String.raw`ドン(?:[!！]{2}|‼)デッキからドン(?:[!！]{2}|‼)([1-9]|10)枚までを、?(アクティブ|レスト)で追加する。`;
+const optionalDon = new RegExp(`^${optionalDonBody}$`, "u");
 
 export function draftSelect(bindAs, zone, owner, min, max, filters, { visibility = "PUBLIC", chooser = "SELF" } = {}) {
   return { type: "SELECT", bindAs, selector: {
@@ -46,6 +48,8 @@ function target(text) {
 }
 
 function operation(sentence, timing) {
+  const don = optionalDon.exec(sentence);
+  if (don) return { kind: "optional-don", max: Number(don[1]), state: don[2] === "アクティブ" ? "ACTIVE" : "REST" };
   const draw = /^カード([1-9]|[1-4][0-9]|50)枚を引く。$/u.exec(sentence);
   if (draw) return { kind: "draw", player: "SELF", count: Number(draw[1]) };
   const discard = /^自分の手札([1-3])枚を捨てる。$/u.exec(sentence);
@@ -80,6 +84,12 @@ export function parseV3Structure(body, timing) {
     const ops = [operation(`${drawDiscard[1]}く。`, timing), operation(drawDiscard[2], timing)];
     return { structure: { conditions, sequence: "draw-discard", operations: ops } };
   }
+  const combined = /^(.+?)(枚を引き|KOし|レストにし)、(.+)$/u.exec(clauses);
+  if (combined && optionalDon.test(combined[3])) {
+    const verb = { "枚を引き": "枚を引く。", "KOし": "KOする。", "レストにし": "レストにする。" }[combined[2]];
+    const first = operation(combined[1] + verb, timing);
+    if (first) return { structure: { conditions, sequence: "then", operations: [first, operation(combined[3], timing)] } };
+  }
   const parts = clauses.split("。その後、");
   if (parts.length > 3) return fail("sequence-limit", offset, body.length);
   const operations = [], issues = [];
@@ -103,6 +113,7 @@ function discardActions({ owner, chooser }, count, prefix, sourceSpan) {
 }
 
 function emitOperation(node, prefix, sourceSpan) {
+  if (node.kind === "optional-don") return [{ type: "ADD_DON_UP_TO", player: "SELF", max: node.max, state: node.state, sourceSpan }];
   if (node.kind === "draw") return [{ type: "DRAW", player: node.player, count: node.count, sourceSpan }];
   if (node.kind === "discard") return discardActions(node, node.count, prefix, sourceSpan);
   const { zones, owner, chooser, min, max, filters } = node.target;
@@ -131,6 +142,7 @@ export function emitV3Structure(structure, sourceSpan) {
 }
 
 export function structurePattern(structure, boundary) {
+  if (structure.operations.some(node => node.kind === "optional-don")) return "optional-add-don";
   if (structure.conditions.length) return "structure-count-conditions";
   if (structure.sequence === "draw-discard") return "structure-draw-discard";
   if (structure.sequence === "then") return "structure-sequence";

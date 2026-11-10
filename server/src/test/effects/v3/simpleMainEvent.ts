@@ -37,6 +37,7 @@ function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean)
       case "IF_PAYMENT_SUCCEEDED": return action.then.every(supported) && action.else.every(supported);
       case "SELECT": return action.selector.type === "CARDS" && ["leader", "character", "stage", "hand"].includes(action.selector.zone as string) && !action.selector.cardTypes.includes("don");
       case "DRAW": return action.player === "SELF";
+      case "ADD_DON_UP_TO": return true;
       case "DISCARD_BY_OWNER": case "ORDER_THEN_MOVE": return true;
       case "KO": case "KO_STAGE": case "MOVE_LIFE": case "REST": case "SET_ACTIVE": case "REVEAL": return true;
       case "MODIFY_STAT": case "GRANT_KEYWORD": return action.duration.type === "TURN_END";

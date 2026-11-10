@@ -1,18 +1,20 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { setup: base, finish, selector, id, always } = require('./helpers/v3-memory.cjs');
+const { setup: boardFixture, play, select } = require('./helpers/v3-observed.cjs');
 const { V3SyntheticMatchCoordinator } = require('../dist/test/effects/v3/matchCoordinator.js');
 const { compileV3CardJson } = require('../dist/test/effects/v3/compiler.js');
 const { getCard } = require('../dist/test/movement/state.js');
 const { movementReadContext } = require('../dist/test/effects/v3/readContext.js');
 
 const add = (count = 1, state = 'ACTIVE') => ({ type: 'ADD_DON', player: 'SELF', count, state, onInsufficient: 'fail' });
+const addUpTo = (max, state = 'ACTIVE') => ({ type: 'ADD_DON_UP_TO', player: 'SELF', max, state });
 const set = (from = 'REST', to = 'ACTIVE') => ({ type: 'SET_DON_STATE', cards: { ref: 'bindings.don' }, from, to });
 const choose = (zone = 'restDon', min = 1, max = min) => ({ type: 'SELECT', bindAs: 'don',
   selector: { ...selector('SELF'), zone, min, max, cardTypes: ['don'], excludeSource: false } });
-function setup(actions, { actor = 0, costs = [], prepare = () => {}, effects = [] } = {}) {
+function setup(actions, { actor = 0, costs = [], prepare = () => {}, effects = [], schema = '3.0.0-subset.28' } = {}) {
   const h = base({ actor, mutate: raw => {
-    raw.schemaVersion = '3.0.0-subset.28';
+    raw.schemaVersion = schema;
     Object.assign(raw.effects[0], { actions, costs });
     raw.effects.push(...effects);
   } });
@@ -93,6 +95,74 @@ test('ADD_DON supports all ten cards with no added objects', () => {
     p.donDeck.push(...p.activeDon.splice(0));
   } });
   run(h); assert.equal(board(h).players[0].activeDon.length, 10); assert.equal(board(h).players[0].donDeck.length, 0);
+});
+
+test('optional DON supports zero, middle and maximum with the fixed ADD_DON movement and no false entry trigger', () => {
+  const observer = { id: 'watch-entry', kind: 'triggered', timing: { type: 'ON_EVENT', event: 'CARD_ENTERED',
+    snapshot: 'TRANSACTION_AFTER', relation: 'OTHER', owner: 'SELF', controller: 'SELF', fromZones: ['hand'], toZones: ['character'],
+    cardTypes: ['character'], filters: always() }, sourceZones: ['leader'], optional: false, usageLimit: null, activationConditions: always(),
+    resolutionConditions: always(), costs: [], actions: [{ type: 'DRAW', player: 'SELF', count: 1 }] };
+  for (const [count, state, actor] of [[0, 'ACTIVE', 0], [2, 'REST', 1], [4, 'ACTIVE', 0]]) {
+    const h = setup([addUpTo(4, state)], { schema: '3.0.0-subset.46', actor, effects: [observer] }), before = board(h);
+    activate(h); finish(h.c, actor);
+    const q = h.c.viewFor(actor).frame.choice, at = h.c.context();
+    assert.deepEqual(q.options.map(o => o.label), Array.from({ length: 5 }, (_, i) => `DON!!を${i}枚追加`));
+    assert.ok(q.options.every(o => !Object.hasOwn(o, 'cardId')));
+    assert.deepEqual(h.c.viewFor(1 - actor).frame.choice.options, []);
+    assert.deepEqual(board(h), before);
+    const token = q.options[count].token;
+    const request = id();
+    h.c.answer(actor, request, at, q.selectionId, [token]);
+    assert.equal(h.c.answer(actor, request, at, q.selectionId, [token]).replayed, true);
+    assert.deepEqual(board(h), before);
+    finish(h.c, actor);
+    const after = board(h), zone = state === 'ACTIVE' ? 'activeDon' : 'restDon', ids = before.players[actor].donDeck.slice(0, count);
+    assert.deepEqual(after.players[actor][zone], [...before.players[actor][zone], ...ids]);
+    assert.deepEqual(after.players[actor].donDeck, before.players[actor].donDeck.slice(count));
+    assert.equal(after.revision, before.revision + Number(count > 0));
+    assert.deepEqual(after.players[1 - actor], before.players[1 - actor]);
+    assert.deepEqual(events(h).map(e => [e.kind, e.cause.kind, e.cause.effectController, e.from.zone, e.to.zone, e.after.rotated]),
+      Array.from({ length: count }, () => ['moved', 'EFFECT_MOVE', actor, 'donDeck', zone, state === 'REST']));
+    assert.equal(h.c.viewFor(actor).pendingTriggerCount, 0);
+  }
+});
+
+test('optional DON caps the prompt at the remaining deck, rejects stale or excessive answers, and continues on an empty deck', () => {
+  const h = setup([add(7), addUpTo(4), addUpTo(4), { type: 'DRAW', player: 'SELF', count: 1 }], { schema: '3.0.0-subset.46' });
+  activate(h); finish(h.c, 0);
+  const q = h.c.viewFor(0).frame.choice, at = h.c.context(), before = board(h);
+  assert.deepEqual(q.options.map(o => o.label), ['DON!!を0枚追加', 'DON!!を1枚追加']);
+  const tokens = q.options.map(o => o.token);
+  assert.throws(() => h.c.answer(0, id(), at, q.selectionId, tokens));
+  assert.throws(() => h.c.answer(0, id(), at, q.selectionId, ['over-the-cap']));
+  assert.throws(() => h.c.answer(1, id(), at, q.selectionId, [tokens[1]]));
+  assert.throws(() => h.c.answer(0, id(), { ...at, movementRevision: at.movementRevision - 1 }, q.selectionId, [tokens[1]]));
+  assert.throws(() => h.c.endTurn(0, id(), at));
+  assert.deepEqual(board(h), before);
+  h.c.answer(0, id(), at, q.selectionId, [tokens[1]]);
+  assert.throws(() => h.c.answer(0, id(), h.c.context(), q.selectionId, [tokens[1]]));
+  finish(h.c, 0);
+  assert.equal(h.c.viewFor(0).frame.status, 'completed');
+  assert.equal(board(h).players[0].donDeck.length, 0);
+  assert.equal(board(h).players[0].hand.length, before.players[0].hand.length + 1);
+  assert.equal(events(h).filter(e => e.from.zone === 'donDeck').length, 8);
+});
+
+test('ON_PLAY resumes through the normal trigger queue after choosing the optional DON count', () => {
+  const { c } = boardFixture({ sourceType: 'character', count: 1, mutate(raw) {
+    raw.schemaVersion = '3.0.0-subset.46';
+    Object.assign(raw.effects[0], { timing: { type: 'ON_PLAY' }, actions: [addUpTo(2, 'REST'), { type: 'DRAW', player: 'SELF', count: 1 }] });
+  } });
+  play(c); select(c, 'watch-0', 0);
+  const before = board({ c }), { choice } = finish(c, 0);
+  assert.deepEqual(board({ c }), before);
+  const [one] = choice.options.filter(option => option.label === 'DON!!を1枚追加');
+  c.answer(0, id(), c.context(), choice.selectionId, [one.token]);
+  finish(c, 0);
+  assert.equal(board({ c }).players[0].restDon.length, before.players[0].restDon.length + 1);
+  assert.equal(board({ c }).players[0].hand.length, before.players[0].hand.length + 1);
+  assert.deepEqual(events({ c }).map(e => [e.from.zone, e.to.zone]), [['donDeck', 'restDon'], ['deck', 'hand']]);
+  assert.equal(c.viewFor(0).pendingTriggerCount, 0);
 });
 test('up to two REST DON uses the existing zero-selection path', () => {
   const h = setup([choose('restDon', 0, 2), set()]), before = board(h);

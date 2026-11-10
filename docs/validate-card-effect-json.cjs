@@ -53,6 +53,7 @@ function main() {
       ['3.0.0-subset.43', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-damage.schema.json'), 'utf8')))],
       ['3.0.0-subset.44', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, 'card-effect-extra-turn.schema.json'), 'utf8')))],
       ['3.0.0-subset.45', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset45.schema.json'), 'utf8')))],
+      ['3.0.0-subset.46', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset46.schema.json'), 'utf8')))],
     ]);
     validate = card => {
       const checker = validators.get(card?.schemaVersion);

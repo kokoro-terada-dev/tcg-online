@@ -48,9 +48,9 @@ function diagnosis(group) {
 }
 
 export function compareV3DraftRuns(before, after, beforeCsv, afterCsv) {
-  const versions = ["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3", "v3-draft-generator.4"];
+  const versions = ["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3", "v3-draft-generator.4", "v3-draft-generator.5"];
   const baseline = versions.indexOf(before.version);
-  const compatible = after.version === versions[3] ? before.registryHash === v3DraftRegistry(before.version) &&
+  const compatible = versions.indexOf(after.version) >= 3 ? before.registryHash === v3DraftRegistry(before.version) &&
     after.registryHash === v3DraftRegistry(after.version) : before.registryHash === after.registryHash;
   assert(baseline >= 0 && versions.indexOf(after.version) > baseline &&
     before.sourceCsvSha256 === after.sourceCsvSha256 && compatible &&

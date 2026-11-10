@@ -30,13 +30,19 @@ export interface ResolutionEnvironment {
   peekTop?(count: number): readonly Ref[] | "unknown";
   lifeMoveCard?(player: Seat, from: "DECK_TOP" | "LIFE_TOP" | "LIFE_BOTTOM"): Ref | null;
   lifeTriggerPlay?(): "OPEN" | "FULL" | "PLAYED";
+  donDeckCount?(): number;
   canPayCosts?(costs: readonly DeepReadonly<Node<"cost">>[], discarded: readonly Ref[] | null, returned: readonly Ref[] | null, selected?: readonly Ref[] | null): boolean | "unknown";
 }
 export type ResolutionIdentity = Readonly<{ matchId: string; resolutionId: string; effectId: string; actor: Seat; source: Ref }>;
-type WorkAction = Exclude<A, { type: "CALL_EFFECT_BODY" | "SEQUENCE" | "IF" | "SELECT" | "ORDER_CARDS" | "BIND_SOURCE" | "MOVE_RESULT" | "REMEMBER_FACTS" | "CHOOSE_MODE" | "OFFER_PAYMENT" | "IF_PAYMENT_SUCCEEDED" | "CONTINUOUS_EFFECT" }>;
+type WorkAction = Exclude<A, { type: "CALL_EFFECT_BODY" | "SEQUENCE" | "IF" | "SELECT" | "ORDER_CARDS" | "BIND_SOURCE" | "MOVE_RESULT" | "REMEMBER_FACTS" | "CHOOSE_MODE" | "ADD_DON_UP_TO" | "OFFER_PAYMENT" | "IF_PAYMENT_SUCCEEDED" | "CONTINUOUS_EFFECT" }>;
 type OwnerHandAction = Extract<A, { type: "DISCARD_BY_OWNER" | "ORDER_THEN_MOVE" }>;
 type PaymentOffer = Extract<A, { type: "OFFER_PAYMENT" }>;
-type ModeBranch = { label: string; to: number };
+type ModeBranch = { label: string; to: number; donCount?: number };
+function availableDon(environment: ResolutionEnvironment): number {
+  const count = environment.donDeckCount?.();
+  ensureMove(typeof count === "number" && Number.isSafeInteger(count) && count >= 0 && count <= 10, "v3-unknown-don-deck-count");
+  return count;
+}
 const lifeSlotBinding = "lifeTriggerSlot";
 type Instruction = { type: "CHECK"; predicate: DeepReadonly<Predicate> } | { type: "OCCURRENCE_CHECK" } | { type: "COSTS" } | { type: "OPTIONAL" } |
   { type: "BODY_CHOICE"; maxPrintedCost: number } |
@@ -95,7 +101,7 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 const relative = (actor: Seat, player: "SELF" | "OPPONENT"): Seat => player === "SELF" ? actor : (1 - actor) as Seat;
 function program(card: ApprovedV3Card, effectId: string, external?: DeepReadonly<Effect>): { code: Instruction[]; bodyEffectId: string | null } {
   const effect = card.definition.effects.find(effect => effect.id === effectId); ensureMove(effect, "v3-effect-not-found");
-  ensureMove(effect.timing.type !== "ON_EVENT" || ["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45"].includes(card.definition.schemaVersion), "v3-conditional-trigger-resolution-deferred-pr06b");
+  ensureMove(effect.timing.type !== "ON_EVENT" || ["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46"].includes(card.definition.schemaVersion), "v3-conditional-trigger-resolution-deferred-pr06b");
   const occurrence = ["ON_EVENT", "ON_BLOCK", "MAIN_START", "TURN_END"].includes(effect.timing.type);
   const code: Instruction[] = [occurrence ? { type: "OCCURRENCE_CHECK" } : { type: "CHECK", predicate: effect.activationConditions }];
   if (effect.optional) code.push({ type: "OPTIONAL" });
@@ -108,11 +114,15 @@ function program(card: ApprovedV3Card, effectId: string, external?: DeepReadonly
       code.push(branch, { type: "ENTER" }); append(action.then); code.push({ type: "EXIT" });
       const jump = { type: "JUMP" as const, to: 0 }; code.push(jump); branch.otherwise = code.length;
       code.push({ type: "ENTER" }); append(action.else); code.push({ type: "EXIT" }); jump.to = code.length;
-    } else if (action.type === "CHOOSE_MODE") {
+    } else if (action.type === "CHOOSE_MODE" || action.type === "ADD_DON_UP_TO") {
       const branches: ModeBranch[] = [], exits: { type: "JUMP"; to: number }[] = [];
       code.push({ type: "MODE", branches });
-      for (const mode of action.modes) {
-        branches.push({ label: mode.label, to: code.length });
+      // A positive count resolves via the same ADD_DON work as a fixed-count effect.
+      const modes: readonly { label: string; actions: readonly A[] }[] = action.type === "CHOOSE_MODE" ? action.modes :
+        Array.from({ length: action.max + 1 }, (_, count) => ({ label: `DON!!を${count}枚追加`,
+          actions: count ? [{ type: "ADD_DON", player: "SELF", count, state: action.state, onInsufficient: "fail" }] : [] }));
+      for (const [index, mode] of modes.entries()) {
+        branches.push({ label: mode.label, to: code.length, ...(action.type === "ADD_DON_UP_TO" ? { donCount: index } : {}) });
         code.push({ type: "ENTER" }); append(mode.actions); code.push({ type: "EXIT" });
         const exit = { type: "JUMP" as const, to: 0 }; code.push(exit); exits.push(exit);
       }
@@ -142,13 +152,13 @@ function program(card: ApprovedV3Card, effectId: string, external?: DeepReadonly
   const call = effect.actions[0];
   let bodyEffectId: string | null = null;
   if (call?.type === "CALL_EFFECT_BODY" && call.from === "OWN_TRASH") {
-    ensureMove(["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45"].includes(card.definition.schemaVersion) && card.definition.cardType !== "event" && effect.actions.length === 1,
+    ensureMove(["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46"].includes(card.definition.schemaVersion) && card.definition.cardType !== "event" && effect.actions.length === 1,
       "v3-effect-body-external-scope");
     if (external) { bodyEffectId = external.id; append(external.actions); }
     else code.push({ type: "BODY_CHOICE", maxPrintedCost: call.maxPrintedCost });
   } else if (call?.type === "CALL_EFFECT_BODY") {
     const body = card.definition.effects.find(row => row.id === call.effectId);
-    ensureMove(["3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45"].includes(card.definition.schemaVersion) && card.definition.cardType === "event" &&
+    ensureMove(["3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46"].includes(card.definition.schemaVersion) && card.definition.cardType === "event" &&
       effect.timing.type === "TRIGGER" && effect.actions.length === 1 && body && isInteractiveMainEvent(body),
     "v3-effect-body-main-target");
     // Expand only the body. The outer life-trigger frame owns activation, timing and cleanup.
@@ -292,7 +302,10 @@ export class V3ResolutionMachine {
             candidates: rows.map(body => ({ body, ref: { ...body.source }, cardId: body.cardId, label: body.effectId, zone: "trash", token: randomUUID() })) };
           state.status = "waitingForChoice";
         } else if (instruction.type === "MODE") {
-          state.pending = { ...this.#singleChoice(state), purpose: "mode", candidates: instruction.branches.map(branch => ({ ...branch, token: randomUUID() })) };
+          const don = instruction.branches[0]?.donCount === undefined ? null : availableDon(this.#environment);
+          const branches = don === null ? instruction.branches : instruction.branches.filter(branch => branch.donCount! <= don);
+          if (don === 0) { state.pc = branches[0]!.to; continue; }
+          state.pending = { ...this.#singleChoice(state), purpose: "mode", candidates: branches.map(branch => ({ ...branch, token: randomUUID() })) };
           state.status = "waitingForChoice";
         } else if (instruction.type === "COSTS" || instruction.type === "OFFER_PAYMENT") {
           const offer = instruction.type === "OFFER_PAYMENT" ? instruction.action : null;
@@ -415,7 +428,7 @@ export class V3ResolutionMachine {
           else {
             const cards = this.#bindings(state)[action.cards.ref.slice("bindings.".length)]; ensureMove(cards, "v3-missing-runtime-binding");
             if (!cards.length) {
-              if ((action.type === "MOVE_CARD" || action.type === "PLAY_BY_EFFECT") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45"].includes(this.#card.definition.schemaVersion)) state.lastMoveResult = emptyMoveResult(state.identity, workId, state.worldRevision);
+              if ((action.type === "MOVE_CARD" || action.type === "PLAY_BY_EFFECT") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46"].includes(this.#card.definition.schemaVersion)) state.lastMoveResult = emptyMoveResult(state.identity, workId, state.worldRevision);
               state.pc++; continue;
             }
             if (action.type === "PLAY_BY_EFFECT") {
@@ -588,7 +601,9 @@ export class V3ResolutionMachine {
       }
       if (choice.purpose === "mode") {
         const branch = choice.candidates.find(candidate => selected.has(candidate.token))!;
-        ensureMove(this.#code[state.pc]?.type === "MODE", "v3-choice-program-mismatch");
+        const instruction = this.#code[state.pc];
+        ensureMove(instruction?.type === "MODE" && instruction.branches.some(row => row.to === branch.to && row.donCount === branch.donCount), "v3-choice-program-mismatch");
+        if (branch.donCount !== undefined) ensureMove(branch.donCount <= availableDon(this.#environment), "v3-don-choice-stale");
         state.pc = branch.to; state.pending = null; state.status = "ready"; return;
       }
       if (choice.purpose === "activation" || choice.purpose === "payment") {
@@ -631,7 +646,7 @@ export class V3ResolutionMachine {
         if (!instruction.ruleSlot && instruction.action.selector.visibility === "PUBLIC") ensureMove(
           cards.every(ref => (this.#environment.targetProtection?.(ref) ?? false) === false), "v3-choice-target-protected");
       }
-      if (choice.purpose === "action" && (["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45"].includes(this.#card.definition.schemaVersion) || ["3.0.0-subset.20", "3.0.0-subset.21"].includes(this.#card.definition.schemaVersion) && this.#card.definition.cardType === "event" && this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)?.timing.type === "MAIN")) {
+      if (choice.purpose === "action" && (["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46"].includes(this.#card.definition.schemaVersion) || ["3.0.0-subset.20", "3.0.0-subset.21"].includes(this.#card.definition.schemaVersion) && this.#card.definition.cardType === "event" && this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)?.timing.type === "MAIN")) {
         const instruction = this.#code[state.pc]; ensureMove(instruction?.type === "SELECT", "v3-choice-program-mismatch");
         const selector = instruction.action.selector, rows = this.#environment.candidates(selector, this.#bindings(state));
         for (const ref of cards) {
@@ -685,7 +700,7 @@ export class V3ResolutionMachine {
           result.rows.some(row => row.event.before?.instanceId === ref.instanceId && row.event.before.generation === ref.generation) ||
           result.prevented?.some(row => row.instanceId === ref.instanceId && row.generation === ref.generation) ||
           result.replaced?.some(row => row.instanceId === ref.instanceId && row.generation === ref.generation)), "v3-move-result-work-mismatch");
-      if (outcome === "applied" && (work.type === "MOVE_CARD" || work.type === "PLAY_BY_EFFECT" && work.from === "hand" || work.type === "MOVE_LIFE") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45"].includes(this.#card.definition.schemaVersion)) {
+      if (outcome === "applied" && (work.type === "MOVE_CARD" || work.type === "PLAY_BY_EFFECT" && work.from === "hand" || work.type === "MOVE_LIFE") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46"].includes(this.#card.definition.schemaVersion)) {
         ensureMove(result, "v3-move-result-required"); state.lastMoveResult = result;
       }
       if (outcome === "applied") {
