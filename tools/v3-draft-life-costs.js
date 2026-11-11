@@ -10,6 +10,23 @@ const power = (bind, amount, duration, sourceSpan) =>
 export function lifeCostProgram(text, timing, cardType, sourceSpan, branches = []) {
   const bind = `life_cost_target_${sourceSpan.start}`;
   const pattern = "zone-life-top-cost";
+  const restDraw = /^自分のリーダー「([^「」]+)」をレストにできる：カード([1-9][0-9]?)枚を引く。$/u.exec(text);
+  if (timing === "MAIN" && cardType === "event" && restDraw) return { pattern: "zone-rest-card-cost", optional: true,
+    costs: [{ type: "REST_AS_COST", selector: draftSelect(bind, "leader", "SELF", 1, 1, {
+      type: "CARD_NAME", subject: "CANDIDATE", basis: "CURRENT", op: "eq", value: restDraw[1]
+    }).selector }],
+    actions: [{ type: "DRAW", player: "SELF", count: Number(restDraw[2]), sourceSpan }] };
+  const restCounter = /^自分のカード1枚をレストにできる：自分の特徴《([^《》]+)》を持つ、リーダーかキャラ1枚までを、このバトル中、パワー\+([1-9][0-9]{0,4})。$/u.exec(text);
+  if (timing === "COUNTER" && cardType === "event" && restCounter) {
+    const payment = draftSelect(bind, "character", "SELF", 1, 1, all()).selector;
+    Object.assign(payment, { zone: ["leader", "character", "stage", "activeDon"], cardTypes: ["leader", "character", "stage", "don"] });
+    const pick = draftSelect(bind, "character", "SELF", 0, 1, {
+      type: "CARD_METADATA", subject: "CANDIDATE", basis: "CURRENT", field: "traits", comparison: "EXACT", match: "ANY", values: [restCounter[1]]
+    });
+    Object.assign(pick.selector, { zone: ["leader", "character"], cardTypes: ["leader", "character"] });
+    return { pattern: "zone-rest-card-cost", optional: true, costs: [{ type: "REST_AS_COST", selector: payment }],
+      actions: [pick, power(bind, Number(restCounter[2]), { type: "BATTLE_END" }, sourceSpan)] };
+  }
   if (timing === "MAIN" && cardType === "character" && text ===
       "【ターン1回】自分のライフの上から1枚を手札に加えることができる：以下から1つを選ぶ。") {
     const modes = branches.map(({ label, sourceSpan: branchSpan }) => {

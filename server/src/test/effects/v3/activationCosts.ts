@@ -20,7 +20,7 @@ export function topLifeCostOperation(board: MovementState, actor: Player, operat
 
 export function activationCostSelector(costs: Costs): DeepReadonly<Node<"selector">> | undefined {
   for (const cost of costs) {
-    if (cost.type === "REVEAL_CARDS") return cost.selector;
+    if (cost.type === "REVEAL_CARDS" || cost.type === "REST_AS_COST") return cost.selector;
     if (cost.type === "MOVE_AS_COST" && cost.selector !== "SOURCE") return cost.selector;
   }
 }

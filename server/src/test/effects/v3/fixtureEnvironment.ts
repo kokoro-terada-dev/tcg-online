@@ -245,6 +245,9 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       const discardedIds = new Set(discarded?.map(ref => ref.instanceId));
       if (discarded !== null && (discarded.length !== discard || discardedIds.size !== discard || !discarded.every(eligible))) return false;
       if (!filtered) return selected === null || selected.length === 0;
+      if (costs.some(cost => cost.type === "REST_AS_COST")) {
+        for (const row of environment.candidates(filtered, {})) if (row.rotated !== false) discardedIds.add(row.ref.instanceId);
+      }
       const rows = filteredCostCandidates(environment, filtered, identity.source, discardedIds);
       if (rows === "unknown") return "unknown";
       const matches = new Map(rows.map(row => [row.ref.instanceId, row.ref.generation]));
@@ -283,7 +286,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
           const parentAt = location(state, card.attachedTo.instanceId);
           label = parentAt.zone === "leader" ? "リーダー付与DON" : `キャラ${state.players[at.player].character.indexOf(card.attachedTo.instanceId) + 1}付与DON`;
         }
-        return [{ ref: { instanceId: id, generation: card.generation }, cardId: card.cardId, owner: card.owner, controller: card.controller, zone: at.zone, kind: card.kind, faceUp: card.faceUp, visibleTo: viewers, ...(label ? { label } : {}), ...(card.attachedTo ? { attachedTo: { ...card.attachedTo } } : {}) }];
+        return [{ ref: { instanceId: id, generation: card.generation }, cardId: card.cardId, owner: card.owner, controller: card.controller, zone: at.zone, kind: card.kind, faceUp: card.faceUp, rotated: card.rotated, visibleTo: viewers, ...(label ? { label } : {}), ...(card.attachedTo ? { attachedTo: { ...card.attachedTo } } : {}) }];
       });
     },
   };
