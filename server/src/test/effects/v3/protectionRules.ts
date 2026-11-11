@@ -5,6 +5,7 @@ import type { CardObjectRef } from "../types";
 import type { ApprovedV3Card } from "./approval";
 import { protectionDecision } from "./continuousEffects";
 import { createDerivedCardFactsReader, UNKNOWN } from "./readContext";
+import type { KeywordGrants } from "./keywordEffects";
 
 type Ref = Readonly<CardObjectRef>;
 type Decision = boolean | "unknown";
@@ -12,8 +13,8 @@ export function hasProtection(definitions: ReadonlyMap<string, ApprovedV3Card>):
   return [...definitions.values()].some(card => card.definition.continuousEffects?.some(effect => effect.operation.type === "RESTRICT"));
 }
 
-export function protectionReader(board: MovementState, definitions: ReadonlyMap<string, ApprovedV3Card>, activePlayer: Player) {
-  const facts = createDerivedCardFactsReader({ board: () => board, definitions, activePlayer, statEffects: () => [] });
+export function protectionReader(board: MovementState, definitions: ReadonlyMap<string, ApprovedV3Card>, activePlayer: Player, grants: KeywordGrants = []) {
+  const facts = createDerivedCardFactsReader({ board: () => board, definitions, activePlayer, statEffects: () => [], keywordGrants: () => grants });
   return (target: Ref, actor: Player, policy: Parameters<typeof protectionDecision>[3], cause?: "EFFECT" | "BATTLE", source?: Ref | null): Decision => {
     const card = getCard(board, target), at = location(board, target.instanceId);
     if (!["leader", "character", "stage"].includes(at.zone) || !card.faceUp || card.kind !== at.zone ||
@@ -30,9 +31,9 @@ export function protectionReader(board: MovementState, definitions: ReadonlyMap<
 }
 
 export function protectionRules(board: MovementState, definitions: ReadonlyMap<string, ApprovedV3Card>, activePlayer: Player,
-  mode: "effect" | "cost" | "rule"): MovementRules {
+  mode: "effect" | "cost" | "rule", grants: KeywordGrants = []): MovementRules {
   if (mode === "cost" || !hasProtection(definitions)) return { status: "certifiedNone" };
-  const initial = protectionReader(board, definitions, activePlayer);
+  const initial = protectionReader(board, definitions, activePlayer, grants);
   const decision = (proposal: Proposal, read: ReturnType<typeof protectionReader>): Decision => {
     const { card, cause, from, to } = proposal;
     if (!card || !from || proposal.automatic) return false;
@@ -50,7 +51,7 @@ export function protectionRules(board: MovementState, definitions: ReadonlyMap<s
     const before = decision(proposal, initial);
     ensureMove(before !== "unknown", "v3-protection-unknown");
     // A batch whose own moves alter the outcome needs a separate timing ruling.
-    if (proposal.operationIndex > 0) ensureMove(decision(proposal, protectionReader(draft, definitions, activePlayer)) === before, "v3-protection-batch-order-unresolved");
+    if (proposal.operationIndex > 0) ensureMove(decision(proposal, protectionReader(draft, definitions, activePlayer, grants)) === before, "v3-protection-batch-order-unresolved");
     return { kind: before ? "prevent" : "allow" };
   } };
 }

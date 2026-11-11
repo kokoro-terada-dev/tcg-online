@@ -8,7 +8,7 @@ import type { ApprovedV3Card } from "./approval";
 import type { ResolutionEnvironment, ResolutionIdentity } from "./resolution";
 import type { StatEffects } from "./statEffects";
 import { UNKNOWN, createDerivedCardFactsReader, readEventContext, type EventContext } from "./readContext";
-import type { KeywordGrants } from "./keywordEffects";
+import { characterPlayPrevented, type KeywordGrants } from "./keywordEffects";
 import { readRememberedColors, rememberedColors } from "./moveResults";
 import { activationCostSelector, filteredCostCandidates, movesActivationSource, topLifeCostOperation } from "./activationCosts";
 import { ownerHandCandidates } from "./ownerHand";
@@ -193,6 +193,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     },
     opponentHand: owner => ownerHandCandidates(board(), identity.actor, owner),
     revision: () => board().revision, now, evaluate,
+    characterPlayPrevented: () => characterPlayPrevented(keywordGrants(), identity.actor),
     donDeckCount: () => board().players[identity.actor].donDeck.length,
     peekTop: amount => board().players[identity.actor].deck.slice(0, amount).map(id => ({ instanceId: id!, generation: board().cards[id!]!.generation })),
     numeric: (value, bindings) => { const result = read(value, bindings); return typeof result === "number" ? result : "unknown"; },

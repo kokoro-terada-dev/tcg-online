@@ -6,6 +6,7 @@ import type { ExternalBodyRef } from "./effectBodyCalls";
 import { label, supportsV3RuntimeProfile } from "./compiler";
 import { isApprovedV3Card, type ApprovedV3Card } from "./approval";
 import { activationCostSelector, movesActivationSource } from "./activationCosts";
+import type { FieldStatus } from "./keywordEffects";
 import { emptyMoveResult, isCertifiedMoveResult, rememberMoveFacts, type MoveResult, type ResultBindings, type FactBindings, type RememberedMoveFacts } from "./moveResults";
 import type { ReplacementAnswer, ReplacementPlan } from "./replacementPlans";
 import { isLifeTriggerBody } from "./simpleMainEvent";
@@ -26,6 +27,7 @@ export interface ResolutionEnvironment {
   now(): number;
   evaluate(predicate: DeepReadonly<Predicate>, bindings: Bindings, candidate?: Ref, results?: ResultBindings, memories?: FactBindings): boolean | "unknown";
   candidates(selector: Selector, bindings: Bindings): readonly ResolutionCandidate[];
+  characterPlayPrevented?(): boolean;
   targetProtection?(ref: Ref): boolean | "unknown";
   opponentHand?(owner: Seat): readonly ResolutionCandidate[];
   peekTop?(count: number): readonly Ref[] | "unknown";
@@ -82,7 +84,7 @@ export type WorkRequest = DeepReadonly<{ kind: "work"; workId: string; worldRevi
       { from: "resolving"; replace: CardObjectRef | null; destination: { owner: "SELF"; zone: "character" | "stage"; slotPolicy: "FIRST_EMPTY" } }) |
   { type: OwnerHandAction["type"]; owner: Seat; count: number; cards: CardObjectRef[] } |
   { type: "MODIFY_STAT"; cards: CardObjectRef[]; stat: "power" | "cost"; amount: number; duration: Node<"duration"> } |
-  { type: "GRANT_KEYWORD"; cards: CardObjectRef[]; keyword: Node<"keyword"> | { type: "SKIP_REFRESH" }; duration: Node<"duration"> } |
+  { type: "GRANT_KEYWORD"; cards: CardObjectRef[]; keyword: Node<"keyword"> | { type: FieldStatus }; duration: Node<"duration"> } |
   { type: "KO" | "KO_STAGE" | "REST" | "SET_ACTIVE" | "RETARGET_BATTLE"; cards: CardObjectRef[] }
 )>;
 type State = {
@@ -113,7 +115,7 @@ const matchesSide = (actual: Seat, actor: Seat, side: "SELF" | "OPPONENT" | "EIT
   side === "EITHER" || actual === relative(actor, side);
 function program(card: ApprovedV3Card, effectId: string, external?: DeepReadonly<Effect>): { code: Instruction[]; bodyEffectId: string | null } {
   const effect = card.definition.effects.find(effect => effect.id === effectId); ensureMove(effect, "v3-effect-not-found");
-  ensureMove(effect.timing.type !== "ON_EVENT" || ["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57"].includes(card.definition.schemaVersion), "v3-conditional-trigger-resolution-deferred-pr06b");
+  ensureMove(effect.timing.type !== "ON_EVENT" || ["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58"].includes(card.definition.schemaVersion), "v3-conditional-trigger-resolution-deferred-pr06b");
   const occurrence = ["ON_EVENT", "ON_BLOCK", "MAIN_START", "TURN_END"].includes(effect.timing.type) || attackAttachmentMinimum(effect) !== null;
   const code: Instruction[] = [occurrence ? { type: "OCCURRENCE_CHECK" } : { type: "CHECK", predicate: effect.activationConditions }];
   if (effect.optional) code.push({ type: "OPTIONAL" });
@@ -167,19 +169,19 @@ function program(card: ApprovedV3Card, effectId: string, external?: DeepReadonly
     }
     else if (action.type === "BIND_SOURCE") code.push({ type: "BIND_SOURCE", bindAs: action.bindAs });
     else if (action.type === "ORDER_CARDS") code.push({ type: "ORDER", action });
-    else if (["DRAW", "ADD_DON", "SET_DON_STATE", "ATTACH_DON", "RETURN_DON_BY_EFFECT", "MOVE_CARD", "MOVE_LIFE", "PLAY_BY_EFFECT", "DISCARD_BY_OWNER", "ORDER_THEN_MOVE", "KO", "KO_STAGE", "RETARGET_BATTLE", "EXTRA_TURN", "REST", "SET_ACTIVE", "LOOK_TOP", "REVEAL", "TRASH_DECK_TOP", "SHUFFLE_DECK", "RETURN_TO_DECK", "MODIFY_STAT", "GRANT_KEYWORD", "SKIP_REFRESH"].includes(action.type)) code.push({ type: "WORK", action: action as WorkAction });
+    else if (["DRAW", "ADD_DON", "SET_DON_STATE", "ATTACH_DON", "RETURN_DON_BY_EFFECT", "MOVE_CARD", "MOVE_LIFE", "PLAY_BY_EFFECT", "DISCARD_BY_OWNER", "ORDER_THEN_MOVE", "KO", "KO_STAGE", "RETARGET_BATTLE", "EXTRA_TURN", "REST", "SET_ACTIVE", "LOOK_TOP", "REVEAL", "TRASH_DECK_TOP", "SHUFFLE_DECK", "RETURN_TO_DECK", "MODIFY_STAT", "GRANT_KEYWORD", "SKIP_REFRESH", "DISABLE_CARD_EFFECTS", "PREVENT_CHARACTER_PLAY"].includes(action.type)) code.push({ type: "WORK", action: action as WorkAction });
     else throw new Error("V3_RUNTIME_HANDLER_UNSUPPORTED");
   } };
   const call = effect.actions[0];
   let bodyEffectId: string | null = null;
   if (call?.type === "CALL_EFFECT_BODY" && call.from === "OWN_TRASH") {
-    ensureMove(["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57"].includes(card.definition.schemaVersion) && card.definition.cardType !== "event" && effect.actions.length === 1,
+    ensureMove(["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58"].includes(card.definition.schemaVersion) && card.definition.cardType !== "event" && effect.actions.length === 1,
       "v3-effect-body-external-scope");
     if (external) { bodyEffectId = external.id; append(external.actions); }
     else code.push({ type: "BODY_CHOICE", maxPrintedCost: call.maxPrintedCost });
   } else if (call?.type === "CALL_EFFECT_BODY") {
     const body = card.definition.effects.find(row => row.id === call.effectId);
-    ensureMove(["3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57"].includes(card.definition.schemaVersion) &&
+    ensureMove(["3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58"].includes(card.definition.schemaVersion) &&
       effect.timing.type === "TRIGGER" && effect.actions.length === 1 && body && isLifeTriggerBody(body, card.definition.cardType, card.definition.schemaVersion),
     "v3-effect-body-main-target");
     // Expand only the body. The outer life-trigger frame owns activation, timing and cleanup.
@@ -393,10 +395,11 @@ export class V3ResolutionMachine {
           else state.status = "completed";
         }
         else if (instruction.type === "PLAY_SLOT_REVEAL") {
+          if (this.#environment.characterPlayPrevented?.()) { state.pc++; continue; }
           const { action } = instruction, cards = this.#bindings(state)[action.cards.ref.slice("bindings.".length)];
           ensureMove(cards && cards.length <= 5, "v3-effect-play-slot-scope");
           if (cards.length > 1 && !state.playSequence) {
-            ensureMove(action.from === "hand" && (this.#card.definition.schemaVersion === "3.0.0-subset.53" || (this.#card.definition.schemaVersion === "3.0.0-subset.54" || (this.#card.definition.schemaVersion === "3.0.0-subset.55" || (this.#card.definition.schemaVersion === "3.0.0-subset.56" || this.#card.definition.schemaVersion === "3.0.0-subset.57")))), "v3-effect-play-sequence-scope");
+            ensureMove(action.from === "hand" && (this.#card.definition.schemaVersion === "3.0.0-subset.53" || (this.#card.definition.schemaVersion === "3.0.0-subset.54" || (this.#card.definition.schemaVersion === "3.0.0-subset.55" || (this.#card.definition.schemaVersion === "3.0.0-subset.56" || (this.#card.definition.schemaVersion === "3.0.0-subset.57" || this.#card.definition.schemaVersion === "3.0.0-subset.58"))))), "v3-effect-play-sequence-scope");
             if (!cards.every(ref => this.#evaluate(action.condition, state, ref))) { state.status = "blocked"; return; }
             state.playSequence = { firstPc: state.pc, index: 0 };
           }
@@ -411,7 +414,10 @@ export class V3ResolutionMachine {
         else if (instruction.type === "WORK") {
           const action = instruction.action;
           if (action.type === "DRAW") state.pending = { kind: "work", type: "DRAW", workId, worldRevision: state.worldRevision, player: relative(state.identity.actor, action.player), count: action.count };
+          else if (action.type === "PREVENT_CHARACTER_PLAY") state.pending = { kind: "work", type: "GRANT_KEYWORD", workId, worldRevision: state.worldRevision,
+            cards: [], keyword: { type: action.type }, duration: { type: "TURN_END", player: "SELF", occurrence: 1 } };
           else if (action.type === "PLAY_TRIGGER_SOURCE") {
+            if (this.#environment.characterPlayPrevented?.()) { state.pc++; continue; }
             const slot = this.#bindings(state)[lifeSlotBinding], status = this.#environment.lifeTriggerPlay?.(), zone = this.#card.definition.cardType;
             ensureMove((zone === "character" || zone === "stage") && slot &&
               (status === "OPEN" && !slot.length || status === "FULL" && slot.length === 1), "v3-trigger-play-slot");
@@ -486,10 +492,11 @@ export class V3ResolutionMachine {
               cards = bound.filter(ref => !excluded.some(card => same(ref, card)));
             }
             if (!cards.length) {
-              if ((action.type === "MOVE_CARD" || action.type === "PLAY_BY_EFFECT") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57"].includes(this.#card.definition.schemaVersion)) state.lastMoveResult = emptyMoveResult(state.identity, workId, state.worldRevision);
+              if ((action.type === "MOVE_CARD" || action.type === "PLAY_BY_EFFECT") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58"].includes(this.#card.definition.schemaVersion)) state.lastMoveResult = emptyMoveResult(state.identity, workId, state.worldRevision);
               state.pc++; continue;
             }
             if (action.type === "PLAY_BY_EFFECT") {
+              if (this.#environment.characterPlayPrevented?.()) { state.lastMoveResult = emptyMoveResult(state.identity, workId, state.worldRevision); state.pc++; continue; }
               const sequence = state.playSequence;
               if (sequence) {
                 const card = cards[sequence.index];
@@ -505,8 +512,10 @@ export class V3ResolutionMachine {
               action.type === "MOVE_CARD" ? { kind: "work", type: "MOVE_CARD", workId, worldRevision: state.worldRevision, cards: structuredClone(cards),
                 destination: { ...action.destination }, cause: "EFFECT", ...(action.excludeCards ? { inspectedOnly: true as const } : {}) } :
               action.type === "MODIFY_STAT" ? { kind: "work", type: "MODIFY_STAT", workId, worldRevision: state.worldRevision, cards: structuredClone(cards), stat: action.stat, amount: action.amount, duration: { ...action.duration } } :
-              action.type === "GRANT_KEYWORD" || action.type === "SKIP_REFRESH" ? { kind: "work", type: "GRANT_KEYWORD", workId, worldRevision: state.worldRevision,
-                cards: structuredClone(cards), keyword: action.type === "SKIP_REFRESH" ? { type: "SKIP_REFRESH" } : { ...action.keyword }, duration: { ...action.duration } } :
+              action.type === "GRANT_KEYWORD" || action.type === "SKIP_REFRESH" || action.type === "DISABLE_CARD_EFFECTS" ?
+                { kind: "work", type: "GRANT_KEYWORD", workId, worldRevision: state.worldRevision, cards: structuredClone(cards),
+                  keyword: action.type === "GRANT_KEYWORD" ? { ...action.keyword } : { type: action.type },
+                  duration: action.type === "DISABLE_CARD_EFFECTS" ? { type: "TURN_END", player: "SELF", occurrence: 1 } : { ...action.duration } } :
               action.type === "RETURN_TO_DECK" ? { kind: "work", type: "RETURN_TO_DECK", workId, worldRevision: state.worldRevision, cards: structuredClone(cards), position: action.position } :
               { kind: "work", type: action.type, workId, worldRevision: state.worldRevision, cards: structuredClone(cards) };
           }
@@ -537,6 +546,7 @@ export class V3ResolutionMachine {
     });
   }
   #playSlotShortage(count: number): number {
+    if (this.#environment.characterPlayPrevented?.()) return 0;
     if (count === 0) return 0;
     const full = this.#environment.effectPlayFull?.();
     ensureMove(count === 1 && full !== undefined, "v3-effect-play-slot-scope");
@@ -732,7 +742,7 @@ export class V3ResolutionMachine {
       }
       // UNORDERED input is canonicalized to server candidate order, not client token order.
       const entryOrder = choice.purpose === "action" && choice.max > 1 &&
-        (this.#card.definition.schemaVersion === "3.0.0-subset.53" || (this.#card.definition.schemaVersion === "3.0.0-subset.54" || (this.#card.definition.schemaVersion === "3.0.0-subset.55" || (this.#card.definition.schemaVersion === "3.0.0-subset.56" || this.#card.definition.schemaVersion === "3.0.0-subset.57")))) &&
+        (this.#card.definition.schemaVersion === "3.0.0-subset.53" || (this.#card.definition.schemaVersion === "3.0.0-subset.54" || (this.#card.definition.schemaVersion === "3.0.0-subset.55" || (this.#card.definition.schemaVersion === "3.0.0-subset.56" || (this.#card.definition.schemaVersion === "3.0.0-subset.57" || this.#card.definition.schemaVersion === "3.0.0-subset.58"))))) &&
         this.#code.some(row => row.type === "PLAY_SLOT_REVEAL" && row.action.from === "hand" && row.action.cards.ref === `bindings.${choice.bindAs}`);
       const cards = choice.purpose === "order" || entryOrder ? tokens.map(token => ({ ...choice.candidates.find(candidate => candidate.token === token)!.ref })) : choice.candidates.filter(candidate => selected.has(candidate.token)).map(candidate => ({ ...candidate.ref }));
       if (choice.purpose === "action") {
@@ -741,7 +751,7 @@ export class V3ResolutionMachine {
         if (!instruction.ruleSlot && instruction.action.selector.visibility === "PUBLIC") ensureMove(
           cards.every(ref => (this.#environment.targetProtection?.(ref) ?? false) === false), "v3-choice-target-protected");
       }
-      if (choice.purpose === "action" && (["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57"].includes(this.#card.definition.schemaVersion) || ["3.0.0-subset.20", "3.0.0-subset.21"].includes(this.#card.definition.schemaVersion) && this.#card.definition.cardType === "event" && this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)?.timing.type === "MAIN")) {
+      if (choice.purpose === "action" && (["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58"].includes(this.#card.definition.schemaVersion) || ["3.0.0-subset.20", "3.0.0-subset.21"].includes(this.#card.definition.schemaVersion) && this.#card.definition.cardType === "event" && this.#card.definition.effects.find(effect => effect.id === state.identity.effectId)?.timing.type === "MAIN")) {
         const instruction = this.#code[state.pc]; ensureMove(instruction?.type === "SELECT", "v3-choice-program-mismatch");
         const selector = instruction.action.selector, rows = this.#environment.candidates(selector, this.#bindings(state));
         for (const ref of cards) {
@@ -795,7 +805,7 @@ export class V3ResolutionMachine {
           result.rows.some(row => row.event.before?.instanceId === ref.instanceId && row.event.before.generation === ref.generation) ||
           result.prevented?.some(row => row.instanceId === ref.instanceId && row.generation === ref.generation) ||
           result.replaced?.some(row => row.instanceId === ref.instanceId && row.generation === ref.generation)), "v3-move-result-work-mismatch");
-      if (outcome === "applied" && (work.type === "MOVE_CARD" || work.type === "PLAY_BY_EFFECT" && work.from === "hand" && work.destination.slotPolicy === "FIRST_EMPTY" || work.type === "MOVE_LIFE") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57"].includes(this.#card.definition.schemaVersion)) {
+      if (outcome === "applied" && (work.type === "MOVE_CARD" || work.type === "PLAY_BY_EFFECT" && work.from === "hand" && work.destination.slotPolicy === "FIRST_EMPTY" || work.type === "MOVE_LIFE") && ["3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58"].includes(this.#card.definition.schemaVersion)) {
         ensureMove(result, "v3-move-result-required"); state.lastMoveResult = result;
       }
       if (outcome === "applied" && work.type === "PLAY_BY_EFFECT" && work.destination.slotPolicy === "REPLACE_IF_FULL") state.lastMoveResult = null;

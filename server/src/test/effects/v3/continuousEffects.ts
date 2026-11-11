@@ -36,7 +36,7 @@ export type ContinuousAdjustments = {
 // Read from the committed board, never from a mutable grant ledger. Stable predicates use the
 // same evaluator as actions, with continuous adjustments disabled for their fact reads.
 export function continuousAdjustments(board: MovementState, target: MovementCard, at: Location, activePlayer: Player,
-  definitions: ReadonlyMap<string, ApprovedV3Card>, master?: PinnedMasterFacts): ContinuousAdjustments {
+  definitions: ReadonlyMap<string, ApprovedV3Card>, master?: PinnedMasterFacts, sourceDisabled?: (card: MovementCard) => boolean): ContinuousAdjustments {
   const result: ContinuousAdjustments = { add: { power: 0, cost: 0, counter: 0 }, base: {}, keywords: {}, protections: [] };
   const publicField = target.kind === at.zone && ["leader", "character", "stage"].includes(at.zone) &&
     target.faceUp && visibleTo(board, target, at, 0) && visibleTo(board, target, at, 1);
@@ -48,6 +48,7 @@ export function continuousAdjustments(board: MovementState, target: MovementCard
   for (const actor of [0, 1] as const) for (const zone of ["leader", "character", "stage"] as const) for (const id of board.players[actor][zone]) {
     if (id === null) continue;
     const source = board.cards[id], definition = source && definitions.get(source.cardId), effects = definition?.definition.continuousEffects;
+    if (source && sourceDisabled?.(source)) continue;
     if (!definition || !effects?.length || !source || source.kind !== zone || definition.definition.cardType !== zone || source.owner !== actor ||
       source.controller !== actor || !source.faceUp || !visibleTo(board, source, { player: actor, zone }, 0) ||
       !visibleTo(board, source, { player: actor, zone }, 1)) continue;

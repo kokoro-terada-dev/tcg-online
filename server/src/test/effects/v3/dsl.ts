@@ -22,7 +22,7 @@ export const PUBLIC_TRIGGER_COUNT_REFS = (["SELF", "OPPONENT"] as const).flatMap
   [`${side}.lifeCount`, `${side}.handCount`, ...DON_COUNT_SCOPES.map(scope => `${side}.don.${scope}`)]);
 export type Value = number | string | boolean | null | { ref: "BOTH.lifeCount" | DonCountRef | "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "base" | "current"}.${MutableStat}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42" | "3.0.0-subset.43" | "3.0.0-subset.44" | "3.0.0-subset.45" | "3.0.0-subset.46" | "3.0.0-subset.47" | "3.0.0-subset.48" | "3.0.0-subset.49" | "3.0.0-subset.50" | "3.0.0-subset.51" | "3.0.0-subset.52" | "3.0.0-subset.53" | "3.0.0-subset.54" | "3.0.0-subset.55" | "3.0.0-subset.56" | "3.0.0-subset.57";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42" | "3.0.0-subset.43" | "3.0.0-subset.44" | "3.0.0-subset.45" | "3.0.0-subset.46" | "3.0.0-subset.47" | "3.0.0-subset.48" | "3.0.0-subset.49" | "3.0.0-subset.50" | "3.0.0-subset.51" | "3.0.0-subset.52" | "3.0.0-subset.53" | "3.0.0-subset.54" | "3.0.0-subset.55" | "3.0.0-subset.56" | "3.0.0-subset.57" | "3.0.0-subset.58";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
 export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "BANISH" | "DOUBLE_ATTACK" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
@@ -72,6 +72,8 @@ export interface ActionMap {
   BIND_SOURCE: NodeMeta & { type: "BIND_SOURCE"; bindAs: string };
   GRANT_KEYWORD: NodeMeta & { type: "GRANT_KEYWORD"; cards: CardSetRef; keyword: Node<"keyword">; duration: Node<"duration"> };
   SKIP_REFRESH: NodeMeta & { type: "SKIP_REFRESH"; cards: CardSetRef; duration: DurationMap["UNTIL_BOUNDARY"] };
+  DISABLE_CARD_EFFECTS: NodeMeta & { type: "DISABLE_CARD_EFFECTS"; cards: CardSetRef };
+  PREVENT_CHARACTER_PLAY: NodeMeta & { type: "PREVENT_CHARACTER_PLAY"; player: "SELF" };
   MODIFY_STAT: NodeMeta & { type: "MODIFY_STAT"; cards: CardSetRef; stat: "power" | "cost"; amount: number; duration: Node<"duration"> };
   LOOK_TOP: NodeMeta & { type: "LOOK_TOP"; player: "SELF"; count: number; bindAs: string; onInsufficient: "fail" | "takeAvailable" };
   TRASH_DECK_TOP: NodeMeta & { type: "TRASH_DECK_TOP"; count: number | { ref: "SOURCE.attachedDonCount" } };

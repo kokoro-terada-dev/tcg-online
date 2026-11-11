@@ -34,7 +34,7 @@ function fieldRows(board: MovementState, player: Seat, definitions: ReadonlyMap<
   });
 }
 export function retargetBattle(board: MovementState, progression: Progression, identity: ResolutionIdentity, timing: string,
-  target: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>): Progression {
+  target: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants = []): Progression {
   const battle = progression.battle;
   const step = timing === "ON_OPPONENT_ATTACK" ? "attack" : timing === "COUNTER" ? "counter" : null;
   ensureMove(step && battle?.step === step && battle.defender === identity.actor && board.turnNumber === progression.turnNumber &&
@@ -49,7 +49,7 @@ export function retargetBattle(board: MovementState, progression: Progression, i
     (step === "counter" ? source.kind === "event" && at.zone === "trash" : (at.zone === "leader" || at.zone === "character") && at.zone === source.kind),
   "v3-battle-retarget-source");
   if (hasProtection(definitions)) {
-    const reader = protectionReader(board, definitions, progression.activePlayer);
+    const reader = protectionReader(board, definitions, progression.activePlayer, grants);
     ensureMove(reader(target, identity.actor, "CANNOT_TARGET") === false && reader(target, identity.actor, "UNAFFECTED_BY") === false, "v3-battle-retarget-protected");
   }
   ensureMove(fieldRows(board, battle.defender, definitions).some(row => row.card.instanceId === target.instanceId && row.card.generation === target.generation),
@@ -245,7 +245,7 @@ export function damage(board: MovementState, progression: Progression, actor: Se
     if (hitsCharacter) {
       const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision, turnNumber: board.turnNumber,
         actor: battle.attacker, effectController: null, source: battle.source, mode: "rule", resolutionId: null,
-        operations: [{ kind: "move", card: battle.target, from: { player: actor, zone: "character" }, to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "BATTLE_KO" }] }, protectionRules(board, definitions, progression.activePlayer, "rule"));
+        operations: [{ kind: "move", card: battle.target, from: { player: actor, zone: "character" }, to: { player: actor, zone: "trash", position: "append", faceUp: true, rotated: false }, cause: "BATTLE_KO" }] }, protectionRules(board, definitions, progression.activePlayer, "rule", grants));
       movement = result.state; events = result.events;
       deferredEffects = deferEffects && events.some(event => event.isKO);
     }

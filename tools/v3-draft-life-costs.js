@@ -10,6 +10,35 @@ const power = (bind, amount, duration, sourceSpan) =>
 export function lifeCostProgram(text, timing, cardType, sourceSpan, branches = []) {
   const bind = `life_cost_target_${sourceSpan.start}`;
   const pattern = "zone-life-top-cost";
+  const disable = /^相手のキャラ([1-5])枚までを、このターン中、効果を無効にする。$/u.exec(text);
+  if (timing === "ON_ATTACK" && cardType === "character" && disable) return { pattern: "zone-field-restriction",
+    actions: [draftSelect(bind, "character", "OPPONENT", 0, Number(disable[1]), all()),
+      { type: "DISABLE_CARD_EFFECTS", cards: cards(bind), sourceSpan }] };
+  const playLock = /^カード([1-9][0-9]?)枚を引き、自分の手札からコスト([0-9]{1,2})以下の特徴《([^《》]+)》を持つキャラカード1枚までを、登場させる。その後、自分は、このターン中、キャラカードを登場できない。$/u.exec(text);
+  if (timing === "ON_PLAY" && cardType === "character" && playLock) {
+    const filter = all(compare("lte", Number(playLock[2])), { type: "CARD_METADATA", subject: "CANDIDATE", basis: "CURRENT",
+      field: "traits", comparison: "EXACT", match: "ANY", values: [playLock[3]] });
+    const pick = draftSelect(bind, "hand", "SELF", 0, 1, filter, { visibility: "OWNER_ONLY" });
+    pick.selector.cardTypes = ["character"];
+    return { pattern: "zone-field-restriction", actions: [
+      { type: "DRAW", player: "SELF", count: Number(playLock[1]), sourceSpan }, pick,
+      { type: "PLAY_BY_EFFECT", cards: cards(bind), from: "hand", destination: { owner: "SELF", zone: "character", slotPolicy: "REPLACE_IF_FULL" },
+        enterState: "ACTIVE", provenance: "EFFECT", condition: filter, sourceSpan },
+      { type: "PREVENT_CHARACTER_PLAY", player: "SELF", sourceSpan }
+    ] };
+  }
+  const bounce = /^自分の手札([1-9][0-9]?)枚を捨てることができる：相手のコスト([0-9]{1,2})以下のキャラ([1-5])枚までを、このターン中、効果を無効にし、持ち主の手札に戻す。$/u.exec(text);
+  if (timing === "MAIN" && cardType === "event" && bounce) {
+    const payment = `payment_${sourceSpan.start}`;
+    return { pattern: "zone-field-restriction", actions: [
+      { type: "OFFER_PAYMENT", costs: [{ type: "DISCARD_HAND", count: Number(bounce[1]) }], bindAs: payment, sourceSpan },
+      { type: "IF_PAYMENT_SUCCEEDED", payment, then: [
+        draftSelect(bind, "character", "OPPONENT", 0, Number(bounce[3]), compare("lte", Number(bounce[2]))),
+        { type: "DISABLE_CARD_EFFECTS", cards: cards(bind), sourceSpan },
+        { type: "MOVE_CARD", cards: cards(bind), destination: { owner: "CARD_OWNER", zone: "hand", position: "append", faceUp: true }, cause: "EFFECT", sourceSpan }
+      ], else: [] }
+    ] };
+  }
   const refresh = /^相手のレストのコスト([0-9]{1,2})以下のキャラ([1-5])枚までは、次の相手のリフレッシュフェイズでアクティブにならない。$/u.exec(text);
   if (timing === "ON_PLAY" && cardType === "character" && refresh) return { pattern: "zone-skip-refresh",
     actions: [draftSelect(bind, "character", "OPPONENT", 0, Number(refresh[2]), all(

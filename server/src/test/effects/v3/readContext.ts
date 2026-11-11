@@ -10,6 +10,7 @@ import { ABILITY_TAGS } from "./compiler";
 import type { AbilityTag, MutableStat } from "./dsl";
 import type { KeywordGrants } from "./keywordEffects";
 import { continuousAdjustments, protectionDecision, type ContinuousAdjustments, type ProtectionFact } from "./continuousEffects";
+import { effectsDisabled } from "./keywordEffects";
 
 export const UNKNOWN: unique symbol = Symbol("v3-unknown-fact");
 export type KnownOrUnknown<T> = T | typeof UNKNOWN;
@@ -90,6 +91,8 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
       const state = options.board(), card = getCard(state, ref), at = location(state, card.instanceId);
       if (at.zone === "resolving" || !visibleTo(state, card, at, viewer)) return UNKNOWN;
       const known = options.definitions.get(card.cardId), matching = known?.definition.cardType === card.kind;
+      const grants = options.keywordGrants?.() ?? [];
+      const disabled = effectsDisabled(grants, ref);
       const printedData = known ? matching ? known.definition.baseStats : undefined : options.master?.cards[card.cardId];
       const printed: DerivedCardFacts["printed"] = { cost: numeric(printedData?.cost), power: numeric(printedData?.power),
         counter: known && matching ? known.definition.baseStats.counter : UNKNOWN, life: numeric(known && matching ? known.definition.baseStats.life : undefined) };
@@ -97,7 +100,8 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
       if (hasContinuous) {
         let rows = Object.isFrozen(state) ? cache.get(state) : undefined;
         if (!rows && Object.isFrozen(state)) { rows = new Map(); cache.set(state, rows); }
-        continuous = rows?.get(card.instanceId) ?? continuousAdjustments(state, card, at, options.activePlayer, options.definitions, options.master);
+        continuous = rows?.get(card.instanceId) ?? continuousAdjustments(state, card, at, options.activePlayer, options.definitions, options.master,
+          source => effectsDisabled(grants, source));
         rows?.set(card.instanceId, continuous);
       }
       const unmodeled = card.modifierIds.length > 0 || card.grantIds.length > 0;
@@ -150,8 +154,9 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
         return [tag, permanent === true || timed.some(grant => immunity(grant.actor) === false) ? true : permanent === "unknown" || timed.length ? UNKNOWN : false];
       })) as Record<AbilityTag, KnownOrUnknown<boolean>>;
       // Timing tags cannot be granted by this engine. Keyword union preserves three-valued facts.
-      const currentAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => [tag, !definition || unmodeled ? UNKNOWN : !keywordTags.has(tag) ? printedAbilities[tag] :
-        printedAbilities[tag] === true || grantedAbilities[tag] === true ? true : printedAbilities[tag] === UNKNOWN || grantedAbilities[tag] === UNKNOWN ? UNKNOWN : false])) as Record<AbilityTag, KnownOrUnknown<boolean>>;
+      const currentAbilities = Object.fromEntries(ABILITY_TAGS.map(tag => [tag, !definition || unmodeled ? UNKNOWN : !keywordTags.has(tag) ? !disabled && printedAbilities[tag] :
+        !disabled && printedAbilities[tag] === true || grantedAbilities[tag] === true ? true :
+        !disabled && printedAbilities[tag] === UNKNOWN || grantedAbilities[tag] === UNKNOWN ? UNKNOWN : false])) as Record<AbilityTag, KnownOrUnknown<boolean>>;
       return freezeMovement({ cardType: card.kind === "unknown" ? UNKNOWN : card.kind, rotated: card.rotated, owner: card.owner, controller: card.controller,
         printed, base, current: { cost: current("cost"), power: current("power"),
           counter: typeof base.counter !== "number" ? base.counter : counterAdd === UNKNOWN || base.counter + counterAdd < 0 ? UNKNOWN : numeric(base.counter + counterAdd) },

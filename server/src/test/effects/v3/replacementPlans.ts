@@ -7,6 +7,7 @@ import type { DeepReadonly } from "../types";
 import type { ApprovedV3Card } from "./approval";
 import type { Node } from "./dsl";
 import { filteredCostCandidates } from "./activationCosts";
+import { effectsDisabled, type KeywordGrants } from "./keywordEffects";
 import { protectionRules } from "./protectionRules";
 import type { ResolutionEnvironment, ResolutionIdentity } from "./resolution";
 
@@ -32,10 +33,10 @@ function matches(rule: Rule, move: Move, actor: Player): boolean {
 export function planReplacements(board: MovementState, workId: string, identity: ResolutionIdentity, operations: readonly MovementOperation[],
   definitions: ReadonlyMap<string, ApprovedV3Card>, activePlayer: Player,
   environmentFor: (ruleId: string, card: ApprovedV3Card, actor: Player, source: Move["card"]) => ResolutionEnvironment,
-  used: (key: string) => boolean): readonly ReplacementPlan[] {
+  used: (key: string) => boolean, grants: KeywordGrants = []): readonly ReplacementPlan[] {
   let rules: ReturnType<typeof protectionRules> | undefined;
   function allowed(move: Move, cause: EventCause): boolean {
-    rules ??= protectionRules(board, definitions, activePlayer, "effect");
+    rules ??= protectionRules(board, definitions, activePlayer, "effect", grants);
     if (rules.status === "certifiedNone") return true;
     ensureMove(rules.status === "evaluate", "v3-replacement-protection-unresolved");
     const result = rules.check({ kind: "move", operationIndex: 0, card: getCard(board, move.card),
@@ -52,6 +53,7 @@ export function planReplacements(board: MovementState, workId: string, identity:
     const candidates = (["leader", "character", "stage"] as const).flatMap(zone => board.players[at.player][zone].flatMap((id, slot) => {
       if (!id) return [];
       const holder = board.cards[id]!, definition = definitions.get(holder.cardId);
+      if (effectsDisabled(grants, holder)) return [];
       if (!definition?.definition.replacementEffects || holder.kind !== zone || holder.owner !== at.player || holder.controller !== at.player ||
         !holder.faceUp || !visibleTo(board, holder, { player: at.player, zone }, 0) || !visibleTo(board, holder, { player: at.player, zone }, 1)) return [];
       const source = { instanceId: id, generation: holder.generation };
@@ -80,7 +82,7 @@ export function planReplacements(board: MovementState, workId: string, identity:
         ensureMove(target !== "unknown", "v3-replacement-target-unknown");
         if (!target) continue;
       }
-      const prioritized = ["3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57"].includes(definition.definition.schemaVersion);
+      const prioritized = ["3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58"].includes(definition.definition.schemaVersion);
       const candidateId = hash([intentId, definition.definitionHash, rule.id, ...(prioritized ? [source] : [])]);
       const alternateCause: EventCause = { kind: "EFFECT_MOVE", actor: at.player, effectController: at.player,
         source, resolutionId: candidateId, parentEventId: null };
