@@ -282,9 +282,10 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
           parsed = { ...parsed, pattern: "zone-ko-and-stat-costs", continuousEffects: effects };
         }
       }
-      if (zones === "delta" && field === "text" && parsed.status !== "recognized") {
+      if (zones === "delta" && parsed.status !== "recognized") {
         const tag = header(span.text), timing = timings.get(tag?.[1] ?? tag?.[2]);
-        const program = timing?.[2].includes(cardType) && lifeCostProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end });
+        const program = timing?.[2].includes(cardType) && (field === "triggerText") === (timing[0] === "TRIGGER") &&
+          lifeCostProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end });
         if (program) {
           const { pattern, ...effect } = program;
           parsed = { ...span, status: "recognized", pattern, effect: { ...effectFor(field, span.start, cardType, timing), ...effect } };

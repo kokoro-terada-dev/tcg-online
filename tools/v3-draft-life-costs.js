@@ -112,17 +112,29 @@ export function lifeCostProgram(text, timing, cardType, sourceSpan, branches = [
       type: "CARD_NAME", subject: "CANDIDATE", basis: "CURRENT", op: "eq", value: restDraw[1]
     }).selector }],
     actions: [{ type: "DRAW", player: "SELF", count: Number(restDraw[2]), sourceSpan }] };
-  const restCounter = /^自分のカード1枚をレストにできる：自分の特徴《([^《》]+)》を持つ、リーダーかキャラ1枚までを、このバトル中、パワー\+([1-9][0-9]{0,4})。$/u.exec(text);
+  const restCounter = /^自分のカード1枚をレストにできる：自分の(?:特徴《([^《》]+)》を持つ、)?リーダーかキャラ1枚までを、このバトル中、パワー\+([1-9][0-9]{0,4})。$/u.exec(text);
   if (timing === "COUNTER" && cardType === "event" && restCounter) {
     const payment = draftSelect(bind, "character", "SELF", 1, 1, all()).selector;
     Object.assign(payment, { zone: ["leader", "character", "stage", "activeDon"], cardTypes: ["leader", "character", "stage", "don"] });
-    const pick = draftSelect(bind, "character", "SELF", 0, 1, {
+    const pick = draftSelect(bind, "character", "SELF", 0, 1, restCounter[1] ? {
       type: "CARD_METADATA", subject: "CANDIDATE", basis: "CURRENT", field: "traits", comparison: "EXACT", match: "ANY", values: [restCounter[1]]
-    });
+    } : all());
     Object.assign(pick.selector, { zone: ["leader", "character"], cardTypes: ["leader", "character"] });
     return { pattern: "zone-rest-card-cost", optional: true, costs: [{ type: "REST_AS_COST", selector: payment }],
       actions: [pick, power(bind, Number(restCounter[2]), { type: "BATTLE_END" }, sourceSpan)] };
   }
+  const lifeStat = /^【ターン1回】自分のライフの上から1枚を手札に加えることができる：相手のキャラ([1-5])枚までを、このターン中、パワー([+-][1-9][0-9]{0,4})。$/u.exec(text);
+  if (timing === "MAIN" && cardType === "character" && lifeStat) return { pattern, optional: true,
+    usageLimit: { type: "PER_TURN", scope: "SOURCE_OBJECT", count: 1 }, costs: [life("TO_HAND")],
+    actions: [draftSelect(bind, "character", "OPPONENT", 0, Number(lifeStat[1]), all()),
+      power(bind, Number(lifeStat[2]), turnEnd, sourceSpan)] };
+  const triggerKO = /^自分の手札([1-9]|[1-4][0-9]|50)枚を捨てることができる：相手のコスト([0-9]{1,2})以下のキャラ([1-5])枚までを、KOする。$/u.exec(text);
+  if (timing === "TRIGGER" && cardType === "character" && triggerKO) return {
+    ...offer([{ type: "DISCARD_HAND", count: Number(triggerKO[1]) }], [
+      draftSelect(bind, "character", "OPPONENT", 0, Number(triggerKO[3]), compare("lte", Number(triggerKO[2]))),
+      { type: "KO", cards: cards(bind), sourceSpan }
+    ]), pattern: "zone-trigger-discard-ko"
+  };
   if (timing === "MAIN" && cardType === "character" && text ===
       "【ターン1回】自分のライフの上から1枚を手札に加えることができる：以下から1つを選ぶ。") {
     const modes = branches.map(({ label, sourceSpan: branchSpan }) => {
