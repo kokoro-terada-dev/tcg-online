@@ -406,12 +406,12 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
-      const supported = ["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
+      const supported = ["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
         card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent : isInteractiveMainEvent;
-      return card.definition.effects.filter(effect => supported(effect, ["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56"].includes(card.definition.schemaVersion))).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
+      return card.definition.effects.filter(effect => supported(effect, ["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57"].includes(card.definition.schemaVersion))).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
         enabled: this.#board.players[actor].activeDon.length >= cost && (!effect.costs.length || effect.costs[0]?.type === "REST_AS_COST" ||
           this.#canActivateEffect(actor, source, card, effect.id)) && (!effect.usageLimit ||
           (this.#usage.get(effectUsageKey(this.#board.turnNumber, actor, { ...source, generation: source.generation + 1 }, effect.id)) ?? 0) < effect.usageLimit.count),
@@ -539,12 +539,13 @@ export class V3SyntheticMatchCoordinator {
       throw new Error("V3_MATCH_PHASE_LIMIT");
     });
   }
-  #phaseMovement(board: MovementState, progression: Progression, requestId: string): TransactionResult | null {
+  #phaseMovement(board: MovementState, progression: Progression, requestId: string, skipRefresh?: ReadonlySet<string>): TransactionResult | null {
     const work = phaseWork(progression); ensureMove(work, "v3-match-phase-work-required");
     const operations: MovementOperation[] = [], player = work.player;
     const ref = (id: string) => ({ instanceId: id, generation: board.cards[id]!.generation });
     if (work.kind === "refreshCheckpoint") {
-      for (const zone of ["leader", "character", "stage", "restDon"] as const) for (const id of board.players[player][zone]) if (id && board.cards[id]!.rotated) operations.push({ kind: "setRest", card: ref(id), rotated: false });
+      for (const zone of ["leader", "character", "stage", "restDon"] as const) for (const id of board.players[player][zone])
+        if (id && board.cards[id]!.rotated && !(zone === "character" && skipRefresh?.has(id))) operations.push({ kind: "setRest", card: ref(id), rotated: false });
       for (const id of board.players[player].attachedDon) if (id) operations.push({ kind: "move", card: ref(id), from: { player, zone: "attachedDon" }, to: { player, zone: "activeDon", position: "append", faceUp: true, rotated: false }, cause: "RULE_PROCESSING" });
     } else if (work.kind === "drawCheckpoint") {
       for (const id of board.players[player].deck.slice(0, work.normalCount)) if (id) operations.push({ kind: "move", card: ref(id), from: { player, zone: "deck" }, to: { player, zone: "hand", position: "append", faceUp: true, rotated: false }, cause: "RULE_PROCESSING" });
@@ -572,7 +573,14 @@ export class V3SyntheticMatchCoordinator {
     };
     for (let steps = 0; steps < 12; steps++) {
       const work = phaseWork(progression); ensureMove(work, "v3-match-phase-work-required");
-      if (boundaryClock && progression.phase === "refresh") expire("TURN_START");
+      const skipRefresh = new Set<string>();
+      if (boundaryClock && work.kind === "refreshCheckpoint") {
+        const before = grants;
+        expire("TURN_START");
+        const remaining = new Set(grants.map(grant => grant.id));
+        for (const grant of before) if (grant.keyword === "SKIP_REFRESH" && grant.boundary?.player === work.player &&
+          !remaining.has(grant.id) && board.cards[grant.target.instanceId]?.generation === grant.target.generation) skipRefresh.add(grant.target.instanceId);
+      }
       if ((progression.phase === "main" || progression.phase === "end") && !tokens.includes(progression.phaseToken)) {
         ensureMove(tokens.length < 512, "v3-boundary-token-limit"); tokens.push(progression.phaseToken);
         this.#observeBoundary({ type: progression.phase === "main" ? "MAIN_START" : "TURN_END", eventId: `phase:${progression.phaseToken}`, turnNumber: progression.turnNumber,
@@ -585,7 +593,7 @@ export class V3SyntheticMatchCoordinator {
           stats = endTurnStatEffects(stats, progression.activePlayer); grants = endTurnKeywordGrants(grants, progression.activePlayer);
         }
       }
-      const result = this.#phaseMovement(board, progression, requestId);
+      const result = this.#phaseMovement(board, progression, requestId, skipRefresh);
       if (result) {
         board = result.state; events.push(...result.events); ensureMove(events.length <= 512, "v3-match-rule-event-limit");
         this.#observationDraft = observeConditionalTriggers(this.#observationDraft!, result.events, this.#cards, progression.activePlayer, stats, grants);

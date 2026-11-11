@@ -10,6 +10,11 @@ const power = (bind, amount, duration, sourceSpan) =>
 export function lifeCostProgram(text, timing, cardType, sourceSpan, branches = []) {
   const bind = `life_cost_target_${sourceSpan.start}`;
   const pattern = "zone-life-top-cost";
+  const refresh = /^相手のレストのコスト([0-9]{1,2})以下のキャラ([1-5])枚までは、次の相手のリフレッシュフェイズでアクティブにならない。$/u.exec(text);
+  if (timing === "ON_PLAY" && cardType === "character" && refresh) return { pattern: "zone-skip-refresh",
+    actions: [draftSelect(bind, "character", "OPPONENT", 0, Number(refresh[2]), all(
+      { type: "compare", left: { ref: "CANDIDATE.rotated" }, op: "eq", right: true }, compare("lte", Number(refresh[1])))),
+    { type: "SKIP_REFRESH", cards: cards(bind), duration: { type: "UNTIL_BOUNDARY", player: "OPPONENT", boundary: "TURN_START", occurrence: 1, includeCurrent: false }, sourceSpan }] };
   const revealDraw = /^自分の手札からイベントか特徴《([^《》]+)》を持つカード合計([1-9][0-9]?)枚を公開できる：カード([1-9][0-9]?)枚を引く。$/u.exec(text);
   if (timing === "ON_PLAY" && cardType === "character" && revealDraw) {
     const count = Number(revealDraw[2]);

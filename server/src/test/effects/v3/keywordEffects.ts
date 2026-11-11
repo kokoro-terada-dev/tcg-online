@@ -6,7 +6,7 @@ import type { Node } from "./dsl";
 import type { ApprovedV3Card } from "./approval";
 import { expiryFor, validateExpiry, type EffectExpiry, type ExpiryAnchor } from "./effectExpiry";
 export type Keyword = Node<"keyword">["type"];
-export type KeywordGrant = Readonly<{ id: string; target: Readonly<CardObjectRef>; source: Readonly<CardObjectRef>; actor: 0 | 1; keyword: Keyword }> & EffectExpiry;
+export type KeywordGrant = Readonly<{ id: string; target: Readonly<CardObjectRef>; source: Readonly<CardObjectRef>; actor: 0 | 1; keyword: Keyword | "SKIP_REFRESH" }> & EffectExpiry;
 export type KeywordGrants = readonly KeywordGrant[];
 export function validateKeywordGrants(board: MovementState, grants: KeywordGrants): KeywordGrants {
   dataArray(grants, 256); const ids = new Set<string>();
@@ -15,7 +15,10 @@ export function validateKeywordGrants(board: MovementState, grants: KeywordGrant
     const card = getCard(board, grant.target), at = location(board, card.instanceId);
     ensureMove(typeof grant.id === "string" && /^[a-f0-9]{64}$/.test(grant.id) && !ids.has(grant.id) && card.faceUp && card.kind === at.zone &&
       (card.kind === "character" || card.kind === "leader") && (grant.actor === 0 || grant.actor === 1) &&
-      ["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED", "BANISH", "DOUBLE_ATTACK"].includes(grant.keyword) &&
+      (["BLOCKER", "RUSH", "RUSH_CHARACTER", "CANNOT_BE_BLOCKED", "BANISH", "DOUBLE_ATTACK"].includes(grant.keyword) ||
+        grant.keyword === "SKIP_REFRESH" && card.kind === "character" && at.player !== grant.actor &&
+        grant.boundary?.kind === "TURN_START" && grant.boundary.player === at.player &&
+        grant.boundary.occurrence === 1 && !grant.boundary.includeCurrent) &&
       (card.kind === "character" || grant.keyword !== "RUSH" && grant.keyword !== "RUSH_CHARACTER"), "v3-invalid-keyword-grant"); ids.add(grant.id);
   }
   return freezeMovement(structuredClone(grants));
@@ -24,11 +27,11 @@ export function pruneKeywordGrants(board: MovementState, grants: KeywordGrants):
   return freezeMovement(grants.filter(grant => { const card = board.cards[grant.target.instanceId]; return card?.generation === grant.target.generation && ["leader", "character"].includes(location(board, card.instanceId).zone); }));
 }
 export function addKeywordGrants(board: MovementState, grants: KeywordGrants, workId: string, source: Readonly<CardObjectRef>, actor: 0 | 1,
-  targets: readonly Readonly<CardObjectRef>[], keyword: DeepReadonly<Node<"keyword">>, duration: DeepReadonly<Node<"duration">>, definitions: readonly ApprovedV3Card[], battleId: string | null = null, anchor?: ExpiryAnchor): KeywordGrants {
+  targets: readonly Readonly<CardObjectRef>[], keyword: DeepReadonly<Node<"keyword">> | { type: "SKIP_REFRESH" }, duration: DeepReadonly<Node<"duration">>, definitions: readonly ApprovedV3Card[], battleId: string | null = null, anchor?: ExpiryAnchor): KeywordGrants {
   ensureMove(targets.length > 0 && new Set(targets.map(ref => ref.instanceId)).size === targets.length && grants.length + targets.length <= 256, "v3-keyword-grant-limit");
   const entries = targets.map(target => {
     const card = getCard(board, target), definition = definitions.find(known => known.definition.cardId === card.cardId);
-    ensureMove(definition && definition.definition.cardType === card.kind && !card.modifierIds.length && !card.grantIds.length, "v3-keyword-target-unregistered");
+    ensureMove(keyword.type === "SKIP_REFRESH" || definition && definition.definition.cardType === card.kind && !card.modifierIds.length && !card.grantIds.length, "v3-keyword-target-unregistered");
     return { id: createHash("sha256").update(JSON.stringify([board.matchId, workId, target])).digest("hex"), target: { ...target }, source: { ...source }, actor,
       keyword: keyword.type, ...expiryFor(duration, actor, battleId, anchor) };
   });
@@ -43,5 +46,5 @@ export function retainBattleKeywordGrants(grants: KeywordGrants, battleId: strin
 export function effectiveKeywords(board: MovementState, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants, ref: Readonly<CardObjectRef>): readonly Keyword[] {
   const card = getCard(board, ref), at = location(board, card.instanceId), known = definitions.get(card.cardId);
   ensureMove(known && known.definition.cardType === card.kind && !card.grantIds.length && card.faceUp && card.kind === at.zone && ["leader", "character"].includes(at.zone), "v3-keywords-unresolved");
-  return [...new Set([...known.definition.keywords.map(keyword => keyword.type), ...grants.filter(grant => grant.target.instanceId === ref.instanceId && grant.target.generation === ref.generation).map(grant => grant.keyword)])];
+  return [...new Set([...known.definition.keywords.map(keyword => keyword.type), ...grants.filter(grant => grant.target.instanceId === ref.instanceId && grant.target.generation === ref.generation).map(grant => grant.keyword).filter(keyword => keyword !== "SKIP_REFRESH")])];
 }
