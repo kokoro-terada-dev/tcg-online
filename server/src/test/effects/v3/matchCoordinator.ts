@@ -24,7 +24,7 @@ import { prepareLifeTrigger } from "./lifeTriggers";
 import { isReviewedV3Catalog, type ReviewedV3Catalog } from "./reviewedCatalog";
 import { pinMasterFacts } from "../masterFacts";
 import { fixtureEnvironment } from "./fixtureEnvironment";
-import { trackMovementOccurrences } from "../../movement/occurrence";
+import { characterEntryBatchId, entryDisplacementBatchId, trackMovementOccurrences } from "../../movement/occurrence";
 import { conditionalTriggersHeld, conditionalTriggersWaiting, emptyTriggerObservations, hasConditionalTriggers, hasPhaseBoundaries, observeBoundaryTriggers, observeConditionalTriggers, updateTriggerObservation, validateObservedSource, type TriggerObservations } from "./conditionalTriggers";
 import { createDerivedCardFactsReader, FIELD_KEYWORDS, UNKNOWN, type BoundaryEvent } from "./readContext";
 import { finishBlockStep } from "./battle";
@@ -136,11 +136,13 @@ export class V3SyntheticMatchCoordinator {
     const queued = new Set(this.#triggers.flatMap(entry => entry.cause.type === "ON_EVENT" ? [entry.cause.observation.key] : []));
     ensureMove(this.#triggers.length + this.#lifePlayTriggers.length + movementTriggerCandidates(events, this.#cards).length + this.#observationDraft.records.filter(record => record.status === "PENDING" && !queued.has(record.key)).length <= 128, "v3-trigger-queue-limit");
   };
-  #reconcileObserved(): void {
+  #reconcileObserved(displaced?: ReadonlySet<string>): void {
     let ledger = this.#observationDraft!;
     for (const record of ledger.records) {
       if (record.status !== "PENDING") continue;
-      if (validateObservedSource(record, this.#board, this.#cards) !== "CURRENT") ledger = updateTriggerObservation(ledger, record.key, "HELD", "SOURCE_STALE");
+      if (record.entryBatchId && displaced?.has(JSON.stringify([record.entryBatchId, record.source.instanceId, record.source.generation])))
+        ledger = updateTriggerObservation(ledger, record.key, "SKIPPED", "DISPLACED_DURING_ENTRY");
+      else if (validateObservedSource(record, this.#board, this.#cards) !== "CURRENT") ledger = updateTriggerObservation(ledger, record.key, "HELD", "SOURCE_STALE");
       else {
         const limit = this.#cards.get(record.cardId)!.definition.effects.find(effect => effect.id === record.effectId)!.usageLimit;
         const key = JSON.stringify([record.turnNumber, record.context.effectController, record.source.instanceId, record.source.generation, record.effectId]);
@@ -222,11 +224,19 @@ export class V3SyntheticMatchCoordinator {
       const bodyUse = active.coordinator.bodyUsageKeyForCoordinator();
       if (bodyUse) this.#usage.set(bodyUse, 1);
       this.#replacementUsage = active.coordinator.replacementUsageForCoordinator();
-      const triggers = enqueueMovementTriggers(snapshot.movementEvents.slice(active.eventCount), this.#cards);
+      const newEvents = snapshot.movementEvents.slice(active.eventCount);
+      const displaced = new Set(newEvents.flatMap(event => {
+        const batchId = entryDisplacementBatchId(event);
+        return batchId && event.before ? [JSON.stringify([batchId, event.before.instanceId, event.before.generation])] : [];
+      }));
+      const triggers = enqueueMovementTriggers(newEvents, this.#cards);
       // Resolve the life trigger during damage, but not its newly triggered ON_PLAY.
       const fromLife = (entry: ScheduledTrigger) => entry.cause.type === "ON_PLAY" && entry.cause.event.from?.zone === "resolving";
       this.#lifePlayTriggers = freezeMovement([...this.#lifePlayTriggers, ...triggers.filter(fromLife)]);
-      this.#triggers = freezeMovement([...this.#triggers, ...triggers.filter(entry => !fromLife(entry))]); active.eventCount = snapshot.movementEvents.length;
+      this.#triggers = freezeMovement([...this.#triggers, ...triggers.filter(entry => !fromLife(entry))].filter(entry =>
+        entry.cause.type !== "ON_PLAY" || !characterEntryBatchId(entry.cause.event) ||
+        !displaced.has(JSON.stringify([entry.batchId, entry.source.instanceId, entry.source.generation]))));
+      active.eventCount = snapshot.movementEvents.length;
       this.#board = snapshot.movement; this.#progression = snapshot.progression; this.#statEffects = snapshot.statEffects; this.#keywordGrants = snapshot.keywordGrants;
       if (frame.activationCommitted && !active.counted) {
         this.#usage.set(active.usageKey, (this.#usage.get(active.usageKey) ?? 0) + 1); active.counted = true;
@@ -235,7 +245,7 @@ export class V3SyntheticMatchCoordinator {
       if (this.#progression.outcome) {
         this.#triggers = []; this.#battleCounters = []; this.#lifeDecision = null; this.#damageSettling = false; return;
       }
-      this.#reconcileObserved();
+      this.#reconcileObserved(displaced);
       if (conditionalTriggersWaiting(this.#observationDraft!)) return;
       if (frame.status === "completed" && !this.#triggers.length && this.#progression.battle?.step === "block") {
         this.#archive(); this.#progression = finishBlockStep(this.#board, this.#progression); return;

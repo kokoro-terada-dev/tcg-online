@@ -6750,7 +6750,7 @@
         "3.0.0-subset.53"
       ],
       "schemaRef": "../schemas/effect-v3-subset53.schema.json#/$defs/action",
-      "runtimeConstraints": "REPLACE_IF_FULL supports up to five own-hand characters in one batch. Only pre-entry occupants may be discarded to make room."
+      "runtimeConstraints": "REPLACE_IF_FULL plays up to five own-hand characters in selection order. An earlier entrant can be displaced; its pending entry effect is skipped."
     }
   ],
   "implementationUpdate": "PR05b: subset20 resumable event MAIN, existing handlers only; paid event use is committed before later selections/work. See card-effect-pr05b.md.",

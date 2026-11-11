@@ -36,29 +36,36 @@ for (const field of [3, 4, 5]) test('batch play with ' + field + ' occupied slot
   const pick = finish(c, 0).choice;
   assert.equal(pick.max, 2);
   assert.deepEqual(c.viewFor(1).frame.choice.options, []);
-  c.answer(0, id(), c.context(), pick.selectionId, pick.options.slice(0, 2).map(option => option.token));
+  c.answer(0, id(), c.context(), pick.selectionId, pick.options.slice(0, 2).reverse().map(option => option.token));
 
-  let replaced = [];
-  if (field > 3) {
+  const replaced = [];
+  if (field === 5) {
     const { choice } = finish(c, 0);
-    assert.equal(choice.min, field - 3);
-    assert.equal(choice.max, field - 3);
+    assert.deepEqual([choice.min, choice.max], [1, 1]);
     assert.equal(choice.options.length, original.length);
     assert.deepEqual(snapshot(c).players[0].character.filter(Boolean), original);
-    assert.ok(hand.every(card => snapshot(c).players[0].hand.includes(card)));
-    assert.equal(c.viewFor(0).triggerChoices.length, 0);
-    const tokens = choice.options.slice(0, choice.min).map(option => option.token);
-    assert.throws(() => c.answer(0, id(), c.context(), choice.selectionId, [hand[0], ...tokens.slice(1)]));
-    replaced = original.slice(0, choice.min);
-    c.answer(0, id(), c.context(), choice.selectionId, tokens);
+    replaced.push(original[0]);
+    c.answer(0, id(), c.context(), choice.selectionId, [choice.options[0].token]);
+  }
+  if (field > 3) {
+    const { choice } = finish(c, 0), current = snapshot(c).players[0];
+    assert.deepEqual([choice.min, choice.max], [1, 1]);
+    assert.ok(current.character.includes(hand[1]));
+    assert.ok(current.hand.includes(hand[0]));
+    const slot = current.character.indexOf(hand[1]);
+    assert.throws(() => c.answer(0, id(), c.context(), choice.selectionId, [hand[1]]));
+    assert.equal(snapshot(c).players[0].deck.length, initial.players[0].deck.length);
+    replaced.push(hand[1]);
+    c.answer(0, id(), c.context(), choice.selectionId, [choice.options[slot].token]);
   }
   finish(c, 0);
   const after = snapshot(c);
-  assert.ok(hand.every(card => after.players[0].character.includes(card) && !after.players[0].trash.includes(card)));
+  assert.ok(after.players[0].character.includes(hand[0]));
+  assert.equal(after.players[0].character.includes(hand[1]), field === 3);
   assert.deepEqual(after.players[0].trash, replaced);
   assert.equal(after.players[0].deck.length, initial.players[0].deck.length - 1);
-  assert.equal(c.viewFor(0).triggerChoices.filter(row => row.effectId === 'on-play').length, 2);
-  assert.equal(c.viewFor(0).triggerChoices.filter(row => row.effectId === 'observed-entry').length, 2);
+  assert.equal(c.viewFor(0).triggerChoices.filter(row => row.effectId === 'on-play').length, field === 3 ? 2 : 1);
+  assert.equal(c.viewFor(0).triggerChoices.filter(row => row.effectId === 'observed-entry').length, field === 3 ? 2 : 1);
 });
 
 test('zero selections skip the slot choice; older profiles reject the larger binding', () => {

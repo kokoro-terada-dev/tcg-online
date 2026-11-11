@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { CardObjectRef } from "../types";
 import type { MovementEvent, MovementState } from "../../movement/types";
-import { isCharacterEntryBatch, movementOccurrence } from "../../movement/occurrence";
+import { characterEntryBatchId, movementOccurrence } from "../../movement/occurrence";
 import { ensureMove, freezeMovement, getCard, location } from "../../movement/state";
 import { visibleTo } from "../../movement/engine";
 import { pinMasterFacts } from "../masterFacts";
@@ -16,11 +16,12 @@ import type { DeepReadonly } from "../types";
 export type TriggerObservation = Readonly<{
   key: string; eventId: string; groupId: string; transactionId: string; eventType: "CARD_ENTERED" | "CARD_KO" | "CARD_MOVED" | "DON_RETURNED" | BoundaryEvent["type"];
   returnedCount?: number;
+  entryBatchId?: string;
   causeEffectId: string | null; source: Readonly<CardObjectRef>; cardId: string;
   effectId: string; definitionHash: string; context: EventContext; target: Readonly<CardObjectRef>;
   snapshot: "TRANSACTION_BEFORE" | "TRANSACTION_AFTER" | "OCCURRENCE"; turnNumber: number; activePlayer: 0 | 1;
   result: true | false | "unknown"; status: "HELD" | "NOT_MATCHED" | "PENDING" | "RESOLVING" | "RESOLVED" | "SKIPPED";
-  reason: "PR06B_REQUIRED" | "CONDITION_FALSE" | "UNKNOWN_FACTS" | "MULTI_MOVE_TIMING_UNRESOLVED" | "READY" | "SOURCE_STALE" | "USAGE_EXHAUSTED" | "NON_MAIN_BOUNDARY";
+  reason: "PR06B_REQUIRED" | "CONDITION_FALSE" | "UNKNOWN_FACTS" | "MULTI_MOVE_TIMING_UNRESOLVED" | "READY" | "SOURCE_STALE" | "USAGE_EXHAUSTED" | "NON_MAIN_BOUNDARY" | "DISPLACED_DURING_ENTRY";
 }>;
 export type TriggerObservations = Readonly<{
   events: Readonly<Record<string, string>>; records: readonly TriggerObservation[];
@@ -121,12 +122,13 @@ export function observeConditionalTriggers(ledger: TriggerObservations, events: 
           const filter = timing.event === "DON_RETURNED" ? true : authorized ? environment.evaluate(timing.filters, {}, target) : "unknown";
           const activation = environment.evaluate(effect.activationConditions, {});
           // Do not disclose a private-query truth value through the public hold indicator.
-          const certifiedEntry = timing.event === "CARD_ENTERED" && isCharacterEntryBatch(event);
-          const result = multiMove && !certifiedEntry || !authorized || targetCard.kind === "unknown" || (timing.event !== "DON_RETURNED" && privateQuery(timing.filters)) || privateQuery(effect.activationConditions) ? "unknown" :
+          const entryBatchId = timing.event === "CARD_ENTERED" ? characterEntryBatchId(event) : undefined;
+          const result = multiMove || !authorized || targetCard.kind === "unknown" || (timing.event !== "DON_RETURNED" && privateQuery(timing.filters)) || privateQuery(effect.activationConditions) ? "unknown" :
             !structural || filter === false || activation === false ? false : filter === "unknown" || activation === "unknown" ? "unknown" : true;
           ensureMove(records.length < 4096, "v3-trigger-observation-limit");
           const executable = ["3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53"].includes(definition.definition.schemaVersion);
           const record: TriggerObservation = { key: hash([state.matchId, event.eventId, source, effect.id, definition.definitionHash]), eventId: event.eventId, groupId: event.groupId,
+            ...(entryBatchId ? { entryBatchId } : {}),
             ...(returned ? { returnedCount: returns.length } : {}),
             transactionId: occurrence.transactionId, eventType: timing.event, causeEffectId: resolvingEffect && resolvingEffect.resolutionId === event.cause.resolutionId ? resolvingEffect.effectId : null,
             source, cardId: sourceCard.cardId, effectId: effect.id, definitionHash: definition.definitionHash, context, target, snapshot: basis,

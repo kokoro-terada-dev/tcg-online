@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:tcg:effect-v3-subset:53",
-  "title": "V3 subset 53: simultaneous effect entry from hand",
+  "title": "V3 subset 53: ordered multi-character effect entry from hand",
   "type": "object",
   "additionalProperties": false,
   "required": [

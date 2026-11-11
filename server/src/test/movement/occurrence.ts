@@ -5,14 +5,21 @@ export type MovementOccurrence = Readonly<{
 }>;
 const tracked = new WeakSet<MovementState>();
 const occurrences = new WeakMap<MovementEvent, MovementOccurrence>();
-const characterEntryBatch = new WeakSet<MovementEvent>();
+const characterEntryBatch = new WeakMap<MovementEvent, string>();
+const entryDisplacement = new WeakMap<MovementEvent, string>();
 
-// Only the effect coordinator certifies a committed simultaneous character entry.
-export function markCharacterEntryBatch(events: readonly MovementEvent[]): void {
+// Certified by the effect coordinator, never taken from a client payload.
+export function markCharacterEntryBatch(events: readonly MovementEvent[], batchId: string): void {
   for (const event of events)
-    if (event.kind === "moved" && event.from?.zone === "hand" && event.to?.zone === "character") characterEntryBatch.add(event);
+    if (event.kind === "moved" && event.from?.zone === "hand" && event.to?.zone === "character") characterEntryBatch.set(event, batchId);
 }
-export function isCharacterEntryBatch(event: MovementEvent): boolean { return characterEntryBatch.has(event); }
+export function markEntryDisplacement(events: readonly MovementEvent[], batchId: string): void {
+  for (const event of events)
+    if (event.kind === "moved" && event.from?.zone === "character" && event.to?.zone === "trash" &&
+        event.cause.kind === "RULE_PROCESSING") entryDisplacement.set(event, batchId);
+}
+export function characterEntryBatchId(event: MovementEvent): string | undefined { return characterEntryBatch.get(event); }
+export function entryDisplacementBatchId(event: MovementEvent): string | undefined { return entryDisplacement.get(event); }
 
 // Opt-in server-only evidence. Neither snapshots nor this journal are movement DTOs.
 export function trackMovementOccurrences(state: MovementState): void { tracked.add(state); }

@@ -33,7 +33,6 @@ export interface ResolutionEnvironment {
   lifeMoveCard?(player: Seat, from: "DECK_TOP" | "LIFE_TOP" | "LIFE_BOTTOM"): Ref | null;
   lifeTriggerPlay?(): "OPEN" | "FULL" | "PLAYED";
   effectPlayFull?(): boolean;
-  effectPlayFreeSlots?(): number;
   donDeckCount?(): number;
   canPayCosts?(costs: readonly DeepReadonly<Node<"cost">>[], discarded: readonly Ref[] | null, returned: readonly Ref[] | null, selected?: readonly Ref[] | null): boolean | "unknown";
 }
@@ -77,7 +76,7 @@ export type WorkRequest = DeepReadonly<{ kind: "work"; workId: string; worldRevi
   { type: "MOVE_LIFE"; player: Seat; from: Extract<Action, { type: "MOVE_LIFE" }>["from"]; to: Extract<Action, { type: "MOVE_LIFE" }>["to"]; faceUp: boolean; cards: CardObjectRef[] } |
   { type: "EXTRA_TURN" } |
   { type: "PLAY_BY_EFFECT"; cards: CardObjectRef[]; enterState: "ACTIVE" | "REST"; provenance: "EFFECT" } &
-    ({ from: "hand" | "trash" | "deck"; replace?: CardObjectRef | null; replaceMany?: CardObjectRef[]; destination: Extract<Action, { type: "PLAY_BY_EFFECT" }>["destination"] } |
+    ({ from: "hand" | "trash" | "deck"; replace?: CardObjectRef | null; entrySequence?: string; destination: Extract<Action, { type: "PLAY_BY_EFFECT" }>["destination"] } |
       { from: "resolving"; replace: CardObjectRef | null; destination: { owner: "SELF"; zone: "character" | "stage"; slotPolicy: "FIRST_EMPTY" } }) |
   { type: OwnerHandAction["type"]; owner: Seat; count: number; cards: CardObjectRef[] } |
   { type: "MODIFY_STAT"; cards: CardObjectRef[]; stat: "power" | "cost"; amount: number; duration: Node<"duration"> } |
@@ -103,6 +102,7 @@ type State = {
   resultScopes?: Record<string, MoveResult>[];
   factScopes?: Record<string, RememberedMoveFacts>[];
   lastMoveResult?: MoveResult | null;
+  playSequence?: { firstPc: number; index: number };
   receipts: { requestId: string; fingerprint: string }[];
 };
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -293,7 +293,7 @@ export class V3ResolutionMachine {
       ensureMove(state.status === "ready" && this.#environment.revision() === state.worldRevision, "v3-not-ready-or-world-changed");
       for (let steps = 0; steps < 256 && state.status === "ready"; steps++) {
         const instruction = this.#code[state.pc]; ensureMove(instruction, "v3-invalid-program-counter");
-        const workId = `${state.identity.resolutionId}:${state.pc}`;
+        const workId = `${state.identity.resolutionId}:${state.pc}${state.playSequence ? `:${state.playSequence.index}` : ""}`;
         if (instruction.type === "OCCURRENCE_CHECK") {
           ensureMove(this.#environment.activationAtOccurrence?.() === true, "v3-trigger-occurrence-not-authorized"); state.pc++;
         } else if (instruction.type === "CHECK") {
@@ -390,9 +390,17 @@ export class V3ResolutionMachine {
         else if (instruction.type === "PLAY_SLOT_REVEAL") {
           const { action } = instruction, cards = this.#bindings(state)[action.cards.ref.slice("bindings.".length)];
           ensureMove(cards && cards.length <= 5, "v3-effect-play-slot-scope");
-          if (!this.#playSlotShortage(cards.length)) { state.pc++; continue; }
-          if (!cards.every(ref => this.#evaluate(action.condition, state, ref))) { state.status = "blocked"; return; }
-          state.pending = { kind: "work", type: "REVEAL", workId, worldRevision: state.worldRevision, cards: structuredClone(cards), playSlot: true };
+          if (cards.length > 1 && !state.playSequence) {
+            ensureMove(action.from === "hand" && this.#card.definition.schemaVersion === "3.0.0-subset.53", "v3-effect-play-sequence-scope");
+            if (!cards.every(ref => this.#evaluate(action.condition, state, ref))) { state.status = "blocked"; return; }
+            state.playSequence = { firstPc: state.pc, index: 0 };
+          }
+          const card = state.playSequence ? cards[state.playSequence.index] : cards[0];
+          if (!this.#playSlotShortage(card ? 1 : 0)) { state.pc++; continue; }
+          ensureMove(card, "v3-effect-play-missing-card");
+          if (!state.playSequence && !this.#evaluate(action.condition, state, card)) { state.status = "blocked"; return; }
+          const revealId = state.playSequence ? `${state.identity.resolutionId}:${state.pc}:${state.playSequence.index}` : workId;
+          state.pending = { kind: "work", type: "REVEAL", workId: revealId, worldRevision: state.worldRevision, cards: [structuredClone(card)], playSlot: true };
           state.status = "waitingForWork";
         }
         else if (instruction.type === "WORK") {
@@ -477,11 +485,16 @@ export class V3ResolutionMachine {
               state.pc++; continue;
             }
             if (action.type === "PLAY_BY_EFFECT") {
-              if (!cards.every(ref => this.#evaluate(action.condition, state, ref))) { state.status = "blocked"; return; }
+              const sequence = state.playSequence;
+              if (sequence) {
+                const card = cards[sequence.index];
+                ensureMove(card && action.from === "hand" && action.destination.slotPolicy === "REPLACE_IF_FULL", "v3-effect-play-sequence-card");
+                cards = [card];
+              } else if (!cards.every(ref => this.#evaluate(action.condition, state, ref))) { state.status = "blocked"; return; }
               state.pending = { kind: "work", type: "PLAY_BY_EFFECT", workId, worldRevision: state.worldRevision, cards: structuredClone(cards), from: action.from,
                 destination: { ...action.destination }, enterState: action.enterState, provenance: action.provenance,
-                ...(action.destination.slotPolicy !== "REPLACE_IF_FULL" ? {} : cards.length > 1 ?
-                  { replaceMany: this.#bindings(state)[effectSlotBinding] ?? [] } : { replace: this.#bindings(state)[effectSlotBinding]?.[0] ?? null }) };
+                ...(action.destination.slotPolicy === "REPLACE_IF_FULL" ? { replace: this.#bindings(state)[effectSlotBinding]?.[0] ?? null } : {}),
+                ...(sequence ? { entrySequence: `${state.identity.resolutionId}:${sequence.firstPc}` } : {}) };
             } else state.pending = action.type === "SET_DON_STATE" ? { kind: "work", type: "SET_DON_STATE", workId, worldRevision: state.worldRevision, cards: structuredClone(cards), from: action.from, to: action.to } :
               action.type === "RETURN_DON_BY_EFFECT" ? { kind: "work", type: "RETURN_DON_BY_EFFECT", workId, worldRevision: state.worldRevision, cards: structuredClone(cards), from: [...action.from] } :
               action.type === "MOVE_CARD" ? { kind: "work", type: "MOVE_CARD", workId, worldRevision: state.worldRevision, cards: structuredClone(cards),
@@ -496,7 +509,7 @@ export class V3ResolutionMachine {
           if (instruction.playCards) {
             const cards = this.#bindings(state)[instruction.playCards.ref.slice("bindings.".length)];
             ensureMove(cards && cards.length <= 5, "v3-effect-play-slot-scope");
-            const need = this.#playSlotShortage(cards.length);
+            const need = this.#playSlotShortage(cards.length ? 1 : 0);
             if (!need) { state.scopes.at(-1)![effectSlotBinding] = []; state.pc++; continue; }
             this.#select(state, { ...instruction.action.selector, min: need, max: need }, instruction.action.bindAs, undefined, false, true);
             continue;
@@ -519,15 +532,9 @@ export class V3ResolutionMachine {
   }
   #playSlotShortage(count: number): number {
     if (count === 0) return 0;
-    if (count === 1) {
-      const full = this.#environment.effectPlayFull?.();
-      ensureMove(full !== undefined, "v3-effect-play-slot-scope");
-      return Number(full);
-    }
-    const free = this.#environment.effectPlayFreeSlots?.();
-    ensureMove(this.#card.definition.schemaVersion === "3.0.0-subset.53" && free !== undefined &&
-      Number.isSafeInteger(free) && free >= 0 && free <= 5, "v3-effect-play-batch-slot-scope");
-    return Math.max(0, count - free);
+    const full = this.#environment.effectPlayFull?.();
+    ensureMove(count === 1 && full !== undefined, "v3-effect-play-slot-scope");
+    return Number(full);
   }
   #select(state: State, selector: Selector, bindAs: string | null, purpose: "returnCost" | "order" | undefined = undefined, filteredCost = false, ruleSlot = false, automatic = false): void {
     const rows = this.#environment.candidates(selector, this.#bindings(state)); dataArray(rows, 256);
@@ -714,7 +721,9 @@ export class V3ResolutionMachine {
         return;
       }
       // UNORDERED input is canonicalized to server candidate order, not client token order.
-      const cards = choice.purpose === "order" ? tokens.map(token => ({ ...choice.candidates.find(candidate => candidate.token === token)!.ref })) : choice.candidates.filter(candidate => selected.has(candidate.token)).map(candidate => ({ ...candidate.ref }));
+      const entryOrder = choice.purpose === "action" && choice.max > 1 && this.#card.definition.schemaVersion === "3.0.0-subset.53" &&
+        this.#code.some(row => row.type === "PLAY_SLOT_REVEAL" && row.action.from === "hand" && row.action.cards.ref === `bindings.${choice.bindAs}`);
+      const cards = choice.purpose === "order" || entryOrder ? tokens.map(token => ({ ...choice.candidates.find(candidate => candidate.token === token)!.ref })) : choice.candidates.filter(candidate => selected.has(candidate.token)).map(candidate => ({ ...candidate.ref }));
       if (choice.purpose === "action") {
         const instruction = this.#code[state.pc];
         ensureMove(instruction?.type === "SELECT", "v3-choice-program-mismatch");
@@ -754,7 +763,7 @@ export class V3ResolutionMachine {
     if (result) ensureMove(isCertifiedMoveResult(result), "v3-untrusted-move-result");
     return this.#command(requestId, expectedRevision, { kind: "settleWork", workId, outcome, worldRevision, ...(result ? { result } : {}) }, state => {
       const work = state.pending; ensureMove(state.status === "waitingForWork" && work?.kind === "work" && work.workId === workId, "v3-work-not-pending");
-      const steps = work.type === "PLAY_BY_EFFECT" && (work.replace || work.from !== "resolving" && work.replaceMany?.length) ? 2 : 1;
+      const steps = work.type === "PLAY_BY_EFFECT" && work.replace ? 2 : 1;
       ensureMove((outcome === "applied" || outcome === "rejected") && Number.isSafeInteger(worldRevision) && this.#environment.revision() === worldRevision &&
         worldRevision === state.worldRevision + (outcome === "applied" ? steps : 0), "v3-work-version-or-outcome");
       const replacement = state.replacement;
@@ -791,7 +800,15 @@ export class V3ResolutionMachine {
         }
         if (work.type === "LOOK_TOP") state.scopes.at(-1)![work.bindAs] = work.cards.map(ref => ({ ...ref }));
         if (work.type === "LOOK_TOP" || work.type === "REVEAL") state.revealsOpen = true;
-        if (work.type === "CLOSE_REVEALS") state.revealsOpen = false; else state.pc++;
+        if (work.type === "CLOSE_REVEALS") state.revealsOpen = false;
+        else if (work.type === "PLAY_BY_EFFECT" && work.from !== "resolving" && work.entrySequence) {
+          const sequence = state.playSequence, instruction = this.#code[state.pc];
+          ensureMove(sequence && instruction?.type === "WORK" && instruction.action.type === "PLAY_BY_EFFECT", "v3-effect-play-sequence-work");
+          const cards = this.#bindings(state)[instruction.action.cards.ref.slice("bindings.".length)];
+          ensureMove(cards && sequence.index < cards.length, "v3-effect-play-sequence-binding");
+          if (++sequence.index < cards.length) state.pc = sequence.firstPc;
+          else { delete state.playSequence; state.pc++; }
+        } else state.pc++;
       }
     });
   }

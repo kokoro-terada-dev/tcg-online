@@ -29,7 +29,7 @@ import { hasProtection, protectionReader, protectionRules } from "./protectionRu
 import { isSimpleMainEvent, isInteractiveMainEvent, isShareableMainEvent } from "./simpleMainEvent";
 import { effectUsageKey, externalBodyChoices, resolveExternalBody } from "./effectBodyCalls";
 import { retargetBattle } from "./battle";
-import { markCharacterEntryBatch, trackMovementOccurrences } from "../../movement/occurrence";
+import { markCharacterEntryBatch, markEntryDisplacement, trackMovementOccurrences } from "../../movement/occurrence";
 import { hasPhaseBoundaries, isTriggerObservation, validateObservedSource } from "./conditionalTriggers";
 import { applicationAnchor } from "./effectExpiry";
 import { planReplacements, verifyReplacementOutcome, type ReplacementAnswer, type ReplacementPlan } from "./replacementPlans";
@@ -393,10 +393,9 @@ export class V3FixtureCoordinator {
       ensureMove(work.cards.length > 0 && work.cards.length <= 50, "v3-fixture-reveal-count");
       for (const ref of work.cards) {
         const card = getCard(board, ref), from = location(board, card.instanceId);
-        if (work.playSlot) ensureMove(["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53"].includes(this.#card.definition.schemaVersion) &&
-          (work.cards.length === 1 || work.cards.length <= 5 && from.zone === "hand" && this.#card.definition.schemaVersion === "3.0.0-subset.53") &&
+        if (work.playSlot) ensureMove(["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53"].includes(this.#card.definition.schemaVersion) && work.cards.length === 1 &&
           (from.zone === "hand" || from.zone === "deck" && (this.#card.definition.schemaVersion === "3.0.0-subset.51" || (this.#card.definition.schemaVersion === "3.0.0-subset.52" || this.#card.definition.schemaVersion === "3.0.0-subset.53"))) &&
-          board.players[actor].character.filter(id => id === null).length < work.cards.length && card.kind === "character" &&
+          !board.players[actor].character.includes(null) && card.kind === "character" &&
           definitions.get(card.cardId)?.definition.cardType === "character", "v3-effect-play-reveal-policy");
         ensureMove(from.player === actor && card.owner === actor && card.controller === actor && ["character", "stage", "event"].includes(card.kind) &&
           (from.zone === "hand" || from.zone === "deck" && inspected(ref)) && visibleTo(board, card, from, actor), "v3-fixture-reveal-uninspected-card");
@@ -474,9 +473,8 @@ export class V3FixtureCoordinator {
       ensureMove(work.from !== "trash" || ["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53"].includes(this.#card.definition.schemaVersion), "v3-trash-effect-play-profile");
       ensureMove(work.from !== "deck" || (this.#card.definition.schemaVersion === "3.0.0-subset.51" || (this.#card.definition.schemaVersion === "3.0.0-subset.52" || this.#card.definition.schemaVersion === "3.0.0-subset.53")) && replaceIfFull &&
         work.cards.every(inspected), "v3-effect-play-uninspected-deck");
-      const batch = replaceIfFull && work.cards.length > 1 && work.from === "hand" && this.#card.definition.schemaVersion === "3.0.0-subset.53";
       ensureMove(!replaceIfFull || ["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53"].includes(this.#card.definition.schemaVersion) &&
-        work.from !== "resolving" && (work.cards.length === 1 || batch),
+        work.from !== "resolving" && work.cards.length === 1,
         "v3-effect-play-replacement-policy");
       ensureMove(work.provenance === "EFFECT" && work.destination.owner === "SELF" && (zone === "character" || work.from === "resolving" && zone === "stage") &&
         (work.enterState === "ACTIVE" || work.enterState === "REST") && work.cards.length > 0 && work.cards.length <= 5 && new Set(work.cards.map(ref => ref.instanceId)).size === work.cards.length, "v3-fixture-effect-play-policy");
@@ -489,7 +487,7 @@ export class V3FixtureCoordinator {
       }
       if (work.from === "resolving" || replaceIfFull) {
         const existing = board.players[actor][zone], need = Math.max(0, work.cards.length - existing.filter(id => id === null).length);
-        const replacements = batch ? work.replaceMany : work.replace ? [work.replace] : [];
+        const replacements = work.replace ? [work.replace] : [];
         ensureMove(replacements && replacements.length === need && new Set(replacements.map(ref => ref.instanceId)).size === need,
           "v3-trigger-play-slot-changed");
         if (need) {
@@ -618,9 +616,11 @@ export class V3FixtureCoordinator {
     const mode = work.type === "PAY_COSTS" ? "cost" : "effect";
     const result = new MovementStore(board).commit({ transactionId: hash(`${board.matchId}:${work.workId}`), matchId: board.matchId, expectedRevision: board.revision,
       turnNumber: board.turnNumber, actor, effectController: actor, source: identity.source, mode, resolutionId: identity.resolutionId, operations }, protectionRules(board, definitions, activePlayer, mode));
-    if (work.type === "PLAY_BY_EFFECT" && work.from === "hand" && work.replaceMany !== undefined) {
-      ensureMove(!result.prevented.length, "v3-effect-play-batch-not-committed");
-      markCharacterEntryBatch(result.events);
+    if (work.type === "PLAY_BY_EFFECT" && work.from === "hand" && work.entrySequence) {
+      ensureMove(this.#card.definition.schemaVersion === "3.0.0-subset.53" && !result.prevented.length,
+        "v3-effect-play-sequence-not-committed");
+      markCharacterEntryBatch(result.events, work.entrySequence);
+      markEntryDisplacement(slotEvents, work.entrySequence);
     }
     if (slotEvents.length) {
       ensureMove(!result.prevented.length, "v3-trigger-play-slot-not-committed");
