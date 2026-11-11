@@ -9,7 +9,7 @@ const legacy = (body, timing, kind, span) => parseCompoundEffect(body, timing, k
   parseCompletionEffect(body, timing, kind, span);
 const hasAction = (actions, type) => actions.some(action => action.type === type ||
   action.type === "IF" && (hasAction(action.then, type) || hasAction(action.else, type)));
-const needsDeltaProfile = new Set(["zone-deck-play", "zone-event-main-payment", "zone-auto-field-stat"]);
+const needsDeltaProfile = new Set(["zone-deck-play", "zone-event-main-payment", "zone-auto-field-stat", "zone-effect-play-batch"]);
 function mixedTraitTarget(text) {
   const form = /^(.*?)特徴《([^《》]+)》か『([^『』]+)』を含む特徴を持つキャラカード$/u.exec(text);
   if (!form) return null;
@@ -297,7 +297,7 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
     const ordered = /^(カード[1-9][0-9]?枚を引)き、(.+)$/u.exec(body);
     if (ordered && !/そのカード|引いたカード|引いた枚数/u.test(ordered[2])) {
       const first = legacy(ordered[1] + "く。", timing, cardType, sourceSpan);
-      const second = legacy(ordered[2], timing, cardType, sourceSpan) ?? parseZoneEffect(ordered[2], timing, cardType, sourceSpan, true);
+      const second = legacy(ordered[2], timing, cardType, sourceSpan) ?? parseZoneEffect(ordered[2], timing, cardType, sourceSpan, delta);
       if (first && second && !second.costs && !second.usageLimit && !second.optional)
         return { pattern: needsDeltaProfile.has(second.pattern) ? second.pattern : "zone-ordered-draw", actions: wrap([...first.actions, ...second.actions]) };
     }
@@ -325,11 +325,13 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
     if (follow && (!next || next.costs || next.usageLimit)) return null;
     return { pattern: "zone-trash-deck-top", actions: wrap([{ type: "TRASH_DECK_TOP", count: Number(mill[1]), sourceSpan }, ...(next?.actions ?? [])]) };
   }
-  const play = /^自分の(手札|トラッシュ)から、?(.+?)1枚までを、?(レストで|アクティブで)?登場させる。(?:その後、(.+))?$/u.exec(body);
+  const play = /^自分の(手札|トラッシュ)から、?(.+?)([1-5])枚までを、?(レストで|アクティブで)?登場させる。(?:その後、(.+))?$/u.exec(body);
   if (!play) {
     const parsed = delta && text !== normalized && legacy(text, timing, cardType, sourceSpan);
     return parsed ? { ...parsed, pattern: "zone-end-phase-or-target-syntax" } : null;
   }
+  const max = Number(play[3]);
+  if (max > 1 && (delta !== "batch-play" || play[1] !== "手札")) return null;
   const named = (delta ? /「[^「」\r\n]+」$/u : /^「[^「」\r\n]+」$/u).test(play[2]);
   // Only characters can enter this destination, even if the text specifies only a name.
   const names = delta && /^(?:「[^「」]+」か){1,4}「[^「」]+」$/u.test(play[2]) &&
@@ -338,14 +340,14 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
     type: "CARD_NAME", subject: "CANDIDATE", basis: "CURRENT", op: "eq", value
   })) } } : searchTarget(named ? `${play[2]}のキャラカード` : play[2], true, true) ?? (delta ? mixedTraitTarget(play[2]) : null);
   if (!target || target.kinds.length !== 1 || target.kinds[0] !== "character") return null;
-  const after = play[4] && legacy(play[4], timing, cardType, sourceSpan);
-  if (play[4] && (!after || after.costs || after.usageLimit)) return null;
+  const after = play[5] && legacy(play[5], timing, cardType, sourceSpan);
+  if (play[5] && (!after || after.costs || after.usageLimit)) return null;
   const from = play[1] === "手札" ? "hand" : "trash", bindAs = `zone_play_${sourceSpan.start}`;
-  const pick = draftSelect(bindAs, from, "SELF", 0, 1, target.filters, { visibility: from === "hand" ? "OWNER_ONLY" : "PUBLIC" });
+  const pick = draftSelect(bindAs, from, "SELF", 0, max, target.filters, { visibility: from === "hand" ? "OWNER_ONLY" : "PUBLIC" });
   pick.selector.cardTypes = ["character"];
-  return { pattern: from === "hand" ? "zone-effect-play-full" : "zone-effect-play-trash", actions: wrap([pick,
+  return { pattern: max > 1 ? "zone-effect-play-batch" : from === "hand" ? "zone-effect-play-full" : "zone-effect-play-trash", actions: wrap([pick,
     { type: "PLAY_BY_EFFECT", cards: { ref: `bindings.${bindAs}` }, from,
-      destination: { owner: "SELF", zone: "character", slotPolicy: "REPLACE_IF_FULL" }, enterState: play[3] === "レストで" ? "REST" : "ACTIVE",
+      destination: { owner: "SELF", zone: "character", slotPolicy: "REPLACE_IF_FULL" }, enterState: play[4] === "レストで" ? "REST" : "ACTIVE",
       provenance: "EFFECT", condition: always(), sourceSpan }, ...(after?.actions ?? [])]) };
 }
 

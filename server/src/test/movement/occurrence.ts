@@ -5,6 +5,14 @@ export type MovementOccurrence = Readonly<{
 }>;
 const tracked = new WeakSet<MovementState>();
 const occurrences = new WeakMap<MovementEvent, MovementOccurrence>();
+const characterEntryBatch = new WeakSet<MovementEvent>();
+
+// Only the effect coordinator certifies a committed simultaneous character entry.
+export function markCharacterEntryBatch(events: readonly MovementEvent[]): void {
+  for (const event of events)
+    if (event.kind === "moved" && event.from?.zone === "hand" && event.to?.zone === "character") characterEntryBatch.add(event);
+}
+export function isCharacterEntryBatch(event: MovementEvent): boolean { return characterEntryBatch.has(event); }
 
 // Opt-in server-only evidence. Neither snapshots nor this journal are movement DTOs.
 export function trackMovementOccurrences(state: MovementState): void { tracked.add(state); }

@@ -197,6 +197,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     peekTop: amount => board().players[identity.actor].deck.slice(0, amount).map(id => ({ instanceId: id!, generation: board().cards[id!]!.generation })),
     numeric: (value, bindings) => { const result = read(value, bindings); return typeof result === "number" ? result : "unknown"; },
     effectPlayFull: () => !board().players[identity.actor].character.includes(null),
+    effectPlayFreeSlots: () => board().players[identity.actor].character.filter(id => id === null).length,
     lifeMoveCard: (player, from) => {
       const state = board(), zones = state.players[player];
       const id = from === "DECK_TOP" ? zones.deck[0] : from === "LIFE_TOP" ? zones.life[0] : zones.life.at(-1);

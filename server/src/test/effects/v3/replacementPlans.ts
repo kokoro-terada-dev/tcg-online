@@ -80,7 +80,7 @@ export function planReplacements(board: MovementState, workId: string, identity:
         ensureMove(target !== "unknown", "v3-replacement-target-unknown");
         if (!target) continue;
       }
-      const prioritized = ["3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52"].includes(definition.definition.schemaVersion);
+      const prioritized = ["3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53"].includes(definition.definition.schemaVersion);
       const candidateId = hash([intentId, definition.definitionHash, rule.id, ...(prioritized ? [source] : [])]);
       const alternateCause: EventCause = { kind: "EFFECT_MOVE", actor: at.player, effectController: at.player,
         source, resolutionId: candidateId, parentEventId: null };

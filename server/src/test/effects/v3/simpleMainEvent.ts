@@ -21,7 +21,7 @@ export function isShareableMainEvent(effect: DeepReadonly<Effect>, privateDeck =
 }
 
 export function isLifeTriggerBody(effect: DeepReadonly<Effect>, cardType: CardDefinition["cardType"], schema: CardDefinition["schemaVersion"]): boolean {
-  const expanded = (schema === "3.0.0-subset.51" || schema === "3.0.0-subset.52");
+  const expanded = (schema === "3.0.0-subset.51" || (schema === "3.0.0-subset.52" || schema === "3.0.0-subset.53"));
   if (effect.timing.type === "MAIN")
     return cardType === "event" && isInteractiveMainEvent(effect, expanded || schema === "3.0.0-subset.50");
   if (!expanded || !(cardType === "event" && effect.timing.type === "COUNTER" ||
