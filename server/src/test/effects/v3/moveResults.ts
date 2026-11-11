@@ -30,7 +30,20 @@ export function emptyMoveResult(identity: ResolutionIdentity, workId: string, re
 }
 
 export function captureMoveResult(before: MovementState, result: TransactionResult, identity: ResolutionIdentity, workId: string,
-  requested: readonly Ref[], facts: (state: MovementState, ref: Ref, viewer: 0 | 1) => KnownOrUnknown<DerivedCardFacts>, includePrinted = false, replacement?: ReplacementPlan): MoveResult {
+  requested: readonly Ref[], facts: (state: MovementState, ref: Ref, viewer: 0 | 1) => KnownOrUnknown<DerivedCardFacts>, includePrinted = false, replacement?: ReplacementPlan,
+  groupCommit?: { alternate: TransactionResult; remaining?: TransactionResult }): MoveResult {
+  if (replacement?.group) {
+    ensureMove(groupCommit && replacement.intent.workId === workId && before.matchId === identity.matchId &&
+      result.state === (groupCommit.remaining?.state ?? groupCommit.alternate.state), "v3-group-replacement-result-context");
+    const transactionId = verifyReplacementOutcome(before, groupCommit.alternate, replacement);
+    const replaced = replacement.group.protectedCards.map(ref => ({ ...ref }));
+    const remaining = requested.filter(ref => !replaced.some(row => row.instanceId === ref.instanceId && row.generation === ref.generation));
+    ensureMove(replaced.length + remaining.length === requested.length && Boolean(remaining.length) === Boolean(groupCommit.remaining), "v3-group-replacement-result-targets");
+    const tail = groupCommit.remaining ? captureMoveResult(groupCommit.alternate.state, groupCommit.remaining, identity, workId, remaining, facts, includePrinted) : null;
+    const memory = freezeMovement({ ...emptyMoveResult(identity, workId, before.revision), afterRevision: result.state.revision,
+      transactionId, replaced, rows: tail?.rows ?? [], ...(tail?.prevented ? { prevented: tail.prevented } : {}) });
+    certified.add(memory); return memory;
+  }
   ensureMove(before.matchId === identity.matchId && result.state.matchId === identity.matchId && result.state.revision === before.revision + 1 &&
     requested.length > 0 && requested.length <= 50 && new Set(requested.map(ref => ref.instanceId)).size === requested.length, "v3-move-result-context");
   if (replacement) {

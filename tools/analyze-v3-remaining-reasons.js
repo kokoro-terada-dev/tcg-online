@@ -56,7 +56,7 @@ if (trace.executable !== false || trace.cards.length !== trace.totals.sourceCard
     new Set(trace.cards.map(card => card.cardId)).size !== trace.cards.length) throw Error("Full draft report required");
 const categories = { A: new Set(), B: new Set(), C: new Set(), D: new Set() };
 const profiles = JSON.parse(fs.readFileSync(new URL("../docs/card-effect-supported-operations.json", import.meta.url), "utf8")).profiles;
-const deltaProfile = ["3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60", "3.0.0-subset.61"].some(profile => trace.registryHash === profiles[profile]?.registryHash);
+const deltaProfile = ["3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60", "3.0.0-subset.61", "3.0.0-subset.62"].some(profile => trace.registryHash === profiles[profile]?.registryHash);
 const zoneProfile = deltaProfile || trace.registryHash === profiles["3.0.0-subset.50"]?.registryHash;
 const superseded = new Set(["source-specific-attached-don-count", "hand-effect-play-full-field", "effect-play-from-trash",
   "deck-top-to-trash-without-look", "event-main-private-deck-program", "continuous-source-identity"]);

@@ -5,12 +5,12 @@ import type { CardObjectRef } from "../types";
 import type { ApprovedV3Card } from "./approval";
 import { effectsDisabled, type KeywordGrants } from "./keywordEffects";
 import { protectionRules } from "./protectionRules";
-import { planReplacements, type ReplacementPlan } from "./replacementPlans";
+import { planReplacements, replacementLabel, type ReplacementPlan } from "./replacementPlans";
 
 type Move = Extract<MovementOperation, { kind: "move" }>;
 type EnvironmentFor = Parameters<typeof planReplacements>[6];
 export type BattleReplacement = Readonly<{ id: string; cardId: string; label: string; source: Readonly<CardObjectRef>;
-  operation: Move; plan?: ReplacementPlan }>;
+  operation: Move | Extract<MovementOperation, { kind: "setRest" }>; plan?: ReplacementPlan }>;
 
 export function battleReplacementCandidates(board: MovementState, intent: "BATTLE_KO" | "DAMAGE", battleId: string,
   attacker: Player, defender: Player, attackSource: Readonly<CardObjectRef>, target: Readonly<CardObjectRef>,
@@ -23,7 +23,8 @@ export function battleReplacementCandidates(board: MovementState, intent: "BATTL
       matchId: board.matchId, resolutionId: battleId, effectId: "battle-ko", actor: attacker, source: attackSource
     }, [move], definitions, activePlayer, environmentFor, used, grants).flatMap(plan =>
       plan.substitute && plan.cause.source ? [{ id: plan.candidateId, cardId: plan.sourceCardId,
-        label: `${plan.sourceLabel}：ライフを手札へ`, source: plan.cause.source, operation: plan.substitute, plan }] : []);
+        label: `${plan.sourceLabel}：${plan.group ? replacementLabel(plan.substitute) : "ライフを手札へ"}`,
+        source: plan.cause.source, operation: plan.substitute, plan }] : []);
   }
   const rules = protectionRules(board, definitions, activePlayer, "effect", grants);
   return board.players[defender].character.flatMap(id => {

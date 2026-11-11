@@ -22,7 +22,7 @@ export const PUBLIC_TRIGGER_COUNT_REFS = (["SELF", "OPPONENT"] as const).flatMap
   [`${side}.lifeCount`, `${side}.handCount`, ...DON_COUNT_SCOPES.map(scope => `${side}.don.${scope}`)]);
 export type Value = number | string | boolean | null | { ref: "BOTH.lifeCount" | DonCountRef | "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "base" | "current"}.${MutableStat}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42" | "3.0.0-subset.43" | "3.0.0-subset.44" | "3.0.0-subset.45" | "3.0.0-subset.46" | "3.0.0-subset.47" | "3.0.0-subset.48" | "3.0.0-subset.49" | "3.0.0-subset.50" | "3.0.0-subset.51" | "3.0.0-subset.52" | "3.0.0-subset.53" | "3.0.0-subset.54" | "3.0.0-subset.55" | "3.0.0-subset.56" | "3.0.0-subset.57" | "3.0.0-subset.58" | "3.0.0-subset.59" | "3.0.0-subset.60" | "3.0.0-subset.61";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42" | "3.0.0-subset.43" | "3.0.0-subset.44" | "3.0.0-subset.45" | "3.0.0-subset.46" | "3.0.0-subset.47" | "3.0.0-subset.48" | "3.0.0-subset.49" | "3.0.0-subset.50" | "3.0.0-subset.51" | "3.0.0-subset.52" | "3.0.0-subset.53" | "3.0.0-subset.54" | "3.0.0-subset.55" | "3.0.0-subset.56" | "3.0.0-subset.57" | "3.0.0-subset.58" | "3.0.0-subset.59" | "3.0.0-subset.60" | "3.0.0-subset.61" | "3.0.0-subset.62";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
 export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "BANISH" | "DOUBLE_ATTACK" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
@@ -105,11 +105,12 @@ export interface CostMap {
 export interface ReplacementMap {
   REPLACE_EVENT: NodeMeta & {
     type: "REPLACE_EVENT"; id: string;
-    match: { cause: "EFFECT_KO" | "EFFECT_MOVE" | "OPPONENT_LEAVE" | "DAMAGE"; by: "SELF" | "OPPONENT" | "ANY"; from: "character"; to: "trash" | "hand" | "deck" | "public" | "ANY" };
+    match: { cause: "EFFECT_KO" | "EFFECT_MOVE" | "OPPONENT_LEAVE" | "DAMAGE" | "OPPONENT_EFFECT_LEAVE" | "KO"; by: "SELF" | "OPPONENT" | "ANY"; from: "character"; to: "trash" | "hand" | "deck" | "public" | "ANY" };
     condition: Predicate;
+    group?: { filters: Predicate };
     target?: { type: "OWN_CHARACTER"; minPrintedCost: number } | { type: "OWN_CHARACTER"; maxPrintedPower: number };
     usageLimit?: "ONCE_PER_TURN";
-  } & ({ substitute: { to: "hand" | "trash"; from?: "LIFE_TOP" | "SOURCE" }; optionalPayment?: never } |
+  } & ({ substitute: { to: "hand" | "trash" | "character"; from?: "LIFE_TOP" | "SOURCE" | "SOURCE_KO" | "SOURCE_REST" }; optionalPayment?: never } |
     { substitute: { type: "PREVENT" }; optionalPayment: (Omit<CostMap["MOVE_AS_COST"], "selector"> & { selector: Extract<SelectorMap["CARDS"], { zone: "hand" }> }) |
       (CostMap["DON_RETURN"] & { count: 1 }) });
 }

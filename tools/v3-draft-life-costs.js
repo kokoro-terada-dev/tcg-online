@@ -10,6 +10,13 @@ const power = (bind, amount, duration, sourceSpan) =>
 export function battleReplacementProgram(text, cardType, sourceSpan) {
   if (cardType !== "character") return null;
   const base = { type: "REPLACE_EVENT", id: `replacement-${sourceSpan.start}`, sourceSpan, condition: all() };
+  if (text === "自分のキャラが相手の効果で場を離れる場合、代わりにこのキャラをKOできる。") return { ...base,
+    match: { cause: "OPPONENT_EFFECT_LEAVE", by: "OPPONENT", from: "character", to: "ANY" },
+    group: { filters: all() }, substitute: { from: "SOURCE_KO", to: "trash" } };
+  const rest = /^自分の特徴《([^《》]+)》か《([^《》]+)》を持つキャラがKOされる場合、代わりにこのキャラをレストにできる。$/u.exec(text);
+  if (rest) return { ...base, match: { cause: "KO", by: "ANY", from: "character", to: "trash" },
+    group: { filters: { type: "CARD_METADATA", subject: "CANDIDATE", basis: "CURRENT", field: "traits",
+      comparison: "EXACT", match: "ANY", values: [rest[1], rest[2]] } }, substitute: { from: "SOURCE_REST", to: "character" } };
   if (text === "自分がダメージを受ける場合、代わりにこのキャラをトラッシュに置くことができる。") return { ...base,
     match: { cause: "DAMAGE", by: "ANY", from: "character", to: "ANY" }, substitute: { from: "SOURCE", to: "trash" } };
   const leave = /^【ターン1回】自分の元々のパワー([0-9]{1,5})以下のキャラが相手によって場を離れる場合、代わりに自分のライフの上から1枚を手札に加えることができる。$/u.exec(text);

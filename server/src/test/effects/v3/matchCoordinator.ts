@@ -422,12 +422,12 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60", "3.0.0-subset.61"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60", "3.0.0-subset.61", "3.0.0-subset.62"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
-      const supported = ["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60", "3.0.0-subset.61"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
+      const supported = ["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60", "3.0.0-subset.61", "3.0.0-subset.62"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
         card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent : isInteractiveMainEvent;
-      return card.definition.effects.filter(effect => supported(effect, ["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60", "3.0.0-subset.61"].includes(card.definition.schemaVersion))).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
+      return card.definition.effects.filter(effect => supported(effect, ["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60", "3.0.0-subset.61", "3.0.0-subset.62"].includes(card.definition.schemaVersion))).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
         enabled: this.#board.players[actor].activeDon.length >= cost && (!effect.costs.length || effect.costs[0]?.type === "REST_AS_COST" ||
           this.#canActivateEffect(actor, source, card, effect.id)) && (!effect.usageLimit ||
           (this.#usage.get(effectUsageKey(this.#board.turnNumber, actor, { ...source, generation: source.generation + 1 }, effect.id)) ?? 0) < effect.usageLimit.count),
@@ -494,7 +494,7 @@ export class V3SyntheticMatchCoordinator {
     const board = this.#board;
     if (![...board.players[actor].character, ...board.players[actor].leader, ...board.players[actor].stage].some(id => {
       const object = id === null ? undefined : board.cards[id];
-      return object && this.#cards.get(object.cardId)?.definition.replacementEffects?.some(rule => ["DAMAGE", "OPPONENT_LEAVE"].includes(rule.match.cause));
+      return object && this.#cards.get(object.cardId)?.definition.replacementEffects?.some(rule => ["DAMAGE", "OPPONENT_LEAVE", "KO"].includes(rule.match.cause));
     })) return [];
     const intent = battleDamageIntent(board, this.#progression, actor, this.#cards, this.#statEffects, this.#battleCounters, this.#keywordGrants);
     if (!intent) return [];
@@ -517,8 +517,8 @@ export class V3SyntheticMatchCoordinator {
           turnNumber: board.turnNumber, actor, effectController: actor, source: selected.source, mode: "effect",
           resolutionId: plan?.cause.resolutionId ?? this.#progression.battle!.battleId, operations: [selected.operation] },
           protectionRules(board, this.#cards, this.#progression.activePlayer, "effect", this.#keywordGrants));
-        ensureMove(!result.prevented.length && result.events.some(event => event.kind === "moved" && !event.isKO), "v3-battle-replacement-not-applied");
         if (plan) verifyReplacementOutcome(board, result, plan);
+        else ensureMove(!result.prevented.length && result.events.some(event => event.kind === "moved" && !event.isKO), "v3-battle-replacement-not-applied");
         this.#acceptBattle({ movement: result.state, progression: this.#progression, events: result.events, deferredEffects: true }, this.#battleCounters, null);
         if (plan?.usageKey) this.#replacementUsage = freezeMovement([...this.#replacementUsage, plan.usageKey]);
         return;
