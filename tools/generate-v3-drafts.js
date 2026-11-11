@@ -12,7 +12,7 @@ import { parseCompoundEffect } from "./v3-draft-compound.js";
 import { parseContinuousRecipe, parseDraftMode } from "./v3-draft-recipes.js";
 import { normalizeGrammar, parseCompletionEffect, parseNewFieldRecipe } from "./v3-draft-completion.js";
 import { parseAttachedPrefix, parseZoneContinuous, parseZoneEffect } from "./v3-draft-zones.js";
-import { lifeCostProgram } from "./v3-draft-life-costs.js";
+import { battleReplacementProgram, lifeCostProgram } from "./v3-draft-life-costs.js";
 
 const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
@@ -269,6 +269,10 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
       const match = lines[i], span = { field, start: match.index, end: match.index + match[0].length, text: match[0] };
       if (!span.text.trim()) continue;
       let parsed = parseSpan(span, cardType, gaps, spans.at(-1), variant[field], extended, recipes, batch, expansion, refinement, completion, zones);
+      if (zones === "delta" && field === "text" && parsed.status !== "recognized") {
+        const replacement = battleReplacementProgram(span.text.trim(), cardType, { start: span.start, end: span.end });
+        if (replacement) parsed = { ...span, status: "recognized", pattern: "zone-battle-replacement", replacement };
+      }
       if (zones === "delta" && cardType === "character" && parsed.continuousEffects?.length === 2 &&
         /^相手の元々のパワー[0-9]+以上のキャラがいる場合、このキャラは【ブロッカー】を得て、パワー\+[0-9]+。$/u.test(span.text.trim())) {
         const effects = structuredClone(parsed.continuousEffects);
@@ -390,6 +394,7 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const skipRefresh = variant.spans.some(span => span.pattern === "zone-skip-refresh");
   const fieldRestriction = variant.spans.some(span => span.pattern === "zone-field-restriction");
   const koAndStatCosts = variant.spans.some(span => span.pattern === "zone-ko-and-stat-costs");
+  const battleReplacement = variant.spans.some(span => span.pattern === "zone-battle-replacement");
   const fieldBinding = variant.spans.some(span => ["zone-auto-field-stat", "zone-turn-resolving-entry"].includes(span.pattern));
   const deckPlay = variant.spans.some(span => ["zone-deck-play", "zone-trigger-body", "zone-event-main-payment", "zone-event-main-mode",
     "zone-continuous-stable-guard"].includes(span.pattern));
@@ -397,7 +402,7 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const continuousEffects = variant.spans.flatMap(span => span.continuousEffects ?? (span.continuous ? [span.continuous] : []));
   const replacementEffects = variant.spans.flatMap(span => span.replacement ? [span.replacement] : []);
   return {
-    schemaVersion: koAndStatCosts ? "3.0.0-subset.59" : fieldRestriction ? "3.0.0-subset.58" : skipRefresh ? "3.0.0-subset.57" : revealConfirmation ? "3.0.0-subset.56" : restCardCost ? "3.0.0-subset.55" : lifeCost ? "3.0.0-subset.54" : batchPlay ? "3.0.0-subset.53" : fieldBinding ? "3.0.0-subset.52" : deckPlay ? "3.0.0-subset.51" : zones ? "3.0.0-subset.50" : recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
+    schemaVersion: battleReplacement ? "3.0.0-subset.60" : koAndStatCosts ? "3.0.0-subset.59" : fieldRestriction ? "3.0.0-subset.58" : skipRefresh ? "3.0.0-subset.57" : revealConfirmation ? "3.0.0-subset.56" : restCardCost ? "3.0.0-subset.55" : lifeCost ? "3.0.0-subset.54" : batchPlay ? "3.0.0-subset.53" : fieldBinding ? "3.0.0-subset.52" : deckPlay ? "3.0.0-subset.51" : zones ? "3.0.0-subset.50" : recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
     cardVersion: recipes ? "draft.recipes.1" : compound ? "draft.pr29.1" : conditionalTriggerPlay ? "draft.pr28.1" : fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
       variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",

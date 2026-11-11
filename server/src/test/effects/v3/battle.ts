@@ -147,9 +147,9 @@ export function declareBlock(board: MovementState, progression: Progression, act
   next = applySystemEvent(next, next.revision, { kind: "advanceBattle", battleId: battle.battleId, step: "block", participantsPresent: true });
   return { movement: result.state, progression: next, events: result.events };
 }
-export function battlePower(board: MovementState, progression: Progression, definitions: ReadonlyMap<string, ApprovedV3Card>, effects: StatEffects, counters: BattleCounters) {
+export function battlePower(board: MovementState, progression: Progression, definitions: ReadonlyMap<string, ApprovedV3Card>, effects: StatEffects, counters: BattleCounters, grants: KeywordGrants = []) {
   const battle = progression.battle; if (!battle) return null;
-  const facts = createDerivedCardFactsReader({ board: () => board, definitions, statEffects: () => effects, activePlayer: progression.activePlayer,
+  const facts = createDerivedCardFactsReader({ board: () => board, definitions, statEffects: () => effects, activePlayer: progression.activePlayer, keywordGrants: () => grants,
     counterPower: ref => counters.filter(entry => entry.target.instanceId === ref.instanceId && entry.target.generation === ref.generation).reduce((sum, entry) => sum + entry.amount, 0) });
   const power = (ref: Ref, player: Seat) => {
     field(board, ref, player);
@@ -194,21 +194,23 @@ export function finishDamagePoint(board: MovementState, progression: Progression
   if (battle.remainingDamage) progression = applySystemEvent(progression, progression.revision, { kind: "consumeRemainingDamage", battleId: battle.battleId });
   return finishDamageStep(progression);
 }
-export function damage(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, effects: StatEffects, counters: BattleCounters, transactionId: string, now: number, deferEffects = false, grants: KeywordGrants = []) {
+export function battleDamageIntent(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, effects: StatEffects, counters: BattleCounters, grants: KeywordGrants = []) {
   const battle = progression.battle;
   ensureMove(battle && actor === battle.defender && battle.step === "damage" && battle.decisionComplete && !battle.settled && progression.gate.kind === "idle" && !progression.outcome, "v3-battle-damage-window");
+  if (battle.remainingDamage) return board.players[actor].life.length > 0 ? "DAMAGE" : null;
+  const powers = battlePower(board, progression, definitions, effects, counters, grants)!;
+  const target = field(board, battle.target, actor);
+  return powers.attack < powers.defense ? null : target.kind === "leader" ? "DAMAGE" : "BATTLE_KO";
+}
+export function damage(board: MovementState, progression: Progression, actor: Seat, definitions: ReadonlyMap<string, ApprovedV3Card>, effects: StatEffects, counters: BattleCounters, transactionId: string, now: number, deferEffects = false, grants: KeywordGrants = []) {
+  const intent = battleDamageIntent(board, progression, actor, definitions, effects, counters, grants);
+  const battle = progression.battle!;
   let next = progression; let movement = board; let events: readonly MovementEvent[] = [];
   let pendingLife: LifeDecision | null = null;
   let deferredEffects = false;
-  let hitsLeader: boolean, hitsCharacter = false;
+  const hitsLeader = intent === "DAMAGE", hitsCharacter = intent === "BATTLE_KO";
   if (battle.remainingDamage) {
-    hitsLeader = board.players[actor].life.length > 0;
     next = applySystemEvent(next, next.revision, { kind: "consumeRemainingDamage", battleId: battle.battleId });
-  } else {
-    const powers = battlePower(board, progression, definitions, effects, counters)!;
-    const target = field(board, battle.target, actor), hits = powers.attack >= powers.defense;
-    hitsLeader = hits && target.kind === "leader";
-    hitsCharacter = hits && target.kind === "character";
   }
   if (hitsLeader && board.players[actor].life.length === 0) {
     next = applySystemEvent(next, next.revision, { kind: "finishGame", winner: battle.attacker, reason: "leader-damage-at-zero-life" });

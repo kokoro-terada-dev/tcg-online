@@ -7,6 +7,17 @@ const life = operation => ({ type: "LIFE_TOP_COST", operation });
 const power = (bind, amount, duration, sourceSpan) =>
   ({ type: "MODIFY_STAT", cards: cards(bind), stat: "power", amount, duration, sourceSpan });
 
+export function battleReplacementProgram(text, cardType, sourceSpan) {
+  if (cardType !== "character") return null;
+  const base = { type: "REPLACE_EVENT", id: `replacement-${sourceSpan.start}`, sourceSpan, condition: all() };
+  if (text === "自分がダメージを受ける場合、代わりにこのキャラをトラッシュに置くことができる。") return { ...base,
+    match: { cause: "DAMAGE", by: "ANY", from: "character", to: "ANY" }, substitute: { from: "SOURCE", to: "trash" } };
+  const leave = /^【ターン1回】自分の元々のパワー([0-9]{1,5})以下のキャラが相手によって場を離れる場合、代わりに自分のライフの上から1枚を手札に加えることができる。$/u.exec(text);
+  return leave ? { ...base, match: { cause: "OPPONENT_LEAVE", by: "OPPONENT", from: "character", to: "ANY" },
+    target: { type: "OWN_CHARACTER", maxPrintedPower: Number(leave[1]) }, substitute: { from: "LIFE_TOP", to: "hand" },
+    usageLimit: "ONCE_PER_TURN" } : null;
+}
+
 export function lifeCostProgram(text, timing, cardType, sourceSpan, branches = []) {
   const bind = `life_cost_target_${sourceSpan.start}`;
   const pattern = "zone-life-top-cost";

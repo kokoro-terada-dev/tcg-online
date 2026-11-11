@@ -28,6 +28,10 @@ import { characterEntryBatchId, entryDisplacementBatchId, trackMovementOccurrenc
 import { conditionalTriggersHeld, conditionalTriggersWaiting, emptyTriggerObservations, hasConditionalTriggers, hasPhaseBoundaries, observeBoundaryTriggers, observeConditionalTriggers, updateTriggerObservation, validateObservedSource, type TriggerObservations } from "./conditionalTriggers";
 import { createDerivedCardFactsReader, FIELD_KEYWORDS, UNKNOWN, type BoundaryEvent } from "./readContext";
 import { finishBlockStep } from "./battle";
+import { battleDamageIntent } from "./battle";
+import { battleReplacementCandidates } from "./battleReplacements";
+import { verifyReplacementOutcome } from "./replacementPlans";
+import { protectionRules } from "./protectionRules";
 import { expireAtBoundary, expiryCheckpoint, hasBoundaryDurations } from "./effectExpiry";
 
 type Seat = 0 | 1;
@@ -412,12 +416,12 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
-      const supported = ["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
+      const supported = ["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
         card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent : isInteractiveMainEvent;
-      return card.definition.effects.filter(effect => supported(effect, ["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59"].includes(card.definition.schemaVersion))).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
+      return card.definition.effects.filter(effect => supported(effect, ["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60"].includes(card.definition.schemaVersion))).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
         enabled: this.#board.players[actor].activeDon.length >= cost && (!effect.costs.length || effect.costs[0]?.type === "REST_AS_COST" ||
           this.#canActivateEffect(actor, source, card, effect.id)) && (!effect.usageLimit ||
           (this.#usage.get(effectUsageKey(this.#board.turnNumber, actor, { ...source, generation: source.generation + 1 }, effect.id)) ?? 0) < effect.usageLimit.count),
@@ -477,9 +481,43 @@ export class V3SyntheticMatchCoordinator {
       this.#acceptBattle({ movement: result.state, progression: this.#progression, events: result.events }, result.counters, null);
     });
   }
-  resolveDamage(actor: Seat, requestId: string, expected: V3MatchContext) {
-    return this.#run(actor, requestId, expected, { kind: "damage" }, () => {
-      this.#battleIdle(); const result = damage(this.#board, this.#progression, actor, this.#cards, this.#statEffects, this.#battleCounters, hash(`${this.#board.matchId}:${requestId}:damage`), this.#now(), true, this.#keywordGrants);
+  #battleReplacementOptions(actor: Seat) {
+    const battle = this.#progression.battle;
+    if (!battle || battle.defender !== actor || battle.step !== "damage" || !battle.decisionComplete || battle.settled || battle.remainingDamage ||
+      this.#progression.gate.kind !== "idle" || this.#active || this.#triggers.length || this.#lifeDecision || this.#damageSettling || this.#progression.outcome) return [];
+    const board = this.#board;
+    if (![...board.players[actor].character, ...board.players[actor].leader, ...board.players[actor].stage].some(id => {
+      const object = id === null ? undefined : board.cards[id];
+      return object && this.#cards.get(object.cardId)?.definition.replacementEffects?.some(rule => ["DAMAGE", "OPPONENT_LEAVE"].includes(rule.match.cause));
+    })) return [];
+    const intent = battleDamageIntent(board, this.#progression, actor, this.#cards, this.#statEffects, this.#battleCounters, this.#keywordGrants);
+    if (!intent) return [];
+    const master = pinMasterFacts(board, { master: this.#master, numericPolicy: "certifiedUnmodified" });
+    return battleReplacementCandidates(board, intent, battle.battleId, battle.attacker, battle.defender, battle.source, battle.target,
+      this.#cards, this.#progression.activePlayer, (ruleId, card, chooser, source) => fixtureEnvironment(() => board,
+        { matchId: board.matchId, resolutionId: battle.battleId, effectId: ruleId, actor: chooser, source }, card, master, this.#now,
+        [...this.#cards.values()], () => this.#statEffects, this.#progression.activePlayer, undefined, undefined, () => this.#keywordGrants),
+      key => this.#replacementUsage.includes(key), this.#keywordGrants).map(option => ({ ...option, token: createHmac("sha256", this.#key)
+        .update(JSON.stringify(["battle-replacement", actor, battle.battleId, this.context(), option.id])).digest("hex") }));
+  }
+  resolveDamage(actor: Seat, requestId: string, expected: V3MatchContext, replacementToken?: string) {
+    return this.#run(actor, requestId, expected, { kind: "damage", ...(replacementToken ? { replacementToken } : {}) }, () => {
+      this.#battleIdle();
+      if (replacementToken !== undefined) {
+        const selected = this.#battleReplacementOptions(actor).find(option => option.token === replacementToken);
+        ensureMove(selected, "v3-battle-replacement-unavailable");
+        const board = this.#board, plan = selected.plan, transactionId = plan?.candidateId ?? hash(`${board.matchId}:${requestId}:replacement`);
+        const result = new MovementStore(board).commit({ transactionId, matchId: board.matchId, expectedRevision: board.revision,
+          turnNumber: board.turnNumber, actor, effectController: actor, source: selected.source, mode: "effect",
+          resolutionId: plan?.cause.resolutionId ?? this.#progression.battle!.battleId, operations: [selected.operation] },
+          protectionRules(board, this.#cards, this.#progression.activePlayer, "effect", this.#keywordGrants));
+        ensureMove(!result.prevented.length && result.events.some(event => event.kind === "moved" && !event.isKO), "v3-battle-replacement-not-applied");
+        if (plan) verifyReplacementOutcome(board, result, plan);
+        this.#acceptBattle({ movement: result.state, progression: this.#progression, events: result.events, deferredEffects: true }, this.#battleCounters, null);
+        if (plan?.usageKey) this.#replacementUsage = freezeMovement([...this.#replacementUsage, plan.usageKey]);
+        return;
+      }
+      const result = damage(this.#board, this.#progression, actor, this.#cards, this.#statEffects, this.#battleCounters, hash(`${this.#board.matchId}:${requestId}:damage`), this.#now(), true, this.#keywordGrants);
       this.#acceptBattle(result, this.#battleCounters, result.pendingLife);
     });
   }
@@ -628,7 +666,10 @@ export class V3SyntheticMatchCoordinator {
     const battle = this.#progression.battle, life = this.#lifeDecision;
     const fieldFacts = this.#fieldFacts();
     let powers: ReturnType<typeof battlePower> = null;
-    try { powers = battlePower(this.#board, this.#progression, this.#cards, this.#statEffects, this.#battleCounters); } catch { /* Unknown facts must not be displayed as zero. */ }
+    try { powers = battlePower(this.#board, this.#progression, this.#cards, this.#statEffects, this.#battleCounters, this.#keywordGrants); } catch { /* Unknown facts must not be displayed as zero. */ }
+    let battleReplacements: { token: string; label: string; cardId: string }[] = [];
+    try { battleReplacements = this.#battleReplacementOptions(viewer).map(({ token, label, cardId }) => ({ token, label, cardId })); }
+    catch { /* Unknown facts cannot authorize a replacement choice. */ }
     const revealIds = [...new Set(this.#board.reveals.filter(grant => grant.viewers.includes(0) && grant.viewers.includes(1)).map(grant => grant.card.instanceId))];
     const heldId = this.#board.players.flatMap(zones => zones.resolving)[0], held = heldId ? this.#board.cards[heldId]! : null;
     return freezeMovement({ mode: this.#reviewed ? "v3-reviewed-session" as const : "v3-synthetic-session" as const, context: this.context(), movement: active?.movement ?? projectV3Movement(this.#board, viewer),
@@ -644,6 +685,7 @@ export class V3SyntheticMatchCoordinator {
         ...(entry.cause.type === "ON_EVENT" ? { sourceLabel: `${location(this.#board, entry.source.instanceId).zone} ${this.#board.players[viewer][location(this.#board, entry.source.instanceId).zone].indexOf(entry.source.instanceId) + 1}` } : {}) })),
       battle: battle ? { ...battle, powers } : null, battleRules: V3_BASE_BATTLE_RULES.version, deckOutPolicy: DECK_OUT_POLICY.version, outcome: this.#progression.outcome, damageEffectsPending: this.#damageSettling,
       counterChoices: counterCandidates(this.#board, this.#progression, viewer, this.#cards), counterEventChoices: !this.#triggers.length && !this.#active ? counterEventChoices(this.#board, this.#progression, viewer, this.#cards) : [], blockerChoices: blockerOptions(this.#board, this.#progression, viewer, this.#cards, this.#keywordGrants), lifePending: !!life,
+      battleReplacements,
       lifeChoice: life?.defender === viewer ? { selectionId: life.selectionId, token: life.token, expiresAt: life.expiresAt, cardId: this.#board.cards[life.card.instanceId]!.cardId,
         canTrigger: this.#lifeTriggerAvailable(viewer, life.card) } : null,
       lifeTrigger: held ? { cardId: held.cardId, owner: held.owner } : null,

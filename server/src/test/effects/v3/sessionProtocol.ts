@@ -19,6 +19,7 @@ export type V3SessionView = Readonly<{
   mainEventChoices: readonly Readonly<{ source: Readonly<{ instanceId: string; generation: number }>; sourceToken: string; cardId: string; effectId: string; cost: number; enabled: boolean }>[];
   mainEvent: Readonly<{ cardId: string; effectId: string; actor: 0 | 1; paidCost: number }> | null;
   lifePending: boolean; lifeChoice: Readonly<{ selectionId: string; token: string; expiresAt: number; cardId: string; canTrigger: boolean }> | null;
+  battleReplacements?: readonly Readonly<{ token: string; label: string; cardId: string }>[];
   lifeTrigger: Readonly<{ cardId: string; owner: 0 | 1 }> | null;
   resolutionActor: 0 | 1 | null; workType: V3FixtureView["workType"];
   effects: readonly Readonly<{ sourceToken: string; source: Readonly<{ instanceId: string; generation: number }>; cardId: string; zone: "leader" | "character" | "stage"; slot: number; effectId: string; label: string; enabled: boolean; used: number; limit: number | null }>[];
@@ -33,7 +34,8 @@ export type V3SessionCommand = Readonly<{ matchId: string; requestId: string; co
   { kind: "counter"; card: Readonly<{ instanceId: string; generation: number }>; target: Readonly<{ instanceId: string; generation: number }> } |
   { kind: "counterEvent"; card: Readonly<{ instanceId: string; generation: number }>; effectId: string } |
   { kind: "mainEvent"; sourceToken: string; effectId: string } |
-  { kind: "life" | "lifeTrigger"; selectionId: string; token: string } | { kind: "passBlock" | "endCounter" | "damage" } |
+  { kind: "life" | "lifeTrigger"; selectionId: string; token: string } | { kind: "passBlock" | "endCounter" } |
+  { kind: "damage"; replacementToken?: string } |
   { kind: "attachDon"; target: Readonly<{ instanceId: string; generation: number }>; count: number } |
   { kind: "block"; card: Readonly<{ instanceId: string; generation: number }> } |
   { kind: "advance" | "work" | "endTurn" } | { kind: "answer"; selectionId: string; tokens: readonly string[] }

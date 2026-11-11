@@ -223,7 +223,8 @@ export async function startLocalV3Server(port = 0, options: Readonly<{ lanOrigin
       const fields: Record<string, string[]> = { activate: ["effectId", "sourceToken"], mainEvent: ["effectId", "sourceToken"], trigger: ["token"], play: ["card"], answer: ["selectionId", "tokens"], life: ["selectionId", "token"], lifeTrigger: ["selectionId", "token"],
         attack: ["source", "target"], counter: ["card", "target"], counterEvent: ["card", "effectId"], attachDon: ["target", "count"], block: ["card"], advance: [], work: [], endTurn: [], passBlock: [], endCounter: [], damage: [] };
       ensureMove(typeof kind === "string" && Object.hasOwn(fields, kind), "v3-session-command-kind");
-      dataObject(input, ["kind", "requestId", "matchId", "context", ...fields[kind]!, ...(kind === "play" && Object.hasOwn(input, "slotIndex") ? ["slotIndex"] : [])]);
+      dataObject(input, ["kind", "requestId", "matchId", "context", ...fields[kind]!],
+        kind === "play" ? ["slotIndex"] : kind === "damage" ? ["replacementToken"] : []);
       ensureMove(input.matchId === session.matchId, "v3-session-match-context"); const requestId = label(input.requestId), expected = input.context as V3SessionContext, c = session.coordinator;
       if (kind === "activate") c.activateMain(actor, requestId, expected, label(input.sourceToken), label(input.effectId));
       else if (kind === "mainEvent") c.useMainEvent(actor, requestId, expected, label(input.sourceToken), label(input.effectId));
@@ -233,7 +234,7 @@ export async function startLocalV3Server(port = 0, options: Readonly<{ lanOrigin
       else if (kind === "counterEvent") c.useCounterEvent(actor, requestId, expected, input.card as { instanceId: string; generation: number }, label(input.effectId));
       else if (kind === "block") c.block(actor, requestId, expected, input.card as { instanceId: string; generation: number });
       else if (kind === "passBlock" || kind === "endCounter") c.battleDecision(actor, requestId, expected, kind);
-      else if (kind === "damage") c.resolveDamage(actor, requestId, expected);
+      else if (kind === "damage") c.resolveDamage(actor, requestId, expected, Object.hasOwn(input, "replacementToken") ? label(input.replacementToken) : undefined);
       else if (kind === "life") c.takeDamageLife(actor, requestId, expected, label(input.selectionId), label(input.token));
       else if (kind === "lifeTrigger") c.useLifeTrigger(actor, requestId, expected, label(input.selectionId), label(input.token));
       else if (kind === "attachDon") c.attachDon(actor, requestId, expected, input.target as { instanceId: string; generation: number }, input.count as number);

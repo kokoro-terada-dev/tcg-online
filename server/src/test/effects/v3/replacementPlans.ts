@@ -8,6 +8,7 @@ import type { ApprovedV3Card } from "./approval";
 import type { Node } from "./dsl";
 import { filteredCostCandidates } from "./activationCosts";
 import { effectsDisabled, type KeywordGrants } from "./keywordEffects";
+import { topLifeCostOperation } from "./activationCosts";
 import { protectionRules } from "./protectionRules";
 import type { ResolutionEnvironment, ResolutionIdentity } from "./resolution";
 
@@ -26,6 +27,9 @@ const hash = (input: unknown) => createHash("sha256").update(JSON.stringify(inpu
 
 function matches(rule: Rule, move: Move, actor: Player): boolean {
   const match = rule.match;
+  if (match.cause === "DAMAGE") return false;
+  if (match.cause === "OPPONENT_LEAVE") return actor !== move.from.player && move.from.zone === "character" &&
+    move.to.zone !== "character" && ["EFFECT_KO", "EFFECT_MOVE", "BATTLE_KO"].includes(move.cause);
   return move.cause === match.cause && move.from.zone === match.from && move.to.zone === match.to &&
     (match.by === "ANY" || (move.from.player === actor ? match.by === "SELF" : match.by === "OPPONENT"));
 }
@@ -34,9 +38,8 @@ export function planReplacements(board: MovementState, workId: string, identity:
   definitions: ReadonlyMap<string, ApprovedV3Card>, activePlayer: Player,
   environmentFor: (ruleId: string, card: ApprovedV3Card, actor: Player, source: Move["card"]) => ResolutionEnvironment,
   used: (key: string) => boolean, grants: KeywordGrants = []): readonly ReplacementPlan[] {
-  let rules: ReturnType<typeof protectionRules> | undefined;
   function allowed(move: Move, cause: EventCause): boolean {
-    rules ??= protectionRules(board, definitions, activePlayer, "effect", grants);
+    const rules = protectionRules(board, definitions, activePlayer, cause.kind === "BATTLE_KO" ? "rule" : "effect", grants);
     if (rules.status === "certifiedNone") return true;
     ensureMove(rules.status === "evaluate", "v3-replacement-protection-unresolved");
     const result = rules.check({ kind: "move", operationIndex: 0, card: getCard(board, move.card),
@@ -63,8 +66,8 @@ export function planReplacements(board: MovementState, workId: string, identity:
     }));
     if (!candidates.length) continue;
     ensureMove(operations.length === 1, "v3-replacement-batch-unresolved");
-    const cause: EventCause = { kind: move.cause, actor: identity.actor, effectController: identity.actor, source: identity.source,
-      resolutionId: identity.resolutionId, parentEventId: null };
+    const cause: EventCause = { kind: move.cause, actor: identity.actor, effectController: move.cause === "BATTLE_KO" ? null : identity.actor, source: identity.source,
+      resolutionId: move.cause === "BATTLE_KO" ? null : identity.resolutionId, parentEventId: null };
     if (!allowed(move, cause)) return [];
     const intent = { workId, worldRevision: board.revision, identity, operation: move, cause };
     const intentId = hash(intent);
@@ -78,11 +81,13 @@ export function planReplacements(board: MovementState, workId: string, identity:
       ensureMove(valid !== "unknown", "v3-replacement-condition-unknown");
       if (!valid) continue;
       if (rule.target) {
-        const target = environment.evaluate({ type: "compare", left: { ref: "CANDIDATE.printed.cost" }, op: "gte", right: rule.target.minPrintedCost }, {}, move.card);
+        const target = environment.evaluate("maxPrintedPower" in rule.target ?
+          { type: "compare", left: { ref: "CANDIDATE.printed.power" }, op: "lte", right: rule.target.maxPrintedPower } :
+          { type: "compare", left: { ref: "CANDIDATE.printed.cost" }, op: "gte", right: rule.target.minPrintedCost }, {}, move.card);
         ensureMove(target !== "unknown", "v3-replacement-target-unknown");
         if (!target) continue;
       }
-      const prioritized = ["3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59"].includes(definition.definition.schemaVersion);
+      const prioritized = ["3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60"].includes(definition.definition.schemaVersion);
       const candidateId = hash([intentId, definition.definitionHash, rule.id, ...(prioritized ? [source] : [])]);
       const alternateCause: EventCause = { kind: "EFFECT_MOVE", actor: at.player, effectController: at.player,
         source, resolutionId: candidateId, parentEventId: null };
@@ -104,7 +109,10 @@ export function planReplacements(board: MovementState, workId: string, identity:
         modern ||= prioritized;
         continue;
       }
-      const substitute: Move = { ...move, cause: "EFFECT_MOVE", to: { player: at.player, zone: rule.substitute.to, position: "append", faceUp: true, rotated: false } };
+      const life = rule.substitute.from === "LIFE_TOP" ? topLifeCostOperation(board, at.player, "TO_HAND") : null;
+      if (rule.substitute.from === "LIFE_TOP" && life?.kind !== "move") continue;
+      const substitute: Move = life?.kind === "move" ? { ...life, cause: "EFFECT_MOVE" } :
+        { ...move, cause: "EFFECT_MOVE", to: { player: at.player, zone: rule.substitute.to, position: "append", faceUp: true, rotated: false } };
       if (!allowed(substitute, alternateCause)) continue;
       ensureMove(!definition.definition.replacementEffects?.some(next => next.id !== rule.id && matches(next, substitute, at.player)),
         "v3-replacement-chain-unresolved");

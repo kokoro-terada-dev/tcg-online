@@ -42,6 +42,10 @@ export function v3SessionCommand(view: V3SessionView, kind: V3SessionCommand["ki
   if (kind === "passBlock" || kind === "endCounter" || kind === "damage" || kind === "counter") {
     const battle = view.battle, step = kind === "passBlock" ? "block" : kind === "damage" ? "damage" : "counter";
     if (!battle || battle.defender !== view.localPlayerIndex || battle.step !== step || view.gate !== "idle" || view.lifePending || view.pendingTriggerCount) throw Error("Battle action is unavailable");
+    if (kind === "damage" && details.token !== undefined) {
+      if (!view.battleReplacements?.some(option => option.token === details.token)) throw Error("Battle replacement unavailable");
+      return { ...base, kind, replacementToken: details.token };
+    }
     if (kind !== "counter") return { ...base, kind };
     if (!details.card || !details.target || !view.counterChoices.some(choice => choice.card.instanceId === details.card!.instanceId && choice.card.generation === details.card!.generation)) throw Error("Counter is unavailable");
     return { ...base, kind, card: { ...details.card }, target: { ...details.target } };
