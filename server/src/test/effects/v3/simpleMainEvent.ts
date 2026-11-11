@@ -1,4 +1,4 @@
-import type { Action, Effect } from "./dsl";
+import type { Action, CardDefinition, Effect } from "./dsl";
 import type { DeepReadonly } from "../types";
 
 // PR05a exposes only bounded, choice-free programs. This is not another interpreter.
@@ -20,6 +20,19 @@ export function isShareableMainEvent(effect: DeepReadonly<Effect>, privateDeck =
   return interactiveMainEvent(effect, true, privateDeck);
 }
 
+export function isLifeTriggerBody(effect: DeepReadonly<Effect>, cardType: CardDefinition["cardType"], schema: CardDefinition["schemaVersion"]): boolean {
+  const expanded = schema === "3.0.0-subset.51";
+  if (effect.timing.type === "MAIN")
+    return cardType === "event" && isInteractiveMainEvent(effect, expanded || schema === "3.0.0-subset.50");
+  if (!expanded || !(cardType === "event" && effect.timing.type === "COUNTER" ||
+      cardType === "character" && (effect.timing.type === "ON_PLAY" || effect.timing.type === "ON_KO"))) return false;
+  const usesSourceIdentity = (value: unknown): boolean => value !== null && typeof value === "object" &&
+    ((value as Record<string, unknown>).type === "IS_SOURCE" || Object.values(value).some(usesSourceIdentity));
+  // Borrow the same source-independent body policy; do not activate the printed timing or pay the printed card cost.
+  return !usesSourceIdentity(effect.actions) &&
+    isInteractiveMainEvent({ ...effect, kind: "activated", timing: { type: "MAIN" }, sourceZones: ["hand"] }, true);
+}
+
 function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean, privateDeck: boolean): boolean {
   const sourceFree = (value: unknown): boolean => {
     if (!value || typeof value !== "object") return true;
@@ -35,7 +48,7 @@ function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean,
       case "CHOOSE_MODE": return action.modes.every(mode => mode.actions.every(supported));
       case "OFFER_PAYMENT": return action.costs.every(cost => cost.type !== "REST_SOURCE" && !(cost.type === "MOVE_AS_COST" && cost.selector === "SOURCE"));
       case "IF_PAYMENT_SUCCEEDED": return action.then.every(supported) && action.else.every(supported);
-      case "LOOK_TOP": case "ORDER_CARDS": case "RETURN_TO_DECK": case "TRASH_DECK_TOP": return privateDeck;
+      case "LOOK_TOP": case "ORDER_CARDS": case "RETURN_TO_DECK": case "TRASH_DECK_TOP": case "SHUFFLE_DECK": return privateDeck;
       case "SELECT": return privateDeck && action.selector.type === "BOUND_CARDS" || action.selector.type === "CARDS" && !action.selector.cardTypes.includes("don") &&
         (typeof action.selector.zone === "string" ? (privateDeck ? ["leader", "character", "stage", "hand", "trash"] : ["leader", "character", "stage", "hand"]).includes(action.selector.zone) :
           action.selector.zone.every(zone => ["leader", "character", "stage"].includes(zone)));

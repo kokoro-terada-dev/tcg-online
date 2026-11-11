@@ -22,7 +22,7 @@ export const PUBLIC_TRIGGER_COUNT_REFS = (["SELF", "OPPONENT"] as const).flatMap
   [`${side}.lifeCount`, `${side}.handCount`, ...DON_COUNT_SCOPES.map(scope => `${side}.don.${scope}`)]);
 export type Value = number | string | boolean | null | { ref: "BOTH.lifeCount" | DonCountRef | "SELF.lifeCount" | "SELF.handCount" | "OPPONENT.lifeCount" | "OPPONENT.handCount" | `SOURCE.${CardField}` | `CANDIDATE.${CardField}` | `${CardSubject}.${"printed" | "base" | "current"}.${MutableStat}` | `bindings.${string}.count` };
 export type CardSetRef = { ref: `bindings.${string}` };
-export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42" | "3.0.0-subset.43" | "3.0.0-subset.44" | "3.0.0-subset.45" | "3.0.0-subset.46" | "3.0.0-subset.47" | "3.0.0-subset.48" | "3.0.0-subset.49" | "3.0.0-subset.50";
+export type SchemaVersion = "3.0.0-subset.16" | "3.0.0-subset.17" | "3.0.0-subset.18" | "3.0.0-subset.19" | "3.0.0-subset.20" | "3.0.0-subset.21" | "3.0.0-subset.22" | "3.0.0-subset.23" | "3.0.0-subset.24" | "3.0.0-subset.25" | "3.0.0-subset.26" | "3.0.0-subset.27" | "3.0.0-subset.28" | "3.0.0-subset.29" | "3.0.0-subset.30" | "3.0.0-subset.31" | "3.0.0-subset.32" | "3.0.0-subset.33" | "3.0.0-subset.34" | "3.0.0-subset.35" | "3.0.0-subset.36" | "3.0.0-subset.37" | "3.0.0-subset.38" | "3.0.0-subset.39" | "3.0.0-subset.40" | "3.0.0-subset.41" | "3.0.0-subset.42" | "3.0.0-subset.43" | "3.0.0-subset.44" | "3.0.0-subset.45" | "3.0.0-subset.46" | "3.0.0-subset.47" | "3.0.0-subset.48" | "3.0.0-subset.49" | "3.0.0-subset.50" | "3.0.0-subset.51";
 export type CardSubject = "SOURCE" | "CANDIDATE";
 export type MetadataBasis = "PRINTED" | "CURRENT";
 export type AbilityTag = "BLOCKER" | "RUSH" | "RUSH_CHARACTER" | "CANNOT_BE_BLOCKED" | "BANISH" | "DOUBLE_ATTACK" | "MAIN" | "ON_PLAY" | "ON_ATTACK" | "ON_OPPONENT_ATTACK" | "ON_KO" | "COUNTER" | "TRIGGER";
@@ -65,7 +65,7 @@ export interface ActionMap {
   SET_DON_STATE: NodeMeta & { type: "SET_DON_STATE"; cards: CardSetRef; from: "ACTIVE" | "REST"; to: "ACTIVE" | "REST" };
   ADD_DON: NodeMeta & { type: "ADD_DON"; player: "SELF"; count: number; state: "ACTIVE" | "REST"; onInsufficient: "fail" };
   ADD_DON_UP_TO: NodeMeta & { type: "ADD_DON_UP_TO"; player: "SELF"; max: number; state: "ACTIVE" | "REST" };
-  PLAY_BY_EFFECT: NodeMeta & { type: "PLAY_BY_EFFECT"; cards: CardSetRef; from: "hand" | "trash";
+  PLAY_BY_EFFECT: NodeMeta & { type: "PLAY_BY_EFFECT"; cards: CardSetRef; from: "hand" | "trash" | "deck";
     destination: { owner: "SELF"; zone: "character"; slotPolicy: "FIRST_EMPTY" | "REPLACE_IF_FULL" }; enterState: "ACTIVE" | "REST"; provenance: "EFFECT"; condition: Predicate };
   REMEMBER_FACTS: NodeMeta & { type: "REMEMBER_FACTS"; result: string; cards: CardSetRef | null; snapshot: "BEFORE" | "AFTER"; basis: MetadataBasis; field: "colors"; bindAs: string };
   MOVE_RESULT: NodeMeta & { type: "MOVE_RESULT"; bindAs: string };
@@ -74,6 +74,7 @@ export interface ActionMap {
   MODIFY_STAT: NodeMeta & { type: "MODIFY_STAT"; cards: CardSetRef; stat: "power" | "cost"; amount: number; duration: Node<"duration"> };
   LOOK_TOP: NodeMeta & { type: "LOOK_TOP"; player: "SELF"; count: number; bindAs: string; onInsufficient: "fail" | "takeAvailable" };
   TRASH_DECK_TOP: NodeMeta & { type: "TRASH_DECK_TOP"; count: number | { ref: "SOURCE.attachedDonCount" } };
+  SHUFFLE_DECK: NodeMeta & { type: "SHUFFLE_DECK" };
   REVEAL: NodeMeta & { type: "REVEAL"; cards: CardSetRef; viewers: "BOTH" };
   ORDER_CARDS: NodeMeta & { type: "ORDER_CARDS"; cards: CardSetRef; excludeCards: CardSetRef | null; bindAs: string; chooser: "SELF" };
   RETURN_TO_DECK: NodeMeta & { type: "RETURN_TO_DECK"; cards: CardSetRef; player: "SELF"; position: "top" | "bottom" };
@@ -81,7 +82,7 @@ export interface ActionMap {
   SEQUENCE: NodeMeta & { type: "SEQUENCE"; actions: Action[] };
   IF: NodeMeta & { type: "IF"; condition: Predicate; then: Action[]; else: Action[] };
   SELECT: NodeMeta & { type: "SELECT"; selector: Node<"selector">; bindAs: string };
-  MOVE_CARD: NodeMeta & { type: "MOVE_CARD"; cards: CardSetRef; destination: { owner: Player | "CARD_OWNER"; zone: "hand" | "trash" | "deck" | "public"; position: "append" | "top" | "bottom"; faceUp: boolean }; cause: "EFFECT" };
+  MOVE_CARD: NodeMeta & { type: "MOVE_CARD"; cards: CardSetRef; excludeCards?: CardSetRef; destination: { owner: Player | "CARD_OWNER"; zone: "hand" | "trash" | "deck" | "public"; position: "append" | "top" | "bottom"; faceUp: boolean }; cause: "EFFECT" };
   KO: NodeMeta & { type: "KO"; cards: CardSetRef };
   REST: NodeMeta & { type: "REST"; cards: CardSetRef };
   SET_ACTIVE: NodeMeta & { type: "SET_ACTIVE"; cards: CardSetRef };

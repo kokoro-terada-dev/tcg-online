@@ -9,14 +9,14 @@ import { csv } from "./audit-effect-cards.js";
 import { draftSelect as select, emitV3Structure, parseV3Structure, structurePattern } from "./v3-draft-structure.js";
 import { classifyTriggerSelfPlay } from "./v3-trigger-self-play.js";
 import { parseCompoundEffect } from "./v3-draft-compound.js";
-import { parseContinuousRecipe } from "./v3-draft-recipes.js";
+import { parseContinuousRecipe, parseDraftMode } from "./v3-draft-recipes.js";
 import { normalizeGrammar, parseCompletionEffect, parseNewFieldRecipe } from "./v3-draft-completion.js";
 import { parseAttachedPrefix, parseZoneContinuous, parseZoneEffect } from "./v3-draft-zones.js";
 
 const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
 const { compileV3CardJson, supportsV3RuntimeProfile } = require("../server/dist/test/effects/v3/compiler.js");
-const { isInteractiveMainEvent } = require("../server/dist/test/effects/v3/simpleMainEvent.js");
+const { isInteractiveMainEvent, isLifeTriggerBody } = require("../server/dist/test/effects/v3/simpleMainEvent.js");
 const latest = "v3-draft-generator.15";
 const previousCompletion = "v3-draft-generator.14";
 const previousRefinement = "v3-draft-generator.13";
@@ -110,7 +110,9 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
     }
     if (previous?.effect && /^(?:\r\n|\r|\n)$/u.test(raw.slice(previous.end, start))) {
       const grant = /(?:【([^】]+)】|〖([^〗]+)〗)を得る。$/u.exec(previous.text.trim());
-      const definition = keywords.get(grant?.[1] ?? grant?.[2]);
+      const definition = keywords.get(grant?.[1] ?? grant?.[2]) ?? (zones === "delta" ?
+        [...keywords.values()].find(value => reminder(text.trim(), value) &&
+          [...keywords.entries()].some(([label, row]) => row === value && (previous.text.includes(`【${label}】を得る。`) || previous.text.includes(`〖${label}〗を得る。`)))) : null);
       if (definition && reminder(text.trim(), definition) && grantsKeyword(previous.effect.actions, definition[0]))
         return { ...span, status: "recognized", pattern: "recipe-granted-keyword-reminder", attachedTo: previous.start };
     }
@@ -132,14 +134,15 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
         timing[2].includes(cardType) && second[2].includes(cardType) && !/^[【〖]/u.test(shared)) {
       const parsed = [timing, second].map(t => parseCompoundEffect(shared, t[0], cardType, sourceSpan, false) ??
         (recipes ? parseCompoundEffect(shared, t[0], cardType, sourceSpan, false, true) : null) ??
-        (batch ? parseCompoundEffect(shared, t[0], cardType, sourceSpan, false, true, true) : null));
+        (batch ? parseCompoundEffect(shared, t[0], cardType, sourceSpan, false, true, true) : null) ??
+        (zones === "delta" ? parseZoneEffect(shared, t[0], cardType, sourceSpan, true) : null));
       if (parsed.every(Boolean)) {
         const effects = [timing, second].map((t, index) => {
           const { pattern, structure, ...program } = parsed[index];
           return { ...effectFor(field, start, cardType, t, `-${index + 1}`), ...program };
         });
-        return { ...span, status: "recognized", pattern: parsed.some(p => p.pattern.startsWith("recipe-")) ?
-          "recipe-multiple-timings" : "pr29-multiple-timings", effects };
+        return { ...span, status: "recognized", pattern: parsed.find(p => p.pattern.startsWith("zone-"))?.pattern ?? (parsed.some(p => p.pattern.startsWith("recipe-")) ?
+          "recipe-multiple-timings" : "pr29-multiple-timings"), effects };
       }
     }
   }
@@ -161,6 +164,11 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
     if (type === "TRIGGER" && cardType === "event" && /^(?:このカードの【メイン】効果を発動する。|このカードの〖メイン〗効果を発動する。)$/u.test(body)) {
       return { ...span, status: "unknown", features: [], unparsed: [{ ...sourceSpan, reason: "main-body-unconfirmed" }], pendingMainCall: effect };
     }
+    if (zones === "delta" && type === "TRIGGER") {
+      const call = /^このカードの(?:【(登場時|KO時|カウンター)】|〖(登場時|KO時|カウンター)〗)効果を発動する。$/u.exec(body);
+      if (call) return { ...span, status: "unknown", features: [],
+        unparsed: [{ ...sourceSpan, reason: "effect-body-unconfirmed" }], pendingMainCall: effect, bodyTiming: timings.get(call[1] ?? call[2])[0] };
+    }
     const { structure, issues } = parseV3Structure(body, type);
     if (structure) return { ...span, status: "recognized", pattern: structurePattern(structure, !regular), structure,
       effect: { ...effect, actions: emitV3Structure(structure, sourceSpan) } };
@@ -171,7 +179,7 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
       (expansion ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true, true, null, true) : null) ??
       (refinement ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true, true, null, true, true) : null) ??
       (completion ? parseCompletionEffect(body, type, cardType, sourceSpan) : null) ??
-      (zones ? parseZoneEffect(body, type, cardType, sourceSpan) : null));
+      (zones ? parseZoneEffect(body, type, cardType, sourceSpan, zones === "delta") : null));
     if (compound) {
       const { pattern, structure, ...program } = compound;
       return { ...span, status: "recognized", pattern, ...(structure ? { structure } : {}), effect: { ...effect, ...program } };
@@ -183,7 +191,7 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
     }));
   }
   if (zones && field === "text" && ["leader", "character"].includes(cardType)) {
-    const continuous = parseZoneContinuous(text.trim(), cardType, sourceSpan);
+    const continuous = parseZoneContinuous(text.trim(), cardType, sourceSpan, zones === "delta");
     if (continuous) return { ...span, status: "recognized", ...continuous };
     const attached = parseAttachedPrefix(text.trim());
     if (attached) {
@@ -194,10 +202,12 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
       const newerTag = header(attached.body);
       const nextTiming = timings.get(newerTag?.[1] ?? newerTag?.[2]) ?? boundaryTimings.get(newerTag?.[1] ?? newerTag?.[2]);
       const program = nextTiming && triggered.includes(nextTiming[0]) && nextTiming[2].includes(cardType) &&
-        parseZoneEffect(newerTag[3], nextTiming[0], cardType, sourceSpan);
-      const effect = inner.effect ?? (program ? { ...effectFor(field, start, cardType, nextTiming), actions: program.actions } : null);
+        parseZoneEffect(newerTag[3], nextTiming[0], cardType, sourceSpan, zones === "delta");
+      const { pattern: programPattern, structure: _structure, ...programFields } = program || {};
+      const effect = inner.effect ?? (program ?
+        { ...effectFor(field, start, cardType, nextTiming), ...(zones === "delta" ? programFields : { actions: program.actions }) } : null);
       if (effect && triggered.includes(effect.timing.type) && effect.activationConditions.type === "all" && !effect.activationConditions.conditions.length)
-        return { ...span, status: "recognized", pattern: "zone-source-attached-don", effect: { ...effect, activationConditions: attached.condition } };
+        return { ...span, status: "recognized", pattern: programPattern === "zone-deck-play" && !inner.effect ? programPattern : "zone-source-attached-don", effect: { ...effect, activationConditions: attached.condition } };
     }
   }
   if (completion) {
@@ -242,7 +252,8 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
           branches.every(branch => branch.label.length <= 80) && new Set(branches.map(branch => branch.label)).size === branches.length &&
           (parseCompoundEffect(tag[3], timing[0], cardType, { start: span.start, end }, false, true, true, branches) ??
             (expansion ? parseCompoundEffect(tag[3], timing[0], cardType, { start: span.start, end }, false, true, true, branches, true) : null) ??
-            (refinement ? parseCompoundEffect(tag[3], timing[0], cardType, { start: span.start, end }, false, true, true, branches, true, true) : null));
+            (refinement ? parseCompoundEffect(tag[3], timing[0], cardType, { start: span.start, end }, false, true, true, branches, true, true) : null) ??
+            (zones === "delta" && cardType === "event" && timing[0] === "MAIN" ? deltaEventMode(tag[3], branches) : null));
         if (program) {
           const { pattern, ...effect } = program;
           spans.push({ ...span, status: "recognized", pattern,
@@ -261,18 +272,32 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
   const body = spans.filter(span => span.field === "text");
   const main = body.filter(span => span.effect?.timing.type === "MAIN");
   for (const span of spans) if (span.pendingMainCall) {
-    const { pendingMainCall, features: _features, ...origin } = span;
-    Object.assign(span, { reason: "main-body-unconfirmed" });
+    const { pendingMainCall, bodyTiming, features: _features, ...origin } = span;
+    const target = bodyTiming ? body.filter(row => row.effect?.timing.type === bodyTiming) : main;
+    Object.assign(span, { reason: bodyTiming ? "effect-body-unconfirmed" : "main-body-unconfirmed" });
     delete span.pendingMainCall;
-    if (main.length === 1 && body.every(line => line.status === "recognized") && isInteractiveMainEvent(main[0].effect, main[0].pattern?.startsWith("zone-"))) {
-      Object.assign(span, { status: "recognized", pattern: "trigger-own-main", effect: { ...pendingMainCall,
-        actions: [{ type: "CALL_EFFECT_BODY", effectId: main[0].effect.id, sourceSpan: { start: origin.start, end: origin.end } }] } });
+    delete span.bodyTiming;
+    if (target.length === 1 && body.every(line => line.status === "recognized") && (bodyTiming ?
+        isLifeTriggerBody(target[0].effect, cardType, "3.0.0-subset.51") :
+        isInteractiveMainEvent(target[0].effect, target[0].pattern?.startsWith("zone-")))) {
+      Object.assign(span, { status: "recognized", pattern: bodyTiming ? "zone-trigger-body" : "trigger-own-main", effect: { ...pendingMainCall,
+        actions: [{ type: "CALL_EFFECT_BODY", effectId: target[0].effect.id, sourceSpan: { start: origin.start, end: origin.end } }] } });
       delete span.reason;
       delete span.features;
       delete span.unparsed;
     }
   }
   return { ...variant, cardType, spans };
+}
+
+function deltaEventMode(header, branches) {
+  const modes = branches.map(({ label, sourceSpan }) => {
+    const program = parseCompoundEffect(label, "MAIN", "event", sourceSpan, false, true, true, null, true, true) ??
+      parseZoneEffect(label, "MAIN", "event", sourceSpan, true);
+    return program && !program.costs && !program.usageLimit && !program.optional ? { label, actions: program.actions } : null;
+  });
+  const actions = modes.every(Boolean) && parseDraftMode(header, modes);
+  return actions ? { pattern: "zone-event-main-mode", actions } : null;
 }
 
 function definitionFor(card, variant, raw, sourceCsvSha256) {
@@ -295,11 +320,13 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const compound = variant.spans.some(span => span.pattern?.startsWith("pr29-"));
   const recipes = variant.spans.some(span => span.pattern?.startsWith("recipe-"));
   const zones = variant.spans.some(span => span.pattern?.startsWith("zone-"));
+  const deckPlay = variant.spans.some(span => ["zone-deck-play", "zone-trigger-body", "zone-event-main-payment", "zone-event-main-mode",
+    "zone-continuous-stable-guard"].includes(span.pattern));
   const newTargets = variant.spans.some(span => span.pattern?.startsWith("pr25-"));
   const continuousEffects = variant.spans.flatMap(span => span.continuous ? [span.continuous] : []);
   const replacementEffects = variant.spans.flatMap(span => span.replacement ? [span.replacement] : []);
   return {
-    schemaVersion: zones ? "3.0.0-subset.50" : recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
+    schemaVersion: deckPlay ? "3.0.0-subset.51" : zones ? "3.0.0-subset.50" : recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
     cardVersion: recipes ? "draft.recipes.1" : compound ? "draft.pr29.1" : conditionalTriggerPlay ? "draft.pr28.1" : fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
       variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",
@@ -338,7 +365,7 @@ function generateCard(card, rows, sourceCsvSha256, extended, recipes, batch, exp
   }
 }
 
-export function generateV3Drafts(ledger, cardIds = [], version = latest, validate = null) {
+export function generateV3Drafts(ledger, cardIds = [], version = latest, validate = null, { delta = false, excludeApproved = new Set() } = {}) {
   if (![latest, previousCompletion, previousRefinement, previousExpansion, previousBatch, "v3-draft-generator.10", "v3-draft-generator.9", "v3-draft-generator.8"].includes(version)) throw Error("Unsupported draft generation baseline");
   const registryHash = v3DraftRegistry(version);
   const selected = new Set(cardIds), rows = new Map();
@@ -351,6 +378,8 @@ export function generateV3Drafts(ledger, cardIds = [], version = latest, validat
   const counts = { complete: 0, partial: 0, unconvertible: 0, unassessed: 0 };
   const schemaHolds = [];
   const cards = ledger.cards.filter(card => rows.has(card.cardId)).map(card => {
+    if (excludeApproved.has(card.cardId)) return { cardId: card.cardId, status: "unassessed", noEffect: false,
+      compiler: "not_checked", variants: [], unresolved: 0, recognized: 0, reasons: ["approval-excluded-from-delta"] };
     const args = [card, rows.get(card.cardId), ledger.sourceSha256, version !== "v3-draft-generator.8",
       [latest, previousCompletion, previousRefinement, previousExpansion, previousBatch, "v3-draft-generator.10"].includes(version),
       [latest, previousCompletion, previousRefinement, previousExpansion, previousBatch].includes(version)];
@@ -359,7 +388,7 @@ export function generateV3Drafts(ledger, cardIds = [], version = latest, validat
     const expanded = [latest, previousCompletion, previousRefinement, previousExpansion].includes(version) && unfinished(prior) ? generateCard(...args, true) : prior;
     const refined = [latest, previousCompletion, previousRefinement].includes(version) && unfinished(expanded) ? generateCard(...args, true, true) : expanded;
     const completed = [latest, previousCompletion].includes(version) && unfinished(refined) ? generateCard(...args, true, true, true) : refined;
-    const next = version === latest && unfinished(completed) ? generateCard(...args, true, true, true, true) : completed;
+    const next = version === latest && unfinished(completed) ? generateCard(...args, true, true, true, delta ? "delta" : true) : completed;
     const { definition, ...review } = next;
     if (!validate || next.status !== "complete" || validate(definition)) return next;
     schemaHolds.push({ cardId: card.cardId, schemaVersion: definition.schemaVersion, errors: structuredClone(validate.errors) });

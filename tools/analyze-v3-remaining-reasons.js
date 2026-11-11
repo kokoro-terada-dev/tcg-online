@@ -56,9 +56,27 @@ if (trace.executable !== false || trace.cards.length !== trace.totals.sourceCard
     new Set(trace.cards.map(card => card.cardId)).size !== trace.cards.length) throw Error("Full draft report required");
 const categories = { A: new Set(), B: new Set(), C: new Set(), D: new Set() };
 const profiles = JSON.parse(fs.readFileSync(new URL("../docs/card-effect-supported-operations.json", import.meta.url), "utf8")).profiles;
-const zoneProfile = trace.registryHash === profiles["3.0.0-subset.50"]?.registryHash;
+const deltaProfile = trace.registryHash === profiles["3.0.0-subset.51"]?.registryHash;
+const zoneProfile = deltaProfile || trace.registryHash === profiles["3.0.0-subset.50"]?.registryHash;
 const superseded = new Set(["source-specific-attached-don-count", "hand-effect-play-full-field", "effect-play-from-trash",
   "deck-top-to-trash-without-look", "event-main-private-deck-program", "continuous-source-identity"]);
+if (deltaProfile) {
+  for (const rule of ["event-main-mode-not-in-schema", "counter-additional-hand-payment", "effect-play-from-deck-search", "life-trigger-call-non-main-body"])
+    superseded.add(rule);
+  knownFeature.delete("effect-deck-shuffle");
+  evidenceRules.push(
+    ["C", "multi-character-inspected-deck-play", /デッキの上から[1-9]枚を見て、[^。]+キャラカード[2-9]枚までを、?(?:レストで|アクティブで)?登場させ/u,
+      "Inspected-deck play currently permits one character; multiple full-field entries need a separate resolution contract."],
+    ["C", "shuffle-hand-reset-draw-count", /手札すべてをデッキに戻し、デッキをシャッフルする。その後、デッキに戻した枚数分カードを引く。$/u,
+      "Own-deck shuffle exists, but DRAW does not consume the exact count of a previous hand reset."],
+    ["C", "shuffle-opponent-hand-reset", /相手は自身の手札すべてをデッキに戻しシャッフルする/u,
+      "The shuffle instruction is own-deck only and does not authorize an opponent hand reset."],
+    ["C", "ko-activation-don-cost", /(?:【KO時】|〖KO時〗)ドン(?:[!！]{2}|‼)[-−－][1-9]/u,
+      "ON_KO activation with a DON return cost is outside the current authorization contract."],
+    ["C", "direct-effect-damage", /相手に[1-9]ダメージを与える/u,
+      "Battle damage and life moves are not a direct card-effect damage instruction."],
+  );
+}
 const details = [], groups = new Map(), unclassifiedCards = new Set(), unknownGroups = new Map();
 let unclassifiedSpans = 0;
 for (const card of trace.cards) {
