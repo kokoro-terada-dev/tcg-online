@@ -101,7 +101,7 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
         let rows = Object.isFrozen(state) ? cache.get(state) : undefined;
         if (!rows && Object.isFrozen(state)) { rows = new Map(); cache.set(state, rows); }
         continuous = rows?.get(card.instanceId) ?? continuousAdjustments(state, card, at, options.activePlayer, options.definitions, options.master,
-          source => effectsDisabled(grants, source));
+          source => effectsDisabled(grants, source), { stats: options.statEffects(), grants, ...(options.counterPower ? { counterPower: options.counterPower } : {}) });
         rows?.set(card.instanceId, continuous);
       }
       const unmodeled = card.modifierIds.length > 0 || card.grantIds.length > 0;

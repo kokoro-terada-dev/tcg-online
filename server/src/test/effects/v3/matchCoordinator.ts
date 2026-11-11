@@ -284,7 +284,7 @@ export class V3SyntheticMatchCoordinator {
       const object = getCard(this.#board, cardRef), at = location(this.#board, object.instanceId), card = this.#cards.get(object.cardId);
       ensureMove(at.player === actor && at.zone === "hand" && object.owner === actor && object.controller === actor && card &&
         (card.definition.cardType === "character" || card.definition.cardType === "stage") && object.kind === card.definition.cardType, "v3-match-unregistered-play");
-      const zone = card.definition.cardType, cost = card.definition.baseStats.cost;
+      const zone = card.definition.cardType, cost = this.#playCost(actor, card, cardRef);
       ensureMove(zone !== "character" || !characterPlayPrevented(this.#keywordGrants, actor), "v3-character-play-prevented");
       ensureMove(cost !== null && Number.isSafeInteger(cost) && cost >= 0 && this.#board.players[actor].activeDon.length >= cost, "v3-match-play-cost-unavailable");
       const slot = slotIndex === undefined ? this.#board.players[actor][zone].indexOf(null) : slotIndex;
@@ -313,11 +313,17 @@ export class V3SyntheticMatchCoordinator {
     return this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId);
       if (!card || !["character", "stage"].includes(card.definition.cardType) || object.kind !== card.definition.cardType) return [];
-      const zone = card.definition.cardType as "character" | "stage", cost = card.definition.baseStats.cost, slot = this.#board.players[actor][zone].indexOf(null);
+      const zone = card.definition.cardType as "character" | "stage";
+      const cost = this.#playCost(actor, card, { instanceId: object.instanceId, generation: object.generation }), slot = this.#board.players[actor][zone].indexOf(null);
       return [{ card: { instanceId: object.instanceId, generation: object.generation }, cardId: object.cardId, cost, zone, slotIndex: slot,
         enabled: ready && (zone !== "character" || !characterPlayPrevented(this.#keywordGrants, actor)) &&
           object.owner === actor && object.controller === actor && slot >= 0 && cost !== null && this.#board.players[actor].activeDon.length >= cost }];
     });
+  }
+  #playCost(actor: Seat, card: ApprovedV3Card, ref: Readonly<CardObjectRef>): number | null {
+    if (!card.definition.continuousEffects?.some(effect => effect.sourceZone === "hand")) return card.definition.baseStats.cost;
+    const facts = this.#fieldFacts()(ref, actor);
+    return facts === UNKNOWN || facts.current.cost === UNKNOWN ? null : facts.current.cost;
   }
   attackChoicesFor(actor: Seat) {
     if (conditionalTriggersHeld(this.#observations) || this.#triggers.length || this.#lifeDecision || this.#active && this.#active.coordinator.viewFor(actor).frame.status !== "completed") return { sources: [], targets: [], pairs: [] };
@@ -416,12 +422,12 @@ export class V3SyntheticMatchCoordinator {
     return freezeMovement(this.#board.players[actor].hand.flatMap(id => {
       const object = this.#board.cards[id!]!, card = this.#cards.get(object.cardId), at = location(this.#board, object.instanceId);
       if (object.kind !== "event" || object.owner !== actor || object.controller !== actor || at.player !== actor || at.zone !== "hand" ||
-        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60"].includes(card.definition.schemaVersion) ||
+        !visibleTo(this.#board, object, at, actor) || visibleTo(this.#board, object, at, (1 - actor) as Seat) || !card || !["3.0.0-subset.19", "3.0.0-subset.20", "3.0.0-subset.21", "3.0.0-subset.22", "3.0.0-subset.23", "3.0.0-subset.24", "3.0.0-subset.25", "3.0.0-subset.26", "3.0.0-subset.27", "3.0.0-subset.28", "3.0.0-subset.29", "3.0.0-subset.30", "3.0.0-subset.31", "3.0.0-subset.32", "3.0.0-subset.33", "3.0.0-subset.34", "3.0.0-subset.35", "3.0.0-subset.36", "3.0.0-subset.37", "3.0.0-subset.38", "3.0.0-subset.39", "3.0.0-subset.40", "3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60", "3.0.0-subset.61"].includes(card.definition.schemaVersion) ||
         card.definition.cardType !== "event" || card.definition.baseStats.cost === null || object.modifierIds.length || object.grantIds.length) return [];
       const source = { instanceId: object.instanceId, generation: object.generation }, cost = card.definition.baseStats.cost;
-      const supported = ["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
+      const supported = ["3.0.0-subset.41", "3.0.0-subset.42", "3.0.0-subset.43", "3.0.0-subset.44", "3.0.0-subset.45", "3.0.0-subset.46", "3.0.0-subset.47", "3.0.0-subset.48", "3.0.0-subset.49", "3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60", "3.0.0-subset.61"].includes(card.definition.schemaVersion) ? isShareableMainEvent :
         card.definition.schemaVersion === "3.0.0-subset.19" ? isSimpleMainEvent : isInteractiveMainEvent;
-      return card.definition.effects.filter(effect => supported(effect, ["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60"].includes(card.definition.schemaVersion))).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
+      return card.definition.effects.filter(effect => supported(effect, ["3.0.0-subset.50", "3.0.0-subset.51", "3.0.0-subset.52", "3.0.0-subset.53", "3.0.0-subset.54", "3.0.0-subset.55", "3.0.0-subset.56", "3.0.0-subset.57", "3.0.0-subset.58", "3.0.0-subset.59", "3.0.0-subset.60", "3.0.0-subset.61"].includes(card.definition.schemaVersion))).map(effect => ({ source, cardId: object.cardId, effectId: effect.id, cost,
         enabled: this.#board.players[actor].activeDon.length >= cost && (!effect.costs.length || effect.costs[0]?.type === "REST_AS_COST" ||
           this.#canActivateEffect(actor, source, card, effect.id)) && (!effect.usageLimit ||
           (this.#usage.get(effectUsageKey(this.#board.turnNumber, actor, { ...source, generation: source.generation + 1 }, effect.id)) ?? 0) < effect.usageLimit.count),
