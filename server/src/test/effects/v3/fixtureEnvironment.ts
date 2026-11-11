@@ -10,7 +10,7 @@ import type { StatEffects } from "./statEffects";
 import { UNKNOWN, createDerivedCardFactsReader, readEventContext, type EventContext } from "./readContext";
 import type { KeywordGrants } from "./keywordEffects";
 import { readRememberedColors, rememberedColors } from "./moveResults";
-import { activationCostSelector, filteredCostCandidates, movesActivationSource } from "./activationCosts";
+import { activationCostSelector, filteredCostCandidates, movesActivationSource, topLifeCostOperation } from "./activationCosts";
 import { ownerHandCandidates } from "./ownerHand";
 import { protectionDecision } from "./continuousEffects";
 import { hasProtection } from "./protectionRules";
@@ -208,6 +208,8 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       if (returns.length > 1) return "unknown";
       const returnCost = returns[0], returnCount = returnCost?.count ?? 0;
       const filtered = activationCostSelector(costs), moveSource = movesActivationSource(costs);
+      const lifeCost = costs.find(cost => cost.type === "LIFE_TOP_COST");
+      if (lifeCost && !topLifeCostOperation(state, actor, lifeCost.operation)) return false;
       for (const cost of costs) { if (cost.type === "REST_DON") rest += cost.count; else if (cost.type === "DISCARD_HAND") discard += cost.count; else if (cost.type === "REST_SOURCE") restSource++; }
       if (restSource || moveSource) {
         try {
@@ -238,7 +240,8 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       const pickedCount = filtered?.min ?? 0;
       if (rest + discard + restSource + returnCount + pickedCount + Number(moveSource) > 64 || discard > 50 || active < rest + activeReturned || candidates.length < returnCount) return false;
       if (returned !== null && (returned.length !== returnCount || new Set(returned.map(ref => ref.instanceId)).size !== returnCount || !returned.every(eligibleDon))) return false;
-      if (state.players[actor].hand.filter(id => eligible({ instanceId: id!, generation: state.cards[id!]!.generation })).length < discard + pickedCount) return false;
+      if (state.players[actor].hand.filter(id => eligible({ instanceId: id!, generation: state.cards[id!]!.generation })).length <
+        discard + (filtered?.zone === "hand" ? pickedCount : 0)) return false;
       const discardedIds = new Set(discarded?.map(ref => ref.instanceId));
       if (discarded !== null && (discarded.length !== discard || discardedIds.size !== discard || !discarded.every(eligible))) return false;
       if (!filtered) return selected === null || selected.length === 0;

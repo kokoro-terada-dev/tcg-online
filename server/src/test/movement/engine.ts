@@ -121,7 +121,7 @@ function applyTransaction(state: MovementState, input: MovementTransaction, rule
     ensureMove(transaction.resolutionId !== null, "cost-needs-resolution-context");
     const reserved = new Set<string>();
     for (const operation of transaction.operations) {
-      ensureMove(operation.kind === "move" || operation.kind === "setRest" || operation.kind === "reveal", "unsupported-cost-operation");
+      ensureMove(operation.kind === "move" || operation.kind === "setRest" || operation.kind === "setTopLifeFace" || operation.kind === "reveal", "unsupported-cost-operation");
       const card = getCard(state, operation.card);
       ensureMove(card.owner === transaction.actor && card.controller === transaction.actor, "cost-cannot-use-another-players-card");
       if (operation.kind === "setRest") ensureMove(operation.rotated, "cost-cannot-activate-card");
@@ -151,8 +151,20 @@ function applyTransaction(state: MovementState, input: MovementTransaction, rule
       emit({ eventId: nextId(), operationIndex: index, groupId: `${transaction.transactionId}:group:${index}`, kind: "reordered", before: null, after: null, from: operation.location, to: operation.location, cause: why, isKO: false, visibleBefore: [0, 1], visibleAfter: [0, 1] });
       continue;
     }
-    ensureMove(operation.kind === "setRest" || operation.kind === "reveal" || operation.kind === "attachDon", "unknown-movement-operation");
+    ensureMove(operation.kind === "setRest" || operation.kind === "setTopLifeFace" || operation.kind === "reveal" || operation.kind === "attachDon", "unknown-movement-operation");
     const before = getCard(draft, operation.card), from = location(draft, before.instanceId);
+    if (operation.kind === "setTopLifeFace") {
+      ensureMove(transaction.mode === "cost" && from.player === transaction.actor && from.zone === "life" &&
+        draft.players[from.player].life[0] === before.instanceId && typeof operation.faceUp === "boolean" &&
+        before.faceUp !== operation.faceUp, "cost-life-face-unavailable");
+      check({ operationIndex: index, kind: operation.kind, card: before, from, to: from, cause: why, automatic: false });
+      const visibleBefore = viewers(draft, before, from), after = { ...before, faceUp: operation.faceUp };
+      draft.cards[before.instanceId] = after;
+      draft.reveals = draft.reveals.filter(grant => grant.card.instanceId !== before.instanceId);
+      emit({ eventId: nextId(), operationIndex: index, groupId: `${transaction.transactionId}:group:${index}`,
+        kind: "lifeFaceChanged", before, after, from, to: from, cause: why, isKO: false, visibleBefore, visibleAfter: viewers(draft, after, from) });
+      continue;
+    }
     if (operation.kind === "attachDon") {
       const target = getCard(draft, operation.target), at = location(draft, target.instanceId);
       ensureMove(operation.from === undefined || (before.owner === transaction.actor && transaction.effectController === transaction.actor), "invalid-effect-don-controller");

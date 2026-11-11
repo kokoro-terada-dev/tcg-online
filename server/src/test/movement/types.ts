@@ -18,6 +18,7 @@ export type MoveDestination = Location & Readonly<{ position: "top" | "bottom" |
 export type MovementOperation =
   | Readonly<{ kind: "move"; card: Readonly<CardObjectRef>; from: Location; to: MoveDestination; cause: MoveCause }>
   | Readonly<{ kind: "setRest"; card: Readonly<CardObjectRef>; rotated: boolean }>
+  | Readonly<{ kind: "setTopLifeFace"; card: Readonly<CardObjectRef>; faceUp: boolean }>
   | Readonly<{ kind: "attachDon"; card: Readonly<CardObjectRef>; target: Readonly<CardObjectRef>; from?: "activeDon" | "restDon" }>
   | Readonly<{ kind: "reorder"; location: Location; cards: readonly Readonly<CardObjectRef>[]; conceal: boolean }>
   | Readonly<{ kind: "reveal"; card: Readonly<CardObjectRef>; scopeId: string; viewers: readonly Player[] }>
@@ -34,7 +35,7 @@ export type EventCause = Readonly<{
 }>;
 export type MovementEvent = Readonly<{
   eventId: string; operationIndex: number; groupId: string;
-  kind: "moved" | "restChanged" | "reordered" | "revealed" | "revealsClosed";
+  kind: "moved" | "restChanged" | "lifeFaceChanged" | "reordered" | "revealed" | "revealsClosed";
   before: MovementCard | null; after: MovementCard | null; from: Location | null; to: Location | null;
   cause: EventCause; isKO: boolean; visibleBefore: readonly Player[]; visibleAfter: readonly Player[];
 }>;

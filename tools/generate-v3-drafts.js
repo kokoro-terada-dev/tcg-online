@@ -12,6 +12,7 @@ import { parseCompoundEffect } from "./v3-draft-compound.js";
 import { parseContinuousRecipe, parseDraftMode } from "./v3-draft-recipes.js";
 import { normalizeGrammar, parseCompletionEffect, parseNewFieldRecipe } from "./v3-draft-completion.js";
 import { parseAttachedPrefix, parseZoneContinuous, parseZoneEffect } from "./v3-draft-zones.js";
+import { lifeCostProgram } from "./v3-draft-life-costs.js";
 
 const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
@@ -268,6 +269,14 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
       const match = lines[i], span = { field, start: match.index, end: match.index + match[0].length, text: match[0] };
       if (!span.text.trim()) continue;
       let parsed = parseSpan(span, cardType, gaps, spans.at(-1), variant[field], extended, recipes, batch, expansion, refinement, completion, zones);
+      if (zones === "delta" && field === "text" && parsed.status !== "recognized") {
+        const tag = header(span.text), timing = timings.get(tag?.[1] ?? tag?.[2]);
+        const program = timing?.[2].includes(cardType) && lifeCostProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end });
+        if (program) {
+          const { pattern, ...effect } = program;
+          parsed = { ...span, status: "recognized", pattern, effect: { ...effectFor(field, span.start, cardType, timing), ...effect } };
+        }
+      }
       if (zones === "delta" && field === "text" && parsed.status !== "recognized" && cardType === "character") {
         const entry = /^(?:【(自分|相手)のターン中】|〖(自分|相手)のターン中〗)((?:【登場時】|〖登場時〗).+)$/u.exec(span.text.trim());
         if (entry) {
@@ -297,6 +306,7 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
           (parseCompoundEffect(tag[3], timing[0], cardType, { start: span.start, end }, false, true, true, branches) ??
             (expansion ? parseCompoundEffect(tag[3], timing[0], cardType, { start: span.start, end }, false, true, true, branches, true) : null) ??
             (refinement ? parseCompoundEffect(tag[3], timing[0], cardType, { start: span.start, end }, false, true, true, branches, true, true) : null) ??
+            (zones === "delta" ? lifeCostProgram(tag[3], timing[0], cardType, { start: span.start, end }, branches) : null) ??
             (zones === "delta" && cardType === "event" && timing[0] === "MAIN" ? deltaEventMode(tag[3], branches) : null));
         if (program) {
           const { pattern, ...effect } = program;
@@ -365,6 +375,7 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const recipes = variant.spans.some(span => span.pattern?.startsWith("recipe-"));
   const zones = variant.spans.some(span => span.pattern?.startsWith("zone-"));
   const batchPlay = variant.spans.some(span => span.pattern === "zone-effect-play-batch");
+  const lifeCost = variant.spans.some(span => span.pattern === "zone-life-top-cost");
   const fieldBinding = variant.spans.some(span => ["zone-auto-field-stat", "zone-turn-resolving-entry"].includes(span.pattern));
   const deckPlay = variant.spans.some(span => ["zone-deck-play", "zone-trigger-body", "zone-event-main-payment", "zone-event-main-mode",
     "zone-continuous-stable-guard"].includes(span.pattern));
@@ -372,7 +383,7 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const continuousEffects = variant.spans.flatMap(span => span.continuousEffects ?? (span.continuous ? [span.continuous] : []));
   const replacementEffects = variant.spans.flatMap(span => span.replacement ? [span.replacement] : []);
   return {
-    schemaVersion: batchPlay ? "3.0.0-subset.53" : fieldBinding ? "3.0.0-subset.52" : deckPlay ? "3.0.0-subset.51" : zones ? "3.0.0-subset.50" : recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
+    schemaVersion: lifeCost ? "3.0.0-subset.54" : batchPlay ? "3.0.0-subset.53" : fieldBinding ? "3.0.0-subset.52" : deckPlay ? "3.0.0-subset.51" : zones ? "3.0.0-subset.50" : recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
     cardVersion: recipes ? "draft.recipes.1" : compound ? "draft.pr29.1" : conditionalTriggerPlay ? "draft.pr28.1" : fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
       variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",

@@ -20,6 +20,7 @@ export function compilerVersionForSchema(schema: SchemaVersion): string {
   if (schema === "3.0.0-subset.39") return "v3-subset-compiler.39.1";
   if (schema === "3.0.0-subset.40") return "v3-subset-compiler.40.1";
   if (schema === "3.0.0-subset.41") return "v3-subset-compiler.41.1";
+  if (schema === "3.0.0-subset.54") return "v3-subset-compiler.54.1";
   if (schema === "3.0.0-subset.53") return "v3-subset-compiler.53.1";
   if (schema === "3.0.0-subset.52") return "v3-subset-compiler.52.1";
   if (schema === "3.0.0-subset.51") return "v3-subset-compiler.51.1";
@@ -92,6 +93,7 @@ function donZones(input: unknown): DonZone[] {
   return [...zones] as DonZone[];
 }
 function validateCostCombination(costs: readonly Node<"cost">[], cardType: unknown): void {
+  ensureMove(!costs.some(cost => cost.type === "LIFE_TOP_COST") || costs.length === 1, "v3-life-cost-must-be-standalone");
   ensureMove(costs.reduce((sum, cost) => sum + (cost.type === "DISCARD_HAND" ? cost.count : 0), 0) <= 50, "v3-discard-cost-limit");
   ensureMove(costs.filter(cost => cost.type === "REST_SOURCE").length <= 1, "v3-duplicate-rest-source-cost");
   ensureMove(costs.filter(cost => cost.type === "DON_RETURN").length <= 1, "v3-multiple-don-return-costs-unsupported");
@@ -194,7 +196,8 @@ function valueType(value: Value): string {
 }
 export function builtinV3Registries(profile: SchemaVersion = "3.0.0-subset.16"): V3Registries {
   compilerVersionForSchema(profile);
-  const batchPlay = profile === "3.0.0-subset.53";
+  const lifeCosts = profile === "3.0.0-subset.54";
+  const batchPlay = profile === "3.0.0-subset.53" || lifeCosts;
   const automaticSelection = profile === "3.0.0-subset.52" || batchPlay;
   const deckPlay = profile === "3.0.0-subset.51" || automaticSelection;
   const modern = deckPlay || profile === "3.0.0-subset.50";
@@ -378,7 +381,7 @@ export function builtinV3Registries(profile: SchemaVersion = "3.0.0-subset.16"):
     return { type: "DISCARD_BY_OWNER", ...meta, player: "OPPONENT", chooser: "OPPONENT", count: count(n.count) };
   });
   if ((schema === "3.0.0-subset.31" || (schema === "3.0.0-subset.32" || (schema === "3.0.0-subset.33" || (schema === "3.0.0-subset.34" || (schema === "3.0.0-subset.35" || (schema === "3.0.0-subset.36" || schema === "3.0.0-subset.37"))))))) {
-    r.action.register("CHOOSE_MODE", "1", (n, c) => {
+    r.action.register("CHOOSE_MODE", lifeCosts ? "2" : "1", (n, c) => {
       const meta = c.fields(n, ["modes"]);
       dataArray(n.modes, 8);
       ensureMove(n.modes.length >= 2, "v3-mode-count");
@@ -389,9 +392,9 @@ export function builtinV3Registries(profile: SchemaVersion = "3.0.0-subset.16"):
           !/[\x00-\x1f\x7f]/.test(name) && !labels.has(name), "v3-invalid-mode-label");
         labels.add(name);
         const actions = c.branch(mode.actions);
-        ensureMove(actions.length > 0, "v3-empty-mode");
         return { label: name, actions };
       });
+      ensureMove(lifeCosts ? modes.some(mode => mode.actions.length > 0) : modes.every(mode => mode.actions.length > 0), "v3-empty-mode");
       return { type: "CHOOSE_MODE", ...meta, modes };
     });
     r.action.register("OFFER_PAYMENT", "1", (n, c) => ({ type: "OFFER_PAYMENT", ...c.fields(n, ["costs", "bindAs"]),
@@ -407,10 +410,22 @@ export function builtinV3Registries(profile: SchemaVersion = "3.0.0-subset.16"):
       return selector;
     };
     r.cost.register("REVEAL_CARDS", "1", (n, c) => ({ type: "REVEAL_CARDS", ...c.fields(n, ["selector"]), selector: exactHand(n.selector, c) }));
-    r.cost.register("MOVE_AS_COST", "1", (n, c) => {
+    r.cost.register("MOVE_AS_COST", lifeCosts ? "2" : "1", (n, c) => {
       const meta = c.fields(n, ["selector", "destination"]);
       ensureMove(n.destination === "trash", "v3-move-cost-destination");
+      if (lifeCosts && (n.selector as { zone?: unknown } | null)?.zone === "character") {
+        const selector = c.read("selector", n.selector);
+        ensureMove(selector.type === "CARDS" && selector.zone === "character" && selector.owner === "SELF" && selector.controller === "SELF" &&
+          selector.chooser === "SELF" && selector.visibility === "PUBLIC" && selector.faceUpOnly && selector.min === 1 && selector.max === 1 &&
+          selector.cardTypes.length === 1 && selector.cardTypes[0] === "character", "v3-field-cost-selector");
+        return { type: "MOVE_AS_COST", ...meta, selector, destination: "trash" };
+      }
       return { type: "MOVE_AS_COST", ...meta, selector: n.selector === "SOURCE" ? "SOURCE" : exactHand(n.selector, c), destination: "trash" };
+    });
+    if (lifeCosts) r.cost.register("LIFE_TOP_COST", "1", (n, c) => {
+      const meta = c.fields(n, ["operation"]);
+      ensureMove(n.operation === "TO_HAND" || n.operation === "FACE_UP" || n.operation === "FACE_DOWN", "v3-life-top-cost-operation");
+      return { type: "LIFE_TOP_COST", ...meta, operation: n.operation };
     });
   }
   if ((schema === "3.0.0-subset.29" || (schema === "3.0.0-subset.30" || (schema === "3.0.0-subset.31" || (schema === "3.0.0-subset.32" || (schema === "3.0.0-subset.33" || (schema === "3.0.0-subset.34" || (schema === "3.0.0-subset.35" || (schema === "3.0.0-subset.36" || schema === "3.0.0-subset.37"))))))))) {
@@ -699,9 +714,9 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
   const input: unknown = JSON.parse(json);
   inspectData(input);
   dataObject(input, ["schemaVersion", "cardId", "cardVersion", "name", "cardType", "baseStats", "colors", "traits", "attributes", "keywords", "reviewStatus", "source", "effects"], ["continuousEffects", "replacementEffects"]);
-  ensureMove((input.schemaVersion === "3.0.0-subset.51" || (input.schemaVersion === "3.0.0-subset.52" || input.schemaVersion === "3.0.0-subset.53")) || input.schemaVersion === "3.0.0-subset.50" || input.schemaVersion === "3.0.0-subset.49" || input.schemaVersion === "3.0.0-subset.48" || input.schemaVersion === "3.0.0-subset.47" || input.schemaVersion === "3.0.0-subset.46" || input.schemaVersion === "3.0.0-subset.45" || input.schemaVersion === "3.0.0-subset.44" || input.schemaVersion === "3.0.0-subset.43" || input.schemaVersion === "3.0.0-subset.42" || input.schemaVersion === "3.0.0-subset.41" || input.schemaVersion === "3.0.0-subset.40" || input.schemaVersion === "3.0.0-subset.39" || input.schemaVersion === "3.0.0-subset.38" || input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19" || input.schemaVersion === "3.0.0-subset.20" || input.schemaVersion === "3.0.0-subset.21" || input.schemaVersion === "3.0.0-subset.22" || (input.schemaVersion === "3.0.0-subset.23" || input.schemaVersion === "3.0.0-subset.24" || input.schemaVersion === "3.0.0-subset.25" || input.schemaVersion === "3.0.0-subset.26" || input.schemaVersion === "3.0.0-subset.27" || input.schemaVersion === "3.0.0-subset.28" || (input.schemaVersion === "3.0.0-subset.29" || (input.schemaVersion === "3.0.0-subset.30" || (input.schemaVersion === "3.0.0-subset.31" || (input.schemaVersion === "3.0.0-subset.32" || (input.schemaVersion === "3.0.0-subset.33" || (input.schemaVersion === "3.0.0-subset.34" || (input.schemaVersion === "3.0.0-subset.35" || (input.schemaVersion === "3.0.0-subset.36" || input.schemaVersion === "3.0.0-subset.37"))))))))), "unsupported-v3-schema-version");
+  ensureMove((input.schemaVersion === "3.0.0-subset.51" || (input.schemaVersion === "3.0.0-subset.52" || (input.schemaVersion === "3.0.0-subset.53" || input.schemaVersion === "3.0.0-subset.54"))) || input.schemaVersion === "3.0.0-subset.50" || input.schemaVersion === "3.0.0-subset.49" || input.schemaVersion === "3.0.0-subset.48" || input.schemaVersion === "3.0.0-subset.47" || input.schemaVersion === "3.0.0-subset.46" || input.schemaVersion === "3.0.0-subset.45" || input.schemaVersion === "3.0.0-subset.44" || input.schemaVersion === "3.0.0-subset.43" || input.schemaVersion === "3.0.0-subset.42" || input.schemaVersion === "3.0.0-subset.41" || input.schemaVersion === "3.0.0-subset.40" || input.schemaVersion === "3.0.0-subset.39" || input.schemaVersion === "3.0.0-subset.38" || input.schemaVersion === "3.0.0-subset.16" || input.schemaVersion === "3.0.0-subset.17" || input.schemaVersion === "3.0.0-subset.18" || input.schemaVersion === "3.0.0-subset.19" || input.schemaVersion === "3.0.0-subset.20" || input.schemaVersion === "3.0.0-subset.21" || input.schemaVersion === "3.0.0-subset.22" || (input.schemaVersion === "3.0.0-subset.23" || input.schemaVersion === "3.0.0-subset.24" || input.schemaVersion === "3.0.0-subset.25" || input.schemaVersion === "3.0.0-subset.26" || input.schemaVersion === "3.0.0-subset.27" || input.schemaVersion === "3.0.0-subset.28" || (input.schemaVersion === "3.0.0-subset.29" || (input.schemaVersion === "3.0.0-subset.30" || (input.schemaVersion === "3.0.0-subset.31" || (input.schemaVersion === "3.0.0-subset.32" || (input.schemaVersion === "3.0.0-subset.33" || (input.schemaVersion === "3.0.0-subset.34" || (input.schemaVersion === "3.0.0-subset.35" || (input.schemaVersion === "3.0.0-subset.36" || input.schemaVersion === "3.0.0-subset.37"))))))))), "unsupported-v3-schema-version");
   const profile = input.schemaVersion, compilerVersion = compilerVersionForSchema(profile);
-  const modern = profile === "3.0.0-subset.50" || (profile === "3.0.0-subset.51" || (profile === "3.0.0-subset.52" || profile === "3.0.0-subset.53"));
+  const modern = profile === "3.0.0-subset.50" || (profile === "3.0.0-subset.51" || (profile === "3.0.0-subset.52" || (profile === "3.0.0-subset.53" || profile === "3.0.0-subset.54")));
   const compound = modern || profile === "3.0.0-subset.49";
   const conditionalTriggerPlay = profile === "3.0.0-subset.48" || compound, fieldDon = profile === "3.0.0-subset.47" || conditionalTriggerPlay;
   const triggerPlay = profile === "3.0.0-subset.45" || profile === "3.0.0-subset.46" || fieldDon;
@@ -752,7 +767,7 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
       if (category === "action" && type === "CALL_EFFECT_BODY") {
         ensureMove(externalBody && Object.hasOwn(input, "from") ?
           inputCardType !== "event" && ["MAIN", "ON_PLAY", "ON_EVENT"].includes(currentTiming ?? "") :
-          (inputCardType === "event" || (profile === "3.0.0-subset.51" || (profile === "3.0.0-subset.52" || profile === "3.0.0-subset.53")) && inputCardType === "character") &&
+          (inputCardType === "event" || (profile === "3.0.0-subset.51" || (profile === "3.0.0-subset.52" || (profile === "3.0.0-subset.53" || profile === "3.0.0-subset.54"))) && inputCardType === "character") &&
           currentTiming === "TRIGGER", "v3-effect-body-trigger-only");
         bodyCalls++;
       }
@@ -889,14 +904,20 @@ export function compileV3CardJson(json: string, registries?: V3Registries): Comp
       resolutionConditions = context.read("predicate", effect.resolutionConditions), costs = context.list("cost", effect.costs);
     ensureMove(boundary || (timing.type === "TRIGGER" ? input.cardType !== "leader" && effect.kind === "triggered" : input.cardType === "event" ? effect.kind === "activated" && (timing.type === "COUNTER" || (schemaVersion === "3.0.0-subset.19" || interactiveEventProfile) && timing.type === "MAIN") : effect.kind === "activated" ? timing.type === "MAIN" : timing.type === "ON_EVENT" || timing.type === "ON_PLAY" && input.cardType !== "leader" || timing.type === "ON_ATTACK" && input.cardType !== "stage" || timing.type === "ON_OPPONENT_ATTACK" || timing.type === "ON_KO" && input.cardType === "character"), "v3-kind-timing-mismatch");
     const counterReturn = battleEffects && timing.type === "COUNTER" && costs.length === 1 && costs[0]?.type === "DON_RETURN";
-    if (input.cardType === "event") ensureMove(!effect.optional && (usageLimit === null || externalBody && timing.type === "MAIN" && usageLimit.count === 1) && (costs.length === 0 || counterReturn) && activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-event-additional-activation-unresolved");
+    const lifeCost = costs.some(cost => cost.type === "LIFE_TOP_COST");
+    ensureMove(!lifeCost || costs.length === 1 && ["MAIN", "ON_PLAY", "COUNTER"].includes(timing.type), "v3-life-cost-timing");
+    const eventCost = profile === "3.0.0-subset.54" && costs.length === 1 && (timing.type === "COUNTER" && lifeCost ||
+      timing.type === "MAIN" && costs[0]?.type === "MOVE_AS_COST" && costs[0].selector !== "SOURCE" && costs[0].selector.zone === "character");
+    if (input.cardType === "event") ensureMove(!effect.optional && (usageLimit === null || externalBody && timing.type === "MAIN" && usageLimit.count === 1) && (costs.length === 0 || counterReturn || eventCost) && activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-event-additional-activation-unresolved");
     if (timing.type === "TRIGGER") ensureMove(!effect.optional && usageLimit === null && (costs.length === 0 || compound && lifeSelfPlayCost(costs)) && activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-trigger-additional-activation-unresolved");
     ensureMove(timing.type !== "ON_KO" || costs.length === 0, "v3-ko-activation-cost-unresolved");
     const attachmentGate = modern && ["ON_ATTACK", "ON_OPPONENT_ATTACK"].includes(timing.type) &&
       activationConditions.type === "compare" && activationConditions.op === "gte" &&
       typeof activationConditions.left === "object" && activationConditions.left?.ref === "SOURCE.attachedDonCount" &&
       typeof activationConditions.right === "number" && activationConditions.right >= 1 && activationConditions.right <= 10;
-    ensureMove(effect.kind !== "triggered" || boundary || timing.type === "ON_EVENT" || attachmentGate || activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-trigger-event-conditions-unresolved");
+    ensureMove(effect.kind !== "triggered" || boundary || timing.type === "ON_EVENT" || attachmentGate ||
+      lifeCost && timing.type === "ON_PLAY" && publicTriggerPlayCondition(activationConditions, true) ||
+      activationConditions.type === "all" && activationConditions.conditions.length === 0, "v3-trigger-event-conditions-unresolved");
     validateCostCombination(costs, inputCardType);
     const actions = context.list("action", effect.actions); ensureMove(actions.length > 0, "v3-action-required");
     const singleTriggerPlay = actions.length === 1 && actions[0]?.type === "PLAY_TRIGGER_SOURCE";

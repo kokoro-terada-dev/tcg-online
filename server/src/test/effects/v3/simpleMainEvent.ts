@@ -21,7 +21,7 @@ export function isShareableMainEvent(effect: DeepReadonly<Effect>, privateDeck =
 }
 
 export function isLifeTriggerBody(effect: DeepReadonly<Effect>, cardType: CardDefinition["cardType"], schema: CardDefinition["schemaVersion"]): boolean {
-  const expanded = (schema === "3.0.0-subset.51" || (schema === "3.0.0-subset.52" || schema === "3.0.0-subset.53"));
+  const expanded = (schema === "3.0.0-subset.51" || (schema === "3.0.0-subset.52" || (schema === "3.0.0-subset.53" || schema === "3.0.0-subset.54")));
   if (effect.timing.type === "MAIN")
     return cardType === "event" && isInteractiveMainEvent(effect, expanded || schema === "3.0.0-subset.50");
   if (!expanded || !(cardType === "event" && effect.timing.type === "COUNTER" ||
@@ -63,8 +63,10 @@ function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean,
       default: return false;
     }
   };
+  const fieldCost = allowLimit && privateDeck && effect.costs.length === 1 && effect.costs[0]?.type === "MOVE_AS_COST" &&
+    effect.costs[0].selector !== "SOURCE" && effect.costs[0].selector.zone === "character";
   return effect.kind === "activated" && effect.timing.type === "MAIN" && effect.sourceZones.length === 1 && effect.sourceZones[0] === "hand" &&
-    !effect.optional && (effect.usageLimit === null || allowLimit && effect.usageLimit.count === 1) && effect.costs.length === 0 &&
+    !effect.optional && (effect.usageLimit === null || allowLimit && effect.usageLimit.count === 1) && (effect.costs.length === 0 || fieldCost) &&
     effect.activationConditions.type === "all" && effect.activationConditions.conditions.length === 0 &&
     effect.resolutionConditions.type === "all" && effect.resolutionConditions.conditions.length === 0 && effect.actions.length > 0 && effect.actions.every(supported);
 }
