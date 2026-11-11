@@ -13,7 +13,7 @@ import { parseContinuousRecipe, parseDraftMode } from "./v3-draft-recipes.js";
 import { normalizeGrammar, parseCompletionEffect, parseNewFieldRecipe } from "./v3-draft-completion.js";
 import { parseAttachedPrefix, parseZoneContinuous, parseZoneEffect } from "./v3-draft-zones.js";
 import { battleReplacementProgram, lifeCostProgram } from "./v3-draft-life-costs.js";
-import { handCostProgram, singleColorLeaderBaseProgram } from "./v3-draft-hand-cost.js";
+import { conditionalFieldProgram, handCostProgram, singleColorLeaderBaseProgram } from "./v3-draft-hand-cost.js";
 
 const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
@@ -291,8 +291,11 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
         const tag = header(span.text), timing = timings.get(tag?.[1] ?? tag?.[2]);
         const program = timing?.[2].includes(cardType) && (field === "triggerText") === (timing[0] === "TRIGGER") &&
           (lifeCostProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end }) ??
-            singleColorLeaderBaseProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end }));
-        if (program) {
+            singleColorLeaderBaseProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end }) ??
+            conditionalFieldProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end }));
+        if (program?.heldReason) {
+          parsed = { ...parsed, reason: program.heldReason, unparsed: [{ start: span.start, end: span.end, reason: program.heldReason }] };
+        } else if (program) {
           const { pattern, ...effect } = program;
           parsed = { ...span, status: "recognized", pattern, effect: { ...effectFor(field, span.start, cardType, timing), ...effect } };
         }
