@@ -102,9 +102,10 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
     }
   }
   if (expansion && field === "text") {
-    if (zones && previous?.continuous?.operation?.type === "GRANT_KEYWORD" &&
+    const grantContinuous = (previous?.continuousEffects ?? [previous?.continuous]).find(row => row?.operation?.type === "GRANT_KEYWORD");
+    if (zones && grantContinuous &&
         /^(?:\r\n|\r|\n)$/u.test(raw.slice(previous.end, start))) {
-      const keyword = [...keywords.values()].find(values => values[0] === previous.continuous.operation.keyword.type);
+      const keyword = [...keywords.values()].find(values => values[0] === grantContinuous.operation.keyword.type);
       if (keyword && reminder(text.trim(), keyword))
         return { ...span, status: "recognized", pattern: "zone-continuous-keyword-reminder", attachedTo: previous.start };
     }
@@ -191,8 +192,37 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
     }));
   }
   if (zones && field === "text" && ["leader", "character"].includes(cardType)) {
+    if (zones === "delta" && cardType === "leader") {
+      const ko = /^(?:【ターン[1１]回】|〖ターン[1１]回〗)自分の属性\(([^()]+)\)を持ち、(?:【ブロッカー】|〖ブロッカー〗)を持たないキャラがKOされた時、(.+)$/u.exec(text.trim());
+      if (ko) {
+        const program = parseCompoundEffect(ko[2], "ON_KO", cardType, sourceSpan, false, true, true, null, true, true);
+        if (program && !program.costs && !program.usageLimit && !program.optional) {
+          const timing = { type: "ON_EVENT", event: "CARD_KO", snapshot: "TRANSACTION_BEFORE", relation: "OTHER",
+            owner: "SELF", controller: "SELF", fromZones: ["character"], toZones: ["trash"], cardTypes: ["character"], filters: {
+              type: "all", conditions: [
+                { type: "CARD_METADATA", subject: "CANDIDATE", basis: "CURRENT", field: "attributes", comparison: "EXACT", match: "ANY", values: [ko[1]] },
+                { type: "not", condition: { type: "HAS_ABILITY", subject: "CANDIDATE", basis: "CURRENT", ability: "BLOCKER" } }
+              ] } };
+          return { ...span, status: "recognized", pattern: "zone-observed-ko-filter", effect: {
+            ...effectFor(field, start, cardType, ["ON_EVENT", "triggered"]), timing, actions: program.actions,
+            usageLimit: { type: "PER_TURN", scope: "SOURCE_OBJECT", count: 1 }
+          } };
+        }
+      }
+    }
     const continuous = parseZoneContinuous(text.trim(), cardType, sourceSpan, zones === "delta");
     if (continuous) return { ...span, status: "recognized", ...continuous };
+    if (zones === "delta" && cardType === "character") {
+      const combined = /^((?:[^。]+場合、)?このキャラは(?:【[^】]+】|〖[^〗]+〗))を得て、((?:パワー|コスト)[+-][0-9]+)。$/u.exec(text.trim());
+      if (combined) {
+        const first = parseZoneContinuous(combined[1] + "を得る。", cardType, sourceSpan, true);
+        if (first) {
+          const second = parseZoneContinuous(`このキャラの${combined[2]}。`, cardType, sourceSpan, true);
+          if (second) return { ...span, status: "recognized", pattern: first.pattern,
+            continuousEffects: [first.continuous, { ...second.continuous, condition: first.continuous.condition }] };
+        }
+      }
+    }
     const attached = parseAttachedPrefix(text.trim());
     if (attached) {
       const inner = parseSpan({ ...span, text: attached.body }, cardType, gaps, previous, raw, extended, recipes, batch, expansion, refinement, completion, false);
@@ -231,13 +261,31 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
   const cardType = types.length === 1 ? types[0].toLowerCase() : null;
   const gaps = collectProbes([variant]);
   const spans = [];
+  const deferredEntries = [];
   for (const field of ["text", "triggerText"]) {
     if (absent(variant[field])) continue;
     const lines = [...variant[field].matchAll(/[^\r\n]+/g)];
     for (let i = 0; i < lines.length; i++) {
       const match = lines[i], span = { field, start: match.index, end: match.index + match[0].length, text: match[0] };
       if (!span.text.trim()) continue;
-      const parsed = parseSpan(span, cardType, gaps, spans.at(-1), variant[field], extended, recipes, batch, expansion, refinement, completion, zones);
+      let parsed = parseSpan(span, cardType, gaps, spans.at(-1), variant[field], extended, recipes, batch, expansion, refinement, completion, zones);
+      if (zones === "delta" && field === "text" && parsed.status !== "recognized" && cardType === "character") {
+        const entry = /^(?:【(自分|相手)のターン中】|〖(自分|相手)のターン中〗)((?:【登場時】|〖登場時〗).+)$/u.exec(span.text.trim());
+        if (entry) {
+          const inner = parseSpan({ ...span, text: entry[3] }, cardType, gaps, spans.at(-1), variant[field], extended, recipes, batch, expansion, refinement, completion, zones);
+          const effect = inner.effect;
+          // Cards without a life trigger cannot enter from the resolving zone in the current DSL.
+          if (effect?.timing.type === "ON_PLAY" && effect.activationConditions.type === "all" && !effect.activationConditions.conditions.length) {
+            const observed = { ...span, status: "recognized", pattern: inner.pattern === "zone-deck-play" ? inner.pattern : "zone-turn-observed-entry",
+              effect: { ...effect, timing: { type: "ON_EVENT", event: "CARD_ENTERED", snapshot: "TRANSACTION_AFTER", relation: "SELF",
+                owner: "SELF", controller: "SELF", fromZones: ["hand", "deck", "life", "trash", "public", "stage"],
+                toZones: ["character"], cardTypes: ["character"], filters: always() },
+                activationConditions: { type: "TURN_IS", player: (entry[1] ?? entry[2]) === "自分" ? "SELF" : "OPPONENT" } } };
+            if (absent(variant.triggerText)) parsed = observed;
+            else deferredEntries.push({ parsed, observed });
+          }
+        }
+      }
       if (batch && field === "text" && parsed.status !== "recognized" && span.text.endsWith("以下から1つを選ぶ。")) {
         const tag = header(span.text), timing = timings.get(tag?.[1] ?? tag?.[2]) ?? boundaryTimings.get(tag?.[1] ?? tag?.[2]);
         const branches = [];
@@ -268,6 +316,11 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
       }
       spans.push(parsed);
     }
+  }
+  const triggers = spans.filter(span => span.field === "triggerText");
+  if (triggers.length && triggers.every(span => span.status === "recognized" &&
+      !JSON.stringify(span.effect?.actions ?? []).match(/"(?:PLAY_TRIGGER_SOURCE|CALL_EFFECT_BODY)"/u))) {
+    for (const { parsed, observed } of deferredEntries) spans[spans.indexOf(parsed)] = observed;
   }
   const body = spans.filter(span => span.field === "text");
   const main = body.filter(span => span.effect?.timing.type === "MAIN");
@@ -323,7 +376,7 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const deckPlay = variant.spans.some(span => ["zone-deck-play", "zone-trigger-body", "zone-event-main-payment", "zone-event-main-mode",
     "zone-continuous-stable-guard"].includes(span.pattern));
   const newTargets = variant.spans.some(span => span.pattern?.startsWith("pr25-"));
-  const continuousEffects = variant.spans.flatMap(span => span.continuous ? [span.continuous] : []);
+  const continuousEffects = variant.spans.flatMap(span => span.continuousEffects ?? (span.continuous ? [span.continuous] : []));
   const replacementEffects = variant.spans.flatMap(span => span.replacement ? [span.replacement] : []);
   return {
     schemaVersion: deckPlay ? "3.0.0-subset.51" : zones ? "3.0.0-subset.50" : recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
