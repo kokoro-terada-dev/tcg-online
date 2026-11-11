@@ -10,6 +10,14 @@ const legacy = (body, timing, kind, span) => parseCompoundEffect(body, timing, k
 const hasAction = (actions, type) => actions.some(action => action.type === type ||
   action.type === "IF" && (hasAction(action.then, type) || hasAction(action.else, type)));
 const needsDeltaProfile = new Set(["zone-deck-play", "zone-event-main-payment"]);
+function mixedTraitTarget(text) {
+  const form = /^(.*?)特徴《([^《》]+)》か『([^『』]+)』を含む特徴を持つキャラカード$/u.exec(text);
+  if (!form) return null;
+  const prefix = form[1].replace(/、$/u, "");
+  const exact = searchTarget(`${prefix}特徴《${form[2]}》を持つキャラカード`, true, true);
+  const partial = searchTarget(`${prefix}『${form[3]}』を含む特徴を持つキャラカード`, true, true);
+  return exact && partial ? { kinds: ["character"], filters: { type: "any", conditions: [exact.filters, partial.filters] } } : null;
+}
 
 export function parseZoneContinuous(raw, cardType, sourceSpan, delta = false) {
   if (cardType !== "character" && cardType !== "leader") return null;
@@ -50,6 +58,7 @@ export function parseZoneContinuous(raw, cardType, sourceSpan, delta = false) {
 export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false) {
   const normalized = normalizeGrammar(raw);
   const text = delta ? normalized.replaceAll("次の相手のエンドフェイズ終了時まで", "次の相手のターン終了時まで")
+    .replace(/((?:手札|ライフ)が[0-9]+枚(?:以上|以下))ある場合、/gu, "$1の場合、")
     .replace(/((?:パワー|コスト)[0-9]+(?:以下|以上)の|特徴《[^《》]+》を持つ|属性\([^()]+\)を持つ)、(?=(?:リーダー|キャラ|特徴|属性))/gu, "$1") : normalized;
   if (delta && timing === "COUNTER" && cardType === "event") {
     const payment = /^自分の手札([1-3])枚を捨てることができる[:：](.+)$/u.exec(text);
@@ -85,11 +94,16 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
     const rest = delta && /^自分の(?:アクティブの)?ドン(?:[!！]{2}|‼)([1-9]|10)枚(とこの(キャラ|ステージ|リーダー))?をレストにできる$/u.exec(paid[1]);
     const sourceKind = rest && { キャラ: "character", ステージ: "stage", リーダー: "leader" }[rest[3]];
     const exact = rest && (!rest[2] || sourceKind === cardType) && ["MAIN", "ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_BLOCK", "TURN_END"].includes(timing);
+    const restAndTrash = delta && cardType === "character" && timing === "ON_OPPONENT_ATTACK" &&
+      /^自分のドン(?:[!！]{2}|‼)([1-9]|10)枚をレストにし、このキャラをトラッシュに置くことができる$/u.exec(paid[1]);
     const declaration = legacy(`${paid[1]}：カード1枚を引く。`, timing, cardType, sourceSpan) ??
-      (exact ? { costs: [{ type: "REST_DON", count: Number(rest[1]) }, ...(rest[2] ? [{ type: "REST_SOURCE" }] : [])] } : null);
+      (exact ? { costs: [{ type: "REST_DON", count: Number(rest[1]) }, ...(rest[2] ? [{ type: "REST_SOURCE" }] : [])] } :
+        restAndTrash ? { costs: [{ type: "REST_DON", count: Number(restAndTrash[1]) },
+          { type: "MOVE_AS_COST", selector: "SOURCE", destination: "trash" }] } : null);
     const effect = declaration?.costs?.length && (parseZoneEffect(paid[2], timing, cardType, sourceSpan, delta) ??
       (delta ? legacy(paid[2], timing, cardType, sourceSpan) : null));
-    if (effect && (!delta || !effect.costs && !effect.usageLimit && !effect.optional)) return { ...effect, costs: declaration.costs, optional: declaration.optional ?? timing !== "MAIN",
+    if (effect && (!delta || !effect.costs && !effect.usageLimit && !effect.optional &&
+        (!restAndTrash || !JSON.stringify(effect.actions).includes("SOURCE.") && !hasAction(effect.actions, "BIND_SOURCE")))) return { ...effect, costs: declaration.costs, optional: declaration.optional ?? timing !== "MAIN",
       ...(declaration.usageLimit ? { usageLimit: declaration.usageLimit } : {}) };
     return null;
   }
@@ -104,6 +118,31 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
   const wrap = actions => condition ? [{ type: "IF", condition, then: actions, else: [] }] : actions;
   const body = guard ? guard[2] : text;
   if (delta) {
+    if (body === "お互いのライフの合計枚数以下のコストを持つ相手のキャラ1枚までを、レストにする。") {
+      const bindAs = `life_total_target_${sourceSpan.start}`;
+      return { pattern: "zone-life-total-target", actions: wrap([
+        draftSelect(bindAs, "character", "OPPONENT", 0, 1, { type: "compare", left: { ref: "CANDIDATE.current.cost" },
+          op: "lte", right: { ref: "BOTH.lifeCount" } }),
+        { type: "REST", cards: { ref: `bindings.${bindAs}` }, sourceSpan }
+      ]) };
+    }
+    if (body === "自分の手札1枚までを、ライフの上に加える。") {
+      const bindAs = `hand_to_life_${sourceSpan.start}`;
+      return { pattern: "zone-hand-to-life", actions: wrap([
+        draftSelect(bindAs, "hand", "SELF", 0, 1, always(), { visibility: "OWNER_ONLY" }),
+        { type: "MOVE_LIFE", player: "SELF", from: "BOUND", to: "LIFE_TOP", faceUp: false, cards: { ref: `bindings.${bindAs}` }, sourceSpan }
+      ]) };
+    }
+    const traitLeader = /^自分の特徴《([^《》]+)》か《([^《》]+)》を持つリーダーを、このバトル中、パワー\+([1-9][0-9]{0,4})。$/u.exec(body);
+    if (traitLeader && ["ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_BLOCK", "COUNTER"].includes(timing) && traitLeader[1] !== traitLeader[2]) {
+      const bindAs = `trait_leader_${sourceSpan.start}`;
+      const pick = draftSelect(bindAs, "leader", "SELF", 1, 1, { type: "CARD_METADATA", subject: "CANDIDATE", basis: "CURRENT",
+        field: "traits", comparison: "EXACT", match: "ANY", values: [traitLeader[1], traitLeader[2]] });
+      pick.selector.onInsufficient = "skip";
+      return { pattern: "zone-trait-leader-battle-power", actions: wrap([pick,
+        { type: "MODIFY_STAT", cards: { ref: `bindings.${bindAs}` }, stat: "power", amount: Number(traitLeader[3]),
+          duration: { type: "BATTLE_END" }, sourceSpan }]) };
+    }
     const operation = /^相手のコスト([0-9]{1,2})以下のキャラ1枚までを、?KOするか、レストにする。$/u.exec(body);
     if (operation) {
       const bindAs = `ko_or_rest_${sourceSpan.start}`, cards = { ref: `bindings.${bindAs}` };
@@ -118,12 +157,21 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
     const typed = /^(自分|相手)の(.+?)(リーダーかキャラ|キャラ)([1-5])枚まで(?:を|は)、?(.+)$/u.exec(body);
     if (typed) {
       const prefix = typed[2].replace(/^(特徴《[^《》]+》)と((?:【トリガー】|〖トリガー〗))を両方持つ$/u, "$1を持つ$2を持つ");
-      const target = searchTarget(prefix + "キャラカード", true, true);
+      const target = searchTarget(prefix + "キャラカード", true, true) ?? mixedTraitTarget(prefix + "キャラカード");
       const generic = target && legacy(`${typed[1]}の${typed[3]}${typed[4]}枚までを、${typed[5]}`, timing, cardType, sourceSpan);
       if (generic?.actions[0]?.type === "SELECT" && !generic.costs && !generic.usageLimit &&
           (typed[3] === "キャラ" || target.filters.conditions.every(filter => !filter.left?.ref?.endsWith(".cost")))) {
         const [pick, ...actions] = generic.actions;
         return { pattern: "zone-explicit-field-filters", actions: wrap([{ ...pick, selector: { ...pick.selector, filters: target.filters } }, ...actions]) };
+      }
+      if (target && typed[3] === "キャラ" && /^このターン中、(?:【速攻】|〖速攻〗)を得る。$/u.test(typed[5])) {
+        const bindAs = `field_rush_${sourceSpan.start}`, owner = typed[1] === "自分" ? "SELF" : "OPPONENT";
+        const grant = player => ({ type: "GRANT_KEYWORD", cards: { ref: `bindings.${bindAs}` }, keyword: { type: "RUSH" },
+          duration: { type: "TURN_END", player, occurrence: 1 }, sourceSpan });
+        return { pattern: "zone-explicit-field-filters", actions: wrap([
+          draftSelect(bindAs, "character", owner, 0, Number(typed[4]), target.filters),
+          { type: "IF", condition: { type: "TURN_IS", player: "SELF" }, then: [grant("SELF")], else: [grant("OPPONENT")] }
+        ]) };
       }
     }
     const leader = /^(自分|相手)のリーダー「([^「」]+)」(?:を|は)、?(.+)$/u.exec(body);
@@ -143,6 +191,17 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
       if (generic?.actions[0]?.type === "SELECT" && !generic.costs && !generic.usageLimit) {
         const [pick, ...actions] = generic.actions;
         return { pattern: "zone-named-leader-effect", actions: wrap([{ ...pick, selector: { ...pick.selector, onInsufficient: "skip", filters: filter } }, ...actions]) };
+      }
+    }
+    const attributeAttach = /^自分の属性\(([^()]+)\)か\(([^()]+)\)を持つ、?(リーダーかキャラ1枚)に、?((?:レスト|アクティブ)のドン(?:[!！]{2}|‼)(?:[1-9]|10)枚までを、?付与する。)$/u.exec(body);
+    if (attributeAttach && attributeAttach[1] !== attributeAttach[2]) {
+      const generic = legacy(`自分の${attributeAttach[3]}に${attributeAttach[4]}`, timing, cardType, sourceSpan);
+      if (generic?.pattern === "recipe-don-attachment" && generic.actions[0]?.type === "SELECT") {
+        const [pick, ...actions] = generic.actions;
+        return { pattern: "zone-attribute-don-attachment", actions: wrap([{ ...pick, selector: { ...pick.selector, filters: {
+          type: "CARD_METADATA", subject: "CANDIDATE", basis: "CURRENT", field: "attributes", comparison: "EXACT", match: "ANY",
+          values: [attributeAttach[1], attributeAttach[2]]
+        } } }, ...actions]) };
       }
     }
     const attach = /^自分のリーダー「([^「」]+)」に、?((?:レスト|アクティブ)のドン(?:[!！]{2}|‼)(?:[1-9]|10)枚までを、?付与する。)$/u.exec(body);
@@ -175,13 +234,14 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
         return { pattern: "zone-named-field-stat", actions: wrap([{ ...select, selector: { ...select.selector, filters } }, ...actions]) };
       }
     }
-    const top = /^自分のデッキの上から([1-9])枚を見て、(.+?)1枚までを、?(?:(レストで|アクティブで)?登場させ(?:る。その後、|、)|公開し、手札に加え(?:る。その後、|、))残りを(好きな順番でデッキの下に|トラッシュに)置く。$/u.exec(body);
+    const top = /^自分のデッキの上から([1-9])枚を見て、(.+?)(?:合計)?([1-9])枚までを、?(?:(レストで|アクティブで)?登場させ(?:る。その後、|、)|公開し、手札に加え(?:る。その後、|、))残りを(好きな順番でデッキの下に|トラッシュに)置く。$/u.exec(body);
     const whole = /^自分のデッキから、?(.+?)1枚までを、?(?:(レストで|アクティブで)?登場させ(?:る。その後、|、)|公開し、手札に加え(?:る。その後、|、))デッキをシャッフルする。$/u.exec(body);
     const recover = (top ?? whole)?.[0].includes("公開し、手札に加え");
-    const trash = top?.[4] === "トラッシュに";
-    const play = top ? { count: Number(top[1]), target: top[2], state: top[3] } :
-      whole ? { count: 50, target: whole[1], state: whole[2] } : null;
+    const trash = top?.[5] === "トラッシュに";
+    const play = top ? { count: Number(top[1]), target: top[2], max: Number(top[3]), state: top[4] } :
+      whole ? { count: 50, target: whole[1], max: 1, state: whole[2] } : null;
     if (play) {
+      if (play.max > play.count || !recover && play.max !== 1) return null;
       const named = /「[^「」]+」$/u.test(play.target);
       const targetText = !recover && named ? `${play.target}のキャラカード` : play.target;
       const target = searchTarget(targetText, true, true) ?? searchTarget(targetText.replace(
@@ -194,7 +254,7 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
         { type: "LOOK_TOP", player: "SELF", count: play.count, bindAs: seen, onInsufficient: "takeAvailable", sourceSpan },
         { type: "SELECT", bindAs: picked, selector: { type: "BOUND_CARDS", cards: binding(seen), excludeCards: null,
           owner: "SELF", controller: "SELF", chooser: "SELF", zone: "deck", cardTypes: target.kinds, filters: target.filters,
-          visibility: "OWNER_ONLY", faceUpOnly: false, excludeSource: false, min: 0, max: 1, selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } },
+          visibility: "OWNER_ONLY", faceUpOnly: false, excludeSource: false, min: 0, max: play.max, selectionMode: "SELECT", order: "UNORDERED", onInsufficient: "fail" } },
         ...(recover ? [{ type: "REVEAL", cards: binding(picked), viewers: "BOTH", sourceSpan },
           { type: "MOVE_CARD", cards: binding(picked), destination: { owner: "SELF", zone: "hand", position: "append", faceUp: true }, cause: "EFFECT", sourceSpan }] :
           [{ type: "PLAY_BY_EFFECT", cards: binding(picked), from: "deck",
@@ -265,7 +325,7 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
     [...play[2].matchAll(/「([^「」]+)」/gu)].map(match => match[1]);
   const target = names ? { kinds: ["character"], filters: { type: "any", conditions: names.map(value => ({
     type: "CARD_NAME", subject: "CANDIDATE", basis: "CURRENT", op: "eq", value
-  })) } } : searchTarget(named ? `${play[2]}のキャラカード` : play[2], true, true);
+  })) } } : searchTarget(named ? `${play[2]}のキャラカード` : play[2], true, true) ?? (delta ? mixedTraitTarget(play[2]) : null);
   if (!target || target.kinds.length !== 1 || target.kinds[0] !== "character") return null;
   const after = play[4] && legacy(play[4], timing, cardType, sourceSpan);
   if (play[4] && (!after || after.costs || after.usageLimit)) return null;
@@ -279,13 +339,21 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
 }
 
 function parseJoinedGuard(text) {
-  const terms = text.split(/でかつ、|かつ、|で、|かつ/u);
+  const terms = text.replace(/を持ち、/u, "を持つかつ、").split(/でかつ、|かつ、|で、|かつ/u);
   if (terms.length !== 2) return null;
   const conditions = terms.map(term => parsePublicCondition(term, true) ?? parseDeltaGuard(term));
   return conditions.every(Boolean) ? { type: "all", conditions } : null;
 }
 
 function parseDeltaGuard(text) {
+  const donGap = /^自分の場のドン(?:[!！]{2}|‼)の枚数が相手の場のドン(?:[!！]{2}|‼)の枚数より([1-9]|10)枚以上少ない$/u.exec(text);
+  if (donGap) {
+    const gap = Number(donGap[1]);
+    return { type: "any", conditions: Array.from({ length: 11 - gap }, (_, count) => ({ type: "all", conditions: [
+      { type: "compare", left: { ref: "SELF.don.fieldCount" }, op: "eq", right: count },
+      { type: "compare", left: { ref: "OPPONENT.don.fieldCount" }, op: "gte", right: count + gap }
+    ] })) };
+  }
   const either = /^(自分|相手)のリーダーが「([^「」]+)」か特徴《([^《》]+)》を持つ$/u.exec(text);
   if (either) {
     const conditions = [parsePublicCondition(`${either[1]}のリーダーが「${either[2]}」`, true),

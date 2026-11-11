@@ -6,9 +6,14 @@ import { generateV3Drafts } from "./generate-v3-drafts.js";
 import { resolveReviewOutput } from "./review-v3-catalog.js";
 
 const require = createRequire(import.meta.url);
-const [root, source, ledgerFile, baseline, output, ...sets] = process.argv.slice(2);
+const [root, source, ledgerFile, baseline, output, ...flags] = process.argv.slice(2);
+const powerIndex = flags.indexOf("--confirmed-power");
+const powerFile = powerIndex < 0 ? null : flags[powerIndex + 1];
+if (powerIndex >= 0 && !powerFile) throw Error("Missing confirmed power file");
+if (powerFile) flags.splice(powerIndex, 2);
+const sets = flags;
 if (!output || sets.some(set => !/^(?:EB|OP|ST)[0-9]{2}$/u.test(set)))
-  throw Error("Usage: generate-v3-draft-delta.js <catalog> <source.csv> <ledger.json> <generation.json> <new-output-dir> [set ...]");
+  throw Error("Usage: generate-v3-draft-delta.js <catalog> <source.csv> <ledger.json> <generation.json> <new-output-dir> [set ...] [--confirmed-power file.json]");
 const directory = resolveReviewOutput(root, output);
 if (fs.existsSync(directory)) throw Error("Output directory already exists");
 const read = file => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -38,7 +43,23 @@ for (const entry of [index.legacy, ...index.shards]) {
   }
 }
 const validate = require("../docs/validate-card-effect-json.cjs").createSchemaValidator();
-const { trace, candidates, schemaHolds } = generateV3Drafts(ledger, selected, undefined, validate, { delta: true, excludeApproved: approved });
+const confirmations = powerFile ? read(powerFile) : null;
+const confirmed = new Map();
+if (confirmations) {
+  if (confirmations.sourceCsvSha256 !== sha || !Array.isArray(confirmations.cards)) throw Error("Invalid power confirmation snapshot");
+  const eligible = new Set(selected);
+  for (const entry of confirmations.cards) {
+    const rows = ledger.rows.filter(row => row.cardId === entry.cardId);
+    if (!eligible.has(entry.cardId) || approved.has(entry.cardId) || confirmed.has(entry.cardId) ||
+        !Number.isSafeInteger(entry.power) || entry.power < 0 || !entry.evidence?.trim() || !rows.length ||
+        rows.some(row => row.raw["種類"] !== "CHARACTER" || row.raw["パワー"] !== "-"))
+      throw Error("Invalid or out-of-scope power confirmation: " + entry.cardId);
+    confirmed.set(entry.cardId, entry);
+  }
+}
+const draftLedger = confirmed.size ? { ...ledger, rows: ledger.rows.map(row => confirmed.has(row.cardId) ?
+  { ...row, raw: { ...row.raw, "パワー": String(confirmed.get(row.cardId).power) } } : row) } : ledger;
+const { trace, candidates, schemaHolds } = generateV3Drafts(draftLedger, selected, undefined, validate, { delta: true, excludeApproved: approved });
 trace.version = "v3-draft-delta.1";
 trace.registryHash = require("../docs/card-effect-supported-operations.json").profiles["3.0.0-subset.51"].registryHash;
 const definitions = candidates.cards.filter(c => c.definition && !approved.has(c.cardId));
@@ -52,6 +73,7 @@ const write = (name, value) => fs.writeFileSync(path.join(directory, name), JSON
 for (const { cardId, definition } of definitions) write(`definitions/${cardId}.json`, definition);
 write("generation.json", trace);
 write("schema-holds.json", schemaHolds);
+if (confirmations) write("printed-confirmations.json", confirmations);
 const status = new Map(trace.cards.map(c => [c.cardId, c]));
 // Carry forward status metadata only, without loading or compiling old definitions.
 const merged = prior.cards.map(c => c.status === "complete" ? { cardId: c.cardId, status: c.status } : status.get(c.cardId) ?? c);
