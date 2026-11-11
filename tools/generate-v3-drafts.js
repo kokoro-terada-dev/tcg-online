@@ -14,6 +14,7 @@ import { normalizeGrammar, parseCompletionEffect, parseNewFieldRecipe } from "./
 import { parseAttachedPrefix, parseZoneContinuous, parseZoneEffect } from "./v3-draft-zones.js";
 import { battleReplacementProgram, lifeCostProgram } from "./v3-draft-life-costs.js";
 import { conditionalFieldProgram, handCostProgram, singleColorLeaderBaseProgram } from "./v3-draft-hand-cost.js";
+import { battlePaymentProgram } from "./v3-draft-battle-payment.js";
 
 const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
@@ -147,6 +148,12 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
         return { ...span, status: "recognized", pattern: parsed.find(p => p.pattern.startsWith("zone-"))?.pattern ?? (parsed.some(p => p.pattern.startsWith("recipe-")) ?
           "recipe-multiple-timings" : "pr29-multiple-timings"), effects };
       }
+    }
+    if (zones === "delta" && pair === "ON_ATTACK/ON_OPPONENT_ATTACK" && cardType === "character") {
+      const programs = [timing, second].map(t => battlePaymentProgram(shared, t[0], cardType, sourceSpan));
+      if (programs.every(Boolean)) return { ...span, status: "recognized", pattern: "zone-battle-payment",
+        effects: programs.map(({ pattern: _pattern, ...program }, index) =>
+          ({ ...effectFor(field, start, cardType, [timing, second][index], `-${index + 1}`), ...program })) };
     }
   }
   if (timing && (field === "triggerText") === (timing[0] === "TRIGGER") && timing[2].includes(cardType)) {
@@ -289,11 +296,13 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
         }
       }
       if (zones === "delta" && parsed.status !== "recognized") {
-        const tag = header(span.text), timing = timings.get(tag?.[1] ?? tag?.[2]);
+        const tag = header(span.text), key = tag?.[1] ?? tag?.[2];
+        const timing = cardType === "stage" && key === "相手のアタック時" ? ["ON_OPPONENT_ATTACK", "triggered", ["stage"]] : timings.get(key);
         const program = timing?.[2].includes(cardType) && (field === "triggerText") === (timing[0] === "TRIGGER") &&
           (lifeCostProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end }) ??
             singleColorLeaderBaseProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end }) ??
-            conditionalFieldProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end }));
+            conditionalFieldProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end }) ??
+            battlePaymentProgram(tag[3], timing[0], cardType, { start: span.start, end: span.end }));
         if (program?.heldReason) {
           parsed = { ...parsed, reason: program.heldReason, unparsed: [{ start: span.start, end: span.end, reason: program.heldReason }] };
         } else if (program) {

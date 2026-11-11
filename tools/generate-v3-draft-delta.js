@@ -11,9 +11,13 @@ const powerIndex = flags.indexOf("--confirmed-power");
 const powerFile = powerIndex < 0 ? null : flags[powerIndex + 1];
 if (powerIndex >= 0 && !powerFile) throw Error("Missing confirmed power file");
 if (powerFile) flags.splice(powerIndex, 2);
+const rangeIndex = flags.indexOf("--card-range");
+const range = rangeIndex < 0 ? null : /^(OP[0-9]{2})-([0-9]{3}):\1-([0-9]{3})$/u.exec(flags[rangeIndex + 1] ?? "");
+if (rangeIndex >= 0 && (!range || Number(range[2]) > Number(range[3]))) throw Error("Invalid card range; expected OP17-041:OP17-057");
+if (rangeIndex >= 0) flags.splice(rangeIndex, 2);
 const sets = flags;
 if (!output || sets.some(set => !/^(?:EB|OP|ST)[0-9]{2}$/u.test(set)))
-  throw Error("Usage: generate-v3-draft-delta.js <catalog> <source.csv> <ledger.json> <generation.json> <new-output-dir> [set ...] [--confirmed-power file.json]");
+  throw Error("Usage: generate-v3-draft-delta.js <catalog> <source.csv> <ledger.json> <generation.json> <new-output-dir> [set ...] [--confirmed-power file.json] [--card-range OP17-041:OP17-057]");
 const directory = resolveReviewOutput(root, output);
 if (fs.existsSync(directory)) throw Error("Output directory already exists");
 const read = file => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -26,7 +30,9 @@ if (sha !== ledger.sourceSha256 || sha !== prior.sourceCsvSha256 || prior.execut
 const states = new Set(["complete", "partial", "unconvertible", "unassessed"]);
 if (prior.cards.some(c => !states.has(c.status))) throw Error("Invalid baseline status");
 const inScope = c => !sets.length || sets.includes(c.cardId.split("-")[0]);
-const selected = prior.cards.filter(c => c.status !== "complete" && inScope(c)).map(c => c.cardId);
+const inRange = c => !range || c.cardId.startsWith(`${range[1]}-`) &&
+  Number(c.cardId.slice(5)) >= Number(range[2]) && Number(c.cardId.slice(5)) <= Number(range[3]);
+const selected = prior.cards.filter(c => c.status !== "complete" && inScope(c) && inRange(c)).map(c => c.cardId);
 if (!selected.length) throw Error("No unfinished cards");
 const catalogRoot = fs.realpathSync(root), index = read(path.join(catalogRoot, "catalog-root.json"));
 const approved = new Set();
