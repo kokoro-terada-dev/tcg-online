@@ -9,7 +9,7 @@ const legacy = (body, timing, kind, span) => parseCompoundEffect(body, timing, k
   parseCompletionEffect(body, timing, kind, span);
 const hasAction = (actions, type) => actions.some(action => action.type === type ||
   action.type === "IF" && (hasAction(action.then, type) || hasAction(action.else, type)));
-const needsDeltaProfile = new Set(["zone-deck-play", "zone-event-main-payment"]);
+const needsDeltaProfile = new Set(["zone-deck-play", "zone-event-main-payment", "zone-auto-field-stat"]);
 function mixedTraitTarget(text) {
   const form = /^(.*?)特徴《([^《》]+)》か『([^『』]+)』を含む特徴を持つキャラカード$/u.exec(text);
   if (!form) return null;
@@ -118,6 +118,17 @@ export function parseZoneEffect(raw, timing, cardType, sourceSpan, delta = false
   const wrap = actions => condition ? [{ type: "IF", condition, then: actions, else: [] }] : actions;
   const body = guard ? guard[2] : text;
   if (delta) {
+    const allPrinted = /^(自分|相手)の元々の(パワー|コスト)([0-9]+)(以下|以上)のキャラすべてを、次の相手のターン終了時まで、(パワー|コスト)([+-][1-9][0-9]{0,4})。$/u.exec(body);
+    if (allPrinted && timing === "MAIN" && Number.isSafeInteger(Number(allPrinted[3]))) {
+      const bindAs = `all_field_${sourceSpan.start}`;
+      const pick = draftSelect(bindAs, "character", allPrinted[1] === "自分" ? "SELF" : "OPPONENT", 0, 5, {
+        type: "compare", left: { ref: `CANDIDATE.printed.${allPrinted[2] === "パワー" ? "power" : "cost"}` },
+        op: allPrinted[4] === "以下" ? "lte" : "gte", right: Number(allPrinted[3])
+      });
+      return { pattern: "zone-auto-field-stat", actions: wrap([{ ...pick, automatic: "ALL" },
+        { type: "MODIFY_STAT", cards: { ref: `bindings.${bindAs}` }, stat: allPrinted[5] === "パワー" ? "power" : "cost",
+          amount: Number(allPrinted[6]), duration: { type: "TURN_END", player: "OPPONENT", occurrence: 1 }, sourceSpan }]) };
+    }
     if (body === "お互いのライフの合計枚数以下のコストを持つ相手のキャラ1枚までを、レストにする。") {
       const bindAs = `life_total_target_${sourceSpan.start}`;
       return { pattern: "zone-life-total-target", actions: wrap([
@@ -346,6 +357,13 @@ function parseJoinedGuard(text) {
 }
 
 function parseDeltaGuard(text) {
+  const attribute = /^(自分|相手)のリーダーが属性\(([^()]+)\)を持つ$/u.exec(text);
+  if (attribute) {
+    const owner = attribute[1] === "自分" ? "SELF" : "OPPONENT";
+    return { type: "EXISTS", query: { type: "QUERY_CARDS", owner, controller: owner, zone: "leader", visibility: "PUBLIC",
+      faceUpOnly: true, cardTypes: ["leader"], excludeSource: false, filters: { type: "CARD_METADATA", subject: "CANDIDATE",
+        basis: "CURRENT", field: "attributes", comparison: "EXACT", match: "ANY", values: [attribute[2]] } } };
+  }
   const donGap = /^自分の場のドン(?:[!！]{2}|‼)の枚数が相手の場のドン(?:[!！]{2}|‼)の枚数より([1-9]|10)枚以上少ない$/u.exec(text);
   if (donGap) {
     const gap = Number(donGap[1]);

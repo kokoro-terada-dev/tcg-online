@@ -261,7 +261,6 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
   const cardType = types.length === 1 ? types[0].toLowerCase() : null;
   const gaps = collectProbes([variant]);
   const spans = [];
-  const deferredEntries = [];
   for (const field of ["text", "triggerText"]) {
     if (absent(variant[field])) continue;
     const lines = [...variant[field].matchAll(/[^\r\n]+/g)];
@@ -274,15 +273,12 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
         if (entry) {
           const inner = parseSpan({ ...span, text: entry[3] }, cardType, gaps, spans.at(-1), variant[field], extended, recipes, batch, expansion, refinement, completion, zones);
           const effect = inner.effect;
-          // Cards without a life trigger cannot enter from the resolving zone in the current DSL.
           if (effect?.timing.type === "ON_PLAY" && effect.activationConditions.type === "all" && !effect.activationConditions.conditions.length) {
-            const observed = { ...span, status: "recognized", pattern: inner.pattern === "zone-deck-play" ? inner.pattern : "zone-turn-observed-entry",
+            parsed = { ...span, status: "recognized", pattern: "zone-turn-resolving-entry",
               effect: { ...effect, timing: { type: "ON_EVENT", event: "CARD_ENTERED", snapshot: "TRANSACTION_AFTER", relation: "SELF",
-                owner: "SELF", controller: "SELF", fromZones: ["hand", "deck", "life", "trash", "public", "stage"],
+                owner: "SELF", controller: "SELF", fromZones: ["hand", "deck", "life", "trash", "public", "stage", "resolving"],
                 toZones: ["character"], cardTypes: ["character"], filters: always() },
                 activationConditions: { type: "TURN_IS", player: (entry[1] ?? entry[2]) === "自分" ? "SELF" : "OPPONENT" } } };
-            if (absent(variant.triggerText)) parsed = observed;
-            else deferredEntries.push({ parsed, observed });
           }
         }
       }
@@ -316,11 +312,6 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
       }
       spans.push(parsed);
     }
-  }
-  const triggers = spans.filter(span => span.field === "triggerText");
-  if (triggers.length && triggers.every(span => span.status === "recognized" &&
-      !JSON.stringify(span.effect?.actions ?? []).match(/"(?:PLAY_TRIGGER_SOURCE|CALL_EFFECT_BODY)"/u))) {
-    for (const { parsed, observed } of deferredEntries) spans[spans.indexOf(parsed)] = observed;
   }
   const body = spans.filter(span => span.field === "text");
   const main = body.filter(span => span.effect?.timing.type === "MAIN");
@@ -373,13 +364,14 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const compound = variant.spans.some(span => span.pattern?.startsWith("pr29-"));
   const recipes = variant.spans.some(span => span.pattern?.startsWith("recipe-"));
   const zones = variant.spans.some(span => span.pattern?.startsWith("zone-"));
+  const fieldBinding = variant.spans.some(span => ["zone-auto-field-stat", "zone-turn-resolving-entry"].includes(span.pattern));
   const deckPlay = variant.spans.some(span => ["zone-deck-play", "zone-trigger-body", "zone-event-main-payment", "zone-event-main-mode",
     "zone-continuous-stable-guard"].includes(span.pattern));
   const newTargets = variant.spans.some(span => span.pattern?.startsWith("pr25-"));
   const continuousEffects = variant.spans.flatMap(span => span.continuousEffects ?? (span.continuous ? [span.continuous] : []));
   const replacementEffects = variant.spans.flatMap(span => span.replacement ? [span.replacement] : []);
   return {
-    schemaVersion: deckPlay ? "3.0.0-subset.51" : zones ? "3.0.0-subset.50" : recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
+    schemaVersion: fieldBinding ? "3.0.0-subset.52" : deckPlay ? "3.0.0-subset.51" : zones ? "3.0.0-subset.50" : recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
     cardVersion: recipes ? "draft.recipes.1" : compound ? "draft.pr29.1" : conditionalTriggerPlay ? "draft.pr28.1" : fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
       variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",

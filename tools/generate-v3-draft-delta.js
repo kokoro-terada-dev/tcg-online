@@ -73,7 +73,7 @@ const draftLedger = { ...ledger, rows: ledger.rows.map(row => {
 }) };
 const { trace, candidates, schemaHolds } = generateV3Drafts(draftLedger, selected, undefined, validate, { delta: true, excludeApproved: approved });
 trace.version = "v3-draft-delta.1";
-trace.registryHash = require("../docs/card-effect-supported-operations.json").profiles["3.0.0-subset.51"].registryHash;
+trace.registryHash = require("../docs/card-effect-supported-operations.json").profiles["3.0.0-subset.52"].registryHash;
 const definitions = candidates.cards.filter(c => c.definition && !approved.has(c.cardId));
 for (const { cardId, definition } of definitions)
   if (!/^[A-Z0-9][A-Z0-9-]{0,99}$/u.test(cardId) || /^(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$/iu.test(cardId) ||
