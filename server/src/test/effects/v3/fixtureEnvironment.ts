@@ -50,6 +50,18 @@ function readDonCount(state: MovementState, seat: 0 | 1, scope: DonCountScope): 
   }
 }
 
+export function readSourceAttachmentCount(state: MovementState, ref: Readonly<CardObjectRef>, actor: 0 | 1): number | typeof UNKNOWN {
+  try {
+    const card = getCard(state, ref), at = location(state, ref.instanceId);
+    if ((at.zone !== "character" && at.zone !== "leader") || card.kind !== at.zone ||
+        at.player !== actor || !visibleTo(state, card, at, actor) || readDonCount(state, at.player, "attachedCount") === UNKNOWN) return UNKNOWN;
+    return state.players[at.player].attachedDon.filter(id => {
+      const target = id === null ? undefined : state.cards[id]?.attachedTo;
+      return target?.instanceId === ref.instanceId && target.generation === ref.generation;
+    }).length;
+  } catch { return UNKNOWN; }
+}
+
 export function fixtureEnvironment(board: () => MovementState, identity: ResolutionIdentity, definition: ApprovedV3Card, facts: PinnedMasterFacts, now: () => number, definitions: readonly ApprovedV3Card[] = [definition], statEffects: () => StatEffects = () => [], activePlayer: 0 | 1 = identity.actor, counterPower: (ref: Readonly<CardObjectRef>) => number = () => 0, eventContext?: EventContext, keywordGrants: () => KeywordGrants = () => [], occurrenceAuthorized = false, includeContinuous = true): ResolutionEnvironment {
   const knownDefinitions = new Map(definitions.map(card => [card.definition.cardId, card]));
   const hasRestrictions = includeContinuous && hasProtection(knownDefinitions);
@@ -68,6 +80,7 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
       const zones = state.players[seat(parts[0])]; return parts[1] === "lifeCount" ? zones.life.length : parts[1] === "handCount" ? zones.hand.length : UNKNOWN;
     }
     const ref = parts[0] === "SOURCE" ? identity.source : candidate; if (!ref) return UNKNOWN;
+    if (value.ref === "SOURCE.attachedDonCount") return readSourceAttachmentCount(state, ref, context.effectController);
     const derived = cardFacts(ref, context.effectController), field = parts[1];
     if (derived === UNKNOWN) return UNKNOWN;
     if (field === "rotated") return derived.rotated;
@@ -78,6 +91,11 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     return field === "cost" || field === "power" ? derived.current[field] : UNKNOWN;
   };
   const evaluate: ResolutionEnvironment["evaluate"] = (predicate, bindings, candidate, results, memories) => {
+    if (predicate.type === "IS_SOURCE") {
+      if (!candidate) return "unknown";
+      if (cardFacts(candidate, context.effectController) === UNKNOWN || cardFacts(identity.source, context.effectController) === UNKNOWN) return "unknown";
+      return candidate.instanceId === identity.source.instanceId && candidate.generation === identity.source.generation;
+    }
     if (predicate.type === "MOVED_COLORS" || predicate.type === "REMEMBERED_COLORS") {
       const colors = predicate.type === "MOVED_COLORS" ? rememberedColors(results?.[predicate.result], identity) : readRememberedColors(memories?.[predicate.memory], identity);
       const ref = predicate.subject === "SOURCE" ? identity.source : candidate;
@@ -177,6 +195,8 @@ export function fixtureEnvironment(board: () => MovementState, identity: Resolut
     revision: () => board().revision, now, evaluate,
     donDeckCount: () => board().players[identity.actor].donDeck.length,
     peekTop: amount => board().players[identity.actor].deck.slice(0, amount).map(id => ({ instanceId: id!, generation: board().cards[id!]!.generation })),
+    numeric: (value, bindings) => { const result = read(value, bindings); return typeof result === "number" ? result : "unknown"; },
+    effectPlayFull: () => !board().players[identity.actor].character.includes(null),
     lifeMoveCard: (player, from) => {
       const state = board(), zones = state.players[player];
       const id = from === "DECK_TOP" ? zones.deck[0] : from === "LIFE_TOP" ? zones.life[0] : zones.life.at(-1);

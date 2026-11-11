@@ -16,7 +16,8 @@ const probeRegistry = "731fa079caef72803c33c5221aa0d423c61196b3752102408985cd6c2
 const probesEnabled = inventory.profiles["3.0.0-subset.44"]?.registryHash === probeRegistry && supportsV3RuntimeProfile({
   definition: { schemaVersion: "3.0.0-subset.44" }, compilerVersion: inventory.profiles["3.0.0-subset.44"]?.compilerVersion, registryHash: probeRegistry
 });
-export const v3DraftRegistry = version => ["v3-draft-generator.9", "v3-draft-generator.10", "v3-draft-generator.11", "v3-draft-generator.12", "v3-draft-generator.13", "v3-draft-generator.14"].includes(version) ? inventory.profiles["3.0.0-subset.49"].registryHash :
+export const v3DraftRegistry = version => version === "v3-draft-generator.15" ? inventory.profiles["3.0.0-subset.50"].registryHash :
+  ["v3-draft-generator.9", "v3-draft-generator.10", "v3-draft-generator.11", "v3-draft-generator.12", "v3-draft-generator.13", "v3-draft-generator.14"].includes(version) ? inventory.profiles["3.0.0-subset.49"].registryHash :
   version === "v3-draft-generator.8" ? inventory.profiles["3.0.0-subset.48"].registryHash :
   version === "v3-draft-generator.7" ? inventory.profiles["3.0.0-subset.47"].registryHash :
   ["v3-draft-generator.5", "v3-draft-generator.6"].includes(version) ? inventory.profiles["3.0.0-subset.46"].registryHash :
@@ -50,7 +51,7 @@ function candidatesFor(input, ledger) {
   if (input === undefined) return new Map();
   dataObject(input, ["version", "sourceCsvSha256", "registryHash", "cards"]);
   assert(input.version === "v3-coverage-candidates.1" && input.sourceCsvSha256 === ledger.sourceSha256, "Candidate CSV SHA-256 mismatch");
-  assert([probeRegistry, v3DraftRegistry("v3-draft-generator.4"), v3DraftRegistry("v3-draft-generator.6"), v3DraftRegistry("v3-draft-generator.7"), v3DraftRegistry("v3-draft-generator.8"), inventory.registryHash].includes(input.registryHash), "Candidate Registry SHA-256 mismatch");
+  assert([probeRegistry, v3DraftRegistry("v3-draft-generator.4"), v3DraftRegistry("v3-draft-generator.6"), v3DraftRegistry("v3-draft-generator.7"), v3DraftRegistry("v3-draft-generator.8"), inventory.registryHash, v3DraftRegistry("v3-draft-generator.15")].includes(input.registryHash), "Candidate Registry SHA-256 mismatch");
   dataArray(input.cards, ledger.cards.length);
   const source = new Map(ledger.cards.map(card => [card.cardId, card]));
   const entries = new Map();
@@ -62,7 +63,7 @@ function candidatesFor(input, ledger) {
     if (Object.hasOwn(entry, "generation")) {
       const info = entry.generation;
       dataObject(info, ["version", "status", "noEffect", "recognized", "unresolved"]);
-      assert(["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3", "v3-draft-generator.4", "v3-draft-generator.5", "v3-draft-generator.6", "v3-draft-generator.7", "v3-draft-generator.8", "v3-draft-generator.9", "v3-draft-generator.10", "v3-draft-generator.11", "v3-draft-generator.12", "v3-draft-generator.13", "v3-draft-generator.14"].includes(info.version) && ["complete", "partial", "unconvertible", "unassessed"].includes(info.status) &&
+      assert(["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3", "v3-draft-generator.4", "v3-draft-generator.5", "v3-draft-generator.6", "v3-draft-generator.7", "v3-draft-generator.8", "v3-draft-generator.9", "v3-draft-generator.10", "v3-draft-generator.11", "v3-draft-generator.12", "v3-draft-generator.13", "v3-draft-generator.14", "v3-draft-generator.15"].includes(info.version) && ["complete", "partial", "unconvertible", "unassessed"].includes(info.status) &&
         typeof info.noEffect === "boolean" && [info.recognized, info.unresolved].every(n => Number.isSafeInteger(n) && n >= 0) &&
         (info.status === "complete") === Object.hasOwn(entry, "definition") &&
         (info.status !== "complete" || info.unresolved === 0) &&

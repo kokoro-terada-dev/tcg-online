@@ -12,15 +12,15 @@ export function isSimpleMainEvent(effect: DeepReadonly<Effect>): boolean {
     effect.resolutionConditions.type === "all" && effect.resolutionConditions.conditions.length === 0 && Number.isSafeInteger(total) && total > 0 && total <= 50;
 }
 
-export function isInteractiveMainEvent(effect: DeepReadonly<Effect>): boolean {
-  return interactiveMainEvent(effect, false);
+export function isInteractiveMainEvent(effect: DeepReadonly<Effect>, privateDeck = false): boolean {
+  return interactiveMainEvent(effect, false, privateDeck);
 }
 
-export function isShareableMainEvent(effect: DeepReadonly<Effect>): boolean {
-  return interactiveMainEvent(effect, true);
+export function isShareableMainEvent(effect: DeepReadonly<Effect>, privateDeck = false): boolean {
+  return interactiveMainEvent(effect, true, privateDeck);
 }
 
-function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean): boolean {
+function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean, privateDeck: boolean): boolean {
   const sourceFree = (value: unknown): boolean => {
     if (!value || typeof value !== "object") return true;
     if (Array.isArray(value)) return value.every(sourceFree);
@@ -35,8 +35,9 @@ function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean)
       case "CHOOSE_MODE": return action.modes.every(mode => mode.actions.every(supported));
       case "OFFER_PAYMENT": return action.costs.every(cost => cost.type !== "REST_SOURCE" && !(cost.type === "MOVE_AS_COST" && cost.selector === "SOURCE"));
       case "IF_PAYMENT_SUCCEEDED": return action.then.every(supported) && action.else.every(supported);
-      case "SELECT": return action.selector.type === "CARDS" && !action.selector.cardTypes.includes("don") &&
-        (typeof action.selector.zone === "string" ? ["leader", "character", "stage", "hand"].includes(action.selector.zone) :
+      case "LOOK_TOP": case "ORDER_CARDS": case "RETURN_TO_DECK": case "TRASH_DECK_TOP": return privateDeck;
+      case "SELECT": return privateDeck && action.selector.type === "BOUND_CARDS" || action.selector.type === "CARDS" && !action.selector.cardTypes.includes("don") &&
+        (typeof action.selector.zone === "string" ? (privateDeck ? ["leader", "character", "stage", "hand", "trash"] : ["leader", "character", "stage", "hand"]).includes(action.selector.zone) :
           action.selector.zone.every(zone => ["leader", "character", "stage"].includes(zone)));
       case "DRAW": return action.player === "SELF";
       case "ADD_DON_UP_TO": return true;
@@ -45,7 +46,7 @@ function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean)
       case "MODIFY_STAT": case "GRANT_KEYWORD": return action.duration.type === "TURN_END";
       case "MOVE_CARD": return ["hand", "trash", "public"].includes(action.destination.zone) && action.destination.position === "append" ||
         action.destination.owner === "CARD_OWNER" && action.destination.zone === "deck" && action.destination.position === "bottom";
-      case "PLAY_BY_EFFECT": return true;
+      case "PLAY_BY_EFFECT": return privateDeck || action.from === "hand" && action.destination.slotPolicy === "FIRST_EMPTY";
       default: return false;
     }
   };

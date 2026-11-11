@@ -5,11 +5,21 @@ import type { Progression } from "../../progression/types";
 import type { MovementState } from "../../movement/types";
 import type { CardObjectRef } from "../types";
 import type { TriggerObservation, TriggerObservations } from "./conditionalTriggers";
+import type { DeepReadonly } from "../types";
+import type { Effect } from "./dsl";
+import { readSourceAttachmentCount } from "./fixtureEnvironment";
+
+export function attackAttachmentMinimum(effect: DeepReadonly<Effect>): number | null {
+  const p = effect.activationConditions;
+  return (effect.timing.type === "ON_ATTACK" || effect.timing.type === "ON_OPPONENT_ATTACK") &&
+    p.type === "compare" && p.op === "gte" && typeof p.left === "object" && p.left?.ref === "SOURCE.attachedDonCount" &&
+    typeof p.right === "number" ? p.right : null;
+}
 
 export type TriggerCause = Readonly<{ type: "ON_PLAY"; eventId: string; event: MovementEvent }> |
   Readonly<{ type: "ON_EVENT"; eventId: string; observation: TriggerObservation }> |
   Readonly<{ type: "ON_KO"; eventId: string; event: MovementEvent }> |
-  Readonly<{ type: "ON_ATTACK" | "ON_OPPONENT_ATTACK"; eventId: string; battleId: string; attacker: 0 | 1; attackSource: Readonly<CardObjectRef>; turnNumber: number }>;
+  Readonly<{ type: "ON_ATTACK" | "ON_OPPONENT_ATTACK"; eventId: string; battleId: string; attacker: 0 | 1; attackSource: Readonly<CardObjectRef>; turnNumber: number; attachmentQualified?: true }>;
 export type ScheduledTrigger = Readonly<{ token: string; batchId: string; actor: 0 | 1; cardId: string; effectId: string; source: Readonly<CardObjectRef>; cause: TriggerCause }>;
 export const SYNTHETIC_TRIGGER_POLICY = "synthetic-triggers.attack-entry-ko.4";
 export function enqueueObservedTriggers(queue: readonly ScheduledTrigger[], ledger: TriggerObservations): readonly ScheduledTrigger[] {
@@ -48,9 +58,18 @@ export function enqueueAttackTriggers(board: MovementState, progression: Progres
     return ids.flatMap(id => {
       const card = id ? board.cards[id] : null; if (!card || !card.faceUp || card.owner !== actor || card.controller !== actor) return [];
       const definition = definitions.get(card.cardId);
+      const source = { instanceId: card.instanceId, generation: card.generation };
       return definition?.definition.effects.filter(effect => effect.kind === "triggered" && effect.timing.type === timing && effect.sourceZones.some(zone => zones[zone].includes(id!)))
-        .map(effect => ({ token: randomUUID(), batchId, actor, cardId: card.cardId, effectId: effect.id, source: { instanceId: card.instanceId, generation: card.generation },
-          cause: { type: timing, eventId, battleId: battle.battleId, attacker: battle.attacker, attackSource: { ...battle.source }, turnNumber: progression.turnNumber } })) ?? [];
+        .flatMap(effect => {
+          const minimum = attackAttachmentMinimum(effect);
+          if (minimum !== null) {
+            const count = readSourceAttachmentCount(board, source, actor);
+            if (typeof count !== "number" || count < minimum) return [];
+          }
+          return [{ token: randomUUID(), batchId, actor, cardId: card.cardId, effectId: effect.id, source,
+            cause: { type: timing, eventId, battleId: battle.battleId, attacker: battle.attacker, attackSource: { ...battle.source },
+              turnNumber: progression.turnNumber, ...(minimum !== null ? { attachmentQualified: true as const } : {}) } }];
+        }) ?? [];
     });
   });
 }

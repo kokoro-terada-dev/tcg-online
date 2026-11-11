@@ -11,12 +11,14 @@ import { classifyTriggerSelfPlay } from "./v3-trigger-self-play.js";
 import { parseCompoundEffect } from "./v3-draft-compound.js";
 import { parseContinuousRecipe } from "./v3-draft-recipes.js";
 import { normalizeGrammar, parseCompletionEffect, parseNewFieldRecipe } from "./v3-draft-completion.js";
+import { parseAttachedPrefix, parseZoneContinuous, parseZoneEffect } from "./v3-draft-zones.js";
 
 const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
 const { compileV3CardJson, supportsV3RuntimeProfile } = require("../server/dist/test/effects/v3/compiler.js");
 const { isInteractiveMainEvent } = require("../server/dist/test/effects/v3/simpleMainEvent.js");
-const latest = "v3-draft-generator.14";
+const latest = "v3-draft-generator.15";
+const previousCompletion = "v3-draft-generator.14";
 const previousRefinement = "v3-draft-generator.13";
 const previousExpansion = "v3-draft-generator.12";
 const previousBatch = "v3-draft-generator.11";
@@ -82,7 +84,7 @@ function grantsKeyword(actions, keyword) {
     action.type === "IF_PAYMENT_SUCCEEDED" && grantsKeyword([...action.then, ...action.else], keyword));
 }
 
-function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch, expansion, refinement, completion) {
+function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch, expansion, refinement, completion, zones) {
   const { field, start, end, text } = span;
   const tag = header(text);
   const keyword = keywords.get(tag?.[1] ?? tag?.[2]);
@@ -100,6 +102,12 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
     }
   }
   if (expansion && field === "text") {
+    if (zones && previous?.continuous?.operation?.type === "GRANT_KEYWORD" &&
+        /^(?:\r\n|\r|\n)$/u.test(raw.slice(previous.end, start))) {
+      const keyword = [...keywords.values()].find(values => values[0] === previous.continuous.operation.keyword.type);
+      if (keyword && reminder(text.trim(), keyword))
+        return { ...span, status: "recognized", pattern: "zone-continuous-keyword-reminder", attachedTo: previous.start };
+    }
     if (previous?.effect && /^(?:\r\n|\r|\n)$/u.test(raw.slice(previous.end, start))) {
       const grant = /(?:【([^】]+)】|〖([^〗]+)〗)を得る。$/u.exec(previous.text.trim());
       const definition = keywords.get(grant?.[1] ?? grant?.[2]);
@@ -162,7 +170,8 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
       (batch ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true, true) : null) ??
       (expansion ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true, true, null, true) : null) ??
       (refinement ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true, true, null, true, true) : null) ??
-      (completion ? parseCompletionEffect(body, type, cardType, sourceSpan) : null));
+      (completion ? parseCompletionEffect(body, type, cardType, sourceSpan) : null) ??
+      (zones ? parseZoneEffect(body, type, cardType, sourceSpan) : null));
     if (compound) {
       const { pattern, structure, ...program } = compound;
       return { ...span, status: "recognized", pattern, ...(structure ? { structure } : {}), effect: { ...effect, ...program } };
@@ -172,6 +181,24 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
     unparsed = issues.map(({ reason, start, end }) => ({
       ...(end > start ? { start: bodyStart + start, end: bodyStart + end } : sourceSpan), reason
     }));
+  }
+  if (zones && field === "text" && ["leader", "character"].includes(cardType)) {
+    const continuous = parseZoneContinuous(text.trim(), cardType, sourceSpan);
+    if (continuous) return { ...span, status: "recognized", ...continuous };
+    const attached = parseAttachedPrefix(text.trim());
+    if (attached) {
+      const inner = parseSpan({ ...span, text: attached.body }, cardType, gaps, previous, raw, extended, recipes, batch, expansion, refinement, completion, false);
+      if (inner.continuous) return { ...span, status: "recognized", pattern: "zone-source-continuous",
+        continuous: { ...inner.continuous, condition: { type: "all", conditions: [attached.condition, inner.continuous.condition] } } };
+      const triggered = ["MAIN", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_BLOCK", "TURN_END"];
+      const newerTag = header(attached.body);
+      const nextTiming = timings.get(newerTag?.[1] ?? newerTag?.[2]) ?? boundaryTimings.get(newerTag?.[1] ?? newerTag?.[2]);
+      const program = nextTiming && triggered.includes(nextTiming[0]) && nextTiming[2].includes(cardType) &&
+        parseZoneEffect(newerTag[3], nextTiming[0], cardType, sourceSpan);
+      const effect = inner.effect ?? (program ? { ...effectFor(field, start, cardType, nextTiming), actions: program.actions } : null);
+      if (effect && triggered.includes(effect.timing.type) && effect.activationConditions.type === "all" && !effect.activationConditions.conditions.length)
+        return { ...span, status: "recognized", pattern: "zone-source-attached-don", effect: { ...effect, activationConditions: attached.condition } };
+    }
   }
   if (completion) {
     const normalized = normalizeGrammar(text);
@@ -188,7 +215,7 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
   return { ...span, status: features.length ? "unsupported" : "unknown", features, reason, unparsed };
 }
 
-function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refinement, completion) {
+function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refinement, completion, zones) {
   const selected = rows.filter(row => variant.recordNumbers.includes(row.recordNumber));
   const types = sorted(selected.map(row => row.raw["種類"]));
   const cardType = types.length === 1 ? types[0].toLowerCase() : null;
@@ -200,7 +227,7 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
     for (let i = 0; i < lines.length; i++) {
       const match = lines[i], span = { field, start: match.index, end: match.index + match[0].length, text: match[0] };
       if (!span.text.trim()) continue;
-      const parsed = parseSpan(span, cardType, gaps, spans.at(-1), variant[field], extended, recipes, batch, expansion, refinement, completion);
+      const parsed = parseSpan(span, cardType, gaps, spans.at(-1), variant[field], extended, recipes, batch, expansion, refinement, completion, zones);
       if (batch && field === "text" && parsed.status !== "recognized" && span.text.endsWith("以下から1つを選ぶ。")) {
         const tag = header(span.text), timing = timings.get(tag?.[1] ?? tag?.[2]) ?? boundaryTimings.get(tag?.[1] ?? tag?.[2]);
         const branches = [];
@@ -237,7 +264,7 @@ function analyzeVariant(variant, rows, extended, recipes, batch, expansion, refi
     const { pendingMainCall, features: _features, ...origin } = span;
     Object.assign(span, { reason: "main-body-unconfirmed" });
     delete span.pendingMainCall;
-    if (main.length === 1 && body.every(line => line.status === "recognized") && isInteractiveMainEvent(main[0].effect)) {
+    if (main.length === 1 && body.every(line => line.status === "recognized") && isInteractiveMainEvent(main[0].effect, main[0].pattern?.startsWith("zone-"))) {
       Object.assign(span, { status: "recognized", pattern: "trigger-own-main", effect: { ...pendingMainCall,
         actions: [{ type: "CALL_EFFECT_BODY", effectId: main[0].effect.id, sourceSpan: { start: origin.start, end: origin.end } }] } });
       delete span.reason;
@@ -267,11 +294,12 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const conditionalTriggerPlay = variant.spans.some(span => span.pattern?.startsWith("pr28-trigger-self-play-"));
   const compound = variant.spans.some(span => span.pattern?.startsWith("pr29-"));
   const recipes = variant.spans.some(span => span.pattern?.startsWith("recipe-"));
+  const zones = variant.spans.some(span => span.pattern?.startsWith("zone-"));
   const newTargets = variant.spans.some(span => span.pattern?.startsWith("pr25-"));
   const continuousEffects = variant.spans.flatMap(span => span.continuous ? [span.continuous] : []);
   const replacementEffects = variant.spans.flatMap(span => span.replacement ? [span.replacement] : []);
   return {
-    schemaVersion: recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
+    schemaVersion: zones ? "3.0.0-subset.50" : recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
     cardVersion: recipes ? "draft.recipes.1" : compound ? "draft.pr29.1" : conditionalTriggerPlay ? "draft.pr28.1" : fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
       variant.spans.some(span => span.pattern) ? "draft.pr20.1" : "draft.pr19.1", cardType, name: raw["カード名"], baseStats, colors,
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",
@@ -284,8 +312,8 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   };
 }
 
-function generateCard(card, rows, sourceCsvSha256, extended, recipes, batch, expansion = false, refinement = false, completion = false) {
-  const variants = card.variants.map(variant => analyzeVariant(variant, rows, extended, recipes, batch, expansion, refinement, completion));
+function generateCard(card, rows, sourceCsvSha256, extended, recipes, batch, expansion = false, refinement = false, completion = false, zones = false) {
+  const variants = card.variants.map(variant => analyzeVariant(variant, rows, extended, recipes, batch, expansion, refinement, completion, zones));
   const spans = variants.flatMap(variant => variant.spans);
   const recognized = spans.filter(span => span.status === "recognized").length;
   const unresolved = spans.length - recognized;
@@ -311,7 +339,7 @@ function generateCard(card, rows, sourceCsvSha256, extended, recipes, batch, exp
 }
 
 export function generateV3Drafts(ledger, cardIds = [], version = latest, validate = null) {
-  if (![latest, previousRefinement, previousExpansion, previousBatch, "v3-draft-generator.10", "v3-draft-generator.9", "v3-draft-generator.8"].includes(version)) throw Error("Unsupported draft generation baseline");
+  if (![latest, previousCompletion, previousRefinement, previousExpansion, previousBatch, "v3-draft-generator.10", "v3-draft-generator.9", "v3-draft-generator.8"].includes(version)) throw Error("Unsupported draft generation baseline");
   const registryHash = v3DraftRegistry(version);
   const selected = new Set(cardIds), rows = new Map();
   for (const row of ledger.rows) {
@@ -324,13 +352,14 @@ export function generateV3Drafts(ledger, cardIds = [], version = latest, validat
   const schemaHolds = [];
   const cards = ledger.cards.filter(card => rows.has(card.cardId)).map(card => {
     const args = [card, rows.get(card.cardId), ledger.sourceSha256, version !== "v3-draft-generator.8",
-      [latest, previousRefinement, previousExpansion, previousBatch, "v3-draft-generator.10"].includes(version),
-      [latest, previousRefinement, previousExpansion, previousBatch].includes(version)];
+      [latest, previousCompletion, previousRefinement, previousExpansion, previousBatch, "v3-draft-generator.10"].includes(version),
+      [latest, previousCompletion, previousRefinement, previousExpansion, previousBatch].includes(version)];
     const prior = generateCard(...args);
     const unfinished = result => ["partial", "unconvertible"].includes(result.status);
-    const expanded = [latest, previousRefinement, previousExpansion].includes(version) && unfinished(prior) ? generateCard(...args, true) : prior;
-    const refined = [latest, previousRefinement].includes(version) && unfinished(expanded) ? generateCard(...args, true, true) : expanded;
-    const next = version === latest && unfinished(refined) ? generateCard(...args, true, true, true) : refined;
+    const expanded = [latest, previousCompletion, previousRefinement, previousExpansion].includes(version) && unfinished(prior) ? generateCard(...args, true) : prior;
+    const refined = [latest, previousCompletion, previousRefinement].includes(version) && unfinished(expanded) ? generateCard(...args, true, true) : expanded;
+    const completed = [latest, previousCompletion].includes(version) && unfinished(refined) ? generateCard(...args, true, true, true) : refined;
+    const next = version === latest && unfinished(completed) ? generateCard(...args, true, true, true, true) : completed;
     const { definition, ...review } = next;
     if (!validate || next.status !== "complete" || validate(definition)) return next;
     schemaHolds.push({ cardId: card.cardId, schemaVersion: definition.schemaVersion, errors: structuredClone(validate.errors) });

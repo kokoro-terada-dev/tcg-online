@@ -55,6 +55,10 @@ const trace = JSON.parse(fs.readFileSync(input, "utf8"));
 if (trace.executable !== false || trace.cards.length !== trace.totals.sourceCards ||
     new Set(trace.cards.map(card => card.cardId)).size !== trace.cards.length) throw Error("Full draft report required");
 const categories = { A: new Set(), B: new Set(), C: new Set(), D: new Set() };
+const profiles = JSON.parse(fs.readFileSync(new URL("../docs/card-effect-supported-operations.json", import.meta.url), "utf8")).profiles;
+const zoneProfile = trace.registryHash === profiles["3.0.0-subset.50"]?.registryHash;
+const superseded = new Set(["source-specific-attached-don-count", "hand-effect-play-full-field", "effect-play-from-trash",
+  "deck-top-to-trash-without-look", "event-main-private-deck-program", "continuous-source-identity"]);
 const details = [], groups = new Map(), unclassifiedCards = new Set(), unknownGroups = new Map();
 let unclassifiedSpans = 0;
 for (const card of trace.cards) {
@@ -78,6 +82,7 @@ for (const card of trace.cards) {
   for (const span of unresolved) {
     let matched = false;
     for (const [category, pattern, matcher, explanation, guard] of evidenceRules) {
+      if (zoneProfile && superseded.has(pattern)) continue;
       if (!matcher?.test(span.text) || guard && !guard(span.text)) continue;
       record(category, pattern, explanation, span); matched = true;
     }
