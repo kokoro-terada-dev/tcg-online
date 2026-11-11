@@ -105,10 +105,14 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
         rows?.set(card.instanceId, continuous);
       }
       const unmodeled = card.modifierIds.length > 0 || card.grantIds.length > 0;
+      const isTarget = (effect: { target: Ref }) => effect.target.instanceId === ref.instanceId && effect.target.generation === ref.generation;
+      const timed = options.statEffects().filter(isTarget);
+      const basePower = timed.filter(effect => effect.mode === "SET_BASE").map(effect => effect.amount);
       const baseNumber = (field: "power" | "cost"): KnownOrUnknown<number> => {
         const original = known ? matching && !unmodeled ? printed[field] : UNKNOWN : numeric(masterCardFacts(state, card, options.master)[field]);
         const set = continuous?.base[field];
         if (original === UNKNOWN || set === "unknown") return UNKNOWN;
+        if (field === "power" && basePower.length) return Math.max(...basePower, ...(set === undefined ? [] : [set]));
         return set ?? original;
       };
       const counterGrant = continuous?.counterGrant;
@@ -116,7 +120,6 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
         counter: unmodeled ? UNKNOWN : printed.counter === null && counterGrant !== undefined ? counterGrant === "unknown" ? UNKNOWN : counterGrant : printed.counter };
       const protections = continuous?.protections ?? [];
       const immunity = (actor: Player) => protectionDecision(protections, card.controller, actor, "UNAFFECTED_BY");
-      const isTarget = (effect: { target: Ref }) => effect.target.instanceId === ref.instanceId && effect.target.generation === ref.generation;
       const additive = (field: MutableStat): KnownOrUnknown<number> => {
         const permanent = continuous?.add[field] ?? 0;
         const timed = field === "counter" ? [] : options.statEffects();
@@ -126,7 +129,7 @@ export function createDerivedCardFactsReader(options: ReaderOptions) {
       };
       const powerAdd = additive("power"), costAdd = additive("cost"), counterAdd = additive("counter");
       const displayDelta = (field: "power" | "cost", add: KnownOrUnknown<number>): KnownOrUnknown<number> => {
-        if (continuous?.base[field] === undefined) return add;
+        if (continuous?.base[field] === undefined && (field !== "power" || !basePower.length)) return add;
         const printedValue = printed[field], baseValue = base[field];
         return printedValue === UNKNOWN || baseValue === UNKNOWN || add === UNKNOWN ? UNKNOWN : numeric(baseValue - printedValue + add);
       };

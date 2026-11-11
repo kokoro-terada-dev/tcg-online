@@ -36,7 +36,7 @@ export function enqueueObservedTriggers(queue: readonly ScheduledTrigger[], ledg
 export function movementTriggerCandidates(events: readonly MovementEvent[], definitions: ReadonlyMap<string, ApprovedV3Card>) {
   return events.flatMap(event => {
     if (event.kind !== "moved" || !event.after || !event.to || !event.from || !event.after.faceUp || event.after.owner !== event.to.player || event.after.controller !== event.to.player) return [];
-    const onKo = event.isKO && ["BATTLE_KO", "EFFECT_KO"].includes(event.cause.kind) && event.from.zone === "character" && event.to.zone === "trash" && event.before?.kind === "character" && event.after.kind === "character";
+    const onKo = event.isKO && ["BATTLE_KO", "EFFECT_KO", "COST_PAYMENT"].includes(event.cause.kind) && event.from.zone === "character" && event.to.zone === "trash" && event.before?.kind === "character" && event.after.kind === "character";
     const onPlay = event.from.zone !== event.to.zone && ["character", "stage"].includes(event.to.zone) && event.after.kind === event.to.zone;
     if (!onKo && !onPlay) return [];
     const timing = onKo ? "ON_KO" as const : "ON_PLAY" as const, sourceZone = onKo ? event.from.zone : event.to.zone;

@@ -6,13 +6,15 @@ import type { Node } from "./dsl";
 import type { ApprovedV3Card } from "./approval";
 import { expiryFor, validateExpiry, type EffectExpiry, type ExpiryAnchor } from "./effectExpiry";
 export type Keyword = Node<"keyword">["type"];
-export type FieldStatus = "SKIP_REFRESH" | "DISABLE_CARD_EFFECTS" | "PREVENT_CHARACTER_PLAY";
+export type FieldStatus = "SKIP_REFRESH" | "DISABLE_CARD_EFFECTS" | "PREVENT_CHARACTER_PLAY" | "PREVENT_BLOCKER";
 export type KeywordGrant = Readonly<{ id: string; target: Readonly<CardObjectRef>; source: Readonly<CardObjectRef>; actor: 0 | 1; keyword: Keyword | FieldStatus }> & EffectExpiry;
 export type KeywordGrants = readonly KeywordGrant[];
 export const effectsDisabled = (grants: KeywordGrants, ref: Readonly<CardObjectRef>) => grants.some(grant =>
   grant.keyword === "DISABLE_CARD_EFFECTS" && grant.target.instanceId === ref.instanceId && grant.target.generation === ref.generation);
 export const characterPlayPrevented = (grants: KeywordGrants, actor: 0 | 1) => grants.some(grant =>
   grant.keyword === "PREVENT_CHARACTER_PLAY" && grant.actor === actor);
+export const blockerPrevented = (grants: KeywordGrants, ref: Readonly<CardObjectRef>) => grants.some(grant =>
+  grant.keyword === "PREVENT_BLOCKER" && grant.target.instanceId === ref.instanceId && grant.target.generation === ref.generation);
 export function validateKeywordGrants(board: MovementState, grants: KeywordGrants): KeywordGrants {
   dataArray(grants, 256); const ids = new Set<string>();
   for (const grant of grants) {
@@ -24,7 +26,7 @@ export function validateKeywordGrants(board: MovementState, grants: KeywordGrant
         grant.keyword === "SKIP_REFRESH" && card.kind === "character" && at.player !== grant.actor &&
         grant.boundary?.kind === "TURN_START" && grant.boundary.player === at.player &&
         grant.boundary.occurrence === 1 && !grant.boundary.includeCurrent ||
-        grant.keyword === "DISABLE_CARD_EFFECTS" && card.kind === "character" && grant.remaining === 1 ||
+        (grant.keyword === "DISABLE_CARD_EFFECTS" || grant.keyword === "PREVENT_BLOCKER") && card.kind === "character" && grant.remaining === 1 ||
         grant.keyword === "PREVENT_CHARACTER_PLAY" && card.kind === "leader" && at.player === grant.actor && grant.remaining === 1) &&
       (card.kind === "character" || grant.keyword !== "RUSH" && grant.keyword !== "RUSH_CHARACTER"), "v3-invalid-keyword-grant"); ids.add(grant.id);
   }
@@ -38,7 +40,7 @@ export function addKeywordGrants(board: MovementState, grants: KeywordGrants, wo
   ensureMove(targets.length > 0 && new Set(targets.map(ref => ref.instanceId)).size === targets.length && grants.length + targets.length <= 256, "v3-keyword-grant-limit");
   const entries = targets.map(target => {
     const card = getCard(board, target), definition = definitions.find(known => known.definition.cardId === card.cardId);
-    ensureMove(["SKIP_REFRESH", "DISABLE_CARD_EFFECTS", "PREVENT_CHARACTER_PLAY"].includes(keyword.type) ||
+    ensureMove(["SKIP_REFRESH", "DISABLE_CARD_EFFECTS", "PREVENT_CHARACTER_PLAY", "PREVENT_BLOCKER"].includes(keyword.type) ||
       definition && definition.definition.cardType === card.kind && !card.modifierIds.length && !card.grantIds.length, "v3-keyword-target-unregistered");
     return { id: createHash("sha256").update(JSON.stringify([board.matchId, workId, target])).digest("hex"), target: { ...target }, source: { ...source }, actor,
       keyword: keyword.type, ...expiryFor(duration, actor, battleId, anchor) };
@@ -56,5 +58,5 @@ export function effectiveKeywords(board: MovementState, definitions: ReadonlyMap
   ensureMove(known && known.definition.cardType === card.kind && !card.grantIds.length && card.faceUp && card.kind === at.zone && ["leader", "character"].includes(at.zone), "v3-keywords-unresolved");
   return [...new Set([...(effectsDisabled(grants, ref) ? [] : known.definition.keywords.map(keyword => keyword.type)),
     ...grants.filter(grant => grant.target.instanceId === ref.instanceId && grant.target.generation === ref.generation).map(grant => grant.keyword)
-      .filter(keyword => keyword !== "SKIP_REFRESH" && keyword !== "DISABLE_CARD_EFFECTS" && keyword !== "PREVENT_CHARACTER_PLAY")])];
+      .filter(keyword => keyword !== "SKIP_REFRESH" && keyword !== "DISABLE_CARD_EFFECTS" && keyword !== "PREVENT_CHARACTER_PLAY" && keyword !== "PREVENT_BLOCKER")])];
 }

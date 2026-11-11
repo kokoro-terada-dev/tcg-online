@@ -9,7 +9,7 @@ import { expiryFor, validateExpiry, type EffectExpiry, type ExpiryAnchor } from 
 
 export type StatEffect = Readonly<{
   id: string; target: Readonly<CardObjectRef>; source: Readonly<CardObjectRef>; actor: 0 | 1;
-  stat: "power" | "cost"; amount: number;
+  stat: "power" | "cost"; amount: number; mode?: "SET_BASE";
 }> & EffectExpiry;
 export type StatEffects = readonly StatEffect[];
 const field = (state: MovementState, ref: Readonly<CardObjectRef>) => {
@@ -20,11 +20,12 @@ const field = (state: MovementState, ref: Readonly<CardObjectRef>) => {
 export function validateStatEffects(state: MovementState, effects: StatEffects): StatEffects {
   dataArray(effects, 256); const ids = new Set<string>();
   for (const effect of effects) {
-    dataObject(effect, ["id", "target", "source", "actor", "stat", "amount", "endPlayer", "remaining"], ["battleId", "boundary"]); validateExpiry(effect, state.matchId);
+    dataObject(effect, ["id", "target", "source", "actor", "stat", "amount", "endPlayer", "remaining"], ["battleId", "boundary", "mode"]); validateExpiry(effect, state.matchId);
     ensureMove(typeof effect.id === "string" && /^[a-f0-9]{64}$/.test(effect.id) && !ids.has(effect.id), "v3-invalid-stat-id"); ids.add(effect.id);
     reference(effect.target); reference(effect.source); field(state, effect.target);
     ensureMove((effect.actor === 0 || effect.actor === 1) &&
-      (effect.stat === "power" || effect.stat === "cost") && Number.isSafeInteger(effect.amount) && effect.amount !== 0 && Math.abs(effect.amount) <= 100000, "v3-invalid-stat-effect");
+      (effect.stat === "power" || effect.stat === "cost") && Number.isSafeInteger(effect.amount) && Math.abs(effect.amount) <= 100000 &&
+      (effect.mode === undefined ? effect.amount !== 0 : effect.mode === "SET_BASE" && effect.stat === "power" && effect.amount >= 0), "v3-invalid-stat-effect");
   }
   return freezeMovement(structuredClone(effects));
 }
@@ -35,17 +36,17 @@ export function pruneStatEffects(state: MovementState, effects: StatEffects): St
   }));
 }
 export function statDelta(effects: StatEffects, ref: Readonly<CardObjectRef>, stat: "power" | "cost"): number {
-  return effects.reduce((sum, effect) => sum + (effect.target.instanceId === ref.instanceId && effect.target.generation === ref.generation && effect.stat === stat ? effect.amount : 0), 0);
+  return effects.reduce((sum, effect) => sum + (effect.mode === undefined && effect.target.instanceId === ref.instanceId && effect.target.generation === ref.generation && effect.stat === stat ? effect.amount : 0), 0);
 }
 export function addStatEffects(state: MovementState, effects: StatEffects, workId: string, source: Readonly<CardObjectRef>, actor: 0 | 1,
-  targets: readonly Readonly<CardObjectRef>[], stat: "power" | "cost", amount: number, duration: DeepReadonly<Node<"duration">>, definitions: readonly ApprovedV3Card[], battleId: string | null = null, anchor?: ExpiryAnchor): StatEffects {
+  targets: readonly Readonly<CardObjectRef>[], stat: "power" | "cost", amount: number, duration: DeepReadonly<Node<"duration">>, definitions: readonly ApprovedV3Card[], battleId: string | null = null, anchor?: ExpiryAnchor, mode?: "SET_BASE"): StatEffects {
   ensureMove(targets.length > 0 && new Set(targets.map(ref => ref.instanceId)).size === targets.length && effects.length + targets.length <= 256, "v3-stat-target-or-count-limit");
   const entries = targets.map(target => {
     const card = field(state, target), definition = definitions.find(known => known.definition.cardId === card.cardId);
     ensureMove(definition && definition.definition.cardType === card.kind && definition.definition.baseStats[stat] !== null && !card.modifierIds.length && !card.grantIds.length, "v3-stat-value-unknown");
     ensureMove(Number.isSafeInteger(definition.definition.baseStats[stat]! + statDelta(effects, target, stat) + amount), "v3-stat-number-overflow");
     const id = createHash("sha256").update(JSON.stringify([state.matchId, workId, target])).digest("hex");
-    return { id, target: { ...target }, source: { ...source }, actor, stat, amount, ...expiryFor(duration, actor, battleId, anchor) };
+    return { id, target: { ...target }, source: { ...source }, actor, stat, amount, ...(mode ? { mode } : {}), ...expiryFor(duration, actor, battleId, anchor) };
   });
   return validateStatEffects(state, [...effects, ...entries]);
 }

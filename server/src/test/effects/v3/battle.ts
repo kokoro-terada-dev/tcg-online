@@ -8,7 +8,7 @@ import { applyPlayerIntent, applySystemEvent } from "../../progression/transitio
 import type { CardObjectRef } from "../types";
 import type { ApprovedV3Card } from "./approval";
 import type { StatEffects } from "./statEffects";
-import type { KeywordGrants } from "./keywordEffects";
+import { blockerPrevented, type KeywordGrants } from "./keywordEffects";
 import { createDerivedCardFactsReader, UNKNOWN } from "./readContext";
 import { hasProtection, protectionReader, protectionRules } from "./protectionRules";
 import type { ResolutionIdentity } from "./resolution";
@@ -132,7 +132,8 @@ export function blockerOptions(board: MovementState, progression: Progression, a
   if (attacker === UNKNOWN || attacker.abilities.CURRENT.CANNOT_BE_BLOCKED !== false) return [];
   return fieldRows(board, actor, definitions).filter(row => {
     const card = facts(row.card, actor);
-    return !board.cards[row.card.instanceId]!.rotated && row.card.instanceId !== battle.target.instanceId && card !== UNKNOWN && card.abilities.CURRENT.BLOCKER === true;
+    return !blockerPrevented(grants, row.card) && !board.cards[row.card.instanceId]!.rotated &&
+      row.card.instanceId !== battle.target.instanceId && card !== UNKNOWN && card.abilities.CURRENT.BLOCKER === true;
   });
 }
 export function declareBlock(board: MovementState, progression: Progression, actor: Seat, card: Ref, definitions: ReadonlyMap<string, ApprovedV3Card>, grants: KeywordGrants, transactionId: string, deferCounter = false) {

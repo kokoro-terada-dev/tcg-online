@@ -21,7 +21,7 @@ export function isShareableMainEvent(effect: DeepReadonly<Effect>, privateDeck =
 }
 
 export function isLifeTriggerBody(effect: DeepReadonly<Effect>, cardType: CardDefinition["cardType"], schema: CardDefinition["schemaVersion"]): boolean {
-  const expanded = (schema === "3.0.0-subset.51" || (schema === "3.0.0-subset.52" || (schema === "3.0.0-subset.53" || (schema === "3.0.0-subset.54" || (schema === "3.0.0-subset.55" || (schema === "3.0.0-subset.56" || (schema === "3.0.0-subset.57" || schema === "3.0.0-subset.58")))))));
+  const expanded = (schema === "3.0.0-subset.51" || (schema === "3.0.0-subset.52" || (schema === "3.0.0-subset.53" || (schema === "3.0.0-subset.54" || (schema === "3.0.0-subset.55" || (schema === "3.0.0-subset.56" || (schema === "3.0.0-subset.57" || (schema === "3.0.0-subset.58" || schema === "3.0.0-subset.59"))))))));
   if (effect.timing.type === "MAIN")
     return cardType === "event" && isInteractiveMainEvent(effect, expanded || schema === "3.0.0-subset.50");
   if (!expanded || !(cardType === "event" && effect.timing.type === "COUNTER" ||
@@ -55,7 +55,7 @@ function interactiveMainEvent(effect: DeepReadonly<Effect>, allowLimit: boolean,
       case "DRAW": return action.player === "SELF";
       case "ADD_DON_UP_TO": return true;
       case "DISCARD_BY_OWNER": case "ORDER_THEN_MOVE": return true;
-      case "KO": case "KO_STAGE": case "MOVE_LIFE": case "REST": case "SET_ACTIVE": case "REVEAL": case "DISABLE_CARD_EFFECTS": return true;
+      case "KO": case "KO_STAGE": case "MOVE_LIFE": case "REST": case "SET_ACTIVE": case "REVEAL": case "DISABLE_CARD_EFFECTS": case "PREVENT_BLOCKER": return true;
       case "MODIFY_STAT": case "GRANT_KEYWORD": return action.duration.type === "TURN_END";
       case "MOVE_CARD": return ["hand", "trash", "public"].includes(action.destination.zone) && action.destination.position === "append" ||
         action.destination.owner === "CARD_OWNER" && action.destination.zone === "deck" && action.destination.position === "bottom";

@@ -89,18 +89,21 @@ function applyTransaction(state: MovementState, input: MovementTransaction, rule
     return { ...before, generation: before.generation + 1, controller: to.player, faceUp, rotated, attachedTo,
       modifierIds: [], grantIds: [], enteredTurn: to.zone === "character" ? draft.turnNumber : null };
   }
-  function installMove(before: MovementCard, after: MovementCard, from: Location, to: MoveDestination, index: number, eventId: string, why: EventCause): void {
+  function installMove(before: MovementCard, after: MovementCard, from: Location, to: MoveDestination, index: number, eventId: string, why: EventCause, costKO = false): void {
     const visibleBefore = viewers(draft, before, from);
     remove(draft, from, before.instanceId); insert(draft, to, before.instanceId); draft.cards[before.instanceId] = after;
     draft.reveals = draft.reveals.filter(grant => grant.card.instanceId !== before.instanceId);
     emit({ eventId, operationIndex: index, groupId: `${transaction.transactionId}:group:${index}`, kind: "moved", before, after, from, to: { player: to.player, zone: to.zone }, cause: why,
-      isKO: why.kind === "EFFECT_KO" || why.kind === "BATTLE_KO", visibleBefore, visibleAfter: viewers(draft, after, to) });
+      isKO: costKO || why.kind === "EFFECT_KO" || why.kind === "BATTLE_KO", visibleBefore, visibleAfter: viewers(draft, after, to) });
   }
   function move(operation: Extract<MovementOperation, { kind: "move" }>, index: number): void {
     checkCause(operation.cause);
     const before = getCard(draft, operation.card), from = location(draft, before.instanceId);
     ensureMove(sameLocation(from, operation.from), "card-not-at-expected-source");
     ensureMove(operation.to.zone !== "attachedDon", "attachment-needs-attach-operation");
+    ensureMove(operation.asKO === undefined || operation.asKO === true && transaction.mode === "cost" &&
+      operation.cause === "COST_PAYMENT" && from.player === transaction.actor && before.faceUp &&
+      before.kind === "character" && from.zone === "character" && operation.to.zone === "trash", "invalid-cost-ko");
     if (operation.cause === "EFFECT_KO" || operation.cause === "BATTLE_KO") ensureMove(
       operation.to.zone === "trash" && ((before.kind === "character" && from.zone === "character") ||
         (operation.cause === "EFFECT_KO" && before.kind === "stage" && from.zone === "stage")), "invalid-ko-move");
@@ -114,7 +117,7 @@ function applyTransaction(state: MovementState, input: MovementTransaction, rule
       ensureMove(check({ operationIndex: index, kind: "move", card, from: at, to, cause: childCause, automatic: true }), "attached-don-return-prevented");
       return { card, at, to, after: transitionCard(card, at, to), cause: childCause };
     });
-    installMove(before, after, from, operation.to, index, eventId, why);
+    installMove(before, after, from, operation.to, index, eventId, why, operation.asKO === true);
     for (const child of children) installMove(child.card, child.after, child.at, child.to, index, nextId(), child.cause);
   }
   if (transaction.mode === "cost") {

@@ -16,7 +16,7 @@ export type MovementState = Readonly<{
 }>;
 export type MoveDestination = Location & Readonly<{ position: "top" | "bottom" | "append" | "firstEmpty" | "slot"; slotIndex?: number; faceUp: boolean; rotated: boolean }>;
 export type MovementOperation =
-  | Readonly<{ kind: "move"; card: Readonly<CardObjectRef>; from: Location; to: MoveDestination; cause: MoveCause }>
+  | Readonly<{ kind: "move"; card: Readonly<CardObjectRef>; from: Location; to: MoveDestination; cause: MoveCause; asKO?: true }>
   | Readonly<{ kind: "setRest"; card: Readonly<CardObjectRef>; rotated: boolean }>
   | Readonly<{ kind: "setTopLifeFace"; card: Readonly<CardObjectRef>; faceUp: boolean }>
   | Readonly<{ kind: "attachDon"; card: Readonly<CardObjectRef>; target: Readonly<CardObjectRef>; from?: "activeDon" | "restDon" }>

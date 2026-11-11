@@ -5,7 +5,7 @@ type LabelChoice<P extends string> = Readonly<{ purpose: P; options: readonly Re
 export type V3Choice = ChoiceBase & (
   LabelChoice<"activation"> | LabelChoice<"mode"> | LabelChoice<"payment"> | LabelChoice<"replacement"> |
   (LabelChoice<"revealConfirmation"> & Readonly<{ revealedCardIds: readonly string[] }>) |
-  Readonly<{ purpose: "action" | "cost" | "returnCost" | "order" | "ownerDiscard" | "ownerDeckBottom" | "replacementPayment" | "replacementPriority" | "effectBody"; revealCost?: true; options: readonly Readonly<{ token: string; cardId: string; zone: string; label: string | null }>[] }>
+  Readonly<{ purpose: "action" | "cost" | "returnCost" | "order" | "ownerDiscard" | "ownerDeckBottom" | "replacementPayment" | "replacementPriority" | "effectBody"; revealCost?: true; koCost?: true; options: readonly Readonly<{ token: string; cardId: string; zone: string; label: string | null }>[] }>
 );
 export type V3FixtureView = Readonly<{
   frame: Readonly<{ mode: "work_requests_only"; resolutionId: string; revision: number; worldRevision: number;

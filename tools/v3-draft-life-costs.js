@@ -10,6 +10,46 @@ const power = (bind, amount, duration, sourceSpan) =>
 export function lifeCostProgram(text, timing, cardType, sourceSpan, branches = []) {
   const bind = `life_cost_target_${sourceSpan.start}`;
   const pattern = "zone-life-top-cost";
+  const turnEnd = { type: "TURN_END", player: "SELF", occurrence: 1 };
+  const nameTrait = (value, comparison = "EXACT") => ({ type: "CARD_METADATA", subject: "CANDIDATE", basis: "CURRENT",
+    field: "traits", comparison, match: "ANY", values: [value] });
+  const payKO = (value, comparison) => ({ type: "KO_AS_COST",
+    selector: draftSelect(bind, "character", "SELF", 1, 1, nameTrait(value, comparison)).selector });
+  const offer = (costs, then) => {
+    const payment = `payment_${sourceSpan.start}`;
+    return { pattern: "zone-ko-and-stat-costs", actions: [
+      { type: "OFFER_PAYMENT", costs, bindAs: payment, sourceSpan },
+      { type: "IF_PAYMENT_SUCCEEDED", payment, then, else: [] }
+    ] };
+  };
+  const basePower = /^自分の手札([1-9][0-9]?)枚を捨てることができる：自分のトラッシュが([1-9][0-9]?)枚以上ある場合、自分のリーダーを、このターン中、元々のパワー([1-9][0-9]{0,4})にする。$/u.exec(text);
+  if (timing === "ON_OPPONENT_ATTACK" && cardType === "character" && basePower) return { pattern: "zone-ko-and-stat-costs",
+    optional: true, costs: [{ type: "DISCARD_HAND", count: Number(basePower[1]) }],
+    resolutionConditions: { type: "COUNT", op: "gte", value: Number(basePower[2]), query: {
+      type: "QUERY_CARDS", owner: "SELF", controller: "SELF", zone: "trash", visibility: "PUBLIC",
+      cardTypes: ["character", "event", "stage"], faceUpOnly: true, excludeSource: false, filters: all()
+    } }, actions: [draftSelect(bind, "leader", "SELF", 1, 1, all()),
+      { ...power(bind, Number(basePower[3]), { ...turnEnd, player: "OPPONENT" }, sourceSpan), mode: "SET_BASE" }] };
+  const blockLock = /^自分のドン!!([1-9])枚をレストにし、自分の『([^『』]+)』を含む特徴を持つキャラ1枚をKOできる：相手のコスト([0-9]{1,2})のキャラすべては、このターン中、【ブロッカー】を発動できない。$/u.exec(text);
+  if (timing === "MAIN" && cardType === "event" && blockLock) return offer(
+    [{ type: "REST_DON", count: Number(blockLock[1]) }, payKO(blockLock[2], "CONTAINS")],
+    [{ ...draftSelect(bind, "character", "OPPONENT", 0, 5, compare("eq", Number(blockLock[3]))), automatic: "ALL" },
+      { type: "PREVENT_BLOCKER", cards: cards(bind), sourceSpan }]);
+  const koThen = /^自分の特徴《([^《》]+)》を持つキャラ1枚をKOできる：(.+)$/u.exec(text);
+  if (cardType === "event" && koThen) {
+    const cost = /^相手のキャラ([1-5])枚までを、このターン中、コスト-([1-9][0-9]?)。$/u.exec(koThen[2]);
+    if (timing === "MAIN" && cost) return offer([payKO(koThen[1])], [
+      draftSelect(bind, "character", "OPPONENT", 0, Number(cost[1]), all()),
+      { type: "MODIFY_STAT", cards: cards(bind), stat: "cost", amount: -Number(cost[2]), duration: turnEnd, sourceSpan }
+    ]);
+    const counter = /^自分のリーダーかキャラ1枚までを、このバトル中、パワー\+([1-9][0-9]{0,4})。$/u.exec(koThen[2]);
+    if (timing === "COUNTER" && counter) {
+      const pick = draftSelect(bind, "character", "SELF", 0, 1, all());
+      Object.assign(pick.selector, { zone: ["leader", "character"], cardTypes: ["leader", "character"] });
+      return { pattern: "zone-ko-and-stat-costs", optional: true, costs: [payKO(koThen[1])],
+        actions: [pick, power(bind, Number(counter[1]), { type: "BATTLE_END" }, sourceSpan)] };
+    }
+  }
   const disable = /^相手のキャラ([1-5])枚までを、このターン中、効果を無効にする。$/u.exec(text);
   if (timing === "ON_ATTACK" && cardType === "character" && disable) return { pattern: "zone-field-restriction",
     actions: [draftSelect(bind, "character", "OPPONENT", 0, Number(disable[1]), all()),
