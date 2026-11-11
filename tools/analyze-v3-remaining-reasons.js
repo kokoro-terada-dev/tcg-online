@@ -18,6 +18,22 @@ const evidenceRules = [
     "The interactive event MAIN allowlist rejects LOOK_TOP and BOUND_CARDS."],
   ["C", "event-main-mode-not-in-schema", /^(?:【メイン】|〖メイン〗)以下から1つを選ぶ。$/u,
     "The interactive event MAIN schema excludes CHOOSE_MODE."],
+  ["C", "opponent-mode-chooser", /相手は以下から1つを選ぶ。$/u,
+    "CHOOSE_MODE does not accept an opponent chooser; routing a private selection to the opponent is not equivalent."],
+  ["C", "source-specific-attached-don-count", /^(?:【ドン(?:‼|[!！]{2})×[1-9][0-9]?】|〖ドン(?:‼|[!！]{2})×[1-9][0-9]?〗)/u,
+    "The player-level attachedCount is not the number attached to the effect source."],
+  ["C", "life-self-play-color-guard", /^(?:【トリガー】|〖トリガー〗)(?:自分の手札[1-3]枚を捨てることができる[:：])?自分のリーダーが多色の場合、このカードを登場させる。$/u,
+    "The life self-play compiler accepts a limited set of public conditions, excluding color metadata."],
+  ["C", "effect-play-from-deck-search", /自分のデッキの上から[1-9][0-9]?枚を見て、[^。]+?キャラカード[1-9]枚までを、?(?:レストで|アクティブで)?登場させる。/u,
+    "The inspected deck binding cannot be passed as PLAY_BY_EFFECT's hand source."],
+  ["C", "counter-additional-hand-payment", /^(?:【カウンター】|〖カウンター〗)自分の手札[1-9]枚を捨てることができる[:：]/u,
+    "The event counter activation compiler allows DON_RETURN, not an additional hand payment before its body."],
+  ["C", "life-trigger-call-non-main-body", /^(?:【トリガー】|〖トリガー〗)このカードの(?:【(?:登場時|KO時|カウンター)】|〖(?:登場時|KO時|カウンター)〗)効果を発動する。$/u,
+    "Same-card CALL_EFFECT_BODY from the life trigger only accepts a MAIN event body."],
+  ["C", "continuous-source-identity", /^(?:(?:【(?:相手|自分)のターン中】|〖(?:相手|自分)のターン中〗))?このキャラ(?:の(?:パワー|コスト)[+-][0-9]+。|は(?:相手の)?効果でKOされない。)$/u,
+    "A continuous public query cannot select only the source instance. Matching by printed name would include other copies."],
+  ["C", "distinct-bounded-field-targets", /コスト[0-9]+以下のキャラ1枚までと、?(?:相手の)?コスト[0-9]+以下のキャラ1枚までを、?KOする。/u,
+    "Two filtered field picks require excluding the first selected instance and applying a single KO batch; field CARDS cannot exclude a binding."],
   ["C", "effect-play-from-trash", /自分の(?:手札か)?トラッシュから[^。:：]+?枚までを、?(?:レストで|アクティブで)?登場させる。/u,
     "PLAY_BY_EFFECT accepts hand only; PLAY_TRIGGER_SOURCE cannot play an arbitrary trash card."],
   ["C", "hand-effect-play-full-field", /自分の手札から[^。:：]+?キャラカード1枚までを、?(?:レストで|アクティブで)?登場させる。/u,
@@ -39,7 +55,7 @@ const trace = JSON.parse(fs.readFileSync(input, "utf8"));
 if (trace.executable !== false || trace.cards.length !== trace.totals.sourceCards ||
     new Set(trace.cards.map(card => card.cardId)).size !== trace.cards.length) throw Error("Full draft report required");
 const categories = { A: new Set(), B: new Set(), C: new Set(), D: new Set() };
-const details = [], groups = new Map(), unclassifiedCards = new Set();
+const details = [], groups = new Map(), unclassifiedCards = new Set(), unknownGroups = new Map();
 let unclassifiedSpans = 0;
 for (const card of trace.cards) {
   if (card.status === "complete") continue;
@@ -69,7 +85,15 @@ for (const card of trace.cards) {
       if (!knownFeature.has(feature)) continue;
       record("C", feature, knownFeature.get(feature), span); matched = true;
     }
-    if (!matched) unclassifiedSpans++;
+    if (!matched) {
+      unclassifiedSpans++;
+      // This key groups candidates for review only; generation always uses the original text.
+      const key = `${span.field}:${span.text.normalize("NFKC").replace(/[0-9]+/g, "#")}`;
+      const row = unknownGroups.get(key) ?? { count: 0, example: span.text, field: span.field, cards: new Set() };
+      row.count++;
+      row.cards.add(card.cardId);
+      unknownGroups.set(key, row);
+    }
   }
   if (!seen.size) unclassifiedCards.add(card.cardId);
 }
@@ -84,4 +108,7 @@ const directory = resolveReviewOutput(fileURLToPath(new URL("../server/data/effe
 fs.mkdirSync(directory);
 fs.writeFileSync(path.join(directory, "remaining-reasons.json"), JSON.stringify(summary, null, 2) + "\n", { flag: "wx" });
 fs.writeFileSync(path.join(directory, "remaining-evidence.csv"), csv([["card_id", "category", "pattern", "field", "start", "end", "source", "evidence"], ...details]), { flag: "wx" });
+const unknown = [...unknownGroups.entries()].sort(([a, x], [b, y]) => y.cards.size - x.cards.size || y.count - x.count || (a < b ? -1 : a > b ? 1 : 0));
+fs.writeFileSync(path.join(directory, "remaining-unclassified.csv"), csv([["field", "normalized_pattern", "affected_cards", "occurrences", "example", "card_ids"],
+  ...unknown.map(([key, row]) => [row.field, key.slice(row.field.length + 1), row.cards.size, row.count, row.example, [...row.cards].sort().join(" ")])]), { flag: "wx" });
 console.log(JSON.stringify({ ...summary, patterns: summary.patterns.map(({ category, pattern, affectedCardCount }) => [category, pattern, affectedCardCount]) }));
