@@ -73,7 +73,7 @@ const draftLedger = { ...ledger, rows: ledger.rows.map(row => {
 }) };
 const { trace, candidates, schemaHolds } = generateV3Drafts(draftLedger, selected, undefined, validate, { delta: true, excludeApproved: approved });
 trace.version = "v3-draft-delta.1";
-const profile = ["3.0.0-subset.55", "3.0.0-subset.54"].find(version =>
+const profile = ["3.0.0-subset.56", "3.0.0-subset.55", "3.0.0-subset.54"].find(version =>
   candidates.cards.some(c => c.definition?.schemaVersion === version)) ?? "3.0.0-subset.53";
 trace.registryHash = require("../docs/card-effect-supported-operations.json").profiles[profile].registryHash;
 const definitions = candidates.cards.filter(c => c.definition && !approved.has(c.cardId));

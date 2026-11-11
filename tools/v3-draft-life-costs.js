@@ -10,6 +10,17 @@ const power = (bind, amount, duration, sourceSpan) =>
 export function lifeCostProgram(text, timing, cardType, sourceSpan, branches = []) {
   const bind = `life_cost_target_${sourceSpan.start}`;
   const pattern = "zone-life-top-cost";
+  const revealDraw = /^自分の手札からイベントか特徴《([^《》]+)》を持つカード合計([1-9][0-9]?)枚を公開できる：カード([1-9][0-9]?)枚を引く。$/u.exec(text);
+  if (timing === "ON_PLAY" && cardType === "character" && revealDraw) {
+    const count = Number(revealDraw[2]);
+    const filter = { type: "any", conditions: [
+      { type: "compare", left: { ref: "CANDIDATE.cardType" }, op: "eq", right: "event" },
+      { type: "CARD_METADATA", subject: "CANDIDATE", basis: "CURRENT", field: "traits", comparison: "EXACT", match: "ANY", values: [revealDraw[1]] }
+    ] };
+    return { pattern: "zone-reveal-confirmation-cost", optional: true,
+      costs: [{ type: "REVEAL_CARDS", confirmation: "OPPONENT", selector: draftSelect(bind, "hand", "SELF", count, count, filter, { visibility: "OWNER_ONLY" }).selector }],
+      actions: [{ type: "DRAW", player: "SELF", count: Number(revealDraw[3]), sourceSpan }] };
+  }
   const restDraw = /^自分のリーダー「([^「」]+)」をレストにできる：カード([1-9][0-9]?)枚を引く。$/u.exec(text);
   if (timing === "MAIN" && cardType === "event" && restDraw) return { pattern: "zone-rest-card-cost", optional: true,
     costs: [{ type: "REST_AS_COST", selector: draftSelect(bind, "leader", "SELF", 1, 1, {

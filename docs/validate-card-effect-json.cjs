@@ -49,6 +49,7 @@ function createSchemaValidator() {
     ['3.0.0-subset.53', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset53.schema.json'), 'utf8')))],
     ['3.0.0-subset.54', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset54.schema.json'), 'utf8')))],
     ['3.0.0-subset.55', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset55.schema.json'), 'utf8')))],
+    ['3.0.0-subset.56', ajv.compile(JSON.parse(fs.readFileSync(path.join(__dirname, '../schemas/effect-v3-subset56.schema.json'), 'utf8')))],
   ]);
   const validate = card => {
     const checker = validators.get(card?.schemaVersion);

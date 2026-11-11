@@ -3,6 +3,13 @@ import type { V3Choice } from "../../server/src/test/effects/v3/fixtureProtocol"
 import { getLocalCardImage } from "../utils/localCardImages";
 export default function V3ChoicePanel({ choice, disabled, onConfirm, imageAliases = {}, allowSkip = false }: { choice: V3Choice; disabled: boolean; onConfirm: (tokens: string[]) => void; imageAliases?: Readonly<Record<string, string>>; allowSkip?: boolean }) {
   const [tokens, setTokens] = useState<string[]>([]), [failed, setFailed] = useState<string[]>([]);
+  if (choice.purpose === "revealConfirmation") return <div><p>相手が公開した手札</p>
+    <div className="test-effect-candidates">{choice.revealedCardIds.map((id, index) => {
+      const key = `${id}:${index}`, image = getLocalCardImage(imageAliases[id] ?? id)?.imageUrl;
+      return <div key={key}>{image && !failed.includes(key) ? <img src={image} alt={id} draggable={false}
+        style={{ width: 64 }} onError={() => setFailed(current => [...current, key])} /> : <span>{id}</span>}</div>;
+    })}</div>{choice.options.map(option =>
+      <button key={option.token} disabled={disabled} onClick={() => onConfirm([option.token])}>{option.label}</button>)}</div>;
   const replacement = choice.purpose === "replacementPayment" || choice.purpose === "replacementPriority";
   if (choice.purpose === "activation" || choice.purpose === "mode" || choice.purpose === "payment" || choice.purpose === "replacement") return <div><p>{choice.purpose === "mode" ? "効果を1つ選択" : choice.purpose === "payment" ? "追加のコストを支払いますか？" : choice.purpose === "replacement" ? "代わりの処理を適用しますか？" : "効果を発動しますか？"}</p><div className="test-effect-actions v3-activation-actions">{choice.options.map(option =>
     <button key={option.token} disabled={disabled} onClick={() => onConfirm([option.token])}>{option.label}</button>
