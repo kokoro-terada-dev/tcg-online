@@ -57,8 +57,20 @@ if (confirmations) {
     confirmed.set(entry.cardId, entry);
   }
 }
-const draftLedger = confirmed.size ? { ...ledger, rows: ledger.rows.map(row => confirmed.has(row.cardId) ?
-  { ...row, raw: { ...row.raw, "パワー": String(confirmed.get(row.cardId).power) } } : row) } : ledger;
+const selectedIds = new Set(selected);
+const normalized = new Map();
+const draftLedger = { ...ledger, rows: ledger.rows.map(row => {
+  if (!selectedIds.has(row.cardId) || approved.has(row.cardId)) return row;
+  const raw = row.raw, kind = raw["種類"], fields = {};
+  if (kind === "EVENT" && raw["パワー"] !== "-") fields["パワー"] = "-";
+  if ((kind === "CHARACTER" || kind === "LEADER") && raw["パワー"] === "-")
+    fields["パワー"] = String(confirmed.get(row.cardId)?.power ?? 0);
+  if (["CHARACTER", "STAGE", "EVENT"].includes(kind) && raw["コスト"] === "-") fields["コスト"] = "0";
+  if (!Object.keys(fields).length) return row;
+  if (!normalized.has(row.cardId)) normalized.set(row.cardId, new Set());
+  for (const field of Object.keys(fields)) normalized.get(row.cardId).add(field);
+  return { ...row, raw: { ...raw, ...fields } };
+}) };
 const { trace, candidates, schemaHolds } = generateV3Drafts(draftLedger, selected, undefined, validate, { delta: true, excludeApproved: approved });
 trace.version = "v3-draft-delta.1";
 trace.registryHash = require("../docs/card-effect-supported-operations.json").profiles["3.0.0-subset.51"].registryHash;
@@ -74,6 +86,8 @@ for (const { cardId, definition } of definitions) write(`definitions/${cardId}.j
 write("generation.json", trace);
 write("schema-holds.json", schemaHolds);
 if (confirmations) write("printed-confirmations.json", confirmations);
+write("printed-normalization.json", { sourceCsvSha256: sha, policy: "required-power-and-cost-dash-to-zero; ignore-event-power",
+  cards: [...normalized].map(([cardId, fields]) => ({ cardId, fields: [...fields] })) });
 const status = new Map(trace.cards.map(c => [c.cardId, c]));
 // Carry forward status metadata only, without loading or compiling old definitions.
 const merged = prior.cards.map(c => c.status === "complete" ? { cardId: c.cardId, status: c.status } : status.get(c.cardId) ?? c);
