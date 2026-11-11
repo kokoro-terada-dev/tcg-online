@@ -9,8 +9,25 @@ const metadata = (field, comparison, values) =>
   ({ type: "CARD_METADATA", subject: "CANDIDATE", basis: "CURRENT", field, comparison, match: "ANY", values });
 const nameFilter = (value, op) => ({ type: "CARD_NAME", subject: "CANDIDATE", basis: "CURRENT", op, value });
 const numeric = (field, op, right, basis) => ({ type: "compare", left: { ref: `CANDIDATE.${basis}.${field}` }, op, right });
+const seat = text => text === "自分" ? "SELF" : "OPPONENT";
+const query = (owner, zone, cardTypes, filters, excludeSource = false) => ({
+  type: "QUERY_CARDS", owner, controller: owner, zone, cardTypes, filters, excludeSource, visibility: "PUBLIC", faceUpOnly: true
+});
 
-export function searchTarget(text, batch = false) {
+export function searchTarget(text, batch = false, expansion = false) {
+  if (expansion) {
+    // Split only after a complete name or explicit card kind, not inside traits.
+    const either = /^(「[^「」]+」|.+?(?:キャラカード|イベントカード|ステージカード))か(.+)$/u.exec(text);
+    if (either) {
+      const alternatives = either.slice(1).map(term => searchTarget(term, true));
+      if (!alternatives.every(Boolean)) return null;
+      const conditions = alternatives.map(({ kinds, filters }) => {
+        const types = kinds.map(kind => ({ type: "compare", left: { ref: "CANDIDATE.cardType" }, op: "eq", right: kind }));
+        return { type: "all", conditions: [{ type: "any", conditions: types }, filters] };
+      });
+      return { kinds: [...new Set(alternatives.flatMap(item => item.kinds))], filters: { type: "any", conditions } };
+    }
+  }
   const conditions = [];
   const exclusion = /^「([^「」]+)」以外の/u.exec(text);
   if (exclusion) { conditions.push(nameFilter(exclusion[1], "ne")); text = text.slice(exclusion[0].length); }
@@ -33,6 +50,11 @@ export function searchTarget(text, batch = false) {
   if (color) {
     conditions.push(metadata("colors", "EXACT", [color[1]]));
     text = text.slice(color[0].length);
+  }
+  const attribute = expansion && /^属性(?:\(([^()（）]+)\)|（([^()（）]+)）)を持つ/u.exec(text);
+  if (attribute) {
+    conditions.push(metadata("attributes", "EXACT", [attribute[1] ?? attribute[2]]));
+    text = text.slice(attribute[0].length);
   }
   const traits = /^特徴(《[^《》]+》(か《[^《》]+》){0,2})を持つ/u.exec(text);
   const contains = /^『([^『』]+)』を含む特徴を持つ/u.exec(text);
@@ -59,10 +81,10 @@ export function searchTarget(text, batch = false) {
 }
 
 const remainder = "残りを好きな順番でデッキの下に置く";
-function search(body, prefix, sourceSpan, batch) {
+function search(body, prefix, sourceSpan, batch, expansion) {
   const form = /^自分のデッキの上から([1-9])枚を見て、(.+?)([1-9])枚までを公開し、手札に加え(?:る。その後、|、)残りを好きな順番でデッキの下に置く。$/u.exec(body);
   if (!form || Number(form[3]) > Number(form[1])) return null;
-  const target = searchTarget(form[2], batch);
+  const target = searchTarget(form[2], batch, expansion);
   if (!target) return null;
   const looked = `${prefix}_seen`, selected = `${prefix}_picked`, ordered = `${prefix}_ordered`;
   return { pattern: "recipe-private-search", actions: [
@@ -150,21 +172,48 @@ function fieldAction(verb, timing, cards, sourceSpan) {
   return end("OPPONENT");
 }
 
-function fieldTarget(text) {
+function additionalField(body, cardType, prefix, sourceSpan) {
+  const form = /^(.+?)を、?(持ち主の手札に戻す|持ち主のデッキの下に置く|トラッシュに置く|KOする)。$/u.exec(body);
+  if (!form) return null;
+  const [, target, verb] = form;
+  const stage = /^(自分|相手)の(.*?)ステージ([1-5])枚まで$/u.exec(target);
+  const withoutSide = !/^(自分|相手)の/u.test(target);
+  const field = !stage && fieldTarget(withoutSide ? `自分の${target}` : target);
+  if (!stage && (!field || field.excludeSource || field.zones.length !== 1 || field.zones[0] !== "character")) return null;
+  if (withoutSide && !["持ち主の手札に戻す", "持ち主のデッキの下に置く"].includes(verb)) return null;
+  const stageTarget = stage && searchTarget(`${stage[2]}ステージ`, true);
+  if (stage && !stageTarget) return null;
+  const owner = stage ? seat(stage[1]) : withoutSide ? "EITHER" : field.owner;
+  const max = stage ? Number(stage[3]) : field.max;
+  const zone = stage ? "stage" : "character";
+  const bindAs = `${prefix}_moved`, cards = binding(bindAs);
+  const bottom = verb === "持ち主のデッキの下に置く";
+  if (bottom && max !== 1) return null;
+  const pick = draftSelect(bindAs, zone, owner, 0, max, stageTarget?.filters ?? field.filters);
+  const action = verb === "KOする" ? { type: stage ? "KO_STAGE" : "KO", cards, sourceSpan } :
+    { type: "MOVE_CARD", cards, destination: { owner: verb === "トラッシュに置く" ? owner : "CARD_OWNER",
+      zone: bottom ? "deck" : verb === "トラッシュに置く" ? "trash" : "hand",
+      position: bottom ? "bottom" : "append", faceUp: !bottom }, cause: "EFFECT", sourceSpan };
+  return { pattern: stage ? "recipe-stage-target" : "recipe-field-movement", actions: [pick, action],
+    movesSource: zone === cardType && owner !== "OPPONENT" };
+}
+
+function fieldTarget(text, expansion = false) {
   const form = /^(自分|相手)の(このキャラ以外の)?(レストの|アクティブの)?(.*?)((?:リーダーか|リーダーと)?キャラ|リーダー)(合計)?([1-5])枚まで$/u.exec(text);
   if (!form) return null;
   const [, player, exclude, state, filters, types, total, max] = form;
   if (Boolean(total) !== types.startsWith("リーダーと") || types === "リーダー" && max !== "1" ||
       exclude && (player !== "自分" || types !== "キャラ")) return null;
   const zones = types === "リーダー" ? ["leader"] : types === "キャラ" ? ["character"] : ["leader", "character"];
-  const parsed = searchTarget(`${filters}${types === "リーダー" ? "カード" : "キャラカード"}`, true);
+  const prefix = expansion ? filters.replace(/を持つ、$/u, "を持つ") : filters;
+  const parsed = searchTarget(`${prefix}${types === "リーダー" ? "カード" : "キャラカード"}`, true);
   if (!parsed || zones.includes("leader") && parsed.filters.conditions.some(filter => filter.left?.ref.endsWith(".cost"))) return null;
   if (state) parsed.filters.conditions.push({ type: "compare", left: { ref: "CANDIDATE.rotated" }, op: "eq", right: state === "レストの" });
   return { owner: player === "自分" ? "SELF" : "OPPONENT", excludeSource: Boolean(exclude), zones, max: Number(max), filters: parsed.filters };
 }
 
 const fieldTimings = new Set(["MAIN", "ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_BLOCK", "TURN_END"]);
-function targetedField(body, timing, cardType, prefix, sourceSpan, sourceAvailable) {
+function targetedField(body, timing, cardType, prefix, sourceSpan, sourceAvailable, expansion) {
   const self = /^この(キャラ|リーダー)(?:は、|を、?)(.+)。$/u.exec(body);
   const bindAs = `${prefix}_field`, cards = binding(bindAs);
   if (self && sourceAvailable && fieldKinds.get(self[1]) === cardType && fieldTimings.has(timing)) {
@@ -175,7 +224,7 @@ function targetedField(body, timing, cardType, prefix, sourceSpan, sourceAvailab
     return null;
   }
   const form = /^(.+)を、?(.+)。$/u.exec(body);
-  const target = form && fieldTarget(form[1]);
+  const target = form && fieldTarget(form[1], expansion);
   if (!target || target.excludeSource && (!sourceAvailable || cardType !== "character" || !fieldTimings.has(timing))) return null;
   const action = fieldAction(form[2], timing, cards, sourceSpan);
   if (!action || ["KO", "MOVE_CARD"].includes(action.type) && target.zones.includes("leader")) return null;
@@ -187,7 +236,7 @@ function targetedField(body, timing, cardType, prefix, sourceSpan, sourceAvailab
       target.owner === "SELF" && !target.excludeSource && ["KO", "MOVE_CARD"].includes(action.type) };
 }
 
-function extraRecipe(body, timing, cardType, prefix, sourceSpan, eventMain, sourceAvailable) {
+function extraRecipe(body, timing, cardType, prefix, sourceSpan, eventMain, sourceAvailable, expansion) {
   const don = /^自分の(レストの|アクティブの)?ドン(?:[!！]{2}|‼)([1-9]|10)枚までを、?(アクティブ|レスト)にする。$/u.exec(body);
   if (don && !eventMain) {
     const to = don[3] === "アクティブ" ? "ACTIVE" : "REST", from = to === "ACTIVE" ? "REST" : "ACTIVE";
@@ -204,7 +253,7 @@ function extraRecipe(body, timing, cardType, prefix, sourceSpan, eventMain, sour
       { type: "ATTACH_DON", from, assignments: [{ cards: binding(chosen), target: binding(target) }], sourceSpan }] };
   }
   const recovery = /^自分のトラッシュから(.+?)([1-9])枚までを、?手札に加える。$/u.exec(body);
-  const recovered = !eventMain && recovery && searchTarget(recovery[1], true);
+  const recovered = !eventMain && recovery && searchTarget(recovery[1], true, expansion);
   if (recovered) {
     const chosen = `${prefix}_recovered`, pick = draftSelect(chosen, "trash", "SELF", 0, Number(recovery[2]), recovered.filters);
     pick.selector.cardTypes = recovered.kinds;
@@ -217,7 +266,7 @@ function extraRecipe(body, timing, cardType, prefix, sourceSpan, eventMain, sour
     ...(life ? { from: life[2] === "上" ? "LIFE_TOP" : "LIFE_BOTTOM",
       to: { "手札に加える": "HAND", "トラッシュに置く": "TRASH", "デッキの下に置く": "DECK_BOTTOM" }[life[3]] }
       : { from: "DECK_TOP", to: heal[1] === "上" ? "LIFE_TOP" : "LIFE_BOTTOM", faceUp: heal[2] === "表向きで" }), sourceSpan }] };
-  return targetedField(body, timing, cardType, prefix, sourceSpan, sourceAvailable);
+  return targetedField(body, timing, cardType, prefix, sourceSpan, sourceAvailable, expansion);
 }
 
 function ownerHand(body, sourceSpan) {
@@ -230,7 +279,7 @@ function ownerHand(body, sourceSpan) {
   return null;
 }
 
-function publicCondition(text, batch) {
+function publicCondition(text, batch, expansion = false) {
   const prior = predicate(text);
   if (prior || !batch) return prior;
   const and = text.split(/でかつ、|かつ、|かつ/u), or = text.split("または");
@@ -238,7 +287,7 @@ function publicCondition(text, batch) {
   const terms = and.length > 1 ? and : or;
   if (terms.length > 1) {
     if (terms.length > 3) return null;
-    const conditions = terms.map(term => publicCondition(term, true));
+    const conditions = terms.map(term => publicCondition(term, true, expansion));
     return conditions.every(Boolean) ? { type: and.length > 1 ? "all" : "any", conditions } : null;
   }
   const leader = /^(自分|相手)のリーダーが特徴(《[^《》]+》(か《[^《》]+》){0,2})を持つか「([^「」]+)」$/u.exec(text);
@@ -248,6 +297,21 @@ function publicCondition(text, batch) {
     return trait && name ? { type: "any", conditions: [trait, name] } : null;
   }
   if (/^(自分|相手)の(ライフ|手札)が[0-9]+枚(以上|以下)ある$/u.test(text)) return predicate(text.slice(0, -2));
+  if (expansion) {
+    const leaderContains = /^(自分|相手)のリーダーが『([^『』]+)』を含む特徴を持つ$/u.exec(text);
+    if (leaderContains) return { type: "EXISTS", query: query(seat(leaderContains[1]), "leader", ["leader"],
+      metadata("traits", "CONTAINS", [leaderContains[2]])) };
+    const has = /^(自分|相手)の(レストの|アクティブの)?(.*?)キャラが(?:(0|[1-9][0-9]?)枚(以上|以下)?(いる|いない)?|(いる|いない))$/u.exec(text);
+    if (has && (!has[4] || has[6] !== "いない")) {
+      const target = searchTarget(`${has[3]}キャラカード`, true);
+      if (!target) return null;
+      if (has[2]) target.filters.conditions.push({ type: "compare", left: { ref: "CANDIDATE.rotated" }, op: "eq", right: has[2] === "レストの" });
+      const matching = query(seat(has[1]), "character", ["character"], target.filters);
+      if (has[4]) return { type: "COUNT", query: matching, op: has[5] === "以上" ? "gte" : has[5] === "以下" ? "lte" : "eq", value: Number(has[4]) };
+      const exists = { type: "EXISTS", query: matching };
+      return has[7] === "いる" ? exists : { type: "not", condition: exists };
+    }
+  }
   const count = /^(自分|相手)の(キャラ|トラッシュ)が(0|[1-9][0-9]?)枚(以上|以下)?(?:いる|ある)?$/u.exec(text);
   if (!count) return null;
   const owner = count[1] === "自分" ? "SELF" : "OPPONENT", character = count[2] === "キャラ";
@@ -256,11 +320,32 @@ function publicCondition(text, batch) {
       cardTypes: character ? ["character"] : mainDeckKinds, visibility: "PUBLIC", faceUpOnly: true, excludeSource: false, filters: always() } };
 }
 
-function leadingCondition(text, batch) {
+function leadingCondition(text, batch, expansion = false) {
   const clause = /^([^。]+?)(?:の)?場合、/u.exec(text);
   if (!clause) return { body: text };
   const prior = predicate(clause[1]);
-  return { body: text.slice(clause[0].length), condition: prior ?? publicCondition(clause[1], batch), newCondition: !prior };
+  return { body: text.slice(clause[0].length), condition: prior ?? publicCondition(clause[1], batch, expansion), newCondition: !prior };
+}
+
+export function parseContinuousRecipe(text, cardType, sourceSpan) {
+  if (!["leader", "character", "stage"].includes(cardType)) return null;
+  const turn = /^(?:【(自分|相手)のターン中】|〖(自分|相手)のターン中〗)/u.exec(text);
+  const step = leadingCondition(turn ? text.slice(turn[0].length) : text, true, true);
+  if (step.condition === null) return null;
+  const form = /^(?:(自分|相手)のキャラすべてを、?|(自分のリーダー|このリーダー)の)(パワー|コスト)([+-][1-9][0-9]{0,4})。$/u.exec(step.body);
+  if (!form || form[2] === "このリーダー" && cardType !== "leader" || form[2] && form[3] !== "パワー") return null;
+  const guards = [];
+  if (turn) guards.push({ type: "TURN_IS", player: seat(turn[1] ?? turn[2]) });
+  if (step.condition) {
+    const condition = step.condition;
+    if (condition.type !== "compare" || !/^(SELF|OPPONENT)\.(lifeCount|handCount)$/u.test(condition.left?.ref) ||
+        typeof condition.right !== "number") return null;
+    guards.push(condition);
+  }
+  const zone = form[2] ? "leader" : "character";
+  return { type: "CONTINUOUS_EFFECT", condition: { type: "all", conditions: guards },
+    affectedQuery: query(form[2] ? "SELF" : seat(form[1]), zone, [zone], always()),
+    operation: { type: "ADD_STAT", stat: form[3] === "パワー" ? "power" : "cost", amount: Number(form[4]) }, sourceSpan };
 }
 
 export function parseDraftMode(header, modes) {
@@ -270,25 +355,26 @@ export function parseDraftMode(header, modes) {
   return condition ? [{ type: "IF", condition, then: [action], else: [] }] : [action];
 }
 
-export function parseExistingRecipes(body, timing, cardType, sourceSpan, { batch = false, sourceAvailable = true } = {}) {
-  const initial = leadingCondition(body, batch);
+export function parseExistingRecipes(body, timing, cardType, sourceSpan, { batch = false, sourceAvailable = true, expansion = false } = {}) {
+  const initial = leadingCondition(body, batch, expansion);
   if (initial.condition === null) return null;
   const parts = initial.body.split("。その後、");
   if (parts.length > 6) return null;
   const actions = [], patterns = new Set();
   const eventMain = cardType === "event" && timing === "MAIN";
   for (let i = 0; i < parts.length; i++) {
-    const prefix = `recipe_${sourceSpan.start}_${i}`, step = i === 0 ? { body: parts[i] } : leadingCondition(parts[i], batch);
+    const prefix = `recipe_${sourceSpan.start}_${i}`, step = i === 0 ? { body: parts[i] } : leadingCondition(parts[i], batch, expansion);
     if (step.condition === null) return null;
     const sentence = i === parts.length - 1 ? step.body : `${step.body}。`;
-    let parsed = !eventMain && (search(sentence, prefix, sourceSpan, batch) || reorder(sentence, prefix, sourceSpan) || attach(sentence, prefix, sourceSpan, batch));
+    let parsed = !eventMain && (search(sentence, prefix, sourceSpan, batch, expansion) || reorder(sentence, prefix, sourceSpan) || attach(sentence, prefix, sourceSpan, batch));
     if (!parsed && !eventMain && parts[i + 1]?.replace(/。$/u, "") === remainder) {
-      parsed = search(`${sentence}その後、${remainder}。`, prefix, sourceSpan, batch);
+      parsed = search(`${sentence}その後、${remainder}。`, prefix, sourceSpan, batch, expansion);
       if (parsed) i++;
     }
     const structure = parsed ? null : parseV3Structure(sentence, timing, predicate).structure;
     parsed ||= ownerHand(sentence, sourceSpan);
-    if (!parsed && !structure && batch) parsed = extraRecipe(sentence, timing, cardType, prefix, sourceSpan, eventMain, sourceAvailable);
+    if (!parsed && !structure && batch) parsed = extraRecipe(sentence, timing, cardType, prefix, sourceSpan, eventMain, sourceAvailable, expansion);
+    if (!parsed && !structure && expansion) parsed = additionalField(sentence, cardType, prefix, sourceSpan);
     if (!parsed && !structure) return null;
     if (parsed) patterns.add(parsed.pattern);
     if (initial.newCondition || step.newCondition) patterns.add("recipe-public-condition");

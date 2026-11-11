@@ -25,8 +25,8 @@ function activationCost(text, cardType, recipes, batch) {
   return null;
 }
 
-export function parseCompoundEffect(body, timing, cardType, sourceSpan, fullTrigger, recipes = false, batch = false, branches = null) {
-  const once = recipes && timing === "MAIN" && cardType !== "event" &&
+export function parseCompoundEffect(body, timing, cardType, sourceSpan, fullTrigger, recipes = false, batch = false, branches = null, expansion = false) {
+  const once = recipes && (timing === "MAIN" || expansion && ["ON_PLAY", "ON_ATTACK", "ON_OPPONENT_ATTACK", "ON_BLOCK", "TURN_END"].includes(timing)) && cardType !== "event" &&
     /^(?:【ターン[1１]回】|〖ターン[1１]回〗)/u.exec(body);
   if (once) body = body.slice(once[0].length);
   const use = once ? { usageLimit: { type: "PER_TURN", scope: "SOURCE_OBJECT", count: 1 } } : {};
@@ -38,7 +38,9 @@ export function parseCompoundEffect(body, timing, cardType, sourceSpan, fullTrig
   if (!cost && batch && segments.length === 2) {
     const terms = segments[0].trimEnd().split(/[,，]/u);
     const pair = terms.length === 2 && terms.map(term => activationCost(term, cardType, recipes, true));
-    if (pair && pair[0]?.type === "REST_DON" && ["DISCARD_HAND", "REST_SOURCE"].includes(pair[1]?.type)) costs = pair;
+    if (pair && (pair[0]?.type === "REST_DON" && ["DISCARD_HAND", "REST_SOURCE"].includes(pair[1]?.type) ||
+        expansion && ["REST_DON", "DON_RETURN"].includes(pair[0]?.type) && ["REVEAL_CARDS", "MOVE_AS_COST"].includes(pair[1]?.type) && pair[1].selector !== "SOURCE"))
+      costs = pair;
   }
   if (segments.length === 2 && !costs.length) return null;
   if (timing === "TRIGGER" && fullTrigger && (cardType === "character" || cardType === "stage")) {
@@ -55,13 +57,14 @@ export function parseCompoundEffect(body, timing, cardType, sourceSpan, fullTrig
       { type: "IF", condition: guard, then: [playSource(sourceSpan)], else: [] }
     ] };
   }
-  if (costs.length && (cardType === "event" || !["ON_PLAY", "ON_ATTACK", "MAIN"].includes(timing))) return null;
-  const costFields = costs.length ? { costs, optional: timing !== "MAIN" } : {};
+  const counterReturn = expansion && timing === "COUNTER" && cardType === "event" && costs.length === 1 && cost?.type === "DON_RETURN";
+  if (costs.length && !counterReturn && (cardType === "event" || !["ON_PLAY", "ON_ATTACK", "MAIN", ...(expansion ? ["ON_OPPONENT_ATTACK", "ON_BLOCK", "TURN_END"] : [])].includes(timing))) return null;
+  const costFields = costs.length ? { costs, optional: timing !== "MAIN" && !counterReturn } : {};
   if (branches) {
     // The existing interactive MAIN schema does not admit CHOOSE_MODE.
     if (cardType === "event" && timing === "MAIN" || timing === "TRIGGER" || costs.some(node => node.selector === "SOURCE")) return null;
     const modes = branches.map(({ label, sourceSpan }) => {
-      const branch = parseCompoundEffect(label, timing, cardType, sourceSpan, false, true, true);
+      const branch = parseCompoundEffect(label, timing, cardType, sourceSpan, false, true, true, null, expansion);
       return branch && !branch.costs && !branch.usageLimit ? { label, actions: branch.actions } : null;
     });
     const actions = modes.every(Boolean) && parseDraftMode(raw, modes);
@@ -79,11 +82,11 @@ export function parseCompoundEffect(body, timing, cardType, sourceSpan, fullTrig
   }
   const structure = parse(raw);
   const library = !structure && recipes ? parseExistingRecipes(raw, timing, cardType, sourceSpan, {
-    batch, sourceAvailable: cost?.selector !== "SOURCE"
+    batch, expansion, sourceAvailable: cost?.selector !== "SOURCE"
   }) : null;
   if (!structure && !library) return null;
   if (library) return { ...library, ...costFields, ...use };
-  if (recipes && (once || cost?.type === "MOVE_AS_COST" || cost?.type === "REST_SOURCE" && cardType === "stage" ||
+  if (recipes && (once || counterReturn || cost?.type === "MOVE_AS_COST" || cost?.type === "REST_SOURCE" && cardType === "stage" ||
       batch && costs.some(node => node.type === "REST_DON" || node.type === "REVEAL_CARDS")))
     return { pattern: once ? "recipe-turn-limit" : "recipe-source-payment", structure, ...costFields, ...use,
       actions: emitV3Structure(structure, sourceSpan, true) };

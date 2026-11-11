@@ -48,7 +48,7 @@ function diagnosis(group) {
 }
 
 export function compareV3DraftRuns(before, after, beforeCsv, afterCsv) {
-  const versions = ["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3", "v3-draft-generator.4", "v3-draft-generator.5", "v3-draft-generator.6", "v3-draft-generator.7", "v3-draft-generator.8", "v3-draft-generator.9", "v3-draft-generator.10", "v3-draft-generator.11"];
+  const versions = ["v3-draft-generator.1", "v3-draft-generator.2", "v3-draft-generator.3", "v3-draft-generator.4", "v3-draft-generator.5", "v3-draft-generator.6", "v3-draft-generator.7", "v3-draft-generator.8", "v3-draft-generator.9", "v3-draft-generator.10", "v3-draft-generator.11", "v3-draft-generator.12"];
   const baseline = versions.indexOf(before.version);
   const compatible = versions.indexOf(after.version) >= 3 ? before.registryHash === v3DraftRegistry(before.version) &&
     after.registryHash === v3DraftRegistry(after.version) : before.registryHash === after.registryHash;
@@ -58,7 +58,7 @@ export function compareV3DraftRuns(before, after, beforeCsv, afterCsv) {
     after.cards.length === after.totals.sourceCards, "Compare complete reports from the same CSV and Registry");
   const current = indexCards(after.cards), oldCoverage = coverage(beforeCsv, before.sourceCsvSha256), newCoverage = coverage(afterCsv, after.sourceCsvSha256);
   assert(indexCards(before.cards).size === current.size && oldCoverage.size === current.size && newCoverage.size === current.size, "Report card counts differ");
-  const groups = new Map(), patterns = new Map(), approvedOverlap = [], cardChanges = [], regressions = [];
+  const groups = new Map(), patterns = new Map(), approvedOverlap = [], cardChanges = [], regressions = [], schemaExclusions = [];
   let unresolved = 0;
   for (const previous of before.cards) {
     const next = current.get(previous.cardId), old = oldCoverage.get(previous.cardId), fresh = newCoverage.get(previous.cardId);
@@ -75,8 +75,10 @@ export function compareV3DraftRuns(before, after, beforeCsv, afterCsv) {
         definitionHashBefore: previous.definitionHash ?? "", definitionHashAfter: next.definitionHash ?? "",
         reasonsBefore: previous.reasons ?? [], reasonsAfter: next.reasons ?? [] });
     }
-    if (previous.status === "complete" && (next.status !== "complete" || next.compiler !== previous.compiler || next.definitionHash !== previous.definitionHash)) {
-      regressions.push(previous.cardId);
+    if (previous.status === "complete") {
+      const unchanged = next.compiler === previous.compiler && next.definitionHash === previous.definitionHash && next.sourceHash === previous.sourceHash;
+      if (unchanged && next.status === "unassessed" && next.reasons?.includes("schema-validation-failed")) schemaExclusions.push(previous.cardId);
+      else if (!unchanged || next.status !== "complete") regressions.push(previous.cardId);
     }
     for (const variant of previous.variants) {
       const updated = now.get(variant.pairSha256);
@@ -115,7 +117,7 @@ export function compareV3DraftRuns(before, after, beforeCsv, afterCsv) {
   const improvements = [...patterns].map(([pattern, row]) => ({ pattern, spans: row.spans, cards: row.ids.size, newCompleteCards: row.newComplete.size })).sort(positive);
   const counts = rows => Object.fromEntries(classifications.map(status => [status, [...rows.values()].filter(row => row.classification === status).length]));
   return { sourceCsvSha256: before.sourceCsvSha256, before: before.totals, after: after.totals, coverageBefore: counts(oldCoverage), coverageAfter: counts(newCoverage),
-    groups: grouped, improvements, approvedOverlap, cardChanges, regressions };
+    groups: grouped, improvements, approvedOverlap, cardChanges, regressions, schemaExclusions };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -140,7 +142,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     write("card-diff.csv", csv([columns, ...report.cardChanges.map(row => columns.map(column =>
       Array.isArray(row[column]) ? JSON.stringify(row[column]) : row[column]))]));
     console.log(JSON.stringify({ before: report.before, after: report.after, coverageAfter: report.coverageAfter,
-      groupCount: report.groups.length, improvements: report.improvements, approvedOverlap: report.approvedOverlap.length, regressions: report.regressions.length }));
+      groupCount: report.groups.length, improvements: report.improvements, approvedOverlap: report.approvedOverlap.length,
+      regressions: report.regressions.length, schemaExclusions: report.schemaExclusions.length }));
     if (report.regressions.length) process.exitCode = 1;
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

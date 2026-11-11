@@ -9,12 +9,14 @@ import { csv } from "./audit-effect-cards.js";
 import { draftSelect as select, emitV3Structure, parseV3Structure, structurePattern } from "./v3-draft-structure.js";
 import { classifyTriggerSelfPlay } from "./v3-trigger-self-play.js";
 import { parseCompoundEffect } from "./v3-draft-compound.js";
+import { parseContinuousRecipe } from "./v3-draft-recipes.js";
 
 const require = createRequire(import.meta.url);
 const { loadReviewedV3Catalog } = require("../server/dist/test/effects/v3/reviewedCatalog.js");
 const { compileV3CardJson, supportsV3RuntimeProfile } = require("../server/dist/test/effects/v3/compiler.js");
 const { isInteractiveMainEvent } = require("../server/dist/test/effects/v3/simpleMainEvent.js");
-const latest = "v3-draft-generator.11";
+const latest = "v3-draft-generator.12";
+const previousBatch = "v3-draft-generator.11";
 const keywords = new Map([
   ["ブロッカー", ["BLOCKER", "(相手のアタックの後、このカードをレストにし、アタックの対象をこのカードにできる)"]],
   ["速攻", ["RUSH", "(このカードは登場したターンにアタックできる)"]],
@@ -71,7 +73,13 @@ function targetedActions(body, type, start, sourceSpan) {
     actions: [select(binding, "character", "OPPONENT", 0, Number(max), filter), action] };
 }
 
-function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch) {
+function grantsKeyword(actions, keyword) {
+  return actions.some(action => action.type === "GRANT_KEYWORD" && action.keyword.type === keyword ||
+    action.type === "IF" && grantsKeyword([...action.then, ...action.else], keyword) ||
+    action.type === "IF_PAYMENT_SUCCEEDED" && grantsKeyword([...action.then, ...action.else], keyword));
+}
+
+function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch, expansion) {
   const { field, start, end, text } = span;
   const tag = header(text);
   const keyword = keywords.get(tag?.[1] ?? tag?.[2]);
@@ -87,6 +95,16 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
     if (definition && !previousTag[3].trim() && reminder(text.trim(), definition)) {
       return { ...span, status: "recognized", pattern: "keyword-reminder-next-line", attachedTo: previous.start };
     }
+  }
+  if (expansion && field === "text") {
+    if (previous?.effect && /^(?:\r\n|\r|\n)$/u.test(raw.slice(previous.end, start))) {
+      const grant = /(?:【([^】]+)】|〖([^〗]+)〗)を得る。$/u.exec(previous.text.trim());
+      const definition = keywords.get(grant?.[1] ?? grant?.[2]);
+      if (definition && reminder(text.trim(), definition) && grantsKeyword(previous.effect.actions, definition[0]))
+        return { ...span, status: "recognized", pattern: "recipe-granted-keyword-reminder", attachedTo: previous.start };
+    }
+    const continuous = parseContinuousRecipe(text.trim(), cardType, sourceSpan);
+    if (continuous) return { ...span, status: "recognized", pattern: "recipe-continuous-field", continuous };
   }
   const label = tag?.[1] ?? tag?.[2];
   const regular = timings.get(label), timing = regular ?? boundaryTimings.get(label);
@@ -138,7 +156,8 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
     const fullTrigger = raw.trim() === text.trim();
     const compound = extended && (parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger) ??
       (recipes ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true) : null) ??
-      (batch ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true, true) : null));
+      (batch ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true, true) : null) ??
+      (expansion ? parseCompoundEffect(body, type, cardType, sourceSpan, fullTrigger, true, true, null, true) : null));
     if (compound) {
       const { pattern, structure, ...program } = compound;
       return { ...span, status: "recognized", pattern, ...(structure ? { structure } : {}), effect: { ...effect, ...program } };
@@ -153,7 +172,7 @@ function parseSpan(span, cardType, gaps, previous, raw, extended, recipes, batch
   return { ...span, status: features.length ? "unsupported" : "unknown", features, reason, unparsed };
 }
 
-function analyzeVariant(variant, rows, extended, recipes, batch) {
+function analyzeVariant(variant, rows, extended, recipes, batch, expansion) {
   const selected = rows.filter(row => variant.recordNumbers.includes(row.recordNumber));
   const types = sorted(selected.map(row => row.raw["種類"]));
   const cardType = types.length === 1 ? types[0].toLowerCase() : null;
@@ -165,7 +184,7 @@ function analyzeVariant(variant, rows, extended, recipes, batch) {
     for (let i = 0; i < lines.length; i++) {
       const match = lines[i], span = { field, start: match.index, end: match.index + match[0].length, text: match[0] };
       if (!span.text.trim()) continue;
-      const parsed = parseSpan(span, cardType, gaps, spans.at(-1), variant[field], extended, recipes, batch);
+      const parsed = parseSpan(span, cardType, gaps, spans.at(-1), variant[field], extended, recipes, batch, expansion);
       if (batch && field === "text" && parsed.status !== "recognized" && span.text.endsWith("以下から1つを選ぶ。")) {
         const tag = header(span.text), timing = timings.get(tag?.[1] ?? tag?.[2]) ?? boundaryTimings.get(tag?.[1] ?? tag?.[2]);
         const branches = [];
@@ -178,7 +197,8 @@ function analyzeVariant(variant, rows, extended, recipes, batch) {
         }
         const program = timing?.[2].includes(cardType) && branches.length >= 2 && branches.length <= 8 &&
           branches.every(branch => branch.label.length <= 80) && new Set(branches.map(branch => branch.label)).size === branches.length &&
-          parseCompoundEffect(tag[3], timing[0], cardType, { start: span.start, end }, false, true, true, branches);
+          (parseCompoundEffect(tag[3], timing[0], cardType, { start: span.start, end }, false, true, true, branches) ??
+            (expansion ? parseCompoundEffect(tag[3], timing[0], cardType, { start: span.start, end }, false, true, true, branches, true) : null));
         if (program) {
           const { pattern, ...effect } = program;
           spans.push({ ...span, status: "recognized", pattern,
@@ -231,6 +251,7 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
   const compound = variant.spans.some(span => span.pattern?.startsWith("pr29-"));
   const recipes = variant.spans.some(span => span.pattern?.startsWith("recipe-"));
   const newTargets = variant.spans.some(span => span.pattern?.startsWith("pr25-"));
+  const continuousEffects = variant.spans.flatMap(span => span.continuous ? [span.continuous] : []);
   return {
     schemaVersion: recipes || compound ? "3.0.0-subset.49" : conditionalTriggerPlay ? "3.0.0-subset.48" : fieldDon ? "3.0.0-subset.47" : optionalDon ? "3.0.0-subset.46" : triggerPlay ? "3.0.0-subset.45" : "3.0.0-subset.44", cardId: card.cardId,
     cardVersion: recipes ? "draft.recipes.1" : compound ? "draft.pr29.1" : conditionalTriggerPlay ? "draft.pr28.1" : fieldDon ? "draft.pr27.1" : newTargets ? "draft.pr25.1" : optionalDon ? "draft.pr24.1" : triggerPlay ? "draft.pr23.1" : variant.spans.some(span => span.structure) ? "draft.pr21.1" :
@@ -238,13 +259,14 @@ function definitionFor(card, variant, raw, sourceCsvSha256) {
     traits: labels(raw["特徴"]), attributes: labels(raw["属性"]), reviewStatus: "needs_review",
     keywords: variant.spans.flatMap(span => span.keyword ? [span.keyword] : []),
     effects: variant.spans.flatMap(span => span.effects ?? (span.effect ? [span.effect] : [])),
+    ...(continuousEffects.length ? { continuousEffects } : {}),
     source: { text: absent(variant.text) ? "" : variant.text, triggerText: absent(variant.triggerText) ? "" : variant.triggerText,
       displayIds: sorted(variant.displayIds), datasetSha256: sourceCsvSha256 }
   };
 }
 
-function generateCard(card, rows, sourceCsvSha256, extended, recipes, batch) {
-  const variants = card.variants.map(variant => analyzeVariant(variant, rows, extended, recipes, batch));
+function generateCard(card, rows, sourceCsvSha256, extended, recipes, batch, expansion = false) {
+  const variants = card.variants.map(variant => analyzeVariant(variant, rows, extended, recipes, batch, expansion));
   const spans = variants.flatMap(variant => variant.spans);
   const recognized = spans.filter(span => span.status === "recognized").length;
   const unresolved = spans.length - recognized;
@@ -269,8 +291,8 @@ function generateCard(card, rows, sourceCsvSha256, extended, recipes, batch) {
   }
 }
 
-export function generateV3Drafts(ledger, cardIds = [], version = latest) {
-  if (![latest, "v3-draft-generator.10", "v3-draft-generator.9", "v3-draft-generator.8"].includes(version)) throw Error("Unsupported draft generation baseline");
+export function generateV3Drafts(ledger, cardIds = [], version = latest, validate = null) {
+  if (![latest, previousBatch, "v3-draft-generator.10", "v3-draft-generator.9", "v3-draft-generator.8"].includes(version)) throw Error("Unsupported draft generation baseline");
   const registryHash = v3DraftRegistry(version);
   const selected = new Set(cardIds), rows = new Map();
   for (const row of ledger.rows) {
@@ -280,9 +302,17 @@ export function generateV3Drafts(ledger, cardIds = [], version = latest) {
   }
   if ([...selected].some(id => !rows.has(id))) throw Error("Requested card ID does not exist in this CSV");
   const counts = { complete: 0, partial: 0, unconvertible: 0, unassessed: 0 };
-  const cards = ledger.cards.filter(card => rows.has(card.cardId)).map(card =>
-    generateCard(card, rows.get(card.cardId), ledger.sourceSha256, version !== "v3-draft-generator.8",
-      version === latest || version === "v3-draft-generator.10", version === latest))
+  const schemaHolds = [];
+  const cards = ledger.cards.filter(card => rows.has(card.cardId)).map(card => {
+    const args = [card, rows.get(card.cardId), ledger.sourceSha256, version !== "v3-draft-generator.8",
+      [latest, previousBatch, "v3-draft-generator.10"].includes(version), [latest, previousBatch].includes(version)];
+    const prior = generateCard(...args);
+    const next = version === latest && ["partial", "unconvertible"].includes(prior.status) ? generateCard(...args, true) : prior;
+    const { definition, ...review } = next;
+    if (!validate || next.status !== "complete" || validate(definition)) return next;
+    schemaHolds.push({ cardId: card.cardId, schemaVersion: definition.schemaVersion, errors: structuredClone(validate.errors) });
+    return { ...review, status: "unassessed", reasons: ["schema-validation-failed"] };
+  })
     .sort((a, b) => lexical(a.cardId, b.cardId));
   const totals = { sourceCards: ledger.cards.length, selectedCards: cards.length, counts, noEffect: 0, compilerPassed: 0, compilerFailed: 0, unresolvedSpans: 0 };
   for (const card of cards) {
@@ -296,7 +326,7 @@ export function generateV3Drafts(ledger, cardIds = [], version = latest) {
     cards: cards.flatMap(card => card.variants.length !== 1 ? [] : [{ cardId: card.cardId, variantSha256: card.variants[0].pairSha256,
       generation: { version, status: card.status, noEffect: card.noEffect, recognized: card.recognized, unresolved: card.unresolved },
       ...(card.definition ? { definition: card.definition } : {}) }]) };
-  return { candidates, trace: { version, executable: false, sourceCsvSha256: ledger.sourceSha256, registryHash, totals,
+  return { candidates, schemaHolds, trace: { version, executable: false, sourceCsvSha256: ledger.sourceSha256, registryHash, totals,
     cards: cards.map(({ definition: _draft, ...card }) => card) } };
 }
 
@@ -329,17 +359,6 @@ function writeDraftResults(directory, { candidates, trace }, definitionExport) {
   }
 }
 
-function validateDefinitionExport(files) {
-  const validate = require("../docs/validate-card-effect-json.cjs").createSchemaValidator();
-  const holds = [];
-  const accepted = files.filter(({ definition }) => {
-    if (validate(definition)) return true;
-    holds.push({ cardId: definition.cardId, schemaVersion: definition.schemaVersion, errors: structuredClone(validate.errors) });
-    return false;
-  });
-  return { files: accepted, holds };
-}
-
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const [root, source, output, ...flags] = process.argv.slice(2), cardIds = [];
@@ -354,9 +373,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       else throw Error("Unknown or duplicate option");
     }
     if (fs.statSync(source).size > 25 * 1024 * 1024) throw Error("Input CSV exceeds 25 MiB");
-    const bytes = fs.readFileSync(source), generated = generateV3Drafts(ledgerFromCsv(bytes), cardIds);
+    const validate = require("../docs/validate-card-effect-json.cjs").createSchemaValidator();
+    const bytes = fs.readFileSync(source), generated = generateV3Drafts(ledgerFromCsv(bytes), cardIds, latest, validate);
     const report = analyzeV3Coverage(loadReviewedV3Catalog(root), bytes, { auditLedger, candidates: generated.candidates });
-    const definitionExport = exportDefinitions ? validateDefinitionExport(reviewableDefinitionFiles(generated.candidates, report)) : null;
+    const definitionExport = exportDefinitions ? { files: reviewableDefinitionFiles(generated.candidates, report), holds: generated.schemaHolds } : null;
     writeV3Coverage(root, output, report);
     writeDraftResults(output, generated, definitionExport);
     console.log(JSON.stringify({ ...generated.trace.totals, ...(definitionExport ? { reviewableDefinitionFiles: definitionExport.files.length,
